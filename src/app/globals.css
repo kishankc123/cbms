@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --color-primary: #4169e1;
+  --color-primary-hover: #3151b0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/*
+  This UI is intentionally light-themed only (explicit gray-900 text on
+  explicit white/gray-50 cards throughout). We deliberately do NOT flip to a
+  dark palette on prefers-color-scheme: dark, because none of the components
+  have a dark-mode text/background pairing — letting the background invert
+  while text stayed dark-on-dark made content unreadable.
+*/
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
