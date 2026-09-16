@@ -138,7 +138,6 @@ export function CustomersTable({
                 <HistoryDrawer
                   customerId={c.id}
                   customerName={c.name}
-                  periodMode={dateFilter.mode}
                   effectiveFrom={effectiveFrom}
                   effectiveTo={effectiveTo}
                   trigger={(open) => (
