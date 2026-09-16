@@ -1,32 +1,41 @@
 import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices } from "@/db/schema";
+import { customers, salesInvoices, receipts } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
   const session = await requireTenantSession();
 
-  const [customerList, invoices] = await Promise.all([
+  const [customerList, invoices, customerReceipts] = await Promise.all([
     db
       .select()
       .from(customers)
       .where(eq(customers.tenantId, session.tenantId))
       .orderBy(asc(customers.name)),
     db
-      .select({
-        customerId: salesInvoices.customerId,
-        total: salesInvoices.total,
-        amountPaid: salesInvoices.amountPaid,
-      })
+      .select({ customerId: salesInvoices.customerId, date: salesInvoices.invoiceDate, total: salesInvoices.total })
       .from(salesInvoices)
       .where(and(eq(salesInvoices.tenantId, session.tenantId), ne(salesInvoices.status, "void"))),
+    db
+      .select({ customerId: receipts.receivedFromCustomerId, date: receipts.receiptDate, amount: receipts.amount })
+      .from(receipts)
+      .where(eq(receipts.tenantId, session.tenantId)),
   ]);
 
-  const outstandingByCustomer = new Map<string, number>();
+  const invoicesByCustomer = new Map<string, { date: string; total: number }[]>();
   for (const inv of invoices) {
-    const due = Number(inv.total) - Number(inv.amountPaid);
-    outstandingByCustomer.set(inv.customerId, (outstandingByCustomer.get(inv.customerId) ?? 0) + due);
+    const list = invoicesByCustomer.get(inv.customerId) ?? [];
+    list.push({ date: inv.date, total: Number(inv.total) });
+    invoicesByCustomer.set(inv.customerId, list);
+  }
+
+  const receiptsByCustomer = new Map<string, { date: string; amount: number }[]>();
+  for (const r of customerReceipts) {
+    if (!r.customerId) continue;
+    const list = receiptsByCustomer.get(r.customerId) ?? [];
+    list.push({ date: r.date, amount: Number(r.amount) });
+    receiptsByCustomer.set(r.customerId, list);
   }
 
   const rows = customerList.map((c) => ({
@@ -35,7 +44,8 @@ export default async function CustomersPage() {
     phone: c.contactInfo?.phone ?? "",
     details: c.contactInfo?.details ?? "",
     openingBalance: Number(c.openingBalance),
-    outstanding: Number(c.openingBalance) + (outstandingByCustomer.get(c.id) ?? 0),
+    invoices: invoicesByCustomer.get(c.id) ?? [],
+    receipts: receiptsByCustomer.get(c.id) ?? [],
   }));
 
   return (
