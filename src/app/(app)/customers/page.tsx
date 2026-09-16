@@ -2,7 +2,7 @@ import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, salesInvoices } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
-import { createCustomer } from "./actions";
+import { AddCustomerModal } from "./add-customer-modal";
 
 export default async function CustomersPage() {
   const session = await requireTenantSession();
@@ -31,42 +31,17 @@ export default async function CustomersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
-
-      <form
-        action={createCustomer}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
-      >
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Name</label>
-          <input name="name" required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Contact number</label>
-          <input name="phone" className="rounded border border-gray-300 px-2 py-1.5 text-sm w-40" />
-        </div>
-        <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs text-gray-500 mb-1">Details</label>
-          <input
-            name="details"
-            placeholder="Address, notes, etc."
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
-        >
-          Add customer
-        </button>
-      </form>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
+        <AddCustomerModal />
+      </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
             <th className="px-4 py-2 font-medium">Name</th>
             <th className="px-4 py-2 font-medium">Contact number</th>
-            <th className="px-4 py-2 font-medium">Details</th>
+            <th className="px-4 py-2 font-medium">Address</th>
             <th className="px-4 py-2 font-medium">Outstanding (AR)</th>
           </tr>
         </thead>
