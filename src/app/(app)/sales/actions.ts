@@ -3,28 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, journalEntries } from "@/db/schema";
+import { salesInvoices, journalEntries } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
-
-export async function createCustomer(formData: FormData) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "create")) throw new Error("Not permitted");
-
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Customer name is required");
-  const email = String(formData.get("email") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
-
-  await db.insert(customers).values({
-    tenantId: session.tenantId,
-    name,
-    contactInfo: { email: email || undefined, phone: phone || undefined },
-  });
-
-  revalidatePath("/sales");
-}
 
 type LineItemInput = { description: string; quantity: number; unitPrice: number; taxRate: number };
 

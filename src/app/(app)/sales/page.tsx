@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, salesInvoices, accounts } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
-import { createCustomer, voidInvoice } from "./actions";
+import { voidInvoice } from "./actions";
 import { InvoiceForm } from "./invoice-form";
 
 export default async function SalesPage() {
@@ -29,7 +30,12 @@ export default async function SalesPage() {
       <h1 className="text-2xl font-semibold text-gray-900">Sales</h1>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium text-gray-900">New invoice</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium text-gray-900">New invoice</h2>
+          <Link href="/customers" className="text-sm text-[var(--color-primary)] hover:underline">
+            Manage customers
+          </Link>
+        </div>
         <InvoiceForm customers={customerList} incomeAccounts={incomeAccounts} />
       </section>
 
@@ -72,59 +78,6 @@ export default async function SalesPage() {
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No invoices yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium text-gray-900">Customers</h2>
-        <form
-          action={createCustomer}
-          className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
-        >
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Name</label>
-            <input name="name" required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Email</label>
-            <input name="email" type="email" className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Phone</label>
-            <input name="phone" className="rounded border border-gray-300 px-2 py-1.5 text-sm w-40" />
-          </div>
-          <button
-            type="submit"
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
-          >
-            Add customer
-          </button>
-        </form>
-
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Name</th>
-              <th className="px-4 py-2 font-medium">Contact</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customerList.map((c) => (
-              <tr key={c.id} className="border-t border-gray-100">
-                <td className="px-4 py-2">{c.name}</td>
-                <td className="px-4 py-2 text-gray-500">
-                  {[c.contactInfo?.email, c.contactInfo?.phone].filter(Boolean).join(" · ")}
-                </td>
-              </tr>
-            ))}
-            {customerList.length === 0 && (
-              <tr>
-                <td colSpan={2} className="px-4 py-6 text-center text-gray-400">
-                  No customers yet
                 </td>
               </tr>
             )}

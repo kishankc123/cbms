@@ -13,6 +13,7 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
 export type ContactInfo = {
   email?: string;
   phone?: string;
+  details?: string;
 };
 
 export const customers = pgTable("customers", {
