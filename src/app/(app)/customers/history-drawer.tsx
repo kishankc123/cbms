@@ -6,16 +6,24 @@ import { getCustomerHistory, type LedgerRow } from "./actions";
 export function HistoryDrawer({
   customerId,
   customerName,
+  periodMode,
+  effectiveFrom,
+  effectiveTo,
   trigger,
 }: {
   customerId: string;
   customerName: string;
+  periodMode: "all" | "range";
+  effectiveFrom: string;
+  effectiveTo: string;
   trigger: (open: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<{ openingBalance: number; rows: LedgerRow[] } | null>(null);
+  const [data, setData] = useState<{ openingBalance: number; closingBalance: number; rows: LedgerRow[] } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -28,11 +36,10 @@ export function HistoryDrawer({
 
   async function handleOpen() {
     setOpen(true);
-    if (data || loading) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getCustomerHistory(customerId);
+      const result = await getCustomerHistory(customerId, effectiveFrom || undefined, effectiveTo || undefined);
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load history");
@@ -41,7 +48,22 @@ export function HistoryDrawer({
     }
   }
 
-  const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  const fmt = (n: number) => Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
+  const drCr = (n: number) => (n < 0 ? "Cr" : "Dr");
+
+  const periodLabel =
+    periodMode === "range" ? (
+      <>
+        From: <span className="font-medium text-gray-700">{effectiveFrom || "—"}</span> &nbsp; To:{" "}
+        <span className="font-medium text-gray-700">{effectiveTo || "—"}</span>
+      </>
+    ) : (
+      <>
+        From date: Beginning of fiscal year{" "}
+        <span className="font-medium text-gray-700">({effectiveFrom || "not set"})</span> &nbsp; To date:
+        Today&apos;s date <span className="font-medium text-gray-700">({effectiveTo})</span>
+      </>
+    );
 
   return (
     <>
@@ -63,6 +85,7 @@ export function HistoryDrawer({
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{customerName}</h2>
               <p className="text-xs text-gray-500">Account history (Accounts Receivable)</p>
+              <p className="text-xs text-gray-500 mt-1">{periodLabel}</p>
             </div>
             <button
               type="button"
@@ -74,7 +97,7 @@ export function HistoryDrawer({
             </button>
           </div>
 
-          <div className="p-5 overflow-y-auto" style={{ height: "calc(100% - 73px)" }}>
+          <div className="p-5 overflow-y-auto" style={{ height: "calc(100% - 89px)" }}>
             {loading && <p className="text-sm text-gray-400">Loading...</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
             {!loading && !error && data && (
@@ -86,15 +109,17 @@ export function HistoryDrawer({
                     <th className="px-4 py-2 font-medium">Debit</th>
                     <th className="px-4 py-2 font-medium">Credit</th>
                     <th className="px-4 py-2 font-medium">Balance</th>
+                    <th className="px-4 py-2 font-medium">Dr/Cr</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-t border-gray-100 bg-gray-50/50">
-                    <td className="px-4 py-2 text-gray-500">—</td>
+                    <td className="px-4 py-2 text-gray-500">{effectiveFrom || "—"}</td>
                     <td className="px-4 py-2 text-gray-500">Opening balance</td>
-                    <td className="px-4 py-2">{data.openingBalance > 0 ? fmt(data.openingBalance) : ""}</td>
-                    <td className="px-4 py-2">{data.openingBalance < 0 ? fmt(Math.abs(data.openingBalance)) : ""}</td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2"></td>
                     <td className="px-4 py-2 font-medium">{fmt(data.openingBalance)}</td>
+                    <td className="px-4 py-2">{drCr(data.openingBalance)}</td>
                   </tr>
                   {data.rows.map((r, i) => (
                     <tr key={i} className="border-t border-gray-100">
@@ -103,15 +128,24 @@ export function HistoryDrawer({
                       <td className="px-4 py-2">{r.debit > 0 ? fmt(r.debit) : ""}</td>
                       <td className="px-4 py-2">{r.credit > 0 ? fmt(r.credit) : ""}</td>
                       <td className="px-4 py-2 font-medium">{fmt(r.balance)}</td>
+                      <td className="px-4 py-2">{drCr(r.balance)}</td>
                     </tr>
                   ))}
                   {data.rows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                        No transactions yet
+                      <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                        No transactions in this period
                       </td>
                     </tr>
                   )}
+                  <tr className="border-t-2 border-gray-300 font-bold">
+                    <td className="px-4 py-2">{effectiveTo || "—"}</td>
+                    <td className="px-4 py-2">Closing balance on {effectiveTo || "—"}</td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2">{fmt(data.closingBalance)}</td>
+                    <td className="px-4 py-2">{drCr(data.closingBalance)}</td>
+                  </tr>
                 </tbody>
               </table>
             )}

@@ -100,7 +100,7 @@ export async function deleteCustomer(formData: FormData) {
 
 export type LedgerRow = { date: string; details: string; debit: number; credit: number; balance: number };
 
-export async function getCustomerHistory(customerId: string) {
+export async function getCustomerHistory(customerId: string, from?: string, to?: string) {
   const session = await requireTenantSession();
 
   const [customer] = await db
@@ -128,22 +128,36 @@ export async function getCustomerHistory(customerId: string) {
       .orderBy(asc(receipts.receiptDate)),
   ]);
 
+  const activeInvoices = invoices.filter((inv) => inv.status !== "void");
+
+  const isBeforeFrom = (date: string) => !!from && date < from;
+  const inRange = (date: string) => {
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    return true;
+  };
+
+  const openingBalance =
+    Number(customer.openingBalance) +
+    activeInvoices.filter((i) => isBeforeFrom(i.date)).reduce((s, i) => s + Number(i.total), 0) -
+    customerReceipts.filter((r) => isBeforeFrom(r.date)).reduce((s, r) => s + Number(r.amount), 0);
+
   const rows: Omit<LedgerRow, "balance">[] = [];
-  for (const inv of invoices) {
-    if (inv.status === "void") continue;
+  for (const inv of activeInvoices) {
+    if (!inRange(inv.date)) continue;
     rows.push({ date: inv.date, details: `Sales invoice ${inv.invoiceNumber}`, debit: Number(inv.total), credit: 0 });
   }
   for (const r of customerReceipts) {
+    if (!inRange(r.date)) continue;
     rows.push({ date: r.date, details: "Payment received", debit: 0, credit: Number(r.amount) });
   }
   rows.sort((a, b) => a.date.localeCompare(b.date));
 
-  const openingBalance = Number(customer.openingBalance);
   let running = openingBalance;
   const ledgerRows: LedgerRow[] = rows.map((r) => {
     running += r.debit - r.credit;
     return { ...r, balance: running };
   });
 
-  return { name: customer.name, openingBalance, rows: ledgerRows };
+  return { name: customer.name, openingBalance, closingBalance: running, rows: ledgerRows };
 }

@@ -39,11 +39,21 @@ function computePeriod(c: Customer, filter: DateFilter) {
   return { opening, sales, paid, outstanding };
 }
 
-export function CustomersTable({ customers }: { customers: Customer[] }) {
+export function CustomersTable({
+  customers,
+  fiscalYearStartDate,
+}: {
+  customers: Customer[];
+  fiscalYearStartDate: string | null;
+}) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [dateFilter, setDateFilter] = useState<DateFilter>({ mode: "all", from: "", to: "" });
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const effectiveFrom = dateFilter.mode === "range" ? dateFilter.from : fiscalYearStartDate ?? "";
+  const effectiveTo = dateFilter.mode === "range" ? dateFilter.to : today;
 
   const rows = useMemo(
     () => customers.map((c) => ({ ...c, ...computePeriod(c, dateFilter) })),
@@ -128,6 +138,9 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                 <HistoryDrawer
                   customerId={c.id}
                   customerName={c.name}
+                  periodMode={dateFilter.mode}
+                  effectiveFrom={effectiveFrom}
+                  effectiveTo={effectiveTo}
                   trigger={(open) => (
                     <button
                       type="button"
