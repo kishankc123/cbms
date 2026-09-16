@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { createAccount } from "./actions";
+import { AccountsTable } from "./accounts-table";
 
 const CATEGORIES = ["asset", "liability", "equity", "income", "expense"] as const;
 
@@ -42,26 +43,7 @@ export default async function ChartOfAccountsPage() {
         </button>
       </form>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <th className="px-4 py-2 font-medium">Code</th>
-            <th className="px-4 py-2 font-medium">Name</th>
-            <th className="px-4 py-2 font-medium">Category</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((a) => (
-            <tr key={a.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 font-mono">{a.code}</td>
-              <td className="px-4 py-2">{a.name}</td>
-              <td className="px-4 py-2 capitalize">{a.category}</td>
-              <td className="px-4 py-2">{a.isActive ? "Active" : "Inactive"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <AccountsTable accounts={list} />
     </div>
   );
 }
