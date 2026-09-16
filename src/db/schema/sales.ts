@@ -10,11 +10,16 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "void",
 ]);
 
+export type ContactInfo = {
+  email?: string;
+  phone?: string;
+};
+
 export const customers = pgTable("customers", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  contactInfo: jsonb("contact_info"),
+  contactInfo: jsonb("contact_info").$type<ContactInfo>(),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
 });
 
