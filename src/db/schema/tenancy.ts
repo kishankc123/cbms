@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   pgEnum,
+  date,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "user"]);
@@ -18,6 +19,12 @@ export const tenants = pgTable("tenants", {
   companyName: text("company_name").notNull(),
   industry: text("industry"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
+  // Nepali (Bikram Sambat) fiscal year, e.g. "2081/82", plus the AD calendar
+  // dates it corresponds to — kept separate from fiscalYearStartMonth above,
+  // which is unused now that the Settings page collects these instead.
+  fiscalYearLabel: text("fiscal_year_label"),
+  fiscalYearStartDate: date("fiscal_year_start_date"),
+  fiscalYearEndDate: date("fiscal_year_end_date"),
   baseCurrency: text("base_currency").notNull().default("NPR"),
   taxRegistrationNumber: text("tax_registration_number"),
   status: tenantStatusEnum("status").notNull().default("active"),

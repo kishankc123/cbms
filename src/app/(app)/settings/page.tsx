@@ -2,22 +2,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
-import { updateTenantSettings } from "./actions";
+import { generateFiscalYearOptions } from "@/lib/nepali-fiscal-year";
+import { updateCompanyDetails, updateFiscalYearDates } from "./actions";
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+const FISCAL_YEARS = generateFiscalYearOptions();
 
 export default async function SettingsPage() {
   const session = await requireTenantSession();
@@ -28,14 +16,14 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium text-gray-900">Company profile</h2>
+        <h2 className="text-lg font-medium text-gray-900">Details</h2>
 
         <form
-          action={updateTenantSettings}
+          action={updateCompanyDetails}
           className="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-5"
         >
           <div>
@@ -59,20 +47,6 @@ export default async function SettingsPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Fiscal year start month</label>
-              <select
-                name="fiscalYearStartMonth"
-                defaultValue={tenant.fiscalYearStartMonth}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                {MONTHS.map((m, i) => (
-                  <option key={m} value={i + 1}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="block text-xs text-gray-500 mb-1">Base currency</label>
               <input
                 name="baseCurrency"
@@ -80,15 +54,70 @@ export default async function SettingsPage() {
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               />
             </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Tax registration number</label>
+              <input
+                name="taxRegistrationNumber"
+                defaultValue={tenant.taxRegistrationNumber ?? ""}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
           </div>
 
+          <button
+            type="submit"
+            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+          >
+            Save changes
+          </button>
+        </form>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-medium text-gray-900">Dates</h2>
+
+        <form
+          action={updateFiscalYearDates}
+          className="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-5"
+        >
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Tax registration number</label>
-            <input
-              name="taxRegistrationNumber"
-              defaultValue={tenant.taxRegistrationNumber ?? ""}
+            <label className="block text-xs text-gray-500 mb-1">Fiscal year (B.S.)</label>
+            <select
+              name="fiscalYearLabel"
+              required
+              defaultValue={tenant.fiscalYearLabel ?? ""}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-            />
+            >
+              <option value="" disabled>
+                Select fiscal year
+              </option>
+              {FISCAL_YEARS.map((fy) => (
+                <option key={fy} value={fy}>
+                  {fy}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fiscal year beginning date</label>
+              <input
+                type="date"
+                name="fiscalYearStartDate"
+                defaultValue={tenant.fiscalYearStartDate ?? ""}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fiscal year ending date</label>
+              <input
+                type="date"
+                name="fiscalYearEndDate"
+                defaultValue={tenant.fiscalYearEndDate ?? ""}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
           </div>
 
           <button

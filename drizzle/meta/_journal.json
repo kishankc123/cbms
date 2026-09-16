@@ -15,6 +15,13 @@
       "when": 1789498629514,
       "tag": "0001_shiny_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789586040625,
+      "tag": "0002_typical_shooting_star",
+      "breakpoints": true
     }
   ]
 }
