@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, count } from "drizzle-orm";
+import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices } from "@/db/schema";
+import { customers, salesInvoices, receipts } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 
 function parseOpeningBalance(formData: FormData): string {
@@ -96,4 +96,54 @@ export async function deleteCustomer(formData: FormData) {
 
   revalidatePath("/customers");
   revalidatePath("/sales");
+}
+
+export type LedgerRow = { date: string; details: string; debit: number; credit: number; balance: number };
+
+export async function getCustomerHistory(customerId: string) {
+  const session = await requireTenantSession();
+
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(and(eq(customers.id, customerId), eq(customers.tenantId, session.tenantId)))
+    .limit(1);
+  if (!customer) throw new Error("Customer not found");
+
+  const [invoices, customerReceipts] = await Promise.all([
+    db
+      .select({
+        date: salesInvoices.invoiceDate,
+        invoiceNumber: salesInvoices.invoiceNumber,
+        total: salesInvoices.total,
+        status: salesInvoices.status,
+      })
+      .from(salesInvoices)
+      .where(and(eq(salesInvoices.customerId, customerId), eq(salesInvoices.tenantId, session.tenantId)))
+      .orderBy(asc(salesInvoices.invoiceDate)),
+    db
+      .select({ date: receipts.receiptDate, amount: receipts.amount })
+      .from(receipts)
+      .where(and(eq(receipts.receivedFromCustomerId, customerId), eq(receipts.tenantId, session.tenantId)))
+      .orderBy(asc(receipts.receiptDate)),
+  ]);
+
+  const rows: Omit<LedgerRow, "balance">[] = [];
+  for (const inv of invoices) {
+    if (inv.status === "void") continue;
+    rows.push({ date: inv.date, details: `Sales invoice ${inv.invoiceNumber}`, debit: Number(inv.total), credit: 0 });
+  }
+  for (const r of customerReceipts) {
+    rows.push({ date: r.date, details: "Payment received", debit: 0, credit: Number(r.amount) });
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date));
+
+  const openingBalance = Number(customer.openingBalance);
+  let running = openingBalance;
+  const ledgerRows: LedgerRow[] = rows.map((r) => {
+    running += r.debit - r.credit;
+    return { ...r, balance: running };
+  });
+
+  return { name: customer.name, openingBalance, rows: ledgerRows };
 }

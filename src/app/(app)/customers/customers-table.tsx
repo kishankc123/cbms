@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { createCustomer, deleteCustomer, updateCustomer } from "./actions";
 import { CustomerFormModal } from "./customer-form-modal";
+import { HistoryDrawer } from "./history-drawer";
 
 type Customer = {
   id: string;
@@ -67,11 +67,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">History</th>
-            <th className="px-4 py-2 font-medium">Actions</th>
             <SortableHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
-            <th className="px-4 py-2 font-medium">Contact number</th>
-            <th className="px-4 py-2 font-medium">Address</th>
             <SortableHeader
               label="Outstanding (AR)"
               field="outstanding"
@@ -79,19 +75,29 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
               sortDir={sortDir}
               onSort={toggleSort}
             />
+            <th className="px-4 py-2 font-medium">History</th>
+            <th className="px-4 py-2 font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((c) => (
             <tr key={c.id} className="border-t border-gray-100">
+              <td className="px-4 py-2">{c.name}</td>
+              <td className="px-4 py-2">{c.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td className="px-4 py-2">
-                <Link
-                  href={`/customers/${c.id}/history`}
-                  target="_blank"
-                  className="text-[var(--color-primary)] hover:underline text-xs"
-                >
-                  History
-                </Link>
+                <HistoryDrawer
+                  customerId={c.id}
+                  customerName={c.name}
+                  trigger={(open) => (
+                    <button
+                      type="button"
+                      onClick={open}
+                      className="text-[var(--color-primary)] hover:underline text-xs"
+                    >
+                      History
+                    </button>
+                  )}
+                />
               </td>
               <td className="px-4 py-2">
                 <div className="flex gap-3">
@@ -124,15 +130,11 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                   </form>
                 </div>
               </td>
-              <td className="px-4 py-2">{c.name}</td>
-              <td className="px-4 py-2 text-gray-500">{c.phone || "—"}</td>
-              <td className="px-4 py-2 text-gray-500">{c.details || "—"}</td>
-              <td className="px-4 py-2">{c.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
             </tr>
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                 No customers match
               </td>
             </tr>
