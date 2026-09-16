@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createAccount } from "./actions";
 
 type Account = {
   id: string;
@@ -44,46 +45,75 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Filter by category</label>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          >
-            <option value="all">All categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Filter by status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-        {(categoryFilter !== "all" || statusFilter !== "all") && (
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <form action={createAccount} className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Code</label>
+            <input name="code" required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Name</label>
+            <input name="name" required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Category</label>
+            <select name="category" required className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
-            type="button"
-            onClick={() => {
-              setCategoryFilter("all");
-              setStatusFilter("all");
-            }}
-            className="text-sm text-gray-500 hover:text-gray-900 pb-1.5"
+            type="submit"
+            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
           >
-            Clear filters
+            Add account
           </button>
-        )}
+        </form>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Filter by category</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Filter by status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          {(categoryFilter !== "all" || statusFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryFilter("all");
+                setStatusFilter("all");
+              }}
+              className="text-sm text-gray-500 hover:text-gray-900 pb-1.5"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
