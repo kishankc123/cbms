@@ -1,6 +1,5 @@
 import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
-import type { LineItem } from "./sales";
 
 export const billStatusEnum = pgEnum("bill_status", [
   "draft",
@@ -10,6 +9,24 @@ export const billStatusEnum = pgEnum("bill_status", [
   "overdue",
   "void",
 ]);
+
+// "cash" backs Consumable purchase (settled immediately, no Accounts Payable
+// involved); "credit" backs Stockable purchase (goes on account and posts to
+// Accounts Payable like a normal bill). Values kept as-is — only the
+// user-facing labels changed.
+export const purchaseTypeEnum = pgEnum("purchase_type", ["cash", "credit"]);
+
+export const billTypeEnum = pgEnum("bill_type", ["vat", "pan", "estimate", "challan", "no_bill"]);
+
+// Line items on a Stockable purchase invoice — itemId links to the Inventory
+// item master when picked from the dropdown; left null for a free-typed line.
+export type PurchaseLineItem = {
+  itemId: string | null;
+  description: string;
+  rate: number;
+  quantity: number;
+  discount: number;
+};
 
 export const vendors = pgTable("vendors", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -26,10 +43,13 @@ export const purchaseBills = pgTable("purchase_bills", {
   billNumber: text("bill_number").notNull(),
   billDate: date("bill_date").notNull(),
   dueDate: date("due_date"),
-  lineItems: jsonb("line_items").$type<LineItem[]>().notNull().default([]),
+  description: text("description"),
+  lineItems: jsonb("line_items").$type<PurchaseLineItem[]>().notNull().default([]),
   subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
   taxAmount: numeric("tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 18, scale: 2 }).notNull(),
   status: billStatusEnum("status").notNull().default("draft"),
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
+  purchaseType: purchaseTypeEnum("purchase_type").notNull().default("credit"),
+  billType: billTypeEnum("bill_type").notNull().default("no_bill"),
 });

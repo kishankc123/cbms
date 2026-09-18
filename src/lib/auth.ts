@@ -28,19 +28,26 @@ declare module "@auth/core/jwt" {
   }
 }
 
+// Identifies which tenant a login belongs to. Until the super admin UI for
+// issuing per-tenant client codes exists, this single test code is accepted.
+const TEST_CLIENT_CODE = "101";
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
     Credentials({
       credentials: {
+        clientCode: { label: "Client Code", type: "text" },
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials) => {
+        const clientCode = credentials?.clientCode as string | undefined;
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
+        if (!clientCode || !email || !password) return null;
+        if (clientCode !== TEST_CLIENT_CODE) return null;
 
         const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
         if (!user || user.status !== "active") return null;

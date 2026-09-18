@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_bills" ADD COLUMN "description" text;

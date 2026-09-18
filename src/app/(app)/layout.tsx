@@ -1,15 +1,57 @@
-import Link from "next/link";
 import { requireTenantSession } from "@/lib/session";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { SignOutButton } from "./sign-out-button";
+import { AppNav } from "./nav";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/chart-of-accounts", label: "Chart of Accounts" },
+  {
+    href: "/chart-of-accounts",
+    label: "Chart of Accounts",
+    children: [
+      { href: "/chart-of-accounts", label: "Group" },
+      { href: "/chart-of-accounts/sub-groups", label: "Sub-group" },
+    ],
+  },
   { href: "/customers", label: "Customers" },
-  { href: "/sales", label: "Sales" },
+  {
+    href: "/sales",
+    label: "Sales",
+    children: [
+      { href: "/sales", label: "Add new" },
+      { href: "/sales/invoices", label: "Invoices" },
+    ],
+  },
+  {
+    href: "/purchases",
+    label: "Purchases",
+    children: [
+      { href: "/purchases/consumable", label: "Consumable purchase" },
+      { href: "/purchases/stockable", label: "Stockable purchase" },
+    ],
+  },
+  { href: "/suppliers", label: "Suppliers" },
+  {
+    href: "/inventory",
+    label: "Inventory",
+    children: [
+      { href: "/inventory/items", label: "Items" },
+      { href: "/inventory/setup", label: "Setup" },
+    ],
+  },
+  {
+    href: "/payroll",
+    label: "Payroll",
+    children: [
+      { href: "/payroll/employees", label: "Employees" },
+      { href: "/payroll/attendance", label: "Attendance" },
+      { href: "/payroll/salary-sheet", label: "Salary sheet" },
+      { href: "/payroll/benefits", label: "Benefits" },
+      { href: "/payroll/setup", label: "Setup" },
+    ],
+  },
   { href: "/journal", label: "Journal Entries" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
@@ -26,17 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <p className="text-sm font-semibold text-gray-900">{tenant?.companyName}</p>
           <p className="text-xs text-gray-500">{session.role}</p>
         </div>
-        <nav className="flex-1 px-2 py-3 space-y-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-200"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <AppNav items={NAV} />
         <div className="px-2 py-3 border-t border-gray-200">
           <SignOutButton />
         </div>

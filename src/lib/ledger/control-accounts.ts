@@ -22,3 +22,19 @@ export async function findControlAccount(tenantId: string, codes: string[], name
     .limit(1);
   return byName ?? null;
 }
+
+/**
+ * Sub-groups under the tenant's "Cost of Goods Sold" group account — used as
+ * the Category options on purchase bills. Returns [] if the group has no
+ * sub-groups yet (set up under Chart of Accounts > Sub-group).
+ */
+export async function getCogsSubGroups(tenantId: string) {
+  const cogs = await findControlAccount(tenantId, ["5000"], "Cost of Goods Sold");
+  if (!cogs) return [];
+
+  return db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, cogs.id)))
+    .orderBy(accounts.code);
+}

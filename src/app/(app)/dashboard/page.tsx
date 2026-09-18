@@ -1,5 +1,9 @@
 import { requireTenantSession } from "@/lib/session";
 import { profitAndLoss, trialBalance } from "@/lib/ledger/reports";
+import { db } from "@/db";
+import { tenants } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { adToBs, formatBsDate } from "@/lib/bs-date";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -10,10 +14,18 @@ export default async function DashboardPage() {
   const now = new Date();
   const monthStart = startOfMonth(now);
 
-  const [pnl, tb] = await Promise.all([
+  const [[tenant], pnl, tb] = await Promise.all([
+    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
     profitAndLoss(session.tenantId, monthStart, now),
     trialBalance(session.tenantId, now),
   ]);
+
+  const adDateLabel = now.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const bsDateLabel = formatBsDate(adToBs(now));
 
   const cards = [
     { label: "Revenue (this month)", value: pnl.totalIncome },
@@ -23,7 +35,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      <div className="flex items-start justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">KPIs</h1>
+        <div className="text-right">
+          {tenant?.fiscalYearLabel && (
+            <p className="text-sm font-medium text-gray-900">FY {tenant.fiscalYearLabel}</p>
+          )}
+          <p className="text-xs text-gray-500">
+            {adDateLabel} ({bsDateLabel} BS)
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((c) => (

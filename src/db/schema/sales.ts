@@ -39,6 +39,10 @@ export const salesInvoices = pgTable("sales_invoices", {
   invoiceDate: date("invoice_date").notNull(),
   dueDate: date("due_date"),
   lineItems: jsonb("line_items").$type<LineItem[]>().notNull().default([]),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  discountAmount: numeric("discount_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  // Taxable amount (gross - discount); kept as "subtotal" since it's the same
+  // pre-tax figure the ledger posting and reports already key off of.
   subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
   taxAmount: numeric("tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 18, scale: 2 }).notNull(),

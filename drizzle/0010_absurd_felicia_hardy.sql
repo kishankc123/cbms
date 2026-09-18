@@ -1,0 +1,2 @@
+CREATE TYPE "public"."bill_type" AS ENUM('vat', 'pan', 'estimate', 'challan', 'no_bill');--> statement-breakpoint
+ALTER TABLE "purchase_bills" ADD COLUMN "bill_type" "bill_type" DEFAULT 'no_bill' NOT NULL;
