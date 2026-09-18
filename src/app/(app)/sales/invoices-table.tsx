@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { voidInvoice } from "./actions";
-import { EditInvoiceModal } from "./edit-invoice-modal";
+import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 
 type Customer = { id: string; name: string };
+type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type Invoice = {
   id: string;
@@ -15,13 +16,14 @@ type Invoice = {
   status: string;
 };
 
-type SortKey = "customer" | "total";
+type SortKey = "date" | "invoiceNumber" | "customer" | "total" | "status";
 type SortDir = "asc" | "desc";
 
 export function InvoicesTable({
   invoiceList,
   customerById,
   customers,
+  items,
   cashBankAccounts,
   customerBalances,
   vatRate,
@@ -29,10 +31,12 @@ export function InvoicesTable({
   invoiceList: Invoice[];
   customerById: Record<string, Customer>;
   customers: Customer[];
+  items: Item[];
   cashBankAccounts: CashBankGroup[];
   customerBalances: Record<string, number>;
   vatRate: number;
 }) {
+  const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,14 +51,48 @@ export function InvoicesTable({
   }
 
   const sorted = useMemo(() => {
-    if (!sortKey) return invoiceList;
-    return [...invoiceList].sort((a, b) => {
-      const av = sortKey === "total" ? Number(a.total) : customerById[a.customerId]?.name ?? "";
-      const bv = sortKey === "total" ? Number(b.total) : customerById[b.customerId]?.name ?? "";
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [invoiceList, customerById, sortKey, sortDir]);
+    const q = search.trim().toLowerCase();
+    let rows = !q
+      ? invoiceList
+      : invoiceList.filter(
+          (inv) =>
+            inv.invoiceNumber.toLowerCase().includes(q) ||
+            (customerById[inv.customerId]?.name ?? "").toLowerCase().includes(q) ||
+            inv.total.toLowerCase().includes(q)
+        );
+
+    if (sortKey) {
+      rows = [...rows].sort((a, b) => {
+        let av: string | number;
+        let bv: string | number;
+        switch (sortKey) {
+          case "date":
+            av = a.invoiceDate;
+            bv = b.invoiceDate;
+            break;
+          case "invoiceNumber":
+            av = a.invoiceNumber;
+            bv = b.invoiceNumber;
+            break;
+          case "total":
+            av = Number(a.total);
+            bv = Number(b.total);
+            break;
+          case "status":
+            av = a.status;
+            bv = b.status;
+            break;
+          default:
+            av = customerById[a.customerId]?.name ?? "";
+            bv = customerById[b.customerId]?.name ?? "";
+        }
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return rows;
+  }, [invoiceList, customerById, search, sortKey, sortDir]);
 
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
@@ -63,11 +101,30 @@ export function InvoicesTable({
 
   return (
     <>
+      <div className="flex justify-end mb-3">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by customer, invoice #, amount..."
+          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-72"
+        />
+      </div>
+
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Date</th>
-            <th className="px-4 py-2 font-medium">Invoice #</th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("date")}
+            >
+              Date{sortIndicator("date")}
+            </th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("invoiceNumber")}
+            >
+              Invoice #{sortIndicator("invoiceNumber")}
+            </th>
             <th
               className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
               onClick={() => toggleSort("customer")}
@@ -80,7 +137,12 @@ export function InvoicesTable({
             >
               Amount{sortIndicator("total")}
             </th>
-            <th className="px-4 py-2 font-medium">Status</th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("status")}
+            >
+              Status{sortIndicator("status")}
+            </th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -128,9 +190,10 @@ export function InvoicesTable({
       </table>
 
       {editingId && (
-        <EditInvoiceModal
+        <EditSingleInvoiceModal
           invoiceId={editingId}
           customers={customers}
+          items={items}
           cashBankAccounts={cashBankAccounts}
           customerBalances={customerBalances}
           vatRate={vatRate}

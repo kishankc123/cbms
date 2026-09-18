@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createCustomer, deleteCustomer, updateCustomer } from "./actions";
+import Link from "next/link";
+import { createCustomer } from "./actions";
 import { CustomerFormModal } from "./customer-form-modal";
-import { HistoryDrawer } from "./history-drawer";
 import { DateRangeControl, type DateFilter } from "./date-range-control";
 
 type Customer = {
@@ -39,21 +39,11 @@ function computePeriod(c: Customer, filter: DateFilter) {
   return { opening, sales, paid, outstanding };
 }
 
-export function CustomersTable({
-  customers,
-  fiscalYearStartDate,
-}: {
-  customers: Customer[];
-  fiscalYearStartDate: string | null;
-}) {
+export function CustomersTable({ customers }: { customers: Customer[] }) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [dateFilter, setDateFilter] = useState<DateFilter>({ mode: "all", from: "", to: "" });
-
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const effectiveFrom = dateFilter.mode === "range" ? dateFilter.from : fiscalYearStartDate ?? "";
-  const effectiveTo = dateFilter.mode === "range" ? dateFilter.to : today;
 
   const rows = useMemo(
     () => customers.map((c) => ({ ...c, ...computePeriod(c, dateFilter) })),
@@ -122,8 +112,7 @@ export function CustomersTable({
               sortDir={sortDir}
               onSort={toggleSort}
             />
-            <th className="px-4 py-2 font-medium">History</th>
-            <th className="px-4 py-2 font-medium">Actions</th>
+            <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -135,58 +124,15 @@ export function CustomersTable({
               <td className="px-4 py-2">{fmt(c.paid)}</td>
               <td className="px-4 py-2">{fmt(c.outstanding)}</td>
               <td className="px-4 py-2">
-                <HistoryDrawer
-                  customerId={c.id}
-                  customerName={c.name}
-                  effectiveFrom={effectiveFrom}
-                  effectiveTo={effectiveTo}
-                  trigger={(open) => (
-                    <button
-                      type="button"
-                      onClick={open}
-                      className="text-[var(--color-primary)] hover:underline text-xs"
-                    >
-                      History
-                    </button>
-                  )}
-                />
-              </td>
-              <td className="px-4 py-2">
-                <div className="flex gap-3">
-                  <CustomerFormModal
-                    title="Edit customer"
-                    action={updateCustomer}
-                    customerId={c.id}
-                    initial={{
-                      name: c.name,
-                      phone: c.phone,
-                      details: c.details,
-                      openingBalance: c.openingBalance,
-                    }}
-                    trigger={(open) => (
-                      <button type="button" onClick={open} className="text-xs text-gray-600 hover:text-gray-900">
-                        Edit
-                      </button>
-                    )}
-                  />
-                  <form
-                    action={deleteCustomer}
-                    onSubmit={(e) => {
-                      if (!confirm(`Delete ${c.name}? This cannot be undone.`)) e.preventDefault();
-                    }}
-                  >
-                    <input type="hidden" name="customerId" value={c.id} />
-                    <button type="submit" className="text-xs text-red-600 hover:underline">
-                      Delete
-                    </button>
-                  </form>
-                </div>
+                <Link href={`/customers/${c.id}`} className="text-xs text-[var(--color-primary)] hover:underline">
+                  View profile
+                </Link>
               </td>
             </tr>
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                 No customers match
               </td>
             </tr>

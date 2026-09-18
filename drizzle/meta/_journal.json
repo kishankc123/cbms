@@ -120,6 +120,20 @@
       "when": 1789721356316,
       "tag": "0016_stiff_triton",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789732156695,
+      "tag": "0017_strange_johnny_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789753010541,
+      "tag": "0018_talented_sphinx",
+      "breakpoints": true
     }
   ]
 }

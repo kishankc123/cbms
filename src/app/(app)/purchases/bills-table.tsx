@@ -7,13 +7,14 @@ type Vendor = { id: string; name: string };
 type Bill = {
   id: string;
   billNumber: string;
-  vendorId: string;
+  vendorId: string | null;
+  description: string | null;
   billDate: string;
   total: string;
   status: string;
 };
 
-type SortKey = "supplier" | "date";
+type SortKey = "date" | "billNumber" | "supplier" | "total" | "status";
 type SortDir = "asc" | "desc";
 
 export function BillsTable({
@@ -45,13 +46,37 @@ export function BillsTable({
     let rows = !q
       ? bills
       : bills.filter(
-          (b) => b.billNumber.toLowerCase().includes(q) || (vendorById.get(b.vendorId)?.name ?? "").toLowerCase().includes(q)
+          (b) =>
+            b.billNumber.toLowerCase().includes(q) ||
+            (vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "").toLowerCase().includes(q) ||
+            b.total.toLowerCase().includes(q)
         );
 
     if (sortKey) {
       rows = [...rows].sort((a, b) => {
-        const av = sortKey === "date" ? a.billDate : vendorById.get(a.vendorId)?.name ?? "";
-        const bv = sortKey === "date" ? b.billDate : vendorById.get(b.vendorId)?.name ?? "";
+        let av: string | number;
+        let bv: string | number;
+        switch (sortKey) {
+          case "date":
+            av = a.billDate;
+            bv = b.billDate;
+            break;
+          case "billNumber":
+            av = a.billNumber;
+            bv = b.billNumber;
+            break;
+          case "total":
+            av = Number(a.total);
+            bv = Number(b.total);
+            break;
+          case "status":
+            av = a.status;
+            bv = b.status;
+            break;
+          default:
+            av = vendorById.get(a.vendorId ?? "")?.name ?? a.description ?? "";
+            bv = vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "";
+        }
         const cmp = av < bv ? -1 : av > bv ? 1 : 0;
         return sortDir === "asc" ? cmp : -cmp;
       });
@@ -67,12 +92,14 @@ export function BillsTable({
 
   return (
     <div className="space-y-3">
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search bills..."
-        className="rounded border border-gray-300 px-3 py-1.5 text-sm w-64"
-      />
+      <div className="flex justify-end">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by supplier, bill #, amount..."
+          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-72"
+        />
+      </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
@@ -83,15 +110,30 @@ export function BillsTable({
             >
               Date{sortIndicator("date")}
             </th>
-            <th className="px-4 py-2 font-medium">Bill #</th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("billNumber")}
+            >
+              Bill #{sortIndicator("billNumber")}
+            </th>
             <th
               className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
               onClick={() => toggleSort("supplier")}
             >
-              Supplier{sortIndicator("supplier")}
+              Supplier / Details{sortIndicator("supplier")}
             </th>
-            <th className="px-4 py-2 font-medium">Total</th>
-            <th className="px-4 py-2 font-medium">Status</th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("total")}
+            >
+              Total{sortIndicator("total")}
+            </th>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("status")}
+            >
+              Status{sortIndicator("status")}
+            </th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -100,7 +142,7 @@ export function BillsTable({
             <tr key={b.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{b.billDate}</td>
               <td className="px-4 py-2 font-mono">{b.billNumber}</td>
-              <td className="px-4 py-2">{vendorById.get(b.vendorId)?.name ?? "—"}</td>
+              <td className="px-4 py-2">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td className="px-4 py-2 capitalize">{b.status.replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">

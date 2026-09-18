@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createSupplier, deleteSupplier, updateSupplier } from "./actions";
+import Link from "next/link";
+import { createSupplier } from "./actions";
 import { SupplierFormModal } from "./supplier-form-modal";
-import { HistoryDrawer } from "./history-drawer";
 import { DateRangeControl, type DateFilter } from "./date-range-control";
 
 type Supplier = {
@@ -39,21 +39,11 @@ function computePeriod(s: Supplier, filter: DateFilter) {
   return { opening, purchases, paid, outstanding };
 }
 
-export function SuppliersTable({
-  suppliers,
-  fiscalYearStartDate,
-}: {
-  suppliers: Supplier[];
-  fiscalYearStartDate: string | null;
-}) {
+export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [dateFilter, setDateFilter] = useState<DateFilter>({ mode: "all", from: "", to: "" });
-
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const effectiveFrom = dateFilter.mode === "range" ? dateFilter.from : fiscalYearStartDate ?? "";
-  const effectiveTo = dateFilter.mode === "range" ? dateFilter.to : today;
 
   const rows = useMemo(
     () => suppliers.map((s) => ({ ...s, ...computePeriod(s, dateFilter) })),
@@ -122,8 +112,7 @@ export function SuppliersTable({
               sortDir={sortDir}
               onSort={toggleSort}
             />
-            <th className="px-4 py-2 font-medium">History</th>
-            <th className="px-4 py-2 font-medium">Actions</th>
+            <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -135,58 +124,15 @@ export function SuppliersTable({
               <td className="px-4 py-2">{fmt(s.paid)}</td>
               <td className="px-4 py-2">{fmt(s.outstanding)}</td>
               <td className="px-4 py-2">
-                <HistoryDrawer
-                  supplierId={s.id}
-                  supplierName={s.name}
-                  effectiveFrom={effectiveFrom}
-                  effectiveTo={effectiveTo}
-                  trigger={(open) => (
-                    <button
-                      type="button"
-                      onClick={open}
-                      className="text-[var(--color-primary)] hover:underline text-xs"
-                    >
-                      History
-                    </button>
-                  )}
-                />
-              </td>
-              <td className="px-4 py-2">
-                <div className="flex gap-3">
-                  <SupplierFormModal
-                    title="Edit supplier"
-                    action={updateSupplier}
-                    supplierId={s.id}
-                    initial={{
-                      name: s.name,
-                      phone: s.phone,
-                      details: s.details,
-                      openingBalance: s.openingBalance,
-                    }}
-                    trigger={(open) => (
-                      <button type="button" onClick={open} className="text-xs text-gray-600 hover:text-gray-900">
-                        Edit
-                      </button>
-                    )}
-                  />
-                  <form
-                    action={deleteSupplier}
-                    onSubmit={(e) => {
-                      if (!confirm(`Delete ${s.name}? This cannot be undone.`)) e.preventDefault();
-                    }}
-                  >
-                    <input type="hidden" name="supplierId" value={s.id} />
-                    <button type="submit" className="text-xs text-red-600 hover:underline">
-                      Delete
-                    </button>
-                  </form>
-                </div>
+                <Link href={`/suppliers/${s.id}`} className="text-xs text-[var(--color-primary)] hover:underline">
+                  View profile
+                </Link>
               </td>
             </tr>
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                 No suppliers match
               </td>
             </tr>

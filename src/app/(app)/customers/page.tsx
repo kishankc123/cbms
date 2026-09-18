@@ -1,19 +1,13 @@
 import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, receipts, tenants } from "@/db/schema";
+import { customers, salesInvoices, receipts } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
   const session = await requireTenantSession();
 
-  const [tenant, customerList, invoices, customerReceipts] = await Promise.all([
-    db
-      .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
-      .from(tenants)
-      .where(eq(tenants.id, session.tenantId))
-      .limit(1)
-      .then((rows) => rows[0]),
+  const [customerList, invoices, customerReceipts] = await Promise.all([
     db
       .select()
       .from(customers)
@@ -58,7 +52,7 @@ export default async function CustomersPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
 
-      <CustomersTable customers={rows} fiscalYearStartDate={tenant?.fiscalYearStartDate ?? null} />
+      <CustomersTable customers={rows} />
     </div>
   );
 }

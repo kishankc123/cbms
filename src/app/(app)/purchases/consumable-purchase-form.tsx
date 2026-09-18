@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCashPurchaseBatch, type CashBillType } from "./actions";
 import { ConfirmDialog } from "../sales/confirm-dialog";
+import { InfoDialog } from "../inventory/info-dialog";
 import { RecordPayModal } from "./record-pay-modal";
 
 type Vendor = { id: string; name: string };
@@ -88,7 +89,7 @@ export function ConsumablePurchaseForm({
   const [errorRow, setErrorRow] = useState<number | null>(null);
   const [paymentRow, setPaymentRow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [savedMessage, setSavedMessage] = useState(false);
+  const [showSavedDialog, setShowSavedDialog] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
   const [confirmAction, setConfirmAction] = useState<"save" | "reset" | null>(null);
@@ -176,8 +177,7 @@ export function ConsumablePurchaseForm({
         })),
       });
       setRows(Array.from({ length: MIN_ROWS }, emptyRow));
-      setSavedMessage(true);
-      setTimeout(() => setSavedMessage(false), 2500);
+      setShowSavedDialog(true);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -214,13 +214,13 @@ export function ConsumablePurchaseForm({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Description</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Bill no</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Supplier</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Category</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Bill type</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Amount</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap"></th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Description</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Bill no</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Supplier</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Category</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Bill type</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Amount</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
@@ -233,26 +233,26 @@ export function ConsumablePurchaseForm({
                   setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
                 }}
               >
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <input
                     value={row.description}
                     onChange={(e) => updateRow(i, "description", e.target.value)}
                     placeholder="Details"
-                    className={`w-36 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <input
                     value={row.billNumber}
                     onChange={(e) => updateRow(i, "billNumber", e.target.value)}
-                    className={`w-20 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-20 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <select
                     value={row.vendorId}
                     onChange={(e) => updateRow(i, "vendorId", e.target.value)}
-                    className={`w-36 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   >
                     <option value="" className="text-gray-400">
                       Select supplier
@@ -264,11 +264,11 @@ export function ConsumablePurchaseForm({
                     ))}
                   </select>
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <select
                     value={row.categoryId}
                     onChange={(e) => updateRow(i, "categoryId", e.target.value)}
-                    className={`w-36 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   >
                     <option value="" className="text-gray-400">
                       Select category
@@ -280,11 +280,11 @@ export function ConsumablePurchaseForm({
                     ))}
                   </select>
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <select
                     value={row.billType}
                     onChange={(e) => updateRow(i, "billType", e.target.value)}
-                    className={`w-28 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-28 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   >
                     {BILL_TYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -293,17 +293,17 @@ export function ConsumablePurchaseForm({
                     ))}
                   </select>
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={row.amount}
                     onChange={(e) => updateRow(i, "amount", e.target.value)}
-                    className={`w-24 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                    className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <button
                     type="button"
                     onClick={() => handleRecordPayClick(i)}
@@ -372,7 +372,6 @@ export function ConsumablePurchaseForm({
 
       <div className="flex items-center justify-end gap-3">
         {saveError && <span className="text-xs text-red-600">{saveError}</span>}
-        {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
           onClick={handleSaveClick}
@@ -396,6 +395,10 @@ export function ConsumablePurchaseForm({
       )}
       {confirmAction === "reset" && (
         <ConfirmDialog message="Do you want to reset?" onYes={performReset} onNo={() => setConfirmAction(null)} />
+      )}
+
+      {showSavedDialog && (
+        <InfoDialog message="Purchase saved successfully." onOk={() => setShowSavedDialog(false)} />
       )}
 
       {contextMenu && (

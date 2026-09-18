@@ -1,6 +1,6 @@
 import { eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, tenants } from "@/db/schema";
+import { customers, salesInvoices, tenants, items } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
@@ -9,8 +9,9 @@ import { InvoicesTable } from "../invoices-table";
 export default async function SalesInvoicesPage() {
   const session = await requireTenantSession();
 
-  const [customerList, invoiceList, cashBankAccounts, customerBalances, [tenant]] = await Promise.all([
+  const [customerList, itemList, invoiceList, cashBankAccounts, customerBalances, [tenant]] = await Promise.all([
     db.select().from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
+    db.select().from(items).where(eq(items.tenantId, session.tenantId)).orderBy(asc(items.name)),
     db
       .select()
       .from(salesInvoices)
@@ -31,6 +32,7 @@ export default async function SalesInvoicesPage() {
         invoiceList={invoiceList}
         customerById={customerById}
         customers={customerList}
+        items={itemList}
         cashBankAccounts={cashBankAccounts}
         customerBalances={customerBalances}
         vatRate={vatRate}

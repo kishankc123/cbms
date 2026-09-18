@@ -1,19 +1,13 @@
 import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, payments, tenants } from "@/db/schema";
+import { vendors, purchaseBills, payments } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { SuppliersTable } from "./suppliers-table";
 
 export default async function SuppliersPage() {
   const session = await requireTenantSession();
 
-  const [tenant, supplierList, bills, supplierPayments] = await Promise.all([
-    db
-      .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
-      .from(tenants)
-      .where(eq(tenants.id, session.tenantId))
-      .limit(1)
-      .then((rows) => rows[0]),
+  const [supplierList, bills, supplierPayments] = await Promise.all([
     db
       .select()
       .from(vendors)
@@ -31,6 +25,7 @@ export default async function SuppliersPage() {
 
   const billsByVendor = new Map<string, { date: string; total: number }[]>();
   for (const b of bills) {
+    if (!b.vendorId) continue;
     const list = billsByVendor.get(b.vendorId) ?? [];
     list.push({ date: b.date, total: Number(b.total) });
     billsByVendor.set(b.vendorId, list);
@@ -58,7 +53,7 @@ export default async function SuppliersPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-gray-900">Suppliers</h1>
 
-      <SuppliersTable suppliers={rows} fiscalYearStartDate={tenant?.fiscalYearStartDate ?? null} />
+      <SuppliersTable suppliers={rows} />
     </div>
   );
 }

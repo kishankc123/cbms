@@ -31,4 +31,7 @@ export const items = pgTable("items", {
   categoryId: uuid("category_id").references(() => itemCategories.id),
   purchasePrice: numeric("purchase_price", { precision: 18, scale: 2 }).notNull().default("0"),
   sellingPrice: numeric("selling_price", { precision: 18, scale: 2 }).notNull().default("0"),
+  // Running on-hand quantity, kept in sync by Stockable purchases (+) and
+  // sales of stockable items (-) — the source for future inventory reports.
+  stockQuantity: numeric("stock_quantity", { precision: 18, scale: 3 }).notNull().default("0"),
 });

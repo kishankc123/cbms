@@ -25,9 +25,11 @@ export const customers = pgTable("customers", {
 });
 
 export type LineItem = {
+  itemId?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
+  discount?: number;
   taxRate: number;
 };
 

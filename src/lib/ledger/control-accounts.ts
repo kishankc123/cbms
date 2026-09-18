@@ -24,6 +24,23 @@ export async function findControlAccount(tenantId: string, codes: string[], name
 }
 
 /**
+ * The equity account customer/supplier opening balances post against —
+ * the "Brought forward" figure representing balances carried in from before
+ * the books started, so opening balances participate in the trial balance
+ * instead of being an off-ledger display-only number.
+ */
+export async function getOrCreateBroughtForwardAccount(tenantId: string) {
+  const existing = await findControlAccount(tenantId, ["3200"], "Brought forward");
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(accounts)
+    .values({ tenantId, code: "3200", name: "Brought forward", category: "equity", subCategory: "Equity & reserve" })
+    .returning();
+  return created;
+}
+
+/**
  * Sub-groups under the tenant's "Cost of Goods Sold" group account — used as
  * the Category options on purchase bills. Returns [] if the group has no
  * sub-groups yet (set up under Chart of Accounts > Sub-group).

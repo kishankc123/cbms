@@ -8,7 +8,15 @@ import { EditPurchaseInvoiceModal } from "./edit-purchase-invoice-modal";
 type Vendor = { id: string; name: string };
 type Item = { id: string; name: string; purchasePrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
-type Bill = { id: string; billNumber: string; vendorId: string; billDate: string; total: string; status: string };
+type Bill = {
+  id: string;
+  billNumber: string;
+  vendorId: string | null;
+  description: string | null;
+  billDate: string;
+  total: string;
+  status: string;
+};
 
 const TABS = [
   { id: "invoices", label: "Invoices" },

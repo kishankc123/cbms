@@ -3,11 +3,22 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, or, count, desc, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { salesInvoices, journalEntries, journalLines, tenants, bankAccounts, receipts, accounts, customers } from "@/db/schema";
+import {
+  salesInvoices,
+  journalEntries,
+  journalLines,
+  tenants,
+  bankAccounts,
+  receipts,
+  accounts,
+  customers,
+  type LineItem,
+} from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
+import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -64,6 +75,55 @@ async function reverseActiveEntriesForInvoice(
     userId,
     memo
   );
+
+  // Cost-of-goods-sold for stockable items posts as its own "expense"-sourced
+  // entry against the same invoice — reversed alongside the sale/receipt
+  // entries on edit or void.
+  await reverseLatestActiveEntry(
+    tenantId,
+    and(
+      eq(journalEntries.tenantId, tenantId),
+      eq(journalEntries.sourceType, "expense"),
+      eq(journalEntries.sourceId, invoiceId),
+      eq(journalEntries.isReversed, false)
+    ),
+    userId,
+    memo
+  );
+}
+
+// Books the cost side of a sale for stockable items — Dr Cost of Goods Sold,
+// Cr Inventory — as its own "expense"-sourced entry tied to the invoice.
+// Skipped entirely (no entry posted) when nothing sold has a cost basis.
+async function postCogsEntry(
+  tenantId: string,
+  entryDate: string,
+  invoiceId: string,
+  invoiceNumber: string,
+  userId: string,
+  lines: { itemId?: string | null; quantity: number }[]
+) {
+  const cost = await computeCogsTotal(tenantId, lines);
+  if (cost <= 0) return;
+
+  const cogs = await findControlAccount(tenantId, ["5000"], "Cost of Goods Sold");
+  if (!cogs) throw new Error("No Cost of Goods Sold account found — add one to the Chart of Accounts first");
+  const inventory = await findControlAccount(tenantId, ["1200"], "Inventory");
+  if (!inventory) throw new Error("No Inventory account found — add one to the Chart of Accounts first");
+
+  await postJournalEntry({
+    tenantId,
+    entryDate,
+    sourceType: "expense",
+    sourceId: invoiceId,
+    referenceNumber: invoiceNumber,
+    memo: `COGS for invoice ${invoiceNumber}`,
+    createdBy: userId,
+    lines: [
+      { accountId: cogs.id, debitAmount: cost, description: `COGS for invoice ${invoiceNumber}` },
+      { accountId: inventory.id, creditAmount: cost, description: `COGS for invoice ${invoiceNumber}` },
+    ],
+  });
 }
 
 async function deleteReceiptsForInvoice(tenantId: string, invoiceId: string) {
@@ -285,6 +345,7 @@ export async function voidInvoice(formData: FormData) {
     `Void of invoice ${invoice.invoiceNumber}`
   );
   await deleteReceiptsForInvoice(session.tenantId, invoiceId);
+  await applyStockDelta(session.tenantId, (invoice.lineItems ?? []) as LineItem[], 1);
 
   await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
 
@@ -293,20 +354,33 @@ export async function voidInvoice(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/customers");
+  revalidatePath("/inventory/items");
 }
 
-export type SalesInvoiceEditData = {
+export type SingleInvoiceEditLine = {
+  itemId: string | null;
+  description: string;
+  rate: number;
+  quantity: number;
+  discount: number;
+};
+
+export type SingleInvoiceEditData = {
   invoiceId: string;
+  invoiceNumber: string;
   invoiceDate: string;
   customerId: string;
-  grossAmount: number;
-  discountAmount: number;
+  lines: SingleInvoiceEditLine[];
   payments: BatchPaymentLine[];
 };
 
 // Payments aren't stored on the invoice row itself, so the split is
-// reconstructed from the invoice's active "receipt" journal entry.
-export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SalesInvoiceEditData> {
+// reconstructed from the invoice's active "receipt" journal entry. An
+// invoice created via Multi-invoice has no line items (it only ever stored
+// gross/discount totals) — that's synthesized here as a single "Custom" line
+// so editing always lands in the Single invoice format, letting the user add
+// real item detail to it from that point on.
+export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleInvoiceEditData> {
   const session = await requireTenantSession();
   if (!can(session, "sales", "edit")) throw new Error("Not permitted");
 
@@ -339,29 +413,42 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SalesIn
       .map((l) => ({ accountId: l.accountId, amount: Number(l.debitAmount) }));
   }
 
+  const storedLines = (invoice.lineItems ?? []) as LineItem[];
+  const lines: SingleInvoiceEditLine[] =
+    storedLines.length > 0
+      ? storedLines.map((l) => ({
+          itemId: l.itemId ?? null,
+          description: l.description,
+          rate: l.unitPrice,
+          quantity: l.quantity,
+          discount: l.discount ?? 0,
+        }))
+      : [
+          {
+            itemId: null,
+            description: "",
+            rate: Number(invoice.grossAmount),
+            quantity: 1,
+            discount: Number(invoice.discountAmount),
+          },
+        ];
+
   return {
     invoiceId: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
     invoiceDate: invoice.invoiceDate,
     customerId: invoice.customerId,
-    grossAmount: Number(invoice.grossAmount),
-    discountAmount: Number(invoice.discountAmount),
+    lines,
     payments,
   };
 }
 
-export type UpdateSalesInvoiceInput = {
-  invoiceId: string;
-  invoiceDate: string;
-  customerId: string;
-  grossAmount: number;
-  discountAmount: number;
-  payments: BatchPaymentLine[];
-};
+export type UpdateSingleInvoiceInput = SingleInvoiceInput & { invoiceId: string };
 
 // Editing reverses the invoice's old entries (sale + receipt) and posts
-// fresh ones from the updated fields — the invoice number stays the same,
-// this is a correction, not a renumbering.
-export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
+// fresh ones from the updated fields, same correction pattern used
+// everywhere else in the ledger.
+export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "sales", "edit")) throw new Error("Not permitted");
 
@@ -373,24 +460,27 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
   if (!existing) throw new Error("Invoice not found");
   if (existing.status === "void") throw new Error("Cannot edit a void invoice");
 
+  const invoiceNumber = input.invoiceNumber.trim();
+  if (!invoiceNumber) throw new Error("Invoice number is required");
+  if (!input.customerId) throw new Error("Select a customer");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
-  if (input.grossAmount <= 0) throw new Error("Gross amount must be greater than zero");
-  if (input.discountAmount < 0 || input.discountAmount > input.grossAmount) {
-    throw new Error("Discount must be between 0 and the gross amount");
-  }
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
 
-  const subtotal = round2(input.grossAmount - input.discountAmount);
-  const taxAmount = round2(subtotal * (vatRate / 100));
-  const total = round2(subtotal + taxAmount);
-  const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
+  const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
+  if (validLines.length === 0) throw new Error("Add at least one item line");
 
+  const computed = validLines.map((l) => computeSingleLine(l, vatRate));
+  const grossAmount = round2(computed.reduce((s, c) => s + c.gross, 0));
+  const discountAmount = round2(computed.reduce((s, c) => s + c.discount, 0));
+  const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
+  const taxAmount = round2(computed.reduce((s, c) => s + c.vat, 0));
+  const total = round2(subtotal + taxAmount);
+
+  const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
-  if (paid < total && !input.customerId) {
-    throw new Error("Select a customer — the recorded payment doesn't cover the invoice total");
-  }
+  const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
   const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
   if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
@@ -404,9 +494,6 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
     taxPayableId = taxPayable.id;
   }
 
-  const customerId = input.customerId || (await ensureCashCustomer(session.tenantId));
-  const status = paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
-
   await reverseActiveEntriesForInvoice(
     session.tenantId,
     input.invoiceId,
@@ -415,14 +502,25 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
     `Edit of invoice ${existing.invoiceNumber}`
   );
   await deleteReceiptsForInvoice(session.tenantId, input.invoiceId);
+  await applyStockDelta(session.tenantId, (existing.lineItems ?? []) as LineItem[], 1);
+  await applyStockDelta(session.tenantId, validLines, -1);
 
   await db
     .update(salesInvoices)
     .set({
-      customerId,
+      customerId: input.customerId,
+      invoiceNumber,
       invoiceDate: input.invoiceDate,
-      grossAmount: input.grossAmount.toFixed(2),
-      discountAmount: input.discountAmount.toFixed(2),
+      lineItems: validLines.map((l) => ({
+        itemId: l.itemId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.rate,
+        discount: l.discount,
+        taxRate: vatRate,
+      })),
+      grossAmount: grossAmount.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
@@ -432,11 +530,11 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
     .where(eq(salesInvoices.id, input.invoiceId));
 
   const lines: PostLineInput[] = [
-    { accountId: ar.id, debitAmount: total, description: `Invoice ${existing.invoiceNumber}` },
-    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${existing.invoiceNumber}` },
+    { accountId: ar.id, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
   ];
   if (taxAmount > 0 && taxPayableId) {
-    lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${existing.invoiceNumber}` });
+    lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
   }
 
   await postJournalEntry({
@@ -444,28 +542,30 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
     entryDate: input.invoiceDate,
     sourceType: "sale",
     sourceId: input.invoiceId,
-    referenceNumber: existing.invoiceNumber,
-    memo: `Sales invoice ${existing.invoiceNumber} (edited)`,
+    referenceNumber: invoiceNumber,
+    memo: `Sales invoice ${invoiceNumber} (edited)`,
     createdBy: session.userId,
     lines,
   });
+
+  await postCogsEntry(session.tenantId, input.invoiceDate, input.invoiceId, invoiceNumber, session.userId, validLines);
 
   if (paid > 0) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
     const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
       accountId: p.accountId,
       debitAmount: p.amount,
-      description: `Payment received for ${existing.invoiceNumber}`,
+      description: `Payment received for ${invoiceNumber}`,
     }));
-    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${existing.invoiceNumber}` });
+    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
 
     await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: input.invoiceDate,
       sourceType: "receipt",
       sourceId: input.invoiceId,
-      referenceNumber: existing.invoiceNumber,
-      memo: `Payment received for ${existing.invoiceNumber} (edited)`,
+      referenceNumber: invoiceNumber,
+      memo: `Payment received for ${invoiceNumber} (edited)`,
       createdBy: session.userId,
       lines: receiptLines,
     });
@@ -474,7 +574,7 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
     await db.insert(receipts).values({
       tenantId: session.tenantId,
       receiptDate: input.invoiceDate,
-      receivedFromCustomerId: customerId,
+      receivedFromCustomerId: input.customerId,
       amount: paid.toFixed(2),
       bankAccountId: primaryBankAccountId,
       appliedToInvoiceIds: [input.invoiceId],
@@ -486,4 +586,160 @@ export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/customers");
+  revalidatePath("/inventory/items");
+}
+
+export type SingleInvoiceLine = {
+  itemId: string | null;
+  description: string;
+  rate: number;
+  quantity: number;
+  discount: number;
+};
+
+export type SingleInvoicePayment = { accountId: string; amount: number };
+
+export type SingleInvoiceInput = {
+  invoiceNumber: string;
+  invoiceDate: string;
+  customerId: string;
+  lines: SingleInvoiceLine[];
+  payments: SingleInvoicePayment[];
+};
+
+function computeSingleLine(line: SingleInvoiceLine, vatRate: number) {
+  const gross = round2(line.rate * line.quantity);
+  const discount = round2(Math.min(Math.max(line.discount, 0), gross));
+  const taxable = round2(gross - discount);
+  const vat = round2(taxable * (vatRate / 100));
+  const total = round2(taxable + vat);
+  return { gross, discount, taxable, vat, total };
+}
+
+// A Single invoice is one customer bill with multiple item lines — the same
+// shape as a Stockable purchase invoice, just on the sales side. Unlike
+// Multi-invoice's batch grid, the customer is always required upfront (no
+// "Cash Sale" fallback) and this creates exactly one invoice per Save.
+export async function createSingleInvoice(input: SingleInvoiceInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "create")) throw new Error("Not permitted");
+
+  const invoiceNumber = input.invoiceNumber.trim();
+  if (!invoiceNumber) throw new Error("Invoice number is required");
+  if (!input.customerId) throw new Error("Select a customer");
+  if (!input.invoiceDate) throw new Error("Invoice date is required");
+
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
+  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+
+  const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
+  if (validLines.length === 0) throw new Error("Add at least one item line");
+
+  const computed = validLines.map((l) => computeSingleLine(l, vatRate));
+  const grossAmount = round2(computed.reduce((s, c) => s + c.gross, 0));
+  const discountAmount = round2(computed.reduce((s, c) => s + c.discount, 0));
+  const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
+  const taxAmount = round2(computed.reduce((s, c) => s + c.vat, 0));
+  const total = round2(subtotal + taxAmount);
+
+  const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
+  if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
+  const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
+
+  const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
+  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
+  const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
+  if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
+
+  let taxPayableId: string | null = null;
+  if (taxAmount > 0) {
+    const taxPayable = await findControlAccount(session.tenantId, ["2100"], "Tax Payable");
+    if (!taxPayable) throw new Error("No Tax Payable account found — add one to the Chart of Accounts first");
+    taxPayableId = taxPayable.id;
+  }
+
+  const [invoice] = await db
+    .insert(salesInvoices)
+    .values({
+      tenantId: session.tenantId,
+      customerId: input.customerId,
+      invoiceNumber,
+      invoiceDate: input.invoiceDate,
+      lineItems: validLines.map((l) => ({
+        itemId: l.itemId,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.rate,
+        discount: l.discount,
+        taxRate: vatRate,
+      })),
+      grossAmount: grossAmount.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      subtotal: subtotal.toFixed(2),
+      taxAmount: taxAmount.toFixed(2),
+      total: total.toFixed(2),
+      amountPaid: paid.toFixed(2),
+      status,
+    })
+    .returning();
+
+  const lines: PostLineInput[] = [
+    { accountId: ar.id, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+  ];
+  if (taxAmount > 0 && taxPayableId) {
+    lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
+  }
+
+  await postJournalEntry({
+    tenantId: session.tenantId,
+    entryDate: input.invoiceDate,
+    sourceType: "sale",
+    sourceId: invoice.id,
+    referenceNumber: invoiceNumber,
+    memo: `Sales invoice ${invoiceNumber}`,
+    createdBy: session.userId,
+    lines,
+  });
+
+  await postCogsEntry(session.tenantId, input.invoiceDate, invoice.id, invoiceNumber, session.userId, validLines);
+  await applyStockDelta(session.tenantId, validLines, -1);
+
+  if (paid > 0) {
+    const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
+    const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
+      accountId: p.accountId,
+      debitAmount: p.amount,
+      description: `Payment received for ${invoiceNumber}`,
+    }));
+    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+
+    await postJournalEntry({
+      tenantId: session.tenantId,
+      entryDate: input.invoiceDate,
+      sourceType: "receipt",
+      sourceId: invoice.id,
+      referenceNumber: invoiceNumber,
+      memo: `Payment received for ${invoiceNumber}`,
+      createdBy: session.userId,
+      lines: receiptLines,
+    });
+
+    const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+    await db.insert(receipts).values({
+      tenantId: session.tenantId,
+      receiptDate: input.invoiceDate,
+      receivedFromCustomerId: input.customerId,
+      amount: paid.toFixed(2),
+      bankAccountId: primaryBankAccountId,
+      appliedToInvoiceIds: [invoice.id],
+    });
+  }
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  revalidatePath("/customers");
+  revalidatePath("/inventory/items");
 }

@@ -48,7 +48,7 @@ export function EditCashBillModal({
         if (cancelled) return;
         setBillNumber(data.billNumber);
         setBillDate(data.billDate);
-        setVendorId(data.vendorId);
+        setVendorId(data.vendorId ?? "");
         setCategoryId(data.categoryId);
         setBillType(data.billType);
         setDescription(data.description);

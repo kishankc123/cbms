@@ -8,7 +8,15 @@ import { EditCashBillModal } from "./edit-cash-bill-modal";
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
-type Bill = { id: string; billNumber: string; vendorId: string; billDate: string; total: string; status: string };
+type Bill = {
+  id: string;
+  billNumber: string;
+  vendorId: string | null;
+  description: string | null;
+  billDate: string;
+  total: string;
+  status: string;
+};
 
 const TABS = [
   { id: "invoices", label: "Invoices" },

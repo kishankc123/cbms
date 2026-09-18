@@ -39,7 +39,9 @@ export const vendors = pgTable("vendors", {
 export const purchaseBills = pgTable("purchase_bills", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  vendorId: uuid("vendor_id").notNull().references(() => vendors.id),
+  // Nullable: a Consumable purchase with no supplier chosen leaves this
+  // blank rather than being attributed to a placeholder vendor.
+  vendorId: uuid("vendor_id").references(() => vendors.id),
   billNumber: text("bill_number").notNull(),
   billDate: date("bill_date").notNull(),
   dueDate: date("due_date"),

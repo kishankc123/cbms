@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { purchaseBills, journalEntries, journalLines, tenants, vendors, type PurchaseLineItem } from "@/db/schema";
+import { purchaseBills, journalEntries, journalLines, tenants, type PurchaseLineItem } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { applyStockDelta } from "@/lib/inventory/stock";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -74,20 +75,6 @@ function isCashRowComplete(r: CashPurchaseRow) {
   );
 }
 
-// Used when a row is saved without picking a supplier — purchase_bills still
-// requires a vendor, so an unnamed row is attributed to this placeholder.
-async function ensureCashVendor(tenantId: string): Promise<string> {
-  const [existing] = await db
-    .select()
-    .from(vendors)
-    .where(and(eq(vendors.tenantId, tenantId), eq(vendors.name, "Cash Purchase")))
-    .limit(1);
-  if (existing) return existing.id;
-
-  const [created] = await db.insert(vendors).values({ tenantId, name: "Cash Purchase", openingBalance: "0" }).returning();
-  return created.id;
-}
-
 // VAT only applies when a row's bill type is VAT — any other bill type books
 // the entered amount as-is, with no tax added.
 function computeCashRowTax(amount: number, billType: CashBillType, vatRate: number) {
@@ -108,8 +95,6 @@ export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
 
-  const cashVendorId = validRows.some((r) => !r.vendorId) ? await ensureCashVendor(session.tenantId) : null;
-
   let taxReceivableId: string | null = null;
   if (validRows.some((r) => r.billType === "vat")) {
     const taxReceivable = await findControlAccount(session.tenantId, ["1300"], "Tax Receivable");
@@ -126,7 +111,7 @@ export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }
   for (const row of validRows) {
     const amount = round2(row.amount);
     const { tax, total } = computeCashRowTax(amount, row.billType, vatRate);
-    const vendorId = row.vendorId || cashVendorId!;
+    const vendorId = row.vendorId || null;
     const billNumber = row.billNumber.trim() || `AUTO-${nextSequence++}`;
 
     const [bill] = await db
@@ -210,7 +195,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
 
   const amount = round2(input.amount);
   const { tax, total } = computeCashRowTax(amount, input.billType, vatRate);
-  const vendorId = input.vendorId || (await ensureCashVendor(session.tenantId));
+  const vendorId = input.vendorId || null;
   const billNumber = input.billNumber.trim() || existing.billNumber;
 
   let taxReceivableId: string | null = null;
@@ -267,7 +252,7 @@ export type CashPurchaseEditData = {
   billId: string;
   billNumber: string;
   billDate: string;
-  vendorId: string;
+  vendorId: string | null;
   categoryId: string;
   billType: CashBillType;
   description: string;
@@ -324,6 +309,7 @@ export async function voidBill(formData: FormData) {
   if (bill.status === "void") throw new Error("Bill is already void");
 
   await reverseActiveEntry(session.tenantId, billId, session.userId, `Void of bill ${bill.billNumber}`);
+  await applyStockDelta(session.tenantId, bill.lineItems ?? [], -1);
 
   await db.update(purchaseBills).set({ status: "void" }).where(eq(purchaseBills.id, billId));
 
@@ -331,6 +317,7 @@ export async function voidBill(formData: FormData) {
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
+  revalidatePath("/inventory/items");
   revalidatePath("/journal");
 }
 
@@ -455,11 +442,13 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     createdBy: session.userId,
     lines: journalLines,
   });
+  await applyStockDelta(session.tenantId, validLines, 1);
 
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
+  revalidatePath("/inventory/items");
 }
 
 export type PurchaseInvoiceEditData = {
@@ -497,7 +486,7 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
     billId: bill.id,
     invoiceNumber: bill.billNumber,
     invoiceDate: bill.billDate,
-    vendorId: bill.vendorId,
+    vendorId: bill.vendorId ?? "",
     billType: bill.billType as CashBillType,
     lineItems: bill.lineItems as PurchaseLineItem[],
     payments,
@@ -534,6 +523,8 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const journalLines = await buildInvoiceJournalLines(session.tenantId, invoiceNumber, subtotal, taxAmount, remaining, input.payments);
 
   await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of invoice ${existing.billNumber}`);
+  await applyStockDelta(session.tenantId, existing.lineItems ?? [], -1);
+  await applyStockDelta(session.tenantId, validLines, 1);
 
   await db
     .update(purchaseBills)
@@ -565,5 +556,6 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
+  revalidatePath("/inventory/items");
   revalidatePath("/journal");
 }

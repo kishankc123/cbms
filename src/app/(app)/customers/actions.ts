@@ -3,14 +3,64 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, receipts } from "@/db/schema";
+import { customers, salesInvoices, receipts, tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { postJournalEntry, reverseLatestEntryForSource, type PostLineInput } from "@/lib/ledger/post";
+import { findControlAccount, getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
   const signed = type === "CR" ? -amount : amount;
   return signed.toFixed(2);
+}
+
+async function openingBalanceEntryDate(tenantId: string) {
+  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  return tenant?.fiscalYearStartDate || new Date().toISOString().slice(0, 10);
+}
+
+// Posts (or, if the balance is now zero, simply leaves reversed) a customer's
+// opening balance against the "Brought forward" equity account, so it
+// participates in the trial balance instead of being an off-ledger number.
+// Always reverses whatever was posted before first — safe to call on every
+// create/update since reversing a non-existent entry is a no-op.
+async function syncCustomerOpeningBalanceEntry(
+  tenantId: string,
+  customerId: string,
+  customerName: string,
+  openingBalance: number,
+  userId: string
+) {
+  await reverseLatestEntryForSource(tenantId, "opening_balance", customerId, userId, `Opening balance update - ${customerName}`);
+  if (openingBalance === 0) return;
+
+  const ar = await findControlAccount(tenantId, ["1100"], "Accounts Receivable");
+  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
+  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
+
+  const amount = Math.abs(openingBalance);
+  const lines: PostLineInput[] =
+    openingBalance > 0
+      ? [
+          { accountId: ar.id, debitAmount: amount, description: `Opening balance - ${customerName}` },
+          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${customerName}` },
+        ]
+      : [
+          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${customerName}` },
+          { accountId: ar.id, creditAmount: amount, description: `Opening balance - ${customerName}` },
+        ];
+
+  await postJournalEntry({
+    tenantId,
+    entryDate: await openingBalanceEntryDate(tenantId),
+    sourceType: "opening_balance",
+    sourceId: customerId,
+    referenceNumber: customerName,
+    memo: `Opening balance - ${customerName}`,
+    createdBy: userId,
+    lines,
+  });
 }
 
 export async function createCustomer(formData: FormData) {
@@ -21,19 +71,27 @@ export async function createCustomer(formData: FormData) {
   if (!name) throw new Error("Customer name is required");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
+  const openingBalance = parseOpeningBalance(formData);
 
-  await db.insert(customers).values({
-    tenantId: session.tenantId,
-    name,
-    contactInfo: {
-      phone: phone || undefined,
-      details: details || undefined,
-    },
-    openingBalance: parseOpeningBalance(formData),
-  });
+  const [customer] = await db
+    .insert(customers)
+    .values({
+      tenantId: session.tenantId,
+      name,
+      contactInfo: {
+        phone: phone || undefined,
+        details: details || undefined,
+      },
+      openingBalance,
+    })
+    .returning();
+
+  await syncCustomerOpeningBalanceEntry(session.tenantId, customer.id, name, Number(openingBalance), session.userId);
 
   revalidatePath("/customers");
   revalidatePath("/sales");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export async function updateCustomer(formData: FormData) {
@@ -45,6 +103,7 @@ export async function updateCustomer(formData: FormData) {
   if (!id || !name) throw new Error("Customer name is required");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
+  const openingBalance = parseOpeningBalance(formData);
 
   const [existing] = await db
     .select({ id: customers.id })
@@ -61,12 +120,16 @@ export async function updateCustomer(formData: FormData) {
         phone: phone || undefined,
         details: details || undefined,
       },
-      openingBalance: parseOpeningBalance(formData),
+      openingBalance,
     })
     .where(eq(customers.id, id));
 
+  await syncCustomerOpeningBalanceEntry(session.tenantId, id, name, Number(openingBalance), session.userId);
+
   revalidatePath("/customers");
   revalidatePath("/sales");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteCustomer(formData: FormData) {
@@ -76,7 +139,7 @@ export async function deleteCustomer(formData: FormData) {
   const id = String(formData.get("customerId") ?? "");
 
   const [existing] = await db
-    .select({ id: customers.id })
+    .select({ id: customers.id, name: customers.name })
     .from(customers)
     .where(and(eq(customers.id, id), eq(customers.tenantId, session.tenantId)))
     .limit(1);
@@ -92,10 +155,13 @@ export async function deleteCustomer(formData: FormData) {
     );
   }
 
+  await reverseLatestEntryForSource(session.tenantId, "opening_balance", id, session.userId, `Customer deleted - ${existing.name}`);
   await db.delete(customers).where(eq(customers.id, id));
 
   revalidatePath("/customers");
   revalidatePath("/sales");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export type LedgerRow = { date: string; details: string; debit: number; credit: number; balance: number };

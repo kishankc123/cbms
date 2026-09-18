@@ -20,6 +20,8 @@ export const journalSourceTypeEnum = pgEnum("journal_source_type", [
   "receipt",
   "bank_adjustment",
   "manual",
+  "payroll",
+  "opening_balance",
 ]);
 
 // The ledger core. Every financial event produces one of these. Never hard-deleted —

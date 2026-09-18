@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, date, numeric, integer, boolean, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
+import { accounts } from "./accounts";
 
 export const employmentTypeEnum = pgEnum("employment_type", ["full_time", "part_time", "contract", "intern"]);
 export const employmentStatusEnum = pgEnum("employment_status", ["active", "inactive", "terminated", "on_leave"]);
@@ -20,6 +21,10 @@ export const employees = pgTable("employees", {
   employmentStatus: employmentStatusEnum("employment_status").notNull().default("active"),
   bankName: text("bank_name"),
   bankAccountNumber: text("bank_account_number"),
+  // The Chart of Accounts liability sub-account this employee posts salary
+  // accruals to — a sub-group under the tenant's Salary Payable group,
+  // created alongside the employee (see payroll-accounts.ts).
+  payableAccountId: uuid("payable_account_id").references(() => accounts.id),
 });
 
 // "current basic salary" is deliberately NOT stored here — the employee's

@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
-import { ConfirmDialog } from "../sales/confirm-dialog";
-import { InfoDialog } from "../inventory/info-dialog";
-import { InvoicePaymentModal } from "./invoice-payment-modal";
+import { createSingleInvoice, updateSingleInvoice } from "./actions";
+import { ConfirmDialog } from "./confirm-dialog";
+import { PaymentModal } from "./payment-modal";
 
-type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; purchasePrice: string };
+type Customer = { id: string; name: string };
+type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { accountId: string; amount: number };
 
@@ -20,19 +19,10 @@ type LineRow = {
   discount: string;
 };
 
-const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
-  { value: "no_bill", label: "No bill" },
-  { value: "vat", label: "VAT" },
-  { value: "pan", label: "PAN" },
-  { value: "estimate", label: "Estimate" },
-];
-
 const MIN_LINES = 4;
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0" });
 
-// VAT only applies when the invoice is marked as a VAT bill — a PAN,
-// Estimate, or No bill invoice books the taxable amount with no VAT.
 function computeLine(line: LineRow, vatRate: number) {
   const rate = parseFloat(line.rate) || 0;
   const quantity = parseFloat(line.quantity) || 0;
@@ -57,36 +47,40 @@ function flattenAccounts(groups: CashBankGroup[]): Record<string, string> {
   return map;
 }
 
-export type InitialInvoice = {
-  billId: string;
+export type InitialSingleInvoice = {
+  invoiceId: string;
   invoiceNumber: string;
   invoiceDate: string;
-  vendorId: string;
-  billType: CashBillType;
+  customerId: string;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
 };
 
-export function PurchaseInvoiceForm({
-  vendors,
+// Same shape as the Stockable purchase invoice form (header + item-line
+// grid + Record Pay + Save), mirrored on the sales side — one customer
+// invoice with multiple item lines, created (or, with `initial`, edited) in
+// a single Save.
+export function SingleInvoiceForm({
+  customers,
   items,
   cashBankAccounts,
+  customerBalances,
   vatRate,
   initial,
   onDone,
 }: {
-  vendors: Vendor[];
+  customers: Customer[];
   items: Item[];
   cashBankAccounts: CashBankGroup[];
+  customerBalances: Record<string, number>;
   vatRate: number;
-  initial?: InitialInvoice;
+  initial?: InitialSingleInvoice;
   onDone?: () => void;
 }) {
   const router = useRouter();
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
-  const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
-  const [billType, setBillType] = useState<CashBillType>(initial?.billType ?? "no_bill");
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({
@@ -102,7 +96,7 @@ export function PurchaseInvoiceForm({
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showSavedDialog, setShowSavedDialog] = useState(false);
+  const [savedMessage, setSavedMessage] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
 
   useEffect(() => {
@@ -126,7 +120,7 @@ export function PurchaseInvoiceForm({
             ...l,
             itemId: value,
             description: item ? item.name : l.description,
-            rate: item ? item.purchasePrice : l.rate,
+            rate: item ? item.sellingPrice : l.rate,
           };
         }
         return { ...l, [field]: value };
@@ -142,8 +136,7 @@ export function PurchaseInvoiceForm({
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  const effectiveVatRate = billType === "vat" ? vatRate : 0;
-  const computedLines = lines.map((l) => computeLine(l, effectiveVatRate));
+  const computedLines = lines.map((l) => computeLine(l, vatRate));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
   const grandTaxable = computedLines.reduce((s, c) => s + c.taxable, 0);
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
@@ -157,8 +150,8 @@ export function PurchaseInvoiceForm({
       setSaveError("Invoice number is required.");
       return;
     }
-    if (!vendorId) {
-      setSaveError("Select a supplier.");
+    if (!customerId) {
+      setSaveError("Select a customer.");
       return;
     }
     if (!lines.some(isLineComplete)) {
@@ -175,8 +168,7 @@ export function PurchaseInvoiceForm({
       const payload = {
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
-        vendorId,
-        billType,
+        customerId,
         lines: lines.filter(isLineComplete).map((l) => ({
           itemId: l.itemId || null,
           description: l.description.trim(),
@@ -188,9 +180,9 @@ export function PurchaseInvoiceForm({
       };
 
       if (initial) {
-        await updatePurchaseInvoice({ ...payload, billId: initial.billId });
+        await updateSingleInvoice({ ...payload, invoiceId: initial.invoiceId });
       } else {
-        await createPurchaseInvoice(payload);
+        await createSingleInvoice(payload);
       }
 
       if (onDone) {
@@ -198,11 +190,11 @@ export function PurchaseInvoiceForm({
       } else {
         setInvoiceDate(today());
         setInvoiceNumber("");
-        setVendorId("");
-        setBillType("no_bill");
+        setCustomerId("");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
         setPayments([]);
-        setShowSavedDialog(true);
+        setSavedMessage(true);
+        setTimeout(() => setSavedMessage(false), 2500);
       }
       router.refresh();
     } catch (e) {
@@ -214,7 +206,7 @@ export function PurchaseInvoiceForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4 max-w-3xl">
+      <div className="grid grid-cols-3 gap-4 max-w-2xl">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Date</label>
           <input
@@ -234,30 +226,16 @@ export function PurchaseInvoiceForm({
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Select supplier</label>
+          <label className="block text-xs text-gray-500 mb-1">Select customer</label>
           <select
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
-            <option value="">Select supplier</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Bill type</label>
-          <select
-            value={billType}
-            onChange={(e) => setBillType(e.target.value as CashBillType)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-          >
-            {BILL_TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+            <option value="">Select customer</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
@@ -288,9 +266,9 @@ export function PurchaseInvoiceForm({
                     <select
                       value={line.itemId}
                       onChange={(e) => updateLine(i, "itemId", e.target.value)}
-                      className="w-[9.6rem] rounded border border-gray-300 px-1.5 py-1 text-sm"
+                      className="w-32 rounded border border-gray-300 px-1.5 py-1 text-sm"
                     >
-                      <option value="">Select product</option>
+                      <option value="">Custom</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.name}
@@ -395,7 +373,7 @@ export function PurchaseInvoiceForm({
             ))}
             {remaining > 0 && (
               <div className="flex items-center justify-between text-sm text-gray-900">
-                <span>Accounts Payable (credit)</span>
+                <span>Accounts Receivable (credit)</span>
                 <span>{remaining.toFixed(2)}</span>
               </div>
             )}
@@ -409,6 +387,7 @@ export function PurchaseInvoiceForm({
 
       <div className="flex items-center justify-end gap-3">
         {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+        {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
           onClick={() => setShowPayment(true)}
@@ -440,14 +419,13 @@ export function PurchaseInvoiceForm({
         <ConfirmDialog message="Do you want to save?" onYes={performSave} onNo={() => setConfirmSave(false)} />
       )}
 
-      {showSavedDialog && (
-        <InfoDialog message="Purchase invoice saved successfully." onOk={() => setShowSavedDialog(false)} />
-      )}
-
       {showPayment && (
-        <InvoicePaymentModal
-          total={grandTotal}
+        <PaymentModal
+          grandTotal={grandTotal}
           cashBankAccounts={cashBankAccounts}
+          allCustomers={customers}
+          customerBalances={customerBalances}
+          initialCustomerId={customerId}
           initialLines={payments}
           saving={false}
           onCancel={() => setShowPayment(false)}

@@ -7,6 +7,12 @@ import { employees, employeeBenefits, attendanceRecords, payrollComponents, payr
 import { requireTenantSession, can } from "@/lib/session";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { getOrCreateSettings } from "../setup/actions";
+import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
+import {
+  getOrCreateSalaryExpenseAccount,
+  getOrCreatePayrollDeductionsAccount,
+  createEmployeePayableAccount,
+} from "@/lib/ledger/payroll-accounts";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -176,6 +182,74 @@ export async function generatePayrollRun(input: GenerateRunInput) {
   return run.id;
 }
 
+// Posts the ledger accrual for a run the moment it's finalized — one Salary
+// Payable sub-account per employee is credited with their net pay, the
+// shared Salary Expense account is debited with gross pay, and any
+// deductions withheld go to a Payroll Deductions Payable liability. This
+// runs exactly once per run, since a finalized run can never be
+// regenerated or reverted back to draft (see generatePayrollRun /
+// revertRunToDraft).
+async function postPayrollAccrual(tenantId: string, run: typeof payrollRuns.$inferSelect, userId: string) {
+  const lines = await db
+    .select({
+      employeeId: payrollLines.employeeId,
+      grossPay: payrollLines.grossPay,
+      deductions: payrollLines.deductions,
+      netPay: payrollLines.netPay,
+    })
+    .from(payrollLines)
+    .where(eq(payrollLines.payrollRunId, run.id));
+  if (lines.length === 0) return;
+
+  const employeeRows = await db
+    .select({ id: employees.id, employeeCode: employees.employeeCode, fullName: employees.fullName, payableAccountId: employees.payableAccountId })
+    .from(employees)
+    .where(eq(employees.tenantId, tenantId));
+  const employeeById = new Map(employeeRows.map((e) => [e.id, e]));
+
+  const salaryExpense = await getOrCreateSalaryExpenseAccount(tenantId);
+  const totalDeductions = lines.reduce((s, l) => s + Number(l.deductions), 0);
+  const deductionsAccount = totalDeductions > 0 ? await getOrCreatePayrollDeductionsAccount(tenantId) : null;
+
+  const postLines: PostLineInput[] = [];
+  for (const line of lines) {
+    const employee = employeeById.get(line.employeeId);
+    if (!employee) continue;
+
+    let payableAccountId = employee.payableAccountId;
+    if (!payableAccountId) {
+      const created = await createEmployeePayableAccount(tenantId, employee.fullName);
+      payableAccountId = created.id;
+      await db.update(employees).set({ payableAccountId }).where(eq(employees.id, employee.id));
+    }
+
+    const gross = Number(line.grossPay);
+    const deductions = Number(line.deductions);
+    const net = Number(line.netPay);
+    if (gross <= 0) continue;
+
+    postLines.push({ accountId: salaryExpense.id, debitAmount: gross, description: `Salary expense - ${employee.fullName}` });
+    if (net > 0) {
+      postLines.push({ accountId: payableAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
+    }
+    if (deductions > 0 && deductionsAccount) {
+      postLines.push({ accountId: deductionsAccount.id, creditAmount: deductions, description: `Payroll deductions - ${employee.fullName}` });
+    }
+  }
+  if (postLines.length === 0) return;
+
+  await postJournalEntry({
+    tenantId,
+    entryDate: run.periodEnd,
+    sourceType: "payroll",
+    sourceId: run.id,
+    referenceNumber: `PR-${run.year}-${String(run.month).padStart(2, "0")}`,
+    memo: `Payroll for ${run.year}-${String(run.month).padStart(2, "0")}`,
+    createdBy: userId,
+    lines: postLines,
+  });
+}
+
 const STATUS_FLOW = ["draft", "review", "approved", "finalized"] as const;
 
 export async function advanceRunStatus(input: { runId: string }) {
@@ -198,6 +272,10 @@ export async function advanceRunStatus(input: { runId: string }) {
     .set({ status: nextStatus, finalizedAt: nextStatus === "finalized" ? new Date() : null })
     .where(eq(payrollRuns.id, input.runId));
 
+  if (nextStatus === "finalized") {
+    await postPayrollAccrual(session.tenantId, run, session.userId);
+  }
+
   await db.insert(auditLog).values({
     tenantId: session.tenantId,
     userId: session.userId,
@@ -210,6 +288,11 @@ export async function advanceRunStatus(input: { runId: string }) {
 
   revalidatePath("/payroll/salary-sheet");
   revalidatePath(`/payroll/salary-sheet/${input.runId}`);
+  if (nextStatus === "finalized") {
+    revalidatePath("/journal");
+    revalidatePath("/dashboard");
+    revalidatePath("/chart-of-accounts");
+  }
 }
 
 export async function revertRunToDraft(input: { runId: string }) {

@@ -197,15 +197,15 @@ export function InvoiceForm({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Invoice no</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Date</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Select customer</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Gross amount</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap">Discount</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Invoice no</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Date</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Select customer</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Gross amount</th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Discount</th>
               <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">Taxable</th>
               <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">VAT</th>
               <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">Total</th>
-              <th className="px-3 py-2 font-bold text-xs whitespace-nowrap"></th>
+              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
@@ -229,21 +229,21 @@ export function InvoiceForm({
                     setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
                   }}
                 >
-                  <td className={`px-2 py-1 text-gray-500 ${CELL_TEXT}`}>{previewNumber}</td>
-                  <td className="px-2 py-1">
+                  <td className={`px-1 py-1 text-gray-500 ${CELL_TEXT}`}>{previewNumber}</td>
+                  <td className="px-1 py-1">
                     <input
                       type="date"
                       max={today()}
                       value={row.invoiceDate}
                       onChange={(e) => updateRow(i, "invoiceDate", e.target.value)}
-                      className={`w-32 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                      className={`w-32 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                     />
                   </td>
-                  <td className="px-2 py-1">
+                  <td className="px-1 py-1">
                     <select
                       value={row.customerId}
                       onChange={(e) => updateRow(i, "customerId", e.target.value)}
-                      className={`w-40 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                      className={`w-40 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                     >
                       <option value="" className="text-gray-400">
                         Select customer
@@ -255,24 +255,24 @@ export function InvoiceForm({
                       ))}
                     </select>
                   </td>
-                  <td className="px-2 py-1">
+                  <td className="px-1 py-1">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={row.grossAmount}
                       onChange={(e) => updateRow(i, "grossAmount", e.target.value)}
-                      className={`w-24 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                      className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                     />
                   </td>
-                  <td className="px-2 py-1">
+                  <td className="px-1 py-1">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={row.discountAmount}
                       onChange={(e) => updateRow(i, "discountAmount", e.target.value)}
-                      className={`w-24 rounded border border-gray-300 px-2 py-1 ${CELL_TEXT}`}
+                      className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
                     />
                   </td>
                   <td className={`px-1 py-1 text-gray-600 ${CELL_TEXT}`}>
@@ -284,7 +284,7 @@ export function InvoiceForm({
                   <td className={`px-1 py-1 font-medium text-gray-900 ${CELL_TEXT}`}>
                     <div className="w-24 overflow-x-auto whitespace-nowrap">{c.total.toFixed(2)}</div>
                   </td>
-                  <td className="px-2 py-1">
+                  <td className="px-1 py-1">
                     <button
                       type="button"
                       onClick={() => handleRecordPayClick(i)}

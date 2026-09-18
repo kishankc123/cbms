@@ -3,14 +3,62 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, payments } from "@/db/schema";
+import { vendors, purchaseBills, payments, tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { postJournalEntry, reverseLatestEntryForSource, type PostLineInput } from "@/lib/ledger/post";
+import { findControlAccount, getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
   const signed = type === "CR" ? -amount : amount;
   return signed.toFixed(2);
+}
+
+async function openingBalanceEntryDate(tenantId: string) {
+  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  return tenant?.fiscalYearStartDate || new Date().toISOString().slice(0, 10);
+}
+
+// Posts a supplier's opening balance against "Brought forward" — the AP
+// mirror of the customer version. A positive balance means we owe the
+// supplier (the normal AP credit balance); negative means we're prepaid.
+async function syncSupplierOpeningBalanceEntry(
+  tenantId: string,
+  supplierId: string,
+  supplierName: string,
+  openingBalance: number,
+  userId: string
+) {
+  await reverseLatestEntryForSource(tenantId, "opening_balance", supplierId, userId, `Opening balance update - ${supplierName}`);
+  if (openingBalance === 0) return;
+
+  const ap = await findControlAccount(tenantId, ["2000"], "Accounts Payable");
+  if (!ap) throw new Error("No Accounts Payable account found — add one to the Chart of Accounts first");
+  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
+
+  const amount = Math.abs(openingBalance);
+  const lines: PostLineInput[] =
+    openingBalance > 0
+      ? [
+          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${supplierName}` },
+          { accountId: ap.id, creditAmount: amount, description: `Opening balance - ${supplierName}` },
+        ]
+      : [
+          { accountId: ap.id, debitAmount: amount, description: `Opening balance - ${supplierName}` },
+          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${supplierName}` },
+        ];
+
+  await postJournalEntry({
+    tenantId,
+    entryDate: await openingBalanceEntryDate(tenantId),
+    sourceType: "opening_balance",
+    sourceId: supplierId,
+    referenceNumber: supplierName,
+    memo: `Opening balance - ${supplierName}`,
+    createdBy: userId,
+    lines,
+  });
 }
 
 export async function createSupplier(formData: FormData) {
@@ -21,19 +69,27 @@ export async function createSupplier(formData: FormData) {
   if (!name) throw new Error("Supplier name is required");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
+  const openingBalance = parseOpeningBalance(formData);
 
-  await db.insert(vendors).values({
-    tenantId: session.tenantId,
-    name,
-    contactInfo: {
-      phone: phone || undefined,
-      details: details || undefined,
-    },
-    openingBalance: parseOpeningBalance(formData),
-  });
+  const [supplier] = await db
+    .insert(vendors)
+    .values({
+      tenantId: session.tenantId,
+      name,
+      contactInfo: {
+        phone: phone || undefined,
+        details: details || undefined,
+      },
+      openingBalance,
+    })
+    .returning();
+
+  await syncSupplierOpeningBalanceEntry(session.tenantId, supplier.id, name, Number(openingBalance), session.userId);
 
   revalidatePath("/suppliers");
   revalidatePath("/purchases");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export async function updateSupplier(formData: FormData) {
@@ -45,6 +101,7 @@ export async function updateSupplier(formData: FormData) {
   if (!id || !name) throw new Error("Supplier name is required");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
+  const openingBalance = parseOpeningBalance(formData);
 
   const [existing] = await db
     .select({ id: vendors.id })
@@ -61,12 +118,16 @@ export async function updateSupplier(formData: FormData) {
         phone: phone || undefined,
         details: details || undefined,
       },
-      openingBalance: parseOpeningBalance(formData),
+      openingBalance,
     })
     .where(eq(vendors.id, id));
 
+  await syncSupplierOpeningBalanceEntry(session.tenantId, id, name, Number(openingBalance), session.userId);
+
   revalidatePath("/suppliers");
   revalidatePath("/purchases");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteSupplier(formData: FormData) {
@@ -76,7 +137,7 @@ export async function deleteSupplier(formData: FormData) {
   const id = String(formData.get("supplierId") ?? "");
 
   const [existing] = await db
-    .select({ id: vendors.id })
+    .select({ id: vendors.id, name: vendors.name })
     .from(vendors)
     .where(and(eq(vendors.id, id), eq(vendors.tenantId, session.tenantId)))
     .limit(1);
@@ -92,10 +153,13 @@ export async function deleteSupplier(formData: FormData) {
     );
   }
 
+  await reverseLatestEntryForSource(session.tenantId, "opening_balance", id, session.userId, `Supplier deleted - ${existing.name}`);
   await db.delete(vendors).where(eq(vendors.id, id));
 
   revalidatePath("/suppliers");
   revalidatePath("/purchases");
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
 }
 
 export type LedgerRow = { date: string; details: string; debit: number; credit: number; balance: number };

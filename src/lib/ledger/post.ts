@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
@@ -143,4 +143,37 @@ export async function reverseJournalEntry(
 
     return reversal;
   });
+}
+
+/**
+ * Finds the single most-recent, still-active entry for a given source and
+ * reverses it — a no-op if there isn't one. A reversal entry is itself never
+ * marked isReversed, so more than one isReversed=false row can share a
+ * sourceId (the latest correct repost, plus older reversal entries sitting
+ * inert); only the most recent one is ever "currently in force."
+ */
+export async function reverseLatestEntryForSource(
+  tenantId: string,
+  sourceType: (typeof journalSourceTypeEnum.enumValues)[number],
+  sourceId: string,
+  reversedBy: string,
+  memo?: string
+) {
+  const [entry] = await db
+    .select()
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        eq(journalEntries.sourceType, sourceType),
+        eq(journalEntries.sourceId, sourceId),
+        eq(journalEntries.isReversed, false)
+      )
+    )
+    .orderBy(desc(journalEntries.createdAt))
+    .limit(1);
+
+  if (entry) {
+    await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
+  }
 }
