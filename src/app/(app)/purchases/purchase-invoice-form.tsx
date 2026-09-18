@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InvoicePaymentModal } from "./invoice-payment-modal";
 
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; unit: string | null; defaultRate: string };
+type Item = { id: string; name: string; purchasePrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { accountId: string; amount: number };
 
@@ -125,7 +125,7 @@ export function PurchaseInvoiceForm({
             ...l,
             itemId: value,
             description: item ? item.name : l.description,
-            rate: item ? item.defaultRate : l.rate,
+            rate: item ? item.purchasePrice : l.rate,
           };
         }
         return { ...l, [field]: value };

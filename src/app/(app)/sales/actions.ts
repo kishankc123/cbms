@@ -1,15 +1,76 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, count } from "drizzle-orm";
+import { and, eq, or, count, desc, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { salesInvoices, journalEntries, tenants, bankAccounts, receipts, accounts, customers } from "@/db/schema";
+import { salesInvoices, journalEntries, journalLines, tenants, bankAccounts, receipts, accounts, customers } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// A reversal entry is itself never marked isReversed, so at any time there
+// can be more than one isReversed=false row sharing a sourceId (the latest
+// correct repost, plus older reversal entries sitting inert). Reversing all
+// of them would reverse-a-reversal and resurrect stale amounts — only the
+// single most recent one is ever the "currently in force" entry.
+async function reverseLatestActiveEntry(tenantId: string, where: SQL | undefined, userId: string, memo: string) {
+  const [entry] = await db
+    .select()
+    .from(journalEntries)
+    .where(where)
+    .orderBy(desc(journalEntries.createdAt))
+    .limit(1);
+
+  if (entry) {
+    await reverseJournalEntry(tenantId, entry.id, userId, memo);
+  }
+}
+
+// Reverses an invoice's active "sale" entry (AR/Revenue) and, if any, its
+// active "receipt" entry (payment) — so editing or voiding an invoice fully
+// undoes what it posted. Receipt entries posted before sourceId was tracked
+// on them have no sourceId to match, so they're also matched by their old
+// fixed memo text as a fallback.
+async function reverseActiveEntriesForInvoice(
+  tenantId: string,
+  invoiceId: string,
+  invoiceNumber: string,
+  userId: string,
+  memo: string
+) {
+  await reverseLatestActiveEntry(
+    tenantId,
+    and(
+      eq(journalEntries.tenantId, tenantId),
+      eq(journalEntries.sourceType, "sale"),
+      eq(journalEntries.sourceId, invoiceId),
+      eq(journalEntries.isReversed, false)
+    ),
+    userId,
+    memo
+  );
+
+  await reverseLatestActiveEntry(
+    tenantId,
+    and(
+      eq(journalEntries.tenantId, tenantId),
+      eq(journalEntries.sourceType, "receipt"),
+      eq(journalEntries.isReversed, false),
+      or(eq(journalEntries.sourceId, invoiceId), eq(journalEntries.memo, `Payment received for ${invoiceNumber}`))
+    ),
+    userId,
+    memo
+  );
+}
+
+async function deleteReceiptsForInvoice(tenantId: string, invoiceId: string) {
+  await db
+    .delete(receipts)
+    .where(and(eq(receipts.tenantId, tenantId), sql`${receipts.appliedToInvoiceIds} @> ${JSON.stringify([invoiceId])}::jsonb`));
+}
 
 export type BatchPaymentLine = {
   accountId: string;
@@ -165,20 +226,22 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
 
     if (paid > 0) {
       const paymentLines = row.payments.filter((p) => p.accountId && p.amount > 0);
-      const journalLines: PostLineInput[] = paymentLines.map((p) => ({
+      const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
         accountId: p.accountId,
         debitAmount: p.amount,
         description: `Payment received for ${invoiceNumber}`,
       }));
-      journalLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+      receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
 
       await postJournalEntry({
         tenantId: session.tenantId,
         entryDate: row.invoiceDate,
         sourceType: "receipt",
+        sourceId: invoice.id,
+        referenceNumber: invoiceNumber,
         memo: `Payment received for ${invoiceNumber}`,
         createdBy: session.userId,
-        lines: journalLines,
+        lines: receiptLines,
       });
 
       const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
@@ -214,25 +277,213 @@ export async function voidInvoice(formData: FormData) {
   if (!invoice) throw new Error("Invoice not found");
   if (invoice.status === "void") throw new Error("Invoice is already void");
 
-  const [entry] = await db
+  await reverseActiveEntriesForInvoice(
+    session.tenantId,
+    invoiceId,
+    invoice.invoiceNumber,
+    session.userId,
+    `Void of invoice ${invoice.invoiceNumber}`
+  );
+  await deleteReceiptsForInvoice(session.tenantId, invoiceId);
+
+  await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  revalidatePath("/customers");
+}
+
+export type SalesInvoiceEditData = {
+  invoiceId: string;
+  invoiceDate: string;
+  customerId: string;
+  grossAmount: number;
+  discountAmount: number;
+  payments: BatchPaymentLine[];
+};
+
+// Payments aren't stored on the invoice row itself, so the split is
+// reconstructed from the invoice's active "receipt" journal entry.
+export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SalesInvoiceEditData> {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+
+  const [invoice] = await db
+    .select()
+    .from(salesInvoices)
+    .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.tenantId, session.tenantId)))
+    .limit(1);
+  if (!invoice) throw new Error("Invoice not found");
+
+  const [receiptEntry] = await db
     .select()
     .from(journalEntries)
     .where(
       and(
         eq(journalEntries.tenantId, session.tenantId),
-        eq(journalEntries.sourceType, "sale"),
-        eq(journalEntries.sourceId, invoiceId)
+        eq(journalEntries.sourceType, "receipt"),
+        eq(journalEntries.sourceId, invoiceId),
+        eq(journalEntries.isReversed, false)
       )
     )
+    .orderBy(desc(journalEntries.createdAt))
     .limit(1);
 
-  if (entry && !entry.isReversed) {
-    await reverseJournalEntry(session.tenantId, entry.id, session.userId, `Void of invoice ${invoice.invoiceNumber}`);
+  let payments: BatchPaymentLine[] = [];
+  if (receiptEntry) {
+    const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, receiptEntry.id));
+    payments = lines
+      .filter((l) => Number(l.debitAmount) > 0)
+      .map((l) => ({ accountId: l.accountId, amount: Number(l.debitAmount) }));
   }
 
-  await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
+  return {
+    invoiceId: invoice.id,
+    invoiceDate: invoice.invoiceDate,
+    customerId: invoice.customerId,
+    grossAmount: Number(invoice.grossAmount),
+    discountAmount: Number(invoice.discountAmount),
+    payments,
+  };
+}
+
+export type UpdateSalesInvoiceInput = {
+  invoiceId: string;
+  invoiceDate: string;
+  customerId: string;
+  grossAmount: number;
+  discountAmount: number;
+  payments: BatchPaymentLine[];
+};
+
+// Editing reverses the invoice's old entries (sale + receipt) and posts
+// fresh ones from the updated fields — the invoice number stays the same,
+// this is a correction, not a renumbering.
+export async function updateSalesInvoice(input: UpdateSalesInvoiceInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+
+  const [existing] = await db
+    .select()
+    .from(salesInvoices)
+    .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.tenantId, session.tenantId)))
+    .limit(1);
+  if (!existing) throw new Error("Invoice not found");
+  if (existing.status === "void") throw new Error("Cannot edit a void invoice");
+
+  if (!input.invoiceDate) throw new Error("Invoice date is required");
+  if (input.grossAmount <= 0) throw new Error("Gross amount must be greater than zero");
+  if (input.discountAmount < 0 || input.discountAmount > input.grossAmount) {
+    throw new Error("Discount must be between 0 and the gross amount");
+  }
+
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
+  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+
+  const subtotal = round2(input.grossAmount - input.discountAmount);
+  const taxAmount = round2(subtotal * (vatRate / 100));
+  const total = round2(subtotal + taxAmount);
+  const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
+
+  if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
+  if (paid < total && !input.customerId) {
+    throw new Error("Select a customer — the recorded payment doesn't cover the invoice total");
+  }
+
+  const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
+  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
+  const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
+  if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
+
+  let taxPayableId: string | null = null;
+  if (taxAmount > 0) {
+    const taxPayable = await findControlAccount(session.tenantId, ["2100"], "Tax Payable");
+    if (!taxPayable) throw new Error("No Tax Payable account found — add one to the Chart of Accounts first");
+    taxPayableId = taxPayable.id;
+  }
+
+  const customerId = input.customerId || (await ensureCashCustomer(session.tenantId));
+  const status = paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
+
+  await reverseActiveEntriesForInvoice(
+    session.tenantId,
+    input.invoiceId,
+    existing.invoiceNumber,
+    session.userId,
+    `Edit of invoice ${existing.invoiceNumber}`
+  );
+  await deleteReceiptsForInvoice(session.tenantId, input.invoiceId);
+
+  await db
+    .update(salesInvoices)
+    .set({
+      customerId,
+      invoiceDate: input.invoiceDate,
+      grossAmount: input.grossAmount.toFixed(2),
+      discountAmount: input.discountAmount.toFixed(2),
+      subtotal: subtotal.toFixed(2),
+      taxAmount: taxAmount.toFixed(2),
+      total: total.toFixed(2),
+      amountPaid: paid.toFixed(2),
+      status,
+    })
+    .where(eq(salesInvoices.id, input.invoiceId));
+
+  const lines: PostLineInput[] = [
+    { accountId: ar.id, debitAmount: total, description: `Invoice ${existing.invoiceNumber}` },
+    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${existing.invoiceNumber}` },
+  ];
+  if (taxAmount > 0 && taxPayableId) {
+    lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${existing.invoiceNumber}` });
+  }
+
+  await postJournalEntry({
+    tenantId: session.tenantId,
+    entryDate: input.invoiceDate,
+    sourceType: "sale",
+    sourceId: input.invoiceId,
+    referenceNumber: existing.invoiceNumber,
+    memo: `Sales invoice ${existing.invoiceNumber} (edited)`,
+    createdBy: session.userId,
+    lines,
+  });
+
+  if (paid > 0) {
+    const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
+    const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
+      accountId: p.accountId,
+      debitAmount: p.amount,
+      description: `Payment received for ${existing.invoiceNumber}`,
+    }));
+    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${existing.invoiceNumber}` });
+
+    await postJournalEntry({
+      tenantId: session.tenantId,
+      entryDate: input.invoiceDate,
+      sourceType: "receipt",
+      sourceId: input.invoiceId,
+      referenceNumber: existing.invoiceNumber,
+      memo: `Payment received for ${existing.invoiceNumber} (edited)`,
+      createdBy: session.userId,
+      lines: receiptLines,
+    });
+
+    const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+    await db.insert(receipts).values({
+      tenantId: session.tenantId,
+      receiptDate: input.invoiceDate,
+      receivedFromCustomerId: customerId,
+      amount: paid.toFixed(2),
+      bankAccountId: primaryBankAccountId,
+      appliedToInvoiceIds: [input.invoiceId],
+    });
+  }
 
   revalidatePath("/sales");
+  revalidatePath("/sales/invoices");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
+  revalidatePath("/customers");
 }

@@ -77,18 +77,18 @@ export function BillsTable({
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
+            <th
+              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+              onClick={() => toggleSort("date")}
+            >
+              Date{sortIndicator("date")}
+            </th>
             <th className="px-4 py-2 font-medium">Bill #</th>
             <th
               className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
               onClick={() => toggleSort("supplier")}
             >
               Supplier{sortIndicator("supplier")}
-            </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("date")}
-            >
-              Date{sortIndicator("date")}
             </th>
             <th className="px-4 py-2 font-medium">Total</th>
             <th className="px-4 py-2 font-medium">Status</th>
@@ -98,9 +98,9 @@ export function BillsTable({
         <tbody>
           {filtered.map((b) => (
             <tr key={b.id} className="border-t border-gray-100">
+              <td className="px-4 py-2">{b.billDate}</td>
               <td className="px-4 py-2 font-mono">{b.billNumber}</td>
               <td className="px-4 py-2">{vendorById.get(b.vendorId)?.name ?? "—"}</td>
-              <td className="px-4 py-2">{b.billDate}</td>
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td className="px-4 py-2 capitalize">{b.status.replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">

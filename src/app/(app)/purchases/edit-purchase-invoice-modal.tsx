@@ -5,7 +5,7 @@ import { getPurchaseInvoiceForEdit, type PurchaseInvoiceEditData } from "./actio
 import { PurchaseInvoiceForm } from "./purchase-invoice-form";
 
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; unit: string | null; defaultRate: string };
+type Item = { id: string; name: string; purchasePrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 
 export function EditPurchaseInvoiceModal({
