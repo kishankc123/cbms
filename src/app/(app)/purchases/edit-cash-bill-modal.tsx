@@ -212,7 +212,7 @@ export function EditCashBillModal({
               onClick={() => setShowPayment(true)}
               className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs px-3 py-1.5"
             >
-              {payments.length > 0 ? "EDIT PAY" : "RECORD PAY"}
+              {payments.length > 0 ? "Edit Pay" : "Record Pay"}
             </button>
 
             <div className="flex justify-end gap-2 pt-2">

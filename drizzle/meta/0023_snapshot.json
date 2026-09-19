@@ -1,0 +1,2954 @@
+{
+  "id": "cc4931e8-a7a7-43f2-a12f-84de6bc68677",
+  "prevId": "dd0c3c41-43e9-44d1-a698-c605e706c9f2",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "before_value": {
+          "name": "before_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after_value": {
+          "name": "after_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audit_log_tenant_id_tenants_id_fk": {
+          "name": "audit_log_tenant_id_tenants_id_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "audit_log_user_id_users_id_fk": {
+          "name": "audit_log_user_id_users_id_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.password_reset_tokens": {
+      "name": "password_reset_tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "password_reset_tokens_user_id_users_id_fk": {
+          "name": "password_reset_tokens_user_id_users_id_fk",
+          "tableFrom": "password_reset_tokens",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "password_reset_tokens_token_unique": {
+          "name": "password_reset_tokens_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tenants": {
+      "name": "tenants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "industry": {
+          "name": "industry",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fiscal_year_start_month": {
+          "name": "fiscal_year_start_month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "fiscal_year_label": {
+          "name": "fiscal_year_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fiscal_year_start_date": {
+          "name": "fiscal_year_start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fiscal_year_end_date": {
+          "name": "fiscal_year_end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_currency": {
+          "name": "base_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NPR'"
+        },
+        "tax_registration_number": {
+          "name": "tax_registration_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vat_rate": {
+          "name": "vat_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'13'"
+        },
+        "tds_rate": {
+          "name": "tds_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "invoice_prefix": {
+          "name": "invoice_prefix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invoice_suffix": {
+          "name": "invoice_suffix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invoice_number_format": {
+          "name": "invoice_number_format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'prefix-number-suffix'"
+        },
+        "status": {
+          "name": "status",
+          "type": "tenant_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "permissions": {
+          "name": "permissions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "user_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "last_login": {
+          "name": "last_login",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "users_tenant_id_tenants_id_fk": {
+          "name": "users_tenant_id_tenants_id_fk",
+          "tableFrom": "users",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.accounts": {
+      "name": "accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "account_category",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sub_category": {
+          "name": "sub_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_account_id": {
+          "name": "parent_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "accounts_tenant_id_tenants_id_fk": {
+          "name": "accounts_tenant_id_tenants_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "accounts_parent_account_id_accounts_id_fk": {
+          "name": "accounts_parent_account_id_accounts_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "parent_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.journal_entries": {
+      "name": "journal_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference_number": {
+          "name": "reference_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "journal_source_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "memo": {
+          "name": "memo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "is_reversed": {
+          "name": "is_reversed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "reversal_of_id": {
+          "name": "reversal_of_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "journal_entries_tenant_id_tenants_id_fk": {
+          "name": "journal_entries_tenant_id_tenants_id_fk",
+          "tableFrom": "journal_entries",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "journal_entries_reversal_of_id_journal_entries_id_fk": {
+          "name": "journal_entries_reversal_of_id_journal_entries_id_fk",
+          "tableFrom": "journal_entries",
+          "tableTo": "journal_entries",
+          "columnsFrom": [
+            "reversal_of_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.journal_lines": {
+      "name": "journal_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "journal_entry_id": {
+          "name": "journal_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "debit_amount": {
+          "name": "debit_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "credit_amount": {
+          "name": "credit_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "journal_lines_journal_entry_id_journal_entries_id_fk": {
+          "name": "journal_lines_journal_entry_id_journal_entries_id_fk",
+          "tableFrom": "journal_lines",
+          "tableTo": "journal_entries",
+          "columnsFrom": [
+            "journal_entry_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "journal_lines_account_id_accounts_id_fk": {
+          "name": "journal_lines_account_id_accounts_id_fk",
+          "tableFrom": "journal_lines",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.customers": {
+      "name": "customers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact_info": {
+          "name": "contact_info",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opening_balance": {
+          "name": "opening_balance",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "receivable_account_id": {
+          "name": "receivable_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "customers_tenant_id_tenants_id_fk": {
+          "name": "customers_tenant_id_tenants_id_fk",
+          "tableFrom": "customers",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "customers_receivable_account_id_accounts_id_fk": {
+          "name": "customers_receivable_account_id_accounts_id_fk",
+          "tableFrom": "customers",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "receivable_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sales_invoices": {
+      "name": "sales_invoices",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invoice_number": {
+          "name": "invoice_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invoice_date": {
+          "name": "invoice_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "line_items": {
+          "name": "line_items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "gross_amount": {
+          "name": "gross_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "discount_amount": {
+          "name": "discount_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "subtotal": {
+          "name": "subtotal",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tax_amount": {
+          "name": "tax_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "invoice_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "amount_paid": {
+          "name": "amount_paid",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sales_invoices_tenant_id_tenants_id_fk": {
+          "name": "sales_invoices_tenant_id_tenants_id_fk",
+          "tableFrom": "sales_invoices",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sales_invoices_customer_id_customers_id_fk": {
+          "name": "sales_invoices_customer_id_customers_id_fk",
+          "tableFrom": "sales_invoices",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.purchase_bills": {
+      "name": "purchase_bills",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vendor_id": {
+          "name": "vendor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bill_number": {
+          "name": "bill_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bill_date": {
+          "name": "bill_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "line_items": {
+          "name": "line_items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "subtotal": {
+          "name": "subtotal",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tax_amount": {
+          "name": "tax_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "bill_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "amount_paid": {
+          "name": "amount_paid",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "purchase_type": {
+          "name": "purchase_type",
+          "type": "purchase_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'credit'"
+        },
+        "bill_type": {
+          "name": "bill_type",
+          "type": "bill_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'no_bill'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "purchase_bills_tenant_id_tenants_id_fk": {
+          "name": "purchase_bills_tenant_id_tenants_id_fk",
+          "tableFrom": "purchase_bills",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "purchase_bills_vendor_id_vendors_id_fk": {
+          "name": "purchase_bills_vendor_id_vendors_id_fk",
+          "tableFrom": "purchase_bills",
+          "tableTo": "vendors",
+          "columnsFrom": [
+            "vendor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.vendors": {
+      "name": "vendors",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact_info": {
+          "name": "contact_info",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opening_balance": {
+          "name": "opening_balance",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "payable_account_id": {
+          "name": "payable_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "vendors_tenant_id_tenants_id_fk": {
+          "name": "vendors_tenant_id_tenants_id_fk",
+          "tableFrom": "vendors",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "vendors_payable_account_id_accounts_id_fk": {
+          "name": "vendors_payable_account_id_accounts_id_fk",
+          "tableFrom": "vendors",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "payable_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.expenses": {
+      "name": "expenses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expense_number": {
+          "name": "expense_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expense_date": {
+          "name": "expense_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category_account_id": {
+          "name": "category_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vendor_id": {
+          "name": "vendor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payee_name": {
+          "name": "payee_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invoice_number": {
+          "name": "invoice_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invoice_date": {
+          "name": "invoice_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_treatment": {
+          "name": "tax_treatment",
+          "type": "expense_tax_treatment",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'taxable'"
+        },
+        "taxable_amount": {
+          "name": "taxable_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vat_amount": {
+          "name": "vat_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "tds_amount": {
+          "name": "tds_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "other_tax_amount": {
+          "name": "other_tax_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "subtotal": {
+          "name": "subtotal",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_payable": {
+          "name": "amount_payable",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_paid": {
+          "name": "amount_paid",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "status": {
+          "name": "status",
+          "type": "expense_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unpaid'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "expenses_tenant_id_tenants_id_fk": {
+          "name": "expenses_tenant_id_tenants_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "expenses_category_account_id_accounts_id_fk": {
+          "name": "expenses_category_account_id_accounts_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "category_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_vendor_id_vendors_id_fk": {
+          "name": "expenses_vendor_id_vendors_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "vendors",
+          "columnsFrom": [
+            "vendor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bank_accounts": {
+      "name": "bank_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_name": {
+          "name": "account_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_number_masked": {
+          "name": "account_number_masked",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NPR'"
+        },
+        "chart_of_accounts_link": {
+          "name": "chart_of_accounts_link",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "bank_accounts_tenant_id_tenants_id_fk": {
+          "name": "bank_accounts_tenant_id_tenants_id_fk",
+          "tableFrom": "bank_accounts",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bank_accounts_chart_of_accounts_link_accounts_id_fk": {
+          "name": "bank_accounts_chart_of_accounts_link_accounts_id_fk",
+          "tableFrom": "bank_accounts",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "chart_of_accounts_link"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payments": {
+      "name": "payments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_date": {
+          "name": "payment_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paid_to_vendor_id": {
+          "name": "paid_to_vendor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paid_to_other": {
+          "name": "paid_to_other",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bank_account_id": {
+          "name": "bank_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_to_bill_ids": {
+          "name": "applied_to_bill_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payments_tenant_id_tenants_id_fk": {
+          "name": "payments_tenant_id_tenants_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payments_bank_account_id_bank_accounts_id_fk": {
+          "name": "payments_bank_account_id_bank_accounts_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "bank_accounts",
+          "columnsFrom": [
+            "bank_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.receipts": {
+      "name": "receipts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receipt_date": {
+          "name": "receipt_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_from_customer_id": {
+          "name": "received_from_customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_from_other": {
+          "name": "received_from_other",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bank_account_id": {
+          "name": "bank_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_to_invoice_ids": {
+          "name": "applied_to_invoice_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "receipts_tenant_id_tenants_id_fk": {
+          "name": "receipts_tenant_id_tenants_id_fk",
+          "tableFrom": "receipts",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "receipts_bank_account_id_bank_accounts_id_fk": {
+          "name": "receipts_bank_account_id_bank_accounts_id_fk",
+          "tableFrom": "receipts",
+          "tableTo": "bank_accounts",
+          "columnsFrom": [
+            "bank_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.item_categories": {
+      "name": "item_categories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "item_categories_tenant_id_tenants_id_fk": {
+          "name": "item_categories_tenant_id_tenants_id_fk",
+          "tableFrom": "item_categories",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "item_categories_group_id_item_groups_id_fk": {
+          "name": "item_categories_group_id_item_groups_id_fk",
+          "tableFrom": "item_categories",
+          "tableTo": "item_groups",
+          "columnsFrom": [
+            "group_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.item_groups": {
+      "name": "item_groups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "item_groups_tenant_id_tenants_id_fk": {
+          "name": "item_groups_tenant_id_tenants_id_fk",
+          "tableFrom": "item_groups",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.item_units": {
+      "name": "item_units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "item_units_tenant_id_tenants_id_fk": {
+          "name": "item_units_tenant_id_tenants_id_fk",
+          "tableFrom": "item_units",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.items": {
+      "name": "items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchase_price": {
+          "name": "purchase_price",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "selling_price": {
+          "name": "selling_price",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "stock_quantity": {
+          "name": "stock_quantity",
+          "type": "numeric(18, 3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "items_tenant_id_tenants_id_fk": {
+          "name": "items_tenant_id_tenants_id_fk",
+          "tableFrom": "items",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "items_unit_id_item_units_id_fk": {
+          "name": "items_unit_id_item_units_id_fk",
+          "tableFrom": "items",
+          "tableTo": "item_units",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "items_category_id_item_categories_id_fk": {
+          "name": "items_category_id_item_categories_id_fk",
+          "tableFrom": "items",
+          "tableTo": "item_categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.attendance_records": {
+      "name": "attendance_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "attendance_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'present'"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "attendance_records_tenant_id_tenants_id_fk": {
+          "name": "attendance_records_tenant_id_tenants_id_fk",
+          "tableFrom": "attendance_records",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "attendance_records_employee_id_employees_id_fk": {
+          "name": "attendance_records_employee_id_employees_id_fk",
+          "tableFrom": "attendance_records",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.employee_benefits": {
+      "name": "employee_benefits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eligibility_group": {
+          "name": "eligibility_group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "benefit_type": {
+          "name": "benefit_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "benefit_frequency",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'monthly'"
+        },
+        "effective_from": {
+          "name": "effective_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_to": {
+          "name": "effective_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eligibility_status": {
+          "name": "eligibility_status",
+          "type": "benefit_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "employee_benefits_tenant_id_tenants_id_fk": {
+          "name": "employee_benefits_tenant_id_tenants_id_fk",
+          "tableFrom": "employee_benefits",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "employee_benefits_employee_id_employees_id_fk": {
+          "name": "employee_benefits_employee_id_employees_id_fk",
+          "tableFrom": "employee_benefits",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "employee_benefits_created_by_users_id_fk": {
+          "name": "employee_benefits_created_by_users_id_fk",
+          "tableFrom": "employee_benefits",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.employees": {
+      "name": "employees",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_code": {
+          "name": "employee_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_number": {
+          "name": "contact_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pan_number": {
+          "name": "pan_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "joining_date": {
+          "name": "joining_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "designation": {
+          "name": "designation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employment_type": {
+          "name": "employment_type",
+          "type": "employment_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'full_time'"
+        },
+        "employment_status": {
+          "name": "employment_status",
+          "type": "employment_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "bank_name": {
+          "name": "bank_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_account_number": {
+          "name": "bank_account_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payable_account_id": {
+          "name": "payable_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "employees_tenant_id_tenants_id_fk": {
+          "name": "employees_tenant_id_tenants_id_fk",
+          "tableFrom": "employees",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "employees_payable_account_id_accounts_id_fk": {
+          "name": "employees_payable_account_id_accounts_id_fk",
+          "tableFrom": "employees",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "payable_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payroll_components": {
+      "name": "payroll_components",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "payroll_component_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "taxable": {
+          "name": "taxable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payroll_components_tenant_id_tenants_id_fk": {
+          "name": "payroll_components_tenant_id_tenants_id_fk",
+          "tableFrom": "payroll_components",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payroll_lines": {
+      "name": "payroll_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payroll_run_id": {
+          "name": "payroll_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "basic_salary": {
+          "name": "basic_salary",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "working_days": {
+          "name": "working_days",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "present_days": {
+          "name": "present_days",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "absent_days": {
+          "name": "absent_days",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prorated_basic": {
+          "name": "prorated_basic",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowances": {
+          "name": "allowances",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "deductions": {
+          "name": "deductions",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "overtime_amount": {
+          "name": "overtime_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "benefits_amount": {
+          "name": "benefits_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "gross_pay": {
+          "name": "gross_pay",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "net_pay": {
+          "name": "net_pay",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payroll_lines_tenant_id_tenants_id_fk": {
+          "name": "payroll_lines_tenant_id_tenants_id_fk",
+          "tableFrom": "payroll_lines",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payroll_lines_payroll_run_id_payroll_runs_id_fk": {
+          "name": "payroll_lines_payroll_run_id_payroll_runs_id_fk",
+          "tableFrom": "payroll_lines",
+          "tableTo": "payroll_runs",
+          "columnsFrom": [
+            "payroll_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payroll_lines_employee_id_employees_id_fk": {
+          "name": "payroll_lines_employee_id_employees_id_fk",
+          "tableFrom": "payroll_lines",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payroll_runs": {
+      "name": "payroll_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "payroll_run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "processing_date": {
+          "name": "processing_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finalized_at": {
+          "name": "finalized_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payroll_runs_tenant_id_tenants_id_fk": {
+          "name": "payroll_runs_tenant_id_tenants_id_fk",
+          "tableFrom": "payroll_runs",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payroll_runs_created_by_users_id_fk": {
+          "name": "payroll_runs_created_by_users_id_fk",
+          "tableFrom": "payroll_runs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payroll_settings": {
+      "name": "payroll_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proration_method": {
+          "name": "proration_method",
+          "type": "proration_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'prorate'"
+        },
+        "working_days_method": {
+          "name": "working_days_method",
+          "type": "working_days_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'exclude_weekly_holidays'"
+        },
+        "weekly_holidays": {
+          "name": "weekly_holidays",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[6]'::jsonb"
+        },
+        "public_holidays": {
+          "name": "public_holidays",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "payroll_start_day": {
+          "name": "payroll_start_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "payroll_end_day": {
+          "name": "payroll_end_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 31
+        },
+        "rounding_rule": {
+          "name": "rounding_rule",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payroll_settings_tenant_id_tenants_id_fk": {
+          "name": "payroll_settings_tenant_id_tenants_id_fk",
+          "tableFrom": "payroll_settings",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payroll_settings_tenant_id_unique": {
+          "name": "payroll_settings_tenant_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.salary_history": {
+      "name": "salary_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_from": {
+          "name": "effective_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "basic_salary": {
+          "name": "basic_salary",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_type": {
+          "name": "change_type",
+          "type": "salary_change_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_salary": {
+          "name": "previous_salary",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "change_amount": {
+          "name": "change_amount",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "change_percentage": {
+          "name": "change_percentage",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "salary_history_tenant_id_tenants_id_fk": {
+          "name": "salary_history_tenant_id_tenants_id_fk",
+          "tableFrom": "salary_history",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "salary_history_employee_id_employees_id_fk": {
+          "name": "salary_history_employee_id_employees_id_fk",
+          "tableFrom": "salary_history",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "salary_history_created_by_users_id_fk": {
+          "name": "salary_history_created_by_users_id_fk",
+          "tableFrom": "salary_history",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.tenant_status": {
+      "name": "tenant_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "suspended"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "super_admin",
+        "admin",
+        "user"
+      ]
+    },
+    "public.user_status": {
+      "name": "user_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "invited",
+        "disabled"
+      ]
+    },
+    "public.account_category": {
+      "name": "account_category",
+      "schema": "public",
+      "values": [
+        "asset",
+        "liability",
+        "equity",
+        "income",
+        "expense"
+      ]
+    },
+    "public.journal_source_type": {
+      "name": "journal_source_type",
+      "schema": "public",
+      "values": [
+        "sale",
+        "purchase",
+        "expense",
+        "payment",
+        "receipt",
+        "bank_adjustment",
+        "manual",
+        "payroll",
+        "opening_balance"
+      ]
+    },
+    "public.invoice_status": {
+      "name": "invoice_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "sent",
+        "paid",
+        "partially_paid",
+        "overdue",
+        "void"
+      ]
+    },
+    "public.bill_status": {
+      "name": "bill_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "open",
+        "paid",
+        "partially_paid",
+        "overdue",
+        "void"
+      ]
+    },
+    "public.bill_type": {
+      "name": "bill_type",
+      "schema": "public",
+      "values": [
+        "vat",
+        "pan",
+        "estimate",
+        "challan",
+        "no_bill"
+      ]
+    },
+    "public.purchase_type": {
+      "name": "purchase_type",
+      "schema": "public",
+      "values": [
+        "cash",
+        "credit"
+      ]
+    },
+    "public.expense_status": {
+      "name": "expense_status",
+      "schema": "public",
+      "values": [
+        "unpaid",
+        "partially_paid",
+        "paid",
+        "void"
+      ]
+    },
+    "public.expense_tax_treatment": {
+      "name": "expense_tax_treatment",
+      "schema": "public",
+      "values": [
+        "taxable",
+        "exempt",
+        "zero_rated"
+      ]
+    },
+    "public.attendance_status": {
+      "name": "attendance_status",
+      "schema": "public",
+      "values": [
+        "present",
+        "absent",
+        "leave",
+        "half_day"
+      ]
+    },
+    "public.benefit_frequency": {
+      "name": "benefit_frequency",
+      "schema": "public",
+      "values": [
+        "monthly",
+        "yearly",
+        "one_time"
+      ]
+    },
+    "public.benefit_status": {
+      "name": "benefit_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "inactive"
+      ]
+    },
+    "public.employment_status": {
+      "name": "employment_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "inactive",
+        "terminated",
+        "on_leave"
+      ]
+    },
+    "public.employment_type": {
+      "name": "employment_type",
+      "schema": "public",
+      "values": [
+        "full_time",
+        "part_time",
+        "contract",
+        "intern"
+      ]
+    },
+    "public.payroll_component_type": {
+      "name": "payroll_component_type",
+      "schema": "public",
+      "values": [
+        "allowance",
+        "deduction"
+      ]
+    },
+    "public.payroll_run_status": {
+      "name": "payroll_run_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "review",
+        "approved",
+        "finalized"
+      ]
+    },
+    "public.proration_method": {
+      "name": "proration_method",
+      "schema": "public",
+      "values": [
+        "prorate",
+        "new_full_month",
+        "old_full_month"
+      ]
+    },
+    "public.salary_change_type": {
+      "name": "salary_change_type",
+      "schema": "public",
+      "values": [
+        "initial",
+        "percentage_increase",
+        "percentage_decrease",
+        "fixed_increase",
+        "fixed_decrease",
+        "new_fixed"
+      ]
+    },
+    "public.working_days_method": {
+      "name": "working_days_method",
+      "schema": "public",
+      "values": [
+        "calendar_days",
+        "exclude_weekly_holidays"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
+import { accounts } from "./accounts";
 
 export const invoiceStatusEnum = pgEnum("invoice_status", [
   "draft",
@@ -22,6 +23,10 @@ export const customers = pgTable("customers", {
   name: text("name").notNull(),
   contactInfo: jsonb("contact_info").$type<ContactInfo>(),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  // This customer's own sub-account under Accounts Receivable — every sale,
+  // receipt, and opening balance posts here instead of the shared AR
+  // control account (see subledger-accounts.ts).
+  receivableAccountId: uuid("receivable_account_id").references(() => accounts.id),
 });
 
 export type LineItem = {

@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
+import { accounts } from "./accounts";
 
 export const billStatusEnum = pgEnum("bill_status", [
   "draft",
@@ -33,7 +34,12 @@ export const vendors = pgTable("vendors", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   contactInfo: jsonb("contact_info"),
+  panNumber: text("pan_number"),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  // This supplier's own sub-account under Accounts Payable — every purchase,
+  // payment, and opening balance posts here instead of the shared AP
+  // control account (see subledger-accounts.ts).
+  payableAccountId: uuid("payable_account_id").references(() => accounts.id),
 });
 
 export const purchaseBills = pgTable("purchase_bills", {

@@ -3,11 +3,73 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { purchaseBills, journalEntries, journalLines, tenants, type PurchaseLineItem } from "@/db/schema";
+import { purchaseBills, journalEntries, journalLines, tenants, payments, paymentAllocations, type PurchaseLineItem } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { applyStockDelta } from "@/lib/inventory/stock";
+import { buildNextPaymentNumber } from "@/lib/payment-number";
+
+// Deletes the embedded (paid-at-creation) Payment-module row(s) recorded
+// for this bill, cascading to their allocation rows — called before a void
+// or edit re-posts fresh entries.
+async function deleteEmbeddedPaymentsForBill(tenantId: string, billId: string) {
+  const rows = await db
+    .select({ paymentId: paymentAllocations.paymentId })
+    .from(paymentAllocations)
+    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+    .where(and(eq(payments.tenantId, tenantId), eq(payments.origin, "embedded"), eq(paymentAllocations.targetType, "purchase_bill"), eq(paymentAllocations.targetId, billId)));
+
+  const paymentIds = [...new Set(rows.map((r) => r.paymentId))];
+  for (const id of paymentIds) {
+    await db.delete(payments).where(and(eq(payments.tenantId, tenantId), eq(payments.id, id)));
+  }
+}
+
+// Records the embedded supplier-payment row (+ its allocation to this bill)
+// in the unified Payment module for a payment captured at bill
+// creation/edit time — the accounting entry itself is posted separately by
+// the caller, unchanged; this is purely the Payment module's own record of
+// that same fact so it shows up in the Payments list and reconciliation.
+async function insertEmbeddedSupplierPayment(
+  tenantId: string,
+  userId: string,
+  vendorId: string | null,
+  billId: string,
+  paymentDate: string,
+  amount: number,
+  accountId: string,
+  journalEntryId: string,
+  referenceNumber: string
+) {
+  const paymentNumber = await buildNextPaymentNumber(tenantId, "money_out");
+  const [row] = await db
+    .insert(payments)
+    .values({
+      tenantId,
+      paymentNumber,
+      direction: "money_out",
+      paymentType: "supplier_payment",
+      paymentDate,
+      partyType: vendorId ? "supplier" : "none",
+      vendorId,
+      accountId,
+      paymentMethod: "cash",
+      referenceNumber,
+      amount: amount.toFixed(2),
+      description: `Payment for ${referenceNumber}`,
+      status: "posted",
+      origin: "embedded",
+      journalEntryId,
+      createdBy: userId,
+      postedBy: userId,
+      postedAt: new Date(),
+    })
+    .returning();
+
+  await db.insert(paymentAllocations).values({ paymentId: row.id, targetType: "purchase_bill", targetId: billId, allocatedAmount: amount.toFixed(2) });
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -142,7 +204,7 @@ export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }
       lines.push({ accountId: payment.accountId, creditAmount: round2(payment.amount), description: `Bill ${billNumber}` });
     }
 
-    await postJournalEntry({
+    const entry = await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: row.billDate,
       sourceType: "purchase",
@@ -152,6 +214,11 @@ export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }
       createdBy: session.userId,
       lines,
     });
+
+    const totalPaid = round2(row.payments.reduce((s, p) => s + p.amount, 0));
+    if (totalPaid > 0) {
+      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, bill.id, row.billDate, totalPaid, row.payments[0].accountId, entry.id, billNumber);
+    }
   }
 
   revalidatePath("/purchases/consumable");
@@ -206,6 +273,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
   }
 
   await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of bill ${existing.billNumber}`);
+  await deleteEmbeddedPaymentsForBill(session.tenantId, input.billId);
 
   await db
     .update(purchaseBills)
@@ -232,7 +300,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
     lines.push({ accountId: payment.accountId, creditAmount: round2(payment.amount), description: `Bill ${billNumber}` });
   }
 
-  await postJournalEntry({
+  const entry = await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: input.billDate,
     sourceType: "purchase",
@@ -242,6 +310,11 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
     createdBy: session.userId,
     lines,
   });
+
+  const totalPaid = round2(input.payments.reduce((s, p) => s + p.amount, 0));
+  if (totalPaid > 0) {
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.billDate, totalPaid, input.payments[0].accountId, entry.id, billNumber);
+  }
 
   revalidatePath("/purchases/consumable");
   revalidatePath("/dashboard");
@@ -309,6 +382,7 @@ export async function voidBill(formData: FormData) {
   if (bill.status === "void") throw new Error("Bill is already void");
 
   await reverseActiveEntry(session.tenantId, billId, session.userId, `Void of bill ${bill.billNumber}`);
+  await deleteEmbeddedPaymentsForBill(session.tenantId, billId);
   await applyStockDelta(session.tenantId, bill.lineItems ?? [], -1);
 
   await db.update(purchaseBills).set({ status: "void" }).where(eq(purchaseBills.id, billId));
@@ -351,6 +425,7 @@ async function computeInvoiceTotals(tenantId: string, lines: PurchaseLineItem[],
 // expense account — the goods are being stocked, not consumed.
 async function buildInvoiceJournalLines(
   tenantId: string,
+  vendorId: string,
   invoiceLabel: string,
   subtotal: number,
   taxAmount: number,
@@ -371,9 +446,8 @@ async function buildInvoiceJournalLines(
   }
 
   if (remaining > 0) {
-    const ap = await findControlAccount(tenantId, ["2000"], "Accounts Payable");
-    if (!ap) throw new Error("No Accounts Payable account found — add one to the Chart of Accounts first");
-    lines.push({ accountId: ap.id, creditAmount: remaining, description: `Invoice ${invoiceLabel}` });
+    const apId = await getOrCreateSupplierPayableAccountId(tenantId, vendorId);
+    lines.push({ accountId: apId, creditAmount: remaining, description: `Invoice ${invoiceLabel}` });
   }
 
   for (const p of payments.filter((p) => p.accountId && p.amount > 0)) {
@@ -412,7 +486,15 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const remaining = round2(Math.max(total - paid, 0));
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "open";
 
-  const journalLines = await buildInvoiceJournalLines(session.tenantId, invoiceNumber, subtotal, taxAmount, remaining, input.payments);
+  const journalLines = await buildInvoiceJournalLines(
+    session.tenantId,
+    input.vendorId,
+    invoiceNumber,
+    subtotal,
+    taxAmount,
+    remaining,
+    input.payments
+  );
 
   const [bill] = await db
     .insert(purchaseBills)
@@ -432,7 +514,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     })
     .returning();
 
-  await postJournalEntry({
+  const entry = await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: input.invoiceDate,
     sourceType: "purchase",
@@ -443,6 +525,11 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     lines: journalLines,
   });
   await applyStockDelta(session.tenantId, validLines, 1);
+
+  if (paid > 0) {
+    const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber);
+  }
 
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
@@ -476,10 +563,10 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
   if (!bill) throw new Error("Invoice not found");
 
   const lines = await activeEntryLines(session.tenantId, billId);
-  const ap = await findControlAccount(session.tenantId, ["2000"], "Accounts Payable");
+  const apId = bill.vendorId ? await getOrCreateSupplierPayableAccountId(session.tenantId, bill.vendorId) : null;
 
   const payments = lines
-    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== ap?.id)
+    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== apId)
     .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount) }));
 
   return {
@@ -520,9 +607,18 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const remaining = round2(Math.max(total - paid, 0));
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "open";
 
-  const journalLines = await buildInvoiceJournalLines(session.tenantId, invoiceNumber, subtotal, taxAmount, remaining, input.payments);
+  const journalLines = await buildInvoiceJournalLines(
+    session.tenantId,
+    input.vendorId,
+    invoiceNumber,
+    subtotal,
+    taxAmount,
+    remaining,
+    input.payments
+  );
 
   await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of invoice ${existing.billNumber}`);
+  await deleteEmbeddedPaymentsForBill(session.tenantId, input.billId);
   await applyStockDelta(session.tenantId, existing.lineItems ?? [], -1);
   await applyStockDelta(session.tenantId, validLines, 1);
 
@@ -542,7 +638,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     })
     .where(eq(purchaseBills.id, input.billId));
 
-  await postJournalEntry({
+  const entry = await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: input.invoiceDate,
     sourceType: "purchase",
@@ -552,6 +648,11 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     createdBy: session.userId,
     lines: journalLines,
   });
+
+  if (paid > 0) {
+    const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber);
+  }
 
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");

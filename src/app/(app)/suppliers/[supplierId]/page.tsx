@@ -1,8 +1,9 @@
 import { and, eq, ne } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { vendors, purchaseBills, payments, tenants } from "@/db/schema";
+import { vendors, purchaseBills, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { getSupplierPaymentRows } from "@/lib/ledger/supplier-balances";
 import { ProfileTabs } from "./profile-tabs";
 
 export default async function SupplierProfilePage({ params }: { params: Promise<{ supplierId: string }> }) {
@@ -33,10 +34,7 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
           ne(purchaseBills.status, "void")
         )
       ),
-    db
-      .select({ amount: payments.amount })
-      .from(payments)
-      .where(and(eq(payments.paidToVendorId, supplierId), eq(payments.tenantId, session.tenantId))),
+    getSupplierPaymentRows(session.tenantId, supplierId),
   ]);
 
   const contactInfo = supplier.contactInfo as { phone?: string; details?: string } | null;

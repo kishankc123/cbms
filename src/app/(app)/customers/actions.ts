@@ -3,64 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, receipts, tenants } from "@/db/schema";
+import { customers, salesInvoices } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
-import { postJournalEntry, reverseLatestEntryForSource, type PostLineInput } from "@/lib/ledger/post";
-import { findControlAccount, getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
+import { reverseLatestEntryForSource } from "@/lib/ledger/post";
+import { createCustomerReceivableAccount } from "@/lib/ledger/subledger-accounts";
+import { syncCustomerOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
+import { getCustomerPaymentRows } from "@/lib/ledger/customer-balances";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
   const signed = type === "CR" ? -amount : amount;
   return signed.toFixed(2);
-}
-
-async function openingBalanceEntryDate(tenantId: string) {
-  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  return tenant?.fiscalYearStartDate || new Date().toISOString().slice(0, 10);
-}
-
-// Posts (or, if the balance is now zero, simply leaves reversed) a customer's
-// opening balance against the "Brought forward" equity account, so it
-// participates in the trial balance instead of being an off-ledger number.
-// Always reverses whatever was posted before first — safe to call on every
-// create/update since reversing a non-existent entry is a no-op.
-async function syncCustomerOpeningBalanceEntry(
-  tenantId: string,
-  customerId: string,
-  customerName: string,
-  openingBalance: number,
-  userId: string
-) {
-  await reverseLatestEntryForSource(tenantId, "opening_balance", customerId, userId, `Opening balance update - ${customerName}`);
-  if (openingBalance === 0) return;
-
-  const ar = await findControlAccount(tenantId, ["1100"], "Accounts Receivable");
-  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
-  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
-
-  const amount = Math.abs(openingBalance);
-  const lines: PostLineInput[] =
-    openingBalance > 0
-      ? [
-          { accountId: ar.id, debitAmount: amount, description: `Opening balance - ${customerName}` },
-          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${customerName}` },
-        ]
-      : [
-          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${customerName}` },
-          { accountId: ar.id, creditAmount: amount, description: `Opening balance - ${customerName}` },
-        ];
-
-  await postJournalEntry({
-    tenantId,
-    entryDate: await openingBalanceEntryDate(tenantId),
-    sourceType: "opening_balance",
-    sourceId: customerId,
-    referenceNumber: customerName,
-    memo: `Opening balance - ${customerName}`,
-    createdBy: userId,
-    lines,
-  });
 }
 
 export async function createCustomer(formData: FormData) {
@@ -85,6 +39,11 @@ export async function createCustomer(formData: FormData) {
       openingBalance,
     })
     .returning();
+
+  // Every customer gets their own Accounts Receivable sub-account
+  // immediately — the account every sale/receipt for them posts to.
+  const receivableAccount = await createCustomerReceivableAccount(session.tenantId, name);
+  await db.update(customers).set({ receivableAccountId: receivableAccount.id }).where(eq(customers.id, customer.id));
 
   await syncCustomerOpeningBalanceEntry(session.tenantId, customer.id, name, Number(openingBalance), session.userId);
 
@@ -187,11 +146,7 @@ export async function getCustomerHistory(customerId: string, from?: string, to?:
       .from(salesInvoices)
       .where(and(eq(salesInvoices.customerId, customerId), eq(salesInvoices.tenantId, session.tenantId)))
       .orderBy(asc(salesInvoices.invoiceDate)),
-    db
-      .select({ date: receipts.receiptDate, amount: receipts.amount })
-      .from(receipts)
-      .where(and(eq(receipts.receivedFromCustomerId, customerId), eq(receipts.tenantId, session.tenantId)))
-      .orderBy(asc(receipts.receiptDate)),
+    getCustomerPaymentRows(session.tenantId, customerId),
   ]);
 
   const activeInvoices = invoices.filter((inv) => inv.status !== "void");

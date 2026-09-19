@@ -1,119 +1,66 @@
-// One-off backfill: posts a "Brought forward" journal entry for every
-// existing customer/vendor whose openingBalance predates the opening-balance
-// ledger linkage, so their balances participate in the trial balance too.
-// Safe to re-run — reverseLatestEntryForSource is a no-op when nothing is
-// posted yet, and posting is skipped if an active entry already exists.
-import { eq, and, ne, isNull } from "drizzle-orm";
+// One-off backfill for tenants that predate the customer/supplier/employee
+// sub-ledger linkage:
+//   - creates each customer's Accounts Receivable sub-account and each
+//     supplier's Accounts Payable sub-account (if missing)
+//   - re-syncs opening balance entries so they route through those
+//     sub-accounts instead of the shared 1100/2000 control accounts
+//   - links each employee's Salary Payable sub-account (if missing)
+// Safe to re-run — getOrCreate* is a no-op once linked, and syncing an
+// opening balance always reverses whatever was posted before first.
+import { eq, isNull } from "drizzle-orm";
 import { db } from "./index";
-import { customers, vendors, employees, journalEntries, users } from "./schema";
-import { postJournalEntry, type PostLineInput } from "../lib/ledger/post";
-import { findControlAccount, getOrCreateBroughtForwardAccount } from "../lib/ledger/control-accounts";
+import { customers, vendors, employees, users } from "./schema";
+import { createCustomerReceivableAccount, createSupplierPayableAccount } from "../lib/ledger/subledger-accounts";
+import { syncCustomerOpeningBalanceEntry, syncSupplierOpeningBalanceEntry } from "../lib/ledger/opening-balance";
 import { createEmployeePayableAccount } from "../lib/ledger/payroll-accounts";
 
-async function hasActiveOpeningBalanceEntry(tenantId: string, sourceId: string) {
-  const [entry] = await db
-    .select({ id: journalEntries.id })
-    .from(journalEntries)
-    .where(
-      and(
-        eq(journalEntries.tenantId, tenantId),
-        eq(journalEntries.sourceType, "opening_balance"),
-        eq(journalEntries.sourceId, sourceId),
-        eq(journalEntries.isReversed, false)
-      )
-    )
-    .limit(1);
-  return Boolean(entry);
-}
-
 async function main() {
-  let posted = 0;
-  let skipped = 0;
+  let customersLinked = 0;
+  let customerBalancesSynced = 0;
 
-  const allCustomers = await db.select().from(customers).where(ne(customers.openingBalance, "0"));
+  const allCustomers = await db.select().from(customers);
   for (const customer of allCustomers) {
-    if (await hasActiveOpeningBalanceEntry(customer.tenantId, customer.id)) {
-      skipped++;
-      continue;
+    let receivableAccountId = customer.receivableAccountId;
+    if (!receivableAccountId) {
+      const account = await createCustomerReceivableAccount(customer.tenantId, customer.name);
+      receivableAccountId = account.id;
+      await db.update(customers).set({ receivableAccountId }).where(eq(customers.id, customer.id));
+      customersLinked++;
+      console.log(`Linked Accounts Receivable sub-account for customer ${customer.name}`);
     }
+
+    const openingBalance = Number(customer.openingBalance);
+    if (openingBalance === 0) continue;
     const [systemUser] = await db.select({ id: users.id }).from(users).where(eq(users.tenantId, customer.tenantId)).limit(1);
     if (!systemUser) continue;
 
-    const ar = await findControlAccount(customer.tenantId, ["1100"], "Accounts Receivable");
-    if (!ar) {
-      console.warn(`Skipping customer ${customer.name} (${customer.tenantId}) — no Accounts Receivable account`);
-      continue;
-    }
-    const broughtForward = await getOrCreateBroughtForwardAccount(customer.tenantId);
-
-    const openingBalance = Number(customer.openingBalance);
-    const amount = Math.abs(openingBalance);
-    const lines: PostLineInput[] =
-      openingBalance > 0
-        ? [
-            { accountId: ar.id, debitAmount: amount, description: `Opening balance - ${customer.name}` },
-            { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${customer.name}` },
-          ]
-        : [
-            { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${customer.name}` },
-            { accountId: ar.id, creditAmount: amount, description: `Opening balance - ${customer.name}` },
-          ];
-
-    await postJournalEntry({
-      tenantId: customer.tenantId,
-      entryDate: new Date().toISOString().slice(0, 10),
-      sourceType: "opening_balance",
-      sourceId: customer.id,
-      referenceNumber: customer.name,
-      memo: `Opening balance - ${customer.name} (backfilled)`,
-      createdBy: systemUser.id,
-      lines,
-    });
-    posted++;
-    console.log(`Posted opening balance for customer ${customer.name}: ${openingBalance}`);
+    await syncCustomerOpeningBalanceEntry(customer.tenantId, customer.id, customer.name, openingBalance, systemUser.id);
+    customerBalancesSynced++;
+    console.log(`Synced opening balance for customer ${customer.name}: ${openingBalance}`);
   }
 
-  const allVendors = await db.select().from(vendors).where(ne(vendors.openingBalance, "0"));
+  let suppliersLinked = 0;
+  let supplierBalancesSynced = 0;
+
+  const allVendors = await db.select().from(vendors);
   for (const vendor of allVendors) {
-    if (await hasActiveOpeningBalanceEntry(vendor.tenantId, vendor.id)) {
-      skipped++;
-      continue;
+    let payableAccountId = vendor.payableAccountId;
+    if (!payableAccountId) {
+      const account = await createSupplierPayableAccount(vendor.tenantId, vendor.name);
+      payableAccountId = account.id;
+      await db.update(vendors).set({ payableAccountId }).where(eq(vendors.id, vendor.id));
+      suppliersLinked++;
+      console.log(`Linked Accounts Payable sub-account for supplier ${vendor.name}`);
     }
+
+    const openingBalance = Number(vendor.openingBalance);
+    if (openingBalance === 0) continue;
     const [systemUser] = await db.select({ id: users.id }).from(users).where(eq(users.tenantId, vendor.tenantId)).limit(1);
     if (!systemUser) continue;
 
-    const ap = await findControlAccount(vendor.tenantId, ["2000"], "Accounts Payable");
-    if (!ap) {
-      console.warn(`Skipping supplier ${vendor.name} (${vendor.tenantId}) — no Accounts Payable account`);
-      continue;
-    }
-    const broughtForward = await getOrCreateBroughtForwardAccount(vendor.tenantId);
-
-    const openingBalance = Number(vendor.openingBalance);
-    const amount = Math.abs(openingBalance);
-    const lines: PostLineInput[] =
-      openingBalance > 0
-        ? [
-            { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${vendor.name}` },
-            { accountId: ap.id, creditAmount: amount, description: `Opening balance - ${vendor.name}` },
-          ]
-        : [
-            { accountId: ap.id, debitAmount: amount, description: `Opening balance - ${vendor.name}` },
-            { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${vendor.name}` },
-          ];
-
-    await postJournalEntry({
-      tenantId: vendor.tenantId,
-      entryDate: new Date().toISOString().slice(0, 10),
-      sourceType: "opening_balance",
-      sourceId: vendor.id,
-      referenceNumber: vendor.name,
-      memo: `Opening balance - ${vendor.name} (backfilled)`,
-      createdBy: systemUser.id,
-      lines,
-    });
-    posted++;
-    console.log(`Posted opening balance for supplier ${vendor.name}: ${openingBalance}`);
+    await syncSupplierOpeningBalanceEntry(vendor.tenantId, vendor.id, vendor.name, openingBalance, systemUser.id);
+    supplierBalancesSynced++;
+    console.log(`Synced opening balance for supplier ${vendor.name}: ${openingBalance}`);
   }
 
   let employeesLinked = 0;
@@ -126,7 +73,7 @@ async function main() {
   }
 
   console.log(
-    `Done. Posted ${posted} opening balance entries, skipped ${skipped} already-linked, linked ${employeesLinked} employee payable accounts.`
+    `Done. Linked ${customersLinked} customer / ${suppliersLinked} supplier / ${employeesLinked} employee sub-accounts. Synced ${customerBalancesSynced} customer / ${supplierBalancesSynced} supplier opening balances.`
   );
   process.exit(0);
 }

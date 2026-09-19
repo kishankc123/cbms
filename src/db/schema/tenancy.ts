@@ -29,11 +29,22 @@ export const tenants = pgTable("tenants", {
   baseCurrency: text("base_currency").notNull().default("NPR"),
   taxRegistrationNumber: text("tax_registration_number"),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2 }).notNull().default("13"),
+  // Default TDS (Tax Deducted at Source) withholding rate applied to
+  // expenses — configurable per tenant, never hard-coded in the UI.
+  tdsRate: numeric("tds_rate", { precision: 5, scale: 2 }).notNull().default("0"),
   invoicePrefix: text("invoice_prefix"),
   invoiceSuffix: text("invoice_suffix"),
   // One of the INVOICE_NUMBER_FORMATS keys in src/lib/invoice-number.ts, e.g.
   // "prefix-number-suffix" — controls the order the three parts are joined in.
   invoiceNumberFormat: text("invoice_number_format").notNull().default("prefix-number-suffix"),
+  // Payment module numbering — "single" uses one PAY- sequence for both
+  // directions, "split" uses a separate REC-/PAY- sequence per direction.
+  paymentNumberMode: text("payment_number_mode").notNull().default("single"),
+  paymentNumberFormat: text("payment_number_format").notNull().default("prefix-number-suffix"),
+  paymentPrefix: text("payment_prefix").default("PAY"),
+  paymentSuffix: text("payment_suffix"),
+  receiptPrefix: text("receipt_prefix").default("REC"),
+  receiptSuffix: text("receipt_suffix"),
   status: tenantStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

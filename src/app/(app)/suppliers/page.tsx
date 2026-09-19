@@ -1,7 +1,8 @@
 import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, payments } from "@/db/schema";
+import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { getSupplierPaymentRows } from "@/lib/ledger/supplier-balances";
 import { SuppliersTable } from "./suppliers-table";
 
 export default async function SuppliersPage() {
@@ -17,10 +18,7 @@ export default async function SuppliersPage() {
       .select({ vendorId: purchaseBills.vendorId, date: purchaseBills.billDate, total: purchaseBills.total })
       .from(purchaseBills)
       .where(and(eq(purchaseBills.tenantId, session.tenantId), ne(purchaseBills.status, "void"))),
-    db
-      .select({ vendorId: payments.paidToVendorId, date: payments.paymentDate, amount: payments.amount })
-      .from(payments)
-      .where(eq(payments.tenantId, session.tenantId)),
+    getSupplierPaymentRows(session.tenantId),
   ]);
 
   const billsByVendor = new Map<string, { date: string; total: number }[]>();

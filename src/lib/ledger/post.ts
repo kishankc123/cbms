@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
+import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
 export class UnbalancedEntryError extends Error {
   constructor(totalDebits: number, totalCredits: number) {
@@ -40,6 +41,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * and that every posted fact is tenant-scoped.
  */
 export async function postJournalEntry(input: PostJournalEntryInput) {
+  await assertPeriodOpen(input.tenantId, input.entryDate);
+
   if (input.lines.length < 2) {
     throw new Error("A journal entry needs at least two lines");
   }
@@ -100,6 +103,9 @@ export async function reverseJournalEntry(
   reversedBy: string,
   memo?: string
 ) {
+  const reversalDate = new Date().toISOString().slice(0, 10);
+  await assertPeriodOpen(tenantId, reversalDate);
+
   return db.transaction(async (tx) => {
     const [original] = await tx
       .select()
@@ -119,7 +125,7 @@ export async function reverseJournalEntry(
       .insert(journalEntries)
       .values({
         tenantId,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: reversalDate,
         sourceType: original.sourceType,
         sourceId: original.sourceId,
         referenceNumber: original.referenceNumber,
@@ -174,6 +180,29 @@ export async function reverseLatestEntryForSource(
     .limit(1);
 
   if (entry) {
+    await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
+  }
+}
+
+/**
+ * Reverses every still-active entry for a given source, regardless of
+ * sourceType — used where a single source can accumulate more than one
+ * independent posting over time (e.g. an expense's initial accrual plus
+ * one or more later settlement payments), unlike the single "latest entry"
+ * pattern above which assumes at most one active entry per sourceType.
+ */
+export async function reverseAllActiveEntriesForSource(
+  tenantId: string,
+  sourceId: string,
+  reversedBy: string,
+  memo?: string
+) {
+  const activeEntries = await db
+    .select()
+    .from(journalEntries)
+    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, sourceId), eq(journalEntries.isReversed, false)));
+
+  for (const entry of activeEntries) {
     await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
   }
 }

@@ -1,8 +1,9 @@
 import { and, eq, ne } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { customers, salesInvoices, receipts, tenants } from "@/db/schema";
+import { customers, salesInvoices, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { getCustomerPaymentRows } from "@/lib/ledger/customer-balances";
 import { ProfileTabs } from "./profile-tabs";
 
 export default async function CustomerProfilePage({ params }: { params: Promise<{ customerId: string }> }) {
@@ -33,10 +34,7 @@ export default async function CustomerProfilePage({ params }: { params: Promise<
           ne(salesInvoices.status, "void")
         )
       ),
-    db
-      .select({ amount: receipts.amount })
-      .from(receipts)
-      .where(and(eq(receipts.receivedFromCustomerId, customerId), eq(receipts.tenantId, session.tenantId))),
+    getCustomerPaymentRows(session.tenantId, customerId),
   ]);
 
   const openingBalance = Number(customer.openingBalance);

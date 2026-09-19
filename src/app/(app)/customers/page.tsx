@@ -1,7 +1,8 @@
 import { eq, asc, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices, receipts } from "@/db/schema";
+import { customers, salesInvoices } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { getCustomerPaymentRows } from "@/lib/ledger/customer-balances";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
@@ -17,10 +18,7 @@ export default async function CustomersPage() {
       .select({ customerId: salesInvoices.customerId, date: salesInvoices.invoiceDate, total: salesInvoices.total })
       .from(salesInvoices)
       .where(and(eq(salesInvoices.tenantId, session.tenantId), ne(salesInvoices.status, "void"))),
-    db
-      .select({ customerId: receipts.receivedFromCustomerId, date: receipts.receiptDate, amount: receipts.amount })
-      .from(receipts)
-      .where(eq(receipts.tenantId, session.tenantId)),
+    getCustomerPaymentRows(session.tenantId),
   ]);
 
   const invoicesByCustomer = new Map<string, { date: string; total: number }[]>();

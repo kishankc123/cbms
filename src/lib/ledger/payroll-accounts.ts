@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
-import { findControlAccount } from "./control-accounts";
+import { findControlAccount, createSubAccount } from "./control-accounts";
 
 // The shared expense account all payroll runs debit — a top-level account
 // under the "Variable expenses" sub-category, per the tenant's chart layout.
@@ -59,29 +59,9 @@ export async function getOrCreatePayrollDeductionsAccount(tenantId: string) {
 }
 
 // Creates the per-employee liability sub-account nested under Salary
-// Payable — mirrors Chart of Accounts > Sub-group's own code/inheritance
-// scheme (parent code + sequence, category/subCategory copied down). Named
-// after the employee only, matching how Chart of Accounts > Sub-group names
-// its own rows (just a name, no extra detail baked in).
+// Payable. Named after the employee only, matching how Chart of Accounts >
+// Sub-group names its own rows (just a name, no extra detail baked in).
 export async function createEmployeePayableAccount(tenantId: string, employeeName: string) {
   const group = await getOrCreateSalaryPayableGroup(tenantId);
-
-  const siblings = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, group.id)));
-
-  const code = `${group.code}.${String(siblings.length + 1).padStart(2, "0")}`;
-  const [created] = await db
-    .insert(accounts)
-    .values({
-      tenantId,
-      code,
-      name: employeeName,
-      category: group.category,
-      subCategory: group.subCategory,
-      parentAccountId: group.id,
-    })
-    .returning();
-  return created;
+  return createSubAccount(tenantId, group, employeeName);
 }

@@ -41,6 +41,38 @@ export async function getOrCreateBroughtForwardAccount(tenantId: string) {
 }
 
 /**
+ * Creates a child account nested under `parent` — mirrors Chart of
+ * Accounts > Sub-group's own scheme (parent code + sequence, category and
+ * subCategory copied down from the parent). Shared by every place that
+ * needs one sub-account per record (employees under Salary Payable,
+ * customers under Accounts Receivable, suppliers under Accounts Payable).
+ */
+export async function createSubAccount(
+  tenantId: string,
+  parent: { id: string; code: string; category: (typeof accounts.$inferSelect)["category"]; subCategory: string | null },
+  name: string
+) {
+  const siblings = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, parent.id)));
+
+  const code = `${parent.code}.${String(siblings.length + 1).padStart(2, "0")}`;
+  const [created] = await db
+    .insert(accounts)
+    .values({
+      tenantId,
+      code,
+      name,
+      category: parent.category,
+      subCategory: parent.subCategory,
+      parentAccountId: parent.id,
+    })
+    .returning();
+  return created;
+}
+
+/**
  * Sub-groups under the tenant's "Cost of Goods Sold" group account — used as
  * the Category options on purchase bills. Returns [] if the group has no
  * sub-groups yet (set up under Chart of Accounts > Sub-group).

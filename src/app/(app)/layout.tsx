@@ -33,6 +33,15 @@ const NAV = [
     ],
   },
   { href: "/suppliers", label: "Suppliers" },
+  { href: "/expenses", label: "Expenses" },
+  {
+    href: "/payments",
+    label: "Payments",
+    children: [
+      { href: "/payments/money-in", label: "Money In" },
+      { href: "/payments/money-out", label: "Money Out" },
+    ],
+  },
   {
     href: "/inventory",
     label: "Inventory",
@@ -52,6 +61,27 @@ const NAV = [
       { href: "/payroll/setup", label: "Setup" },
     ],
   },
+  {
+    href: "/bank-reconciliation",
+    label: "Bank Reconciliation",
+    children: [
+      { href: "/bank-reconciliation", label: "Reconciliation" },
+      { href: "/bank-reconciliation/setup", label: "Bank Accounts" },
+    ],
+  },
+  {
+    href: "/compliance",
+    label: "Compliance & Controls",
+    children: [
+      { href: "/compliance", label: "Dashboard" },
+      { href: "/compliance/calendar", label: "Compliance Calendar" },
+      { href: "/compliance/reports", label: "Reports" },
+      { href: "/compliance/rules", label: "Rules & Policies" },
+      { href: "/compliance/exceptions", label: "Exception Centre" },
+      { href: "/compliance/periods", label: "Period Locking" },
+      { href: "/compliance/audit-trail", label: "Audit Trail" },
+    ],
+  },
   { href: "/journal", label: "Journal Entries" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
@@ -63,13 +93,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col">
-        <div className="px-4 py-4 border-b border-gray-200">
-          <p className="text-sm font-semibold text-gray-900">{tenant?.companyName}</p>
-          <p className="text-xs text-gray-500">{session.role}</p>
+      <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
+        <div className="px-4 py-4 border-b border-[var(--sidebar-border)]">
+          <p className="text-sm font-semibold text-white">{tenant?.companyName}</p>
+          <p className="text-xs text-[var(--sidebar-text)]">{session.role}</p>
         </div>
         <AppNav items={NAV} />
-        <div className="px-2 py-3 border-t border-gray-200">
+        <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">
           <SignOutButton />
         </div>
       </aside>

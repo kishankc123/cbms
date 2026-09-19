@@ -1,25 +1,122 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
-import { bankAccounts } from "./banking";
+import { accounts } from "./accounts";
+import { customers } from "./sales";
+import { vendors } from "./purchases";
+import { employees } from "./payroll";
+import { journalEntries } from "./ledger";
 
-export const payments = pgTable("payments", {
+// Unified Payment module — the single source of truth for every money
+// movement into or out of the business (spec: "Payment module records the
+// settlement of money"). Both "money in" (customer receipts, advances,
+// loans, capital, refunds, other) and "money out" (supplier/expense/tax
+// payments, loan repayments, advances, owner withdrawals, transfers, other)
+// live in one table so they can be listed, filtered, and reconciled
+// together with one numbering scheme.
+export const paymentDirectionEnum = pgEnum("payment_direction", ["money_in", "money_out"]);
+
+export const paymentTypeEnum = pgEnum("payment_type", [
+  // Money in
+  "customer_payment",
+  "customer_advance",
+  "loan_received",
+  "capital_introduced",
+  "refund_received",
+  "other_receipt",
+  // Money out
+  "supplier_payment",
+  "expense_payment",
+  "tax_payment",
+  "loan_repayment",
+  "supplier_advance",
+  "owner_withdrawal",
+  "cash_withdrawal",
+  "bank_transfer",
+  "other_payment",
+]);
+
+export const paymentPartyTypeEnum = pgEnum("payment_party_type", ["customer", "supplier", "employee", "other", "none"]);
+
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "bank_transfer", "cheque", "card", "online", "other"]);
+
+export const paymentStatusEnum = pgEnum("payment_status", ["draft", "posted", "voided"]);
+
+// "embedded" = auto-recorded by Sales/Purchases' own invoice/bill entry
+// screens (paid-at-creation) — shown in this module's list for visibility,
+// but voided/edited only by voiding/editing the source invoice or bill.
+// "standalone" = created directly through this module's own "+ New Payment"
+// flow (including a later payment against an already-existing invoice/bill,
+// and every type with no other home) — fully voidable here.
+export const paymentOriginEnum = pgEnum("payment_origin", ["standalone", "embedded"]);
+
+export const paymentAllocationTargetEnum = pgEnum("payment_allocation_target", ["sales_invoice", "purchase_bill", "expense"]);
+
+export const payments = pgTable("payments_ledger", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+
+  paymentNumber: text("payment_number").notNull(),
+  direction: paymentDirectionEnum("direction").notNull(),
+  paymentType: paymentTypeEnum("payment_type").notNull(),
   paymentDate: date("payment_date").notNull(),
-  paidToVendorId: uuid("paid_to_vendor_id"),
-  paidToOther: text("paid_to_other"),
+
+  partyType: paymentPartyTypeEnum("party_type").notNull().default("none"),
+  customerId: uuid("customer_id").references(() => customers.id),
+  vendorId: uuid("vendor_id").references(() => vendors.id),
+  employeeId: uuid("employee_id").references(() => employees.id),
+  partyOtherName: text("party_other_name"),
+
+  // The cash/bank chart account the money actually moved into/out of. For a
+  // transfer or cash withdrawal, this is the "from" leg and
+  // transferToAccountId is the "to" leg.
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  transferToAccountId: uuid("transfer_to_account_id").references(() => accounts.id),
+  // Classification account for types with no dedicated control account
+  // (Other Receipt/Payment, Tax Payment's choice of liability, a refund's
+  // unallocated remainder) — never left to default silently, see spec
+  // section 12 "must not bypass required accounting classification".
+  categoryAccountId: uuid("category_account_id").references(() => accounts.id),
+
+  paymentMethod: paymentMethodEnum("payment_method").notNull().default("cash"),
+  chequeNumber: text("cheque_number"),
+  chequeDate: date("cheque_date"),
+  chequeBank: text("cheque_bank"),
+  referenceNumber: text("reference_number"),
+
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
-  bankAccountId: uuid("bank_account_id").notNull().references(() => bankAccounts.id),
-  appliedToBillIds: jsonb("applied_to_bill_ids").$type<string[]>().notNull().default([]),
+  description: text("description"),
+  notes: text("notes"),
+  // Lightweight reference only (URL/filename a user pastes in) — this app has
+  // no file-storage backend yet, so this is not a real upload.
+  attachmentUrl: text("attachment_url"),
+
+  status: paymentStatusEnum("status").notNull().default("posted"),
+  origin: paymentOriginEnum("origin").notNull().default("standalone"),
+  // The journal entry this payment posted — kept for the life of the row so
+  // the detail page and reconciliation lookups have a direct pointer instead
+  // of searching by sourceType/sourceId.
+  journalEntryId: uuid("journal_entry_id").references(() => journalEntries.id),
+
+  voidReason: text("void_reason"),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  postedBy: uuid("posted_by"),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  voidedBy: uuid("voided_by"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
 });
 
-export const receipts = pgTable("receipts", {
+// One payment can settle multiple invoices/bills (or a single expense) —
+// see spec section 17 "Multiple Invoice Payment". allocatedAmount for a
+// customer/supplier payment never exceeds the payment's own amount; any
+// unallocated remainder is booked to that party's Advance account instead
+// (see src/lib/ledger/advance-accounts.ts), not left dangling.
+export const paymentAllocations = pgTable("payment_allocations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  receiptDate: date("receipt_date").notNull(),
-  receivedFromCustomerId: uuid("received_from_customer_id"),
-  receivedFromOther: text("received_from_other"),
-  amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
-  bankAccountId: uuid("bank_account_id").notNull().references(() => bankAccounts.id),
-  appliedToInvoiceIds: jsonb("applied_to_invoice_ids").$type<string[]>().notNull().default([]),
+  paymentId: uuid("payment_id").notNull().references(() => payments.id, { onDelete: "cascade" }),
+  targetType: paymentAllocationTargetEnum("target_type").notNull(),
+  targetId: uuid("target_id").notNull(),
+  allocatedAmount: numeric("allocated_amount", { precision: 18, scale: 2 }).notNull(),
 });

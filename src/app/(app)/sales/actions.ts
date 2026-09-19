@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, or, count, desc, sql, type SQL } from "drizzle-orm";
+import { and, eq, or, count, desc, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   salesInvoices,
@@ -9,7 +9,8 @@ import {
   journalLines,
   tenants,
   bankAccounts,
-  receipts,
+  payments,
+  paymentAllocations,
   accounts,
   customers,
   type LineItem,
@@ -17,7 +18,9 @@ import {
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
+import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -126,10 +129,65 @@ async function postCogsEntry(
   });
 }
 
-async function deleteReceiptsForInvoice(tenantId: string, invoiceId: string) {
-  await db
-    .delete(receipts)
-    .where(and(eq(receipts.tenantId, tenantId), sql`${receipts.appliedToInvoiceIds} @> ${JSON.stringify([invoiceId])}::jsonb`));
+// Deletes the embedded (paid-at-creation) Payment-module row(s) recorded
+// for this invoice, cascading to their allocation rows — used before a void
+// or edit re-posts fresh entries, mirroring how the old receipts table was
+// cleared in the same spots.
+async function deleteEmbeddedPaymentsForInvoice(tenantId: string, invoiceId: string) {
+  const rows = await db
+    .select({ paymentId: paymentAllocations.paymentId })
+    .from(paymentAllocations)
+    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+    .where(and(eq(payments.tenantId, tenantId), eq(payments.origin, "embedded"), eq(paymentAllocations.targetType, "sales_invoice"), eq(paymentAllocations.targetId, invoiceId)));
+
+  const paymentIds = [...new Set(rows.map((r) => r.paymentId))];
+  if (paymentIds.length > 0) {
+    await db.delete(payments).where(and(eq(payments.tenantId, tenantId), or(...paymentIds.map((id) => eq(payments.id, id)))));
+  }
+}
+
+// Records the embedded customer-payment row (+ its allocation to this
+// invoice) in the unified Payment module for a payment captured at invoice
+// creation/edit time — the accounting entry itself is posted separately by
+// the caller, unchanged; this is purely the Payment module's own record of
+// that same fact so it shows up in the Payments list and reconciliation.
+async function insertEmbeddedCustomerPayment(
+  tenantId: string,
+  userId: string,
+  customerId: string,
+  invoiceId: string,
+  paymentDate: string,
+  amount: number,
+  accountId: string,
+  journalEntryId: string,
+  referenceNumber: string
+) {
+  const paymentNumber = await buildNextPaymentNumber(tenantId, "money_in");
+  const [row] = await db
+    .insert(payments)
+    .values({
+      tenantId,
+      paymentNumber,
+      direction: "money_in",
+      paymentType: "customer_payment",
+      paymentDate,
+      partyType: "customer",
+      customerId,
+      accountId,
+      paymentMethod: "cash",
+      referenceNumber,
+      amount: amount.toFixed(2),
+      description: `Payment received for ${referenceNumber}`,
+      status: "posted",
+      origin: "embedded",
+      journalEntryId,
+      createdBy: userId,
+      postedBy: userId,
+      postedAt: new Date(),
+    })
+    .returning();
+
+  await db.insert(paymentAllocations).values({ paymentId: row.id, targetType: "sales_invoice", targetId: invoiceId, allocatedAmount: amount.toFixed(2) });
 }
 
 export type BatchPaymentLine = {
@@ -196,9 +254,6 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
 
-  const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
-  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
-
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
 
@@ -235,9 +290,19 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
     .where(eq(salesInvoices.tenantId, session.tenantId));
   let nextSequence = existingCount + 1;
 
+  const arCache = new Map<string, string>();
+  async function resolveAr(customerId: string) {
+    const cached = arCache.get(customerId);
+    if (cached) return cached;
+    const id = await getOrCreateCustomerReceivableAccountId(session.tenantId, customerId);
+    arCache.set(customerId, id);
+    return id;
+  }
+
   for (const row of computedRows) {
     const { subtotal, taxAmount, total, paid } = row;
     const customerId = row.customerId || cashCustomerId!;
+    const arId = await resolveAr(customerId);
     const invoiceNumber = buildInvoiceNumber(
       tenant?.invoicePrefix,
       tenant?.invoiceSuffix,
@@ -266,7 +331,7 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
       .returning();
 
     const lines: PostLineInput[] = [
-      { accountId: ar.id, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+      { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
       { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
     ];
     if (taxAmount > 0 && taxPayableId) {
@@ -291,9 +356,9 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
         debitAmount: p.amount,
         description: `Payment received for ${invoiceNumber}`,
       }));
-      receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+      receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
 
-      await postJournalEntry({
+      const receiptEntry = await postJournalEntry({
         tenantId: session.tenantId,
         entryDate: row.invoiceDate,
         sourceType: "receipt",
@@ -304,15 +369,18 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
         lines: receiptLines,
       });
 
-      const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
-      await db.insert(receipts).values({
-        tenantId: session.tenantId,
-        receiptDate: row.invoiceDate,
-        receivedFromCustomerId: customerId,
-        amount: paid.toFixed(2),
-        bankAccountId: primaryBankAccountId,
-        appliedToInvoiceIds: [invoice.id],
-      });
+      await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+      await insertEmbeddedCustomerPayment(
+        session.tenantId,
+        session.userId,
+        customerId,
+        invoice.id,
+        row.invoiceDate,
+        paid,
+        paymentLines[0].accountId,
+        receiptEntry.id,
+        invoiceNumber
+      );
     }
   }
 
@@ -344,7 +412,7 @@ export async function voidInvoice(formData: FormData) {
     session.userId,
     `Void of invoice ${invoice.invoiceNumber}`
   );
-  await deleteReceiptsForInvoice(session.tenantId, invoiceId);
+  await deleteEmbeddedPaymentsForInvoice(session.tenantId, invoiceId);
   await applyStockDelta(session.tenantId, (invoice.lineItems ?? []) as LineItem[], 1);
 
   await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
@@ -482,8 +550,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
-  const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
-  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
+  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
 
@@ -501,7 +568,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     session.userId,
     `Edit of invoice ${existing.invoiceNumber}`
   );
-  await deleteReceiptsForInvoice(session.tenantId, input.invoiceId);
+  await deleteEmbeddedPaymentsForInvoice(session.tenantId, input.invoiceId);
   await applyStockDelta(session.tenantId, (existing.lineItems ?? []) as LineItem[], 1);
   await applyStockDelta(session.tenantId, validLines, -1);
 
@@ -530,7 +597,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     .where(eq(salesInvoices.id, input.invoiceId));
 
   const lines: PostLineInput[] = [
-    { accountId: ar.id, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+    { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
     { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
   ];
   if (taxAmount > 0 && taxPayableId) {
@@ -557,9 +624,9 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       debitAmount: p.amount,
       description: `Payment received for ${invoiceNumber}`,
     }));
-    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+    receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
 
-    await postJournalEntry({
+    const receiptEntry = await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: input.invoiceDate,
       sourceType: "receipt",
@@ -570,15 +637,18 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       lines: receiptLines,
     });
 
-    const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
-    await db.insert(receipts).values({
-      tenantId: session.tenantId,
-      receiptDate: input.invoiceDate,
-      receivedFromCustomerId: input.customerId,
-      amount: paid.toFixed(2),
-      bankAccountId: primaryBankAccountId,
-      appliedToInvoiceIds: [input.invoiceId],
-    });
+    await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+    await insertEmbeddedCustomerPayment(
+      session.tenantId,
+      session.userId,
+      input.customerId,
+      input.invoiceId,
+      input.invoiceDate,
+      paid,
+      paymentLines[0].accountId,
+      receiptEntry.id,
+      invoiceNumber
+    );
   }
 
   revalidatePath("/sales");
@@ -646,8 +716,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
-  const ar = await findControlAccount(session.tenantId, ["1100"], "Accounts Receivable");
-  if (!ar) throw new Error("No Accounts Receivable account found — add one to the Chart of Accounts first");
+  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
 
@@ -684,7 +753,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
     .returning();
 
   const lines: PostLineInput[] = [
-    { accountId: ar.id, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+    { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
     { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
   ];
   if (taxAmount > 0 && taxPayableId) {
@@ -712,9 +781,9 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       debitAmount: p.amount,
       description: `Payment received for ${invoiceNumber}`,
     }));
-    receiptLines.push({ accountId: ar.id, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+    receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
 
-    await postJournalEntry({
+    const receiptEntry = await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: input.invoiceDate,
       sourceType: "receipt",
@@ -725,15 +794,18 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       lines: receiptLines,
     });
 
-    const primaryBankAccountId = await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
-    await db.insert(receipts).values({
-      tenantId: session.tenantId,
-      receiptDate: input.invoiceDate,
-      receivedFromCustomerId: input.customerId,
-      amount: paid.toFixed(2),
-      bankAccountId: primaryBankAccountId,
-      appliedToInvoiceIds: [invoice.id],
-    });
+    await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+    await insertEmbeddedCustomerPayment(
+      session.tenantId,
+      session.userId,
+      input.customerId,
+      invoice.id,
+      input.invoiceDate,
+      paid,
+      paymentLines[0].accountId,
+      receiptEntry.id,
+      invoiceNumber
+    );
   }
 
   revalidatePath("/sales");

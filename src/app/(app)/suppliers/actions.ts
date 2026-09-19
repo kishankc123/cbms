@@ -3,62 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, payments, tenants } from "@/db/schema";
+import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
-import { postJournalEntry, reverseLatestEntryForSource, type PostLineInput } from "@/lib/ledger/post";
-import { findControlAccount, getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
+import { reverseLatestEntryForSource } from "@/lib/ledger/post";
+import { createSupplierPayableAccount } from "@/lib/ledger/subledger-accounts";
+import { syncSupplierOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
+import { getSupplierPaymentRows } from "@/lib/ledger/supplier-balances";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
   const signed = type === "CR" ? -amount : amount;
   return signed.toFixed(2);
-}
-
-async function openingBalanceEntryDate(tenantId: string) {
-  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  return tenant?.fiscalYearStartDate || new Date().toISOString().slice(0, 10);
-}
-
-// Posts a supplier's opening balance against "Brought forward" — the AP
-// mirror of the customer version. A positive balance means we owe the
-// supplier (the normal AP credit balance); negative means we're prepaid.
-async function syncSupplierOpeningBalanceEntry(
-  tenantId: string,
-  supplierId: string,
-  supplierName: string,
-  openingBalance: number,
-  userId: string
-) {
-  await reverseLatestEntryForSource(tenantId, "opening_balance", supplierId, userId, `Opening balance update - ${supplierName}`);
-  if (openingBalance === 0) return;
-
-  const ap = await findControlAccount(tenantId, ["2000"], "Accounts Payable");
-  if (!ap) throw new Error("No Accounts Payable account found — add one to the Chart of Accounts first");
-  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
-
-  const amount = Math.abs(openingBalance);
-  const lines: PostLineInput[] =
-    openingBalance > 0
-      ? [
-          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${supplierName}` },
-          { accountId: ap.id, creditAmount: amount, description: `Opening balance - ${supplierName}` },
-        ]
-      : [
-          { accountId: ap.id, debitAmount: amount, description: `Opening balance - ${supplierName}` },
-          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${supplierName}` },
-        ];
-
-  await postJournalEntry({
-    tenantId,
-    entryDate: await openingBalanceEntryDate(tenantId),
-    sourceType: "opening_balance",
-    sourceId: supplierId,
-    referenceNumber: supplierName,
-    memo: `Opening balance - ${supplierName}`,
-    createdBy: userId,
-    lines,
-  });
 }
 
 export async function createSupplier(formData: FormData) {
@@ -83,6 +39,11 @@ export async function createSupplier(formData: FormData) {
       openingBalance,
     })
     .returning();
+
+  // Every supplier gets their own Accounts Payable sub-account
+  // immediately — the account every purchase/payment for them posts to.
+  const payableAccount = await createSupplierPayableAccount(session.tenantId, name);
+  await db.update(vendors).set({ payableAccountId: payableAccount.id }).where(eq(vendors.id, supplier.id));
 
   await syncSupplierOpeningBalanceEntry(session.tenantId, supplier.id, name, Number(openingBalance), session.userId);
 
@@ -185,11 +146,7 @@ export async function getSupplierHistory(supplierId: string, from?: string, to?:
       .from(purchaseBills)
       .where(and(eq(purchaseBills.vendorId, supplierId), eq(purchaseBills.tenantId, session.tenantId)))
       .orderBy(asc(purchaseBills.billDate)),
-    db
-      .select({ date: payments.paymentDate, amount: payments.amount })
-      .from(payments)
-      .where(and(eq(payments.paidToVendorId, supplierId), eq(payments.tenantId, session.tenantId)))
-      .orderBy(asc(payments.paymentDate)),
+    getSupplierPaymentRows(session.tenantId, supplierId),
   ]);
 
   const activeBills = bills.filter((b) => b.status !== "void");
@@ -206,20 +163,22 @@ export async function getSupplierHistory(supplierId: string, from?: string, to?:
     activeBills.filter((b) => isBeforeFrom(b.date)).reduce((s, b) => s + Number(b.total), 0) -
     supplierPayments.filter((p) => isBeforeFrom(p.date)).reduce((s, p) => s + Number(p.amount), 0);
 
+  // Accounts Payable is a liability — a purchase bill increases what we owe,
+  // which is a credit to this account, while a payment reduces it (a debit).
   const rows: Omit<LedgerRow, "balance">[] = [];
   for (const b of activeBills) {
     if (!inRange(b.date)) continue;
-    rows.push({ date: b.date, details: `Purchase bill ${b.billNumber}`, debit: Number(b.total), credit: 0 });
+    rows.push({ date: b.date, details: `Purchase bill ${b.billNumber}`, debit: 0, credit: Number(b.total) });
   }
   for (const p of supplierPayments) {
     if (!inRange(p.date)) continue;
-    rows.push({ date: p.date, details: "Payment made", debit: 0, credit: Number(p.amount) });
+    rows.push({ date: p.date, details: "Payment made", debit: Number(p.amount), credit: 0 });
   }
   rows.sort((a, b) => a.date.localeCompare(b.date));
 
   let running = openingBalance;
   const ledgerRows: LedgerRow[] = rows.map((r) => {
-    running += r.debit - r.credit;
+    running += r.credit - r.debit;
     return { ...r, balance: running };
   });
 

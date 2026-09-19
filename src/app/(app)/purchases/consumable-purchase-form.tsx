@@ -31,7 +31,7 @@ export const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
 ];
 
 const MIN_ROWS = 7;
-const CELL_TEXT = "text-sm";
+const fmt = (n: number) => n.toFixed(2);
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyRow = (): Row => ({
   description: "",
@@ -71,16 +71,22 @@ function flattenAccounts(groups: CashBankGroup[]): Record<string, string> {
   return map;
 }
 
+const cellInputCls =
+  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
+const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-right text-gray-600";
+
 export function ConsumablePurchaseForm({
   vendors,
   categoryAccounts,
   cashBankAccounts,
   vatRate,
+  onDirtyChange,
 }: {
   vendors: Vendor[];
   categoryAccounts: Account[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [billDate, setBillDate] = useState(today());
@@ -92,7 +98,7 @@ export function ConsumablePurchaseForm({
   const [showSavedDialog, setShowSavedDialog] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"save" | "reset" | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -103,6 +109,11 @@ export function ConsumablePurchaseForm({
     window.addEventListener("keydown", (e) => e.key === "Escape" && close());
     return () => window.removeEventListener("click", close);
   }, [contextMenu]);
+
+  useEffect(() => {
+    onDirtyChange?.(rows.some(isRowTouched));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   const accountLabels = flattenAccounts(cashBankAccounts);
 
@@ -127,7 +138,7 @@ export function ConsumablePurchaseForm({
   function performReset() {
     setRows(Array.from({ length: MIN_ROWS }, emptyRow));
     setSaveError(null);
-    setConfirmAction(null);
+    setConfirmReset(false);
   }
 
   function handleRecordPayClick(i: number) {
@@ -143,7 +154,7 @@ export function ConsumablePurchaseForm({
     setPaymentRow(null);
   }
 
-  function handleSaveClick() {
+  async function performSave() {
     setSaveError(null);
     const hasIncompleteRow = rows.some((r) => isRowTouched(r) && !isRowComplete(r));
     if (hasIncompleteRow) {
@@ -155,12 +166,6 @@ export function ConsumablePurchaseForm({
       setSaveError("Add at least one purchase row before saving.");
       return;
     }
-    setConfirmAction("save");
-  }
-
-  async function performSave() {
-    setConfirmAction(null);
-    const validRows = rows.filter(isRowComplete);
 
     setSaving(true);
     try {
@@ -178,6 +183,7 @@ export function ConsumablePurchaseForm({
       });
       setRows(Array.from({ length: MIN_ROWS }, emptyRow));
       setShowSavedDialog(true);
+      onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -189,212 +195,241 @@ export function ConsumablePurchaseForm({
   const activeRow = paymentRow !== null ? rows[paymentRow] : null;
   const activeRowTotal = activeRow ? computeRow(activeRow, vatRate).total : 0;
 
-  const grandTotal = rows.reduce((s, r) => s + computeRow(r, vatRate).total, 0);
+  const completeRows = rows.filter(isRowComplete);
+  const computedRows = completeRows.map((r) => computeRow(r, vatRate));
+  const totalPurchases = completeRows.length;
+  const totalAmount = computedRows.reduce((s, c) => s + c.amount, 0);
+  const totalVat = computedRows.reduce((s, c) => s + c.tax, 0);
+  const grandTotal = computedRows.reduce((s, c) => s + c.total, 0);
   const paidByAccount = new Map<string, number>();
-  for (const r of rows) {
+  for (const r of completeRows) {
     for (const p of r.payments) {
       paidByAccount.set(p.accountId, (paidByAccount.get(p.accountId) ?? 0) + p.amount);
     }
   }
+  const totalPaid = completeRows.reduce((s, r) => s + r.payments.reduce((a, p) => a + p.amount, 0), 0);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">Date</label>
-        <input
-          type="date"
-          max={today()}
-          value={billDate}
-          onChange={(e) => setBillDate(e.target.value)}
-          className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
-        />
-      </div>
+    <div className="space-y-4">
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">Purchase Entries</h2>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Description</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Bill no</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Supplier</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Category</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Bill type</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Amount</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr
-                key={i}
-                className="border-t border-gray-100"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
-                }}
-              >
-                <td className="px-1 py-1">
-                  <input
-                    value={row.description}
-                    onChange={(e) => updateRow(i, "description", e.target.value)}
-                    placeholder="Details"
-                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  />
-                </td>
-                <td className="px-1 py-1">
-                  <input
-                    value={row.billNumber}
-                    onChange={(e) => updateRow(i, "billNumber", e.target.value)}
-                    className={`w-20 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  />
-                </td>
-                <td className="px-1 py-1">
-                  <select
-                    value={row.vendorId}
-                    onChange={(e) => updateRow(i, "vendorId", e.target.value)}
-                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  >
-                    <option value="" className="text-gray-400">
-                      Select supplier
-                    </option>
-                    {vendors.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-1 py-1">
-                  <select
-                    value={row.categoryId}
-                    onChange={(e) => updateRow(i, "categoryId", e.target.value)}
-                    className={`w-36 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  >
-                    <option value="" className="text-gray-400">
-                      Select category
-                    </option>
-                    {categoryAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.code} — {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-1 py-1">
-                  <select
-                    value={row.billType}
-                    onChange={(e) => updateRow(i, "billType", e.target.value)}
-                    className={`w-28 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  >
-                    {BILL_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-1 py-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={row.amount}
-                    onChange={(e) => updateRow(i, "amount", e.target.value)}
-                    className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                  />
-                </td>
-                <td className="px-1 py-1">
-                  <button
-                    type="button"
-                    onClick={() => handleRecordPayClick(i)}
-                    className="whitespace-nowrap rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs px-3 py-1.5"
-                  >
-                    {row.payments.length > 0 ? "EDIT PAY" : "RECORD PAY"}
-                  </button>
-                  {errorRow === i && <p className={`mt-1 w-40 text-red-600 ${CELL_TEXT}`}>Amount is required.</p>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={handleAddRows} className="text-sm text-gray-600 hover:text-gray-900">
-          + Add rows
-        </button>
-        <input
-          type="number"
-          min="1"
-          max="100"
-          value={addCount}
-          onChange={(e) => setAddCount(e.target.value)}
-          className="w-16 rounded border border-gray-300 px-2 py-1 text-sm"
-        />
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-6">
-        <div>
-          <h3 className="mb-2 text-base font-medium text-gray-700">Purchase summary</h3>
-          <div className="w-64 rounded-lg border border-gray-300 bg-white p-4 space-y-1 text-sm text-gray-900">
-            <div className="flex items-center justify-between">
-              <span>Amount</span>
-              <span>{rows.reduce((s, r) => s + computeRow(r, vatRate).amount, 0).toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>VAT</span>
-              <span>{rows.reduce((s, r) => s + computeRow(r, vatRate).tax, 0).toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between border-t border-gray-200 pt-1 font-medium">
-              <span>Grand total</span>
-              <span>{grandTotal.toFixed(2)}</span>
-            </div>
-          </div>
+        <div className="mb-3">
+          <label className="block text-xs text-gray-500 mb-1">Date</label>
+          <input
+            type="date"
+            max={today()}
+            value={billDate}
+            onChange={(e) => setBillDate(e.target.value)}
+            className="w-40 rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+          />
         </div>
 
-        <div>
-          <h3 className="mb-2 text-base font-medium text-gray-700">Settlement summary</h3>
-          <div className="w-64 rounded-lg border border-gray-300 bg-white p-4 space-y-2">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-gray-500">
+              <tr>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Description</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Bill No.</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Supplier</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Category</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Bill Type</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">VAT</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Total</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const c = computeRow(row, vatRate);
+                return (
+                  <tr
+                    key={i}
+                    className="border-t border-gray-100"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
+                    }}
+                  >
+                    <td className="px-1 py-1">
+                      <input
+                        value={row.description}
+                        onChange={(e) => updateRow(i, "description", e.target.value)}
+                        placeholder="Details"
+                        className={`w-36 ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        value={row.billNumber}
+                        onChange={(e) => updateRow(i, "billNumber", e.target.value)}
+                        className={`w-20 ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <select
+                        value={row.vendorId}
+                        onChange={(e) => updateRow(i, "vendorId", e.target.value)}
+                        className={`w-36 ${cellInputCls}`}
+                      >
+                        <option value="" className="text-gray-400">
+                          Select supplier
+                        </option>
+                        {vendors.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1">
+                      <select
+                        value={row.categoryId}
+                        onChange={(e) => updateRow(i, "categoryId", e.target.value)}
+                        className={`w-36 ${cellInputCls}`}
+                      >
+                        <option value="" className="text-gray-400">
+                          Select category
+                        </option>
+                        {categoryAccounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.code} — {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1">
+                      <select
+                        value={row.billType}
+                        onChange={(e) => updateRow(i, "billType", e.target.value)}
+                        className={`w-28 ${cellInputCls}`}
+                      >
+                        {BILL_TYPE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={row.amount}
+                        onChange={(e) => updateRow(i, "amount", e.target.value)}
+                        className={`w-24 text-right ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.tax)}</div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <div className="w-24 rounded bg-gray-50 px-1.5 py-1 text-sm text-right font-medium text-gray-900">
+                        {fmt(c.total)}
+                      </div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <button
+                        type="button"
+                        onClick={() => handleRecordPayClick(i)}
+                        className="whitespace-nowrap rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs px-2.5 py-1"
+                      >
+                        {row.payments.length > 0 ? "Edit Payment" : "Record Payment"}
+                      </button>
+                      {errorRow === i && <p className="mt-1 w-40 text-xs text-red-600">Amount is required.</p>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">Rows:</span>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={addCount}
+            onChange={(e) => setAddCount(e.target.value)}
+            className="w-16 rounded border border-gray-300 px-2 py-1 text-sm"
+          />
+          <button type="button" onClick={handleAddRows} className="text-sm text-gray-600 hover:text-gray-900">
+            + Add Rows
+          </button>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap gap-4">
+        <section className="w-72 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-gray-900">Purchase Summary</h2>
+          <div className="space-y-1 text-sm text-gray-900">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Total Purchases</span>
+              <span>{totalPurchases}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Amount</span>
+              <span>{fmt(totalAmount)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">VAT</span>
+              <span>{fmt(totalVat)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
+              <span className="font-semibold text-gray-900">Grand Total</span>
+              <span className="text-base font-bold text-gray-900">{fmt(grandTotal)}</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="w-72 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-gray-900">Settlement Summary</h2>
+          <div className="space-y-1 text-sm text-gray-900">
             {paidByAccount.size === 0 && <p className="text-sm text-gray-400">—</p>}
             {[...paidByAccount.entries()].map(([accountId, amount]) => (
-              <div key={accountId} className="flex items-center justify-between text-sm text-gray-900">
-                <span>{accountLabels[accountId] ?? "Account"}</span>
-                <span>{amount.toFixed(2)}</span>
+              <div key={accountId} className="flex items-center justify-between">
+                <span className="text-gray-500">{accountLabels[accountId] ?? "Account"}</span>
+                <span>{fmt(amount)}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
-              <span className="font-medium text-gray-900">Total</span>
-              <span className="font-bold text-gray-900">{grandTotal.toFixed(2)}</span>
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
+              <span className="font-semibold text-gray-900">Paid</span>
+              <span className="text-base font-bold text-gray-900">{fmt(totalPaid)}</span>
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
       <div className="flex items-center justify-end gap-3">
         {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         <button
           type="button"
-          onClick={handleSaveClick}
+          onClick={performSave}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "SAVE"}
+          {saving ? "Saving..." : "Save"}
         </button>
         <button
           type="button"
-          onClick={() => setConfirmAction("reset")}
+          onClick={() => setConfirmReset(true)}
           disabled={saving}
-          className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5 disabled:opacity-50"
+          className="rounded text-gray-500 hover:text-gray-700 text-sm px-2 py-1.5 disabled:opacity-50"
         >
-          RESET
+          Reset
         </button>
       </div>
 
-      {confirmAction === "save" && (
-        <ConfirmDialog message="Do you want to save?" onYes={performSave} onNo={() => setConfirmAction(null)} />
-      )}
-      {confirmAction === "reset" && (
-        <ConfirmDialog message="Do you want to reset?" onYes={performReset} onNo={() => setConfirmAction(null)} />
+      {confirmReset && (
+        <ConfirmDialog
+          message="This will clear all entered rows. Continue?"
+          onYes={performReset}
+          onNo={() => setConfirmReset(false)}
+        />
       )}
 
       {showSavedDialog && (

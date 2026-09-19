@@ -42,7 +42,9 @@ export function HistoryPanel({
   }, [supplierId, effectiveFrom, effectiveTo]);
 
   const fmt = (n: number) => Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
-  const drCr = (n: number) => (n < 0 ? "Cr" : "Dr");
+  // Accounts Payable is a liability — a positive balance (money we owe) is a
+  // normal credit balance, the opposite of the customer/AR side.
+  const drCr = (n: number) => (n < 0 ? "Dr" : "Cr");
 
   return (
     <div className="space-y-3">

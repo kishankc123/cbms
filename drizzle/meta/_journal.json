@@ -134,6 +134,76 @@
       "when": 1789753010541,
       "tag": "0018_talented_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789756131986,
+      "tag": "0019_tiny_marrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789762472421,
+      "tag": "0020_bouncy_the_spike",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789762514769,
+      "tag": "0021_nifty_reptil",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789762592004,
+      "tag": "0022_secret_stephen_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789783383794,
+      "tag": "0023_loving_edwin_jarvis",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789783450668,
+      "tag": "0024_mean_madrox",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789786365478,
+      "tag": "0025_mature_lucky_pierre",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789796072245,
+      "tag": "0026_high_lionheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789796121507,
+      "tag": "0027_tiny_devos",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789808690366,
+      "tag": "0028_long_boomer",
+      "breakpoints": true
     }
   ]
 }

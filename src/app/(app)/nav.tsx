@@ -25,8 +25,8 @@ export function AppNav({ items }: { items: NavItem[] }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`block rounded px-3 py-2 text-sm hover:bg-gray-200 ${
-                isActive ? "text-gray-900 font-medium" : "text-gray-700"
+              className={`block rounded px-3 py-2 text-sm hover:bg-[var(--sidebar-bg-hover)] ${
+                isActive ? "text-[var(--sidebar-text-active)] font-medium" : "text-[var(--sidebar-text)]"
               }`}
             >
               {item.label}
@@ -42,8 +42,8 @@ export function AppNav({ items }: { items: NavItem[] }) {
             <button
               type="button"
               onClick={() => setOpenHref(isOpen ? null : item.href)}
-              className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm hover:bg-gray-200 ${
-                isSectionActive ? "text-gray-900 font-medium" : "text-gray-700"
+              className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm hover:bg-[var(--sidebar-bg-hover)] ${
+                isSectionActive ? "text-[var(--sidebar-text-active)] font-medium" : "text-[var(--sidebar-text)]"
               }`}
             >
               {item.label}
@@ -55,15 +55,15 @@ export function AppNav({ items }: { items: NavItem[] }) {
               </svg>
             </button>
             {isOpen && (
-              <div className="ml-3 mt-1 space-y-1 border-l border-gray-200 pl-3">
+              <div className="ml-3 mt-1 space-y-1 border-l border-[var(--sidebar-border)] pl-3">
                 {item.children.map((child) => {
                   const isChildActive = pathname === child.href;
                   return (
                     <Link
                       key={child.href}
                       href={child.href}
-                      className={`block rounded px-2 py-1.5 text-sm hover:bg-gray-200 ${
-                        isChildActive ? "text-gray-900 font-medium" : "text-gray-600"
+                      className={`block rounded px-2 py-1.5 text-sm hover:bg-[var(--sidebar-bg-hover)] ${
+                        isChildActive ? "text-[var(--sidebar-text-active)] font-medium" : "text-[var(--sidebar-text)]"
                       }`}
                     >
                       {child.label}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors, purchaseBills, items, tenants } from "@/db/schema";
@@ -29,7 +30,15 @@ export default async function StockablePurchasePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Stockable purchase</h1>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Stockable Purchase</h1>
+          <p className="mt-0.5 text-sm text-gray-500">Record inventory purchases and settlement details.</p>
+        </div>
+        <Link href="/suppliers" className="mt-1 text-sm text-gray-500 hover:text-[var(--color-primary)] hover:underline">
+          Manage Suppliers
+        </Link>
+      </div>
 
       <StockableTabs
         vendors={vendorList}

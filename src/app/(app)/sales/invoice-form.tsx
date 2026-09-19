@@ -21,8 +21,8 @@ type Row = {
 };
 
 const MIN_ROWS = 7;
-const CELL_TEXT = "text-sm";
 const DATE_FILL_AHEAD = 5;
+const fmt = (n: number) => n.toFixed(2);
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", payments: [] });
 
@@ -50,14 +50,9 @@ function isRowComplete(row: Row) {
   return Boolean(row.invoiceDate && (parseFloat(row.grossAmount) || 0) > 0);
 }
 
-function flattenAccounts(groups: CashBankGroup[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const g of groups) {
-    if (g.children.length === 0) map[g.id] = g.name;
-    else for (const c of g.children) map[c.id] = c.name;
-  }
-  return map;
-}
+const cellInputCls =
+  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
+const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-right text-gray-600";
 
 export function InvoiceForm({
   customers,
@@ -65,12 +60,14 @@ export function InvoiceForm({
   cashBankAccounts,
   customerBalances,
   invoiceNumbering,
+  onDirtyChange,
 }: {
   customers: Customer[];
   vatRate: number;
   cashBankAccounts: CashBankGroup[];
   customerBalances: Record<string, number>;
   invoiceNumbering: InvoiceNumbering;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
@@ -81,7 +78,7 @@ export function InvoiceForm({
   const [savedMessage, setSavedMessage] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"save" | "reset" | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -93,7 +90,10 @@ export function InvoiceForm({
     return () => window.removeEventListener("click", close);
   }, [contextMenu]);
 
-  const accountLabels = flattenAccounts(cashBankAccounts);
+  useEffect(() => {
+    onDirtyChange?.(rows.some(isRowTouched));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   function updateRow(i: number, field: "invoiceDate" | "customerId" | "grossAmount" | "discountAmount", value: string) {
     setRows((prev) => {
@@ -120,7 +120,7 @@ export function InvoiceForm({
   function performReset() {
     setRows(Array.from({ length: MIN_ROWS }, emptyRow));
     setSaveError(null);
-    setConfirmAction(null);
+    setConfirmReset(false);
   }
 
   function handleRecordPayClick(i: number) {
@@ -137,7 +137,7 @@ export function InvoiceForm({
     setPaymentRow(null);
   }
 
-  function handleSaveClick() {
+  async function performSave() {
     setSaveError(null);
     const hasIncompleteRow = rows.some((r) => isRowTouched(r) && !isRowComplete(r));
     if (hasIncompleteRow) {
@@ -149,12 +149,6 @@ export function InvoiceForm({
       setSaveError("Add at least one invoice row before saving.");
       return;
     }
-    setConfirmAction("save");
-  }
-
-  async function performSave() {
-    setConfirmAction(null);
-    const validRows = rows.filter(isRowComplete);
 
     setSaving(true);
     try {
@@ -170,6 +164,7 @@ export function InvoiceForm({
       setRows(Array.from({ length: MIN_ROWS }, emptyRow));
       setSavedMessage(true);
       setTimeout(() => setSavedMessage(false), 2500);
+      onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed to save");
@@ -181,175 +176,194 @@ export function InvoiceForm({
   const activeRow = paymentRow !== null ? rows[paymentRow] : null;
   const activeRowTotal = activeRow ? computeRow(activeRow, vatRate).total : 0;
 
-  const grandTotal = rows.reduce((s, r) => s + computeRow(r, vatRate).total, 0);
-  const paidByAccount = new Map<string, number>();
-  for (const r of rows) {
-    for (const p of r.payments) {
-      paidByAccount.set(p.accountId, (paidByAccount.get(p.accountId) ?? 0) + p.amount);
-    }
-  }
-  const totalPaid = rows.reduce((s, r) => s + paymentTotal(r), 0);
-  const totalCredit = Math.max(grandTotal - totalPaid, 0);
+  const completeRows = rows.filter(isRowComplete);
+  const computedRows = completeRows.map((r) => computeRow(r, vatRate));
+  const totalInvoices = completeRows.length;
+  const grossSales = computedRows.reduce((s, c) => s + c.gross, 0);
+  const totalDiscount = computedRows.reduce((s, c) => s + c.discount, 0);
+  const taxableSales = computedRows.reduce((s, c) => s + c.taxable, 0);
+  const totalVat = computedRows.reduce((s, c) => s + c.vat, 0);
+  const grandTotal = computedRows.reduce((s, c) => s + c.total, 0);
+  const totalPaid = completeRows.reduce((s, r) => s + paymentTotal(r), 0);
+  const totalOutstanding = Math.max(grandTotal - totalPaid, 0);
 
   return (
-    <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Invoice no</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Date</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Select customer</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Gross amount</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap">Discount</th>
-              <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">Taxable</th>
-              <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">VAT</th>
-              <th className="px-1 py-2 font-bold text-xs whitespace-nowrap">Total</th>
-              <th className="px-1.5 py-1.5 font-bold text-xs whitespace-nowrap"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const c = computeRow(row, vatRate);
-              const showPreviewNumber = Boolean(row.invoiceDate || row.customerId);
-              const previewNumber = showPreviewNumber
-                ? buildInvoiceNumber(
-                    invoiceNumbering.prefix,
-                    invoiceNumbering.suffix,
-                    invoiceNumbering.nextSequence + i,
-                    invoiceNumbering.format
-                  )
-                : "";
-              return (
-                <tr
-                  key={i}
-                  className="border-t border-gray-100"
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
-                  }}
-                >
-                  <td className={`px-1 py-1 text-gray-500 ${CELL_TEXT}`}>{previewNumber}</td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="date"
-                      max={today()}
-                      value={row.invoiceDate}
-                      onChange={(e) => updateRow(i, "invoiceDate", e.target.value)}
-                      className={`w-32 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <select
-                      value={row.customerId}
-                      onChange={(e) => updateRow(i, "customerId", e.target.value)}
-                      className={`w-40 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                    >
-                      <option value="" className="text-gray-400">
-                        Select customer
-                      </option>
-                      {customers.map((cu) => (
-                        <option key={cu.id} value={cu.id}>
-                          {cu.name}
+    <div className="space-y-4">
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">Sales Entries</h2>
+
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-gray-500">
+              <tr>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Invoice No.</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Date</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Customer</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Gross Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Discount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Taxable</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">VAT</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Total</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const c = computeRow(row, vatRate);
+                const showPreviewNumber = Boolean(row.invoiceDate || row.customerId);
+                const previewNumber = showPreviewNumber
+                  ? buildInvoiceNumber(
+                      invoiceNumbering.prefix,
+                      invoiceNumbering.suffix,
+                      invoiceNumbering.nextSequence + i,
+                      invoiceNumbering.format
+                    )
+                  : "";
+                return (
+                  <tr
+                    key={i}
+                    className="border-t border-gray-100"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
+                    }}
+                  >
+                    <td className="px-1 py-1 text-gray-500 text-sm whitespace-nowrap">{previewNumber}</td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="date"
+                        max={today()}
+                        value={row.invoiceDate}
+                        onChange={(e) => updateRow(i, "invoiceDate", e.target.value)}
+                        className={`w-32 ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <select
+                        value={row.customerId}
+                        onChange={(e) => updateRow(i, "customerId", e.target.value)}
+                        className={`w-40 ${cellInputCls}`}
+                      >
+                        <option value="" className="text-gray-400">
+                          Select customer
                         </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={row.grossAmount}
-                      onChange={(e) => updateRow(i, "grossAmount", e.target.value)}
-                      className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={row.discountAmount}
-                      onChange={(e) => updateRow(i, "discountAmount", e.target.value)}
-                      className={`w-24 rounded border border-gray-300 px-1.5 py-1 ${CELL_TEXT}`}
-                    />
-                  </td>
-                  <td className={`px-1 py-1 text-gray-600 ${CELL_TEXT}`}>
-                    <div className="w-24 overflow-x-auto whitespace-nowrap">{c.taxable.toFixed(2)}</div>
-                  </td>
-                  <td className={`px-1 py-1 text-gray-600 ${CELL_TEXT}`}>
-                    <div className="w-24 overflow-x-auto whitespace-nowrap">{c.vat.toFixed(2)}</div>
-                  </td>
-                  <td className={`px-1 py-1 font-medium text-gray-900 ${CELL_TEXT}`}>
-                    <div className="w-24 overflow-x-auto whitespace-nowrap">{c.total.toFixed(2)}</div>
-                  </td>
-                  <td className="px-1 py-1">
-                    <button
-                      type="button"
-                      onClick={() => handleRecordPayClick(i)}
-                      className="whitespace-nowrap rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs px-3 py-1.5"
-                    >
-                      {row.payments.length > 0 ? "EDIT PAY" : "RECORD PAY"}
-                    </button>
-                    {errorRow === i && (
-                      <p className={`mt-1 w-40 text-red-600 ${CELL_TEXT}`}>Date and gross amount are required.</p>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={handleAddRows} className="text-sm text-gray-600 hover:text-gray-900">
-          + Add rows
-        </button>
-        <input
-          type="number"
-          min="1"
-          max="100"
-          value={addCount}
-          onChange={(e) => setAddCount(e.target.value)}
-          className="w-16 rounded border border-gray-300 px-2 py-1 text-sm"
-        />
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-6">
-        <div>
-          <h3 className="mb-2 text-base font-medium text-gray-700">Sales summary</h3>
-          <div className="w-64 rounded-lg border border-gray-300 bg-white p-4">
-            <div className="flex items-center justify-between text-sm text-gray-900">
-              <span>Grand total sales</span>
-              <span className="font-medium">{grandTotal.toFixed(2)}</span>
-            </div>
-          </div>
+                        {customers.map((cu) => (
+                          <option key={cu.id} value={cu.id}>
+                            {cu.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={row.grossAmount}
+                        onChange={(e) => updateRow(i, "grossAmount", e.target.value)}
+                        className={`w-24 text-right ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={row.discountAmount}
+                        onChange={(e) => updateRow(i, "discountAmount", e.target.value)}
+                        className={`w-24 text-right ${cellInputCls}`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <div className={`w-24 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <div className={`w-24 ${calculatedCellCls}`}>{fmt(c.vat)}</div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <div className="w-24 rounded bg-gray-50 px-1.5 py-1 text-sm text-right font-medium text-gray-900">
+                        {fmt(c.total)}
+                      </div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <button
+                        type="button"
+                        onClick={() => handleRecordPayClick(i)}
+                        className="whitespace-nowrap rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs px-2.5 py-1"
+                      >
+                        {row.payments.length > 0 ? "Edit Payment" : "Record Payment"}
+                      </button>
+                      {errorRow === i && (
+                        <p className="mt-1 w-40 text-xs text-red-600">Date and gross amount are required.</p>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        <div>
-          <h3 className="mb-2 text-base font-medium text-gray-700">Settlement summary</h3>
-          <div className="w-64 rounded-lg border border-gray-300 bg-white p-4 space-y-2">
-            {paidByAccount.size === 0 && totalCredit <= 0 && <p className="text-sm text-gray-400">—</p>}
-            {[...paidByAccount.entries()].map(([accountId, amount]) => (
-              <div key={accountId} className="flex items-center justify-between text-sm text-gray-900">
-                <span>{accountLabels[accountId] ?? "Account"}</span>
-                <span>{amount.toFixed(2)}</span>
-              </div>
-            ))}
-            {totalCredit > 0 && (
-              <div className="flex items-center justify-between text-sm text-gray-900">
-                <span>Credit</span>
-                <span>{totalCredit.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
-              <span className="font-medium text-gray-900">Total</span>
-              <span className="font-bold text-gray-900">{(totalPaid + totalCredit).toFixed(2)}</span>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">Rows:</span>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={addCount}
+            onChange={(e) => setAddCount(e.target.value)}
+            className="w-16 rounded border border-gray-300 px-2 py-1 text-sm"
+          />
+          <button type="button" onClick={handleAddRows} className="text-sm text-gray-600 hover:text-gray-900">
+            + Add Rows
+          </button>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap gap-4">
+        <section className="w-72 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-gray-900">Sales Summary</h2>
+          <div className="space-y-1 text-sm text-gray-900">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Total Invoices</span>
+              <span>{totalInvoices}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Gross Sales</span>
+              <span>{fmt(grossSales)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Discount</span>
+              <span>{fmt(totalDiscount)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Taxable Sales</span>
+              <span>{fmt(taxableSales)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">VAT</span>
+              <span>{fmt(totalVat)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
+              <span className="font-semibold text-gray-900">Grand Total</span>
+              <span className="text-base font-bold text-gray-900">{fmt(grandTotal)}</span>
             </div>
           </div>
-        </div>
+        </section>
+
+        <section className="w-72 rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-gray-900">Settlement Summary</h2>
+          <div className="space-y-1 text-sm text-gray-900">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Paid</span>
+              <span>{fmt(totalPaid)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
+              <span className="font-semibold text-gray-900">Outstanding</span>
+              <span className="text-base font-bold text-gray-900">{fmt(totalOutstanding)}</span>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div className="flex items-center justify-end gap-3">
@@ -357,34 +371,27 @@ export function InvoiceForm({
         {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
-          onClick={handleSaveClick}
+          onClick={performSave}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "SAVE"}
+          {saving ? "Saving..." : "Save"}
         </button>
         <button
           type="button"
-          onClick={() => setConfirmAction("reset")}
+          onClick={() => setConfirmReset(true)}
           disabled={saving}
-          className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5 disabled:opacity-50"
+          className="rounded text-gray-500 hover:text-gray-700 text-sm px-2 py-1.5 disabled:opacity-50"
         >
-          RESET
+          Reset
         </button>
       </div>
 
-      {confirmAction === "save" && (
+      {confirmReset && (
         <ConfirmDialog
-          message="Do you want to save?"
-          onYes={performSave}
-          onNo={() => setConfirmAction(null)}
-        />
-      )}
-      {confirmAction === "reset" && (
-        <ConfirmDialog
-          message="Do you want to reset?"
+          message="This will clear all entered rows. Continue?"
           onYes={performReset}
-          onNo={() => setConfirmAction(null)}
+          onNo={() => setConfirmReset(false)}
         />
       )}
 

@@ -1,10 +1,38 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #f8f9fa;
   --foreground: #0f172a;
   --color-primary: #4169e1;
   --color-primary-hover: #3151b0;
+
+  /* Sidebar — dark charcoal/slate workspace rail, distinct from the light
+     app background so the two panes read as separate surfaces. */
+  --sidebar-bg: #0f172a;
+  --sidebar-bg-hover: #1e293b;
+  --sidebar-border: #1e293b;
+  --sidebar-text: #cbd5e1;
+  --sidebar-text-active: #ffffff;
+
+  /* Status pill system — soft background tint + high-contrast dark text,
+     never a bright saturated fill. Reuse via the StatusPill component
+     (src/components/ui/status-pill.tsx) rather than one-off classes. */
+  --status-success-bg: #ecfdf3;
+  --status-success-text: #036b3a;
+  --status-success-border: #b7ebc9;
+
+  --status-pending-bg: #eff6ff;
+  --status-pending-text: #1d4ed8;
+  --status-pending-border: #bfdbfe;
+
+  --status-action-bg: #fffaeb;
+  --status-action-text: #b45309;
+  --status-action-border: #fde3a7;
+
+  --status-critical-bg: #fef2f2;
+  --status-critical-text: #b91c1c;
+  --status-critical-border: #fecaca;
+  --status-critical-dot: #ef4444;
 }
 
 @theme inline {
