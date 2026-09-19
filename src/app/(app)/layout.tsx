@@ -40,6 +40,7 @@ const NAV = [
     children: [
       { href: "/payments/money-in", label: "Money In" },
       { href: "/payments/money-out", label: "Money Out" },
+      { href: "/payments/inter-transfer", label: "Inter-Transfer" },
     ],
   },
   {

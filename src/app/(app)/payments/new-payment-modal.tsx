@@ -84,7 +84,9 @@ export function NewPaymentModal({
 
   const config = typeConfig(paymentType);
   const flatAccounts = useMemo(() => flattenAccounts(formOptions.cashBankAccounts), [formOptions.cashBankAccounts]);
-  const typeOptions = direction === "money_in" ? MONEY_IN_TYPE_OPTIONS : MONEY_OUT_TYPE_OPTIONS;
+  // Moving money between the business's own accounts now lives in
+  // Payments > Inter-Transfer, so it's not offered as a payment type here.
+  const typeOptions = direction === "money_in" ? MONEY_IN_TYPE_OPTIONS : MONEY_OUT_TYPE_OPTIONS.filter((t) => !TRANSFER_TYPES.includes(t.value));
 
   useEffect(() => {
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");
