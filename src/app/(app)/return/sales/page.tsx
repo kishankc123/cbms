@@ -2,6 +2,7 @@ import { eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, items, salesReturns, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { salesVatRate } from "@/lib/sales/vat";
 import { SalesReturnTabs } from "./sales-return-tabs";
 
 export default async function SalesReturnPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
@@ -14,7 +15,7 @@ export default async function SalesReturnPage({ searchParams }: { searchParams: 
     db.select().from(salesReturns).where(eq(salesReturns.tenantId, session.tenantId)).orderBy(desc(salesReturns.noteDate), desc(salesReturns.createdAt)),
     db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
   ]);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
 
   return (
     <div className="space-y-6">

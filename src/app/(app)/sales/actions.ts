@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, or, count, desc, type SQL } from "drizzle-orm";
+import { and, eq, or, desc, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   salesInvoices,
@@ -16,14 +16,35 @@ import {
   type LineItem,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
-import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
+import { postJournalEntry, reverseJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
+import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
+import { salesVatRate } from "@/lib/sales/vat";
+import { todayIso } from "@/lib/calendar";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Every invoice number in use in this organization (void ones too — a number is never reused).
+async function takenInvoiceNumbers(tenantId: string, excludeInvoiceId?: string) {
+  const rows = await db.select({ id: salesInvoices.id, n: salesInvoices.invoiceNumber }).from(salesInvoices).where(eq(salesInvoices.tenantId, tenantId));
+  return new Set(rows.filter((r) => r.id !== excludeInvoiceId).map((r) => r.n));
+}
+
+async function assertInvoiceNumberFree(tenantId: string, invoiceNumber: string, excludeInvoiceId?: string) {
+  if ((await takenInvoiceNumbers(tenantId, excludeInvoiceId)).has(invoiceNumber)) throw new Error(`Invoice number ${invoiceNumber} is already used`);
+}
+
+// A failed save must not leave half an invoice behind: undo whatever posted and drop the row.
+async function discardInvoice(tenantId: string, invoiceId: string, userId: string) {
+  await reverseAllActiveEntriesForSource(tenantId, invoiceId, userId, "Rolled back — invoice could not be saved").catch(() => {});
+  await deleteEmbeddedPaymentsForInvoice(tenantId, invoiceId).catch(() => {});
+  await db.delete(salesInvoices).where(eq(salesInvoices.id, invoiceId));
+}
 
 // A reversal entry is itself never marked isReversed, so at any time there
 // can be more than one isReversed=false row sharing a sourceId (the latest
@@ -252,7 +273,10 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   }
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
+
+  // Refuse up front if any invoice date sits in a locked period, before anything is saved.
+  for (const date of new Set(validRows.map((r) => r.invoiceDate))) await assertPeriodOpen(session.tenantId, date);
 
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
@@ -284,11 +308,8 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
 
   const cashCustomerId = computedRows.some((r) => !r.customerId) ? await ensureCashCustomer(session.tenantId) : null;
 
-  const [{ value: existingCount }] = await db
-    .select({ value: count() })
-    .from(salesInvoices)
-    .where(eq(salesInvoices.tenantId, session.tenantId));
-  let nextSequence = existingCount + 1;
+  const taken = await takenInvoiceNumbers(session.tenantId);
+  let nextSequence = taken.size + 1;
 
   const arCache = new Map<string, string>();
   async function resolveAr(customerId: string) {
@@ -303,13 +324,14 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
     const { subtotal, taxAmount, total, paid } = row;
     const customerId = row.customerId || cashCustomerId!;
     const arId = await resolveAr(customerId);
-    const invoiceNumber = buildInvoiceNumber(
-      tenant?.invoicePrefix,
-      tenant?.invoiceSuffix,
-      nextSequence,
-      tenant?.invoiceNumberFormat ?? "prefix-number-suffix"
+    const next = nextFreeInvoiceNumber(
+      taken,
+      (n) => buildInvoiceNumber(tenant?.invoicePrefix, tenant?.invoiceSuffix, n, tenant?.invoiceNumberFormat ?? "prefix-number-suffix"),
+      nextSequence
     );
-    nextSequence++;
+    const invoiceNumber = next.number;
+    taken.add(invoiceNumber);
+    nextSequence = next.sequence + 1;
 
     const status = paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
@@ -330,57 +352,62 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
       })
       .returning();
 
-    const lines: PostLineInput[] = [
-      { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
-      { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
-    ];
-    if (taxAmount > 0 && taxPayableId) {
-      lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
-    }
+    try {
+      const lines: PostLineInput[] = [
+        { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+        { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+      ];
+      if (taxAmount > 0 && taxPayableId) {
+        lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
+      }
 
-    await postJournalEntry({
-      tenantId: session.tenantId,
-      entryDate: row.invoiceDate,
-      sourceType: "sale",
-      sourceId: invoice.id,
-      referenceNumber: invoiceNumber,
-      memo: `Sales invoice ${invoiceNumber}`,
-      createdBy: session.userId,
-      lines,
-    });
-
-    if (paid > 0) {
-      const paymentLines = row.payments.filter((p) => p.accountId && p.amount > 0);
-      const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
-        accountId: p.accountId,
-        debitAmount: p.amount,
-        description: `Payment received for ${invoiceNumber}`,
-      }));
-      receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
-
-      const receiptEntry = await postJournalEntry({
+      await postJournalEntry({
         tenantId: session.tenantId,
         entryDate: row.invoiceDate,
-        sourceType: "receipt",
+        sourceType: "sale",
         sourceId: invoice.id,
         referenceNumber: invoiceNumber,
-        memo: `Payment received for ${invoiceNumber}`,
+        memo: `Sales invoice ${invoiceNumber}`,
         createdBy: session.userId,
-        lines: receiptLines,
+        lines,
       });
 
-      await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
-      await insertEmbeddedCustomerPayment(
-        session.tenantId,
-        session.userId,
-        customerId,
-        invoice.id,
-        row.invoiceDate,
-        paid,
-        paymentLines[0].accountId,
-        receiptEntry.id,
-        invoiceNumber
-      );
+      if (paid > 0) {
+        const paymentLines = row.payments.filter((p) => p.accountId && p.amount > 0);
+        const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
+          accountId: p.accountId,
+          debitAmount: p.amount,
+          description: `Payment received for ${invoiceNumber}`,
+        }));
+        receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+
+        const receiptEntry = await postJournalEntry({
+          tenantId: session.tenantId,
+          entryDate: row.invoiceDate,
+          sourceType: "receipt",
+          sourceId: invoice.id,
+          referenceNumber: invoiceNumber,
+          memo: `Payment received for ${invoiceNumber}`,
+          createdBy: session.userId,
+          lines: receiptLines,
+        });
+
+        await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+        await insertEmbeddedCustomerPayment(
+          session.tenantId,
+          session.userId,
+          customerId,
+          invoice.id,
+          row.invoiceDate,
+          paid,
+          paymentLines[0].accountId,
+          receiptEntry.id,
+          invoiceNumber
+        );
+      }
+    } catch (e) {
+      await discardInvoice(session.tenantId, invoice.id, session.userId);
+      throw e;
     }
   }
 
@@ -437,6 +464,7 @@ export type SingleInvoiceEditData = {
   invoiceId: string;
   invoiceNumber: string;
   invoiceDate: string;
+  dueDate: string | null;
   customerId: string;
   lines: SingleInvoiceEditLine[];
   payments: BatchPaymentLine[];
@@ -505,6 +533,7 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: invoice.invoiceDate,
+    dueDate: invoice.dueDate,
     customerId: invoice.customerId,
     lines,
     payments,
@@ -532,9 +561,13 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   if (!invoiceNumber) throw new Error("Invoice number is required");
   if (!input.customerId) throw new Error("Select a customer");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
+  await assertInvoiceNumberFree(session.tenantId, invoiceNumber, input.invoiceId);
+  // Editing reverses the old entries (dated today) and re-posts on the invoice date — both periods must be open,
+  // checked before anything is reversed so a locked period cannot leave the invoice half-edited.
+  await assertPeriodOpen(session.tenantId, input.invoiceDate);
+  await assertPeriodOpen(session.tenantId, todayIso());
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
@@ -578,6 +611,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       customerId: input.customerId,
       invoiceNumber,
       invoiceDate: input.invoiceDate,
+      dueDate: input.dueDate || null,
       lineItems: validLines.map((l) => ({
         itemId: l.itemId,
         description: l.description,
@@ -672,6 +706,7 @@ export type SingleInvoicePayment = { accountId: string; amount: number };
 export type SingleInvoiceInput = {
   invoiceNumber: string;
   invoiceDate: string;
+  dueDate?: string | null;
   customerId: string;
   lines: SingleInvoiceLine[];
   payments: SingleInvoicePayment[];
@@ -698,9 +733,10 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   if (!invoiceNumber) throw new Error("Invoice number is required");
   if (!input.customerId) throw new Error("Select a customer");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
+  await assertInvoiceNumberFree(session.tenantId, invoiceNumber);
+  await assertPeriodOpen(session.tenantId, input.invoiceDate);
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
@@ -734,6 +770,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       customerId: input.customerId,
       invoiceNumber,
       invoiceDate: input.invoiceDate,
+      dueDate: input.dueDate || null,
       lineItems: validLines.map((l) => ({
         itemId: l.itemId,
         description: l.description,
@@ -752,60 +789,68 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
     })
     .returning();
 
-  const lines: PostLineInput[] = [
-    { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
-    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
-  ];
-  if (taxAmount > 0 && taxPayableId) {
-    lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
-  }
+  let stockApplied = false;
+  try {
+    const lines: PostLineInput[] = [
+      { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
+      { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+    ];
+    if (taxAmount > 0 && taxPayableId) {
+      lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
+    }
 
-  await postJournalEntry({
-    tenantId: session.tenantId,
-    entryDate: input.invoiceDate,
-    sourceType: "sale",
-    sourceId: invoice.id,
-    referenceNumber: invoiceNumber,
-    memo: `Sales invoice ${invoiceNumber}`,
-    createdBy: session.userId,
-    lines,
-  });
-
-  await postCogsEntry(session.tenantId, input.invoiceDate, invoice.id, invoiceNumber, session.userId, validLines);
-  await applyStockDelta(session.tenantId, validLines, -1);
-
-  if (paid > 0) {
-    const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-    const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
-      accountId: p.accountId,
-      debitAmount: p.amount,
-      description: `Payment received for ${invoiceNumber}`,
-    }));
-    receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
-
-    const receiptEntry = await postJournalEntry({
+    await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: input.invoiceDate,
-      sourceType: "receipt",
+      sourceType: "sale",
       sourceId: invoice.id,
       referenceNumber: invoiceNumber,
-      memo: `Payment received for ${invoiceNumber}`,
+      memo: `Sales invoice ${invoiceNumber}`,
       createdBy: session.userId,
-      lines: receiptLines,
+      lines,
     });
 
-    await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
-    await insertEmbeddedCustomerPayment(
-      session.tenantId,
-      session.userId,
-      input.customerId,
-      invoice.id,
-      input.invoiceDate,
-      paid,
-      paymentLines[0].accountId,
-      receiptEntry.id,
-      invoiceNumber
-    );
+    await postCogsEntry(session.tenantId, input.invoiceDate, invoice.id, invoiceNumber, session.userId, validLines);
+    await applyStockDelta(session.tenantId, validLines, -1);
+    stockApplied = true;
+
+    if (paid > 0) {
+      const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
+      const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
+        accountId: p.accountId,
+        debitAmount: p.amount,
+        description: `Payment received for ${invoiceNumber}`,
+      }));
+      receiptLines.push({ accountId: arId, creditAmount: paid, description: `Payment received for ${invoiceNumber}` });
+
+      const receiptEntry = await postJournalEntry({
+        tenantId: session.tenantId,
+        entryDate: input.invoiceDate,
+        sourceType: "receipt",
+        sourceId: invoice.id,
+        referenceNumber: invoiceNumber,
+        memo: `Payment received for ${invoiceNumber}`,
+        createdBy: session.userId,
+        lines: receiptLines,
+      });
+
+      await ensureBankAccount(session.tenantId, paymentLines[0].accountId);
+      await insertEmbeddedCustomerPayment(
+        session.tenantId,
+        session.userId,
+        input.customerId,
+        invoice.id,
+        input.invoiceDate,
+        paid,
+        paymentLines[0].accountId,
+        receiptEntry.id,
+        invoiceNumber
+      );
+    }
+  } catch (e) {
+    if (stockApplied) await applyStockDelta(session.tenantId, validLines, 1).catch(() => {});
+    await discardInvoice(session.tenantId, invoice.id, session.userId);
+    throw e;
   }
 
   revalidatePath("/sales");

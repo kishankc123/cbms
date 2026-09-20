@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { salesReturns, tenants, customers, type LineItem } from "@/db/schema";
+import { salesReturns, customers, type LineItem } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { ensureSalesReturnsAccount } from "@/lib/ledger/return-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { salesVatRate } from "@/lib/sales/vat";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -59,8 +60,7 @@ export async function createSalesReturn(input: SalesReturnInput) {
 
   await assertPeriodOpen(session.tenantId, input.noteDate);
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");

@@ -5,6 +5,7 @@ import { voidInvoice } from "./actions";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 
 import { D } from "@/components/calendar/date-text";
+import { todayIso } from "@/lib/calendar";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -13,9 +14,16 @@ type Invoice = {
   invoiceNumber: string;
   customerId: string;
   invoiceDate: string;
+  dueDate?: string | null;
   total: string;
   status: string;
 };
+
+// An unpaid or part-paid invoice past its due date shows as overdue. Derived, not stored, so it can't go stale.
+function shownStatus(inv: Invoice, today: string) {
+  const open = inv.status === "sent" || inv.status === "partially_paid" || inv.status === "draft";
+  return open && inv.dueDate && inv.dueDate < today ? "overdue" : inv.status;
+}
 
 type SortKey = "date" | "invoiceNumber" | "customer" | "total" | "status";
 type SortDir = "asc" | "desc";
@@ -41,6 +49,7 @@ export function InvoicesTable({
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const today = todayIso();
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -80,8 +89,8 @@ export function InvoicesTable({
             bv = Number(b.total);
             break;
           case "status":
-            av = a.status;
-            bv = b.status;
+            av = shownStatus(a, today);
+            bv = shownStatus(b, today);
             break;
           default:
             av = customerById[a.customerId]?.name ?? "";
@@ -93,7 +102,7 @@ export function InvoicesTable({
     }
 
     return rows;
-  }, [invoiceList, customerById, search, sortKey, sortDir]);
+  }, [invoiceList, customerById, search, sortKey, sortDir, today]);
 
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
@@ -156,7 +165,7 @@ export function InvoicesTable({
               <td className="px-4 py-2">
                 {Number(inv.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
-              <td className="px-4 py-2 capitalize">{inv.status.replace("_", " ")}</td>
+              <td className={`px-4 py-2 capitalize ${shownStatus(inv, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(inv, today).replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 {inv.status !== "void" && (
                   <button type="button" onClick={() => setEditingId(inv.id)} className="text-xs text-gray-600 hover:underline">

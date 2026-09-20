@@ -4,6 +4,7 @@ import { customers, tenants, salesInvoices, items } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
+import { salesVatRate } from "@/lib/sales/vat";
 import { SalesEntryTabs } from "./sales-entry-tabs";
 import { InvoicesTable } from "./invoices-table";
 import { SalesViewTabs } from "./sales-view-tabs";
@@ -23,7 +24,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       db.select().from(salesInvoices).where(eq(salesInvoices.tenantId, session.tenantId)).orderBy(desc(salesInvoices.invoiceDate)),
     ]);
 
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
+  const vatRate = await salesVatRate(session.tenantId);
   const customerById = Object.fromEntries(customerList.map((c) => [c.id, c]));
 
   return (

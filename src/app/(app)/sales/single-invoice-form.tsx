@@ -50,12 +50,13 @@ export type InitialSingleInvoice = {
   invoiceId: string;
   invoiceNumber: string;
   invoiceDate: string;
+  dueDate?: string | null;
   customerId: string;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
 };
 
-type FieldErrors = { invoiceNumber?: string; date?: string; customerId?: string; items?: string };
+type FieldErrors = { invoiceNumber?: string; date?: string; dueDate?: string; customerId?: string; items?: string };
 
 const inputCls =
   "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
@@ -93,6 +94,7 @@ export function SingleInvoiceForm({
   const [customers, addCustomer] = useWithAdded(customersProp);
   const [items, addItem] = useWithAdded(itemsProp);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
+  const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
   const [lines, setLines] = useState<LineRow[]>(() =>
@@ -176,6 +178,7 @@ export function SingleInvoiceForm({
     if (!invoiceNumber.trim()) errors.invoiceNumber = "Invoice number is required.";
     if (!invoiceDate) errors.date = "Please enter the invoice date.";
     if (!customerId) errors.customerId = "Please select a customer.";
+    if (dueDate && dueDate < invoiceDate) errors.dueDate = "The due date can't be before the invoice date.";
     if (!lines.some(isLineComplete)) errors.items = "Add at least one item line with a valid rate and quantity.";
     setFieldErrors(errors);
     setSaveError(null);
@@ -186,6 +189,7 @@ export function SingleInvoiceForm({
       const payload = {
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
+        dueDate: dueDate || null,
         customerId,
         lines: lines.filter(isLineComplete).map((l) => ({
           itemId: l.itemId || null,
@@ -208,6 +212,7 @@ export function SingleInvoiceForm({
       } else {
         setInvoiceDate(today());
         setInvoiceNumber("");
+        setDueDate("");
         setCustomerId("");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
         setPayments([]);
@@ -227,7 +232,7 @@ export function SingleInvoiceForm({
     <div className="space-y-4">
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Details</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
             <DatePicker max={today()} value={invoiceDate} onChange={(v) => {
@@ -261,6 +266,19 @@ export function SingleInvoiceForm({
               className={fieldErrors.customerId ? inputErrCls : inputCls}
             />
             {fieldErrors.customerId && <p className="mt-1 text-xs text-red-600">{fieldErrors.customerId}</p>}
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Due Date (optional)</label>
+            <DatePicker
+              min={invoiceDate}
+              value={dueDate}
+              onChange={(v) => {
+                setDueDate(v);
+                if (fieldErrors.dueDate) setFieldErrors((p) => ({ ...p, dueDate: undefined }));
+              }}
+              className={fieldErrors.dueDate ? inputErrCls : inputCls}
+            />
+            {fieldErrors.dueDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.dueDate}</p>}
           </div>
         </div>
       </section>

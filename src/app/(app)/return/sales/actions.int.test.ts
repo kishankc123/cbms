@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, customers, items, journalEntries, journalLines, salesReturns } from "@/db/schema";
+import { accounts, customers, items, journalEntries, journalLines, salesReturns, tenantTaxRegistrations } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -37,6 +37,7 @@ afterAll(async () => {
 
 describe("sales returns (debit notes)", () => {
   it("reduces what the customer owes, reverses VAT and puts stock back; void undoes it all", async () => {
+    await db.insert(tenantTaxRegistrations).values({ tenantId: org.tenantId, taxTypeKey: "vat", status: "active" });
     const [customer] = await db.insert(customers).values({ tenantId: org.tenantId, name: "Return Customer" }).returning();
     const arId = await getOrCreateCustomerReceivableAccountId(org.tenantId, customer.id);
     const cash = await acct("1000");
@@ -60,7 +61,7 @@ describe("sales returns (debit notes)", () => {
     await createSalesReturn({ noteNumber: "DN-1", noteDate: "2026-09-10", customerId: customer.id, lines: [{ itemId: item.id, description: "Widget", rate: 100, quantity: 2, discount: 0 }] });
 
     const [note] = await db.select().from(salesReturns).where(eq(salesReturns.tenantId, org.tenantId));
-    // vatRate defaults to 13: taxable 200, VAT 26, total 226.
+    // VAT-registered, rate 13: taxable 200, VAT 26, total 226.
     expect(Number(note.total)).toBe(226);
     expect((await getCustomerBalances(org.tenantId))[customer.id]).toBe(1130 - 226);
     expect(await balance("4000")).toBe(-1000);
