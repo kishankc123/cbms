@@ -7,6 +7,8 @@ import { SupplierSelect } from "@/components/quick-add/pickers";
 import { getCashPurchaseForEdit, updateCashPurchase, type CashBillType } from "./actions";
 import { RecordPayModal } from "./record-pay-modal";
 import { BILL_TYPE_OPTIONS } from "./consumable-purchase-form";
+import { BillAvailableToggle } from "@/components/bill-available-toggle";
+import { useProblem } from "@/components/problem-dialog";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -39,12 +41,14 @@ export function EditCashBillModal({
   const [vendorId, setVendorId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [billType, setBillType] = useState<CashBillType>("no_bill");
+  const [billAvailable, setBillAvailable] = useState(true);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [payments, setPayments] = useState<PaymentLine[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { problem, report, dialog } = useProblem();
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +60,7 @@ export function EditCashBillModal({
         setVendorId(data.vendorId ?? "");
         setCategoryId(data.categoryId);
         setBillType(data.billType);
+        setBillAvailable(data.billAvailable ?? true);
         setDescription(data.description);
         setAmount(String(data.amount));
         setPayments(data.payments);
@@ -73,22 +78,20 @@ export function EditCashBillModal({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showPayment) onClose();
+      if (e.key === "Escape" && !showPayment && !problem) onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, showPayment]);
+  }, [onClose, showPayment, problem]);
 
   const enteredAmount = parseFloat(amount) || 0;
   const tax = billType === "vat" ? enteredAmount * (vatRate / 100) : 0;
   const total = enteredAmount + tax;
 
   async function handleSave() {
-    setSaveError(null);
-    if (!categoryId || enteredAmount <= 0 || payments.length === 0) {
-      setSaveError("Category, amount, and payment are required.");
-      return;
-    }
+    if (!categoryId) return report("Select a category.", '[data-field="category"]');
+    if (enteredAmount <= 0) return report("Enter the amount.", '[data-field="amount"]');
+    if (payments.length === 0) return report("Record the payment.", '[data-field="pay"]');
     setSaving(true);
     try {
       await updateCashPurchase({
@@ -101,11 +104,20 @@ export function EditCashBillModal({
         description,
         amount: enteredAmount,
         payments,
+        billAvailable,
       });
       router.refresh();
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      const rules: [RegExp, string][] = [
+        [/closed period|date/i, '#edit-bill-date'],
+        [/already recorded|bill number/i, '[data-field="billNumber"]'],
+        [/category/i, '[data-field="category"]'],
+        [/supplier/i, '[data-field="supplier"]'],
+        [/payment|Cash or Bank/i, '[data-field="pay"]'],
+      ];
+      report(message, rules.find(([re]) => re.test(message))?.[1] ?? null);
     } finally {
       setSaving(false);
     }
@@ -132,6 +144,7 @@ export function EditCashBillModal({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Bill no</label>
                 <input
+                  data-field="billNumber"
                   value={billNumber}
                   onChange={(e) => setBillNumber(e.target.value)}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -139,10 +152,11 @@ export function EditCashBillModal({
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Date</label>
-                <DatePicker max={todayIso()} value={billDate} onChange={(v) => setBillDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker id="edit-bill-date" max={todayIso()} value={billDate} onChange={(v) => setBillDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Supplier</label>
+                <div data-field="supplier" data-opens>
                 <SupplierSelect
                   value={vendorId}
                   options={vendors}
@@ -150,10 +164,12 @@ export function EditCashBillModal({
                   onAdded={addVendor}
                   className="rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />
+                </div>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Category</label>
                 <select
+                  data-field="category"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -186,6 +202,7 @@ export function EditCashBillModal({
                   type="number"
                   step="0.01"
                   min="0"
+                  data-field="amount"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -203,6 +220,7 @@ export function EditCashBillModal({
 
             <button
               type="button"
+              data-field="pay"
               onClick={() => setShowPayment(true)}
               className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs px-3 py-1.5"
             >
@@ -210,7 +228,6 @@ export function EditCashBillModal({
             </button>
 
             <div className="flex justify-end gap-2 pt-2">
-              {saveError && <span className="mr-auto self-center text-xs text-red-600">{saveError}</span>}
               <button
                 type="button"
                 onClick={onClose}
@@ -230,6 +247,8 @@ export function EditCashBillModal({
           </>
         )}
       </div>
+
+      {dialog}
 
       {showPayment && (
         <RecordPayModal

@@ -181,12 +181,17 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
   }
 
   if (type === "vat_return") {
-    const r = result as { outputVat: number; inputVat: number; netVatPayable: number; salesTaxable: number; purchasesTaxable: number };
+    const r = result as { outputVat: number; inputVat: number; netVatPayable: number; salesTaxable: number; purchasesTaxable: number; breakdown?: { salesVat: number; salesReturnsVat: number; purchasesVat: number; expensesVat: number; purchaseReturnsVat: number } };
     return (
       <div className="w-80 rounded-lg border border-gray-300 bg-white p-4 space-y-1 text-sm">
         <Row label="Taxable sales" value={r.salesTaxable} />
+        {r.breakdown && r.breakdown.salesReturnsVat > 0 && <Row label="  Sales VAT" value={r.breakdown.salesVat} />}
+        {r.breakdown && r.breakdown.salesReturnsVat > 0 && <Row label="  Less: sales returns" value={-r.breakdown.salesReturnsVat} />}
         <Row label="Output VAT" value={r.outputVat} />
         <Row label="Taxable purchases" value={r.purchasesTaxable} />
+        {r.breakdown && (r.breakdown.expensesVat > 0 || r.breakdown.purchaseReturnsVat > 0) && <Row label="  Purchases VAT" value={r.breakdown.purchasesVat} />}
+        {r.breakdown && r.breakdown.expensesVat > 0 && <Row label="  Expenses VAT" value={r.breakdown.expensesVat} />}
+        {r.breakdown && r.breakdown.purchaseReturnsVat > 0 && <Row label="  Less: purchase returns" value={-r.breakdown.purchaseReturnsVat} />}
         <Row label="Input VAT" value={r.inputVat} />
         <div className="border-t border-gray-200 pt-1">
           <Row label="Net VAT payable" value={r.netVatPayable} bold />

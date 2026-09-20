@@ -1,6 +1,6 @@
 import { and, eq, ne, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
-import { salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries } from "@/db/schema";
+import { salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -63,16 +63,55 @@ export async function getPurchaseRegister(tenantId: string, from: string, to: st
   };
 }
 
+// VAT paid on expenses (rent, utilities, services) is input VAT too.
+async function getExpenseVat(tenantId: string, from: string, to: string) {
+  const rows = await db
+    .select({ vat: expenses.vatAmount, taxable: expenses.taxableAmount })
+    .from(expenses)
+    .where(and(eq(expenses.tenantId, tenantId), gte(expenses.expenseDate, from), lte(expenses.expenseDate, to), ne(expenses.status, "void")));
+  const withVat = rows.filter((r) => Number(r.vat) > 0);
+  return { vat: round2(withVat.reduce((s, r) => s + Number(r.vat), 0)), taxable: round2(withVat.reduce((s, r) => s + Number(r.taxable), 0)) };
+}
+
+// Sales returns (debit notes) take VAT back off output VAT; purchase returns (credit notes) take it off input VAT.
+async function getReturnsVat(tenantId: string, from: string, to: string) {
+  const [sales, purchases] = await Promise.all([
+    db
+      .select({ subtotal: salesReturns.subtotal, tax: salesReturns.taxAmount })
+      .from(salesReturns)
+      .where(and(eq(salesReturns.tenantId, tenantId), gte(salesReturns.noteDate, from), lte(salesReturns.noteDate, to), ne(salesReturns.status, "void"))),
+    db
+      .select({ subtotal: purchaseReturns.subtotal, tax: purchaseReturns.taxAmount })
+      .from(purchaseReturns)
+      .where(and(eq(purchaseReturns.tenantId, tenantId), gte(purchaseReturns.noteDate, from), lte(purchaseReturns.noteDate, to), ne(purchaseReturns.status, "void"))),
+  ]);
+  const sum = (rows: { subtotal: string; tax: string }[], k: "subtotal" | "tax") => round2(rows.reduce((s, r) => s + Number(r[k]), 0));
+  return { salesTax: sum(sales, "tax"), salesSubtotal: sum(sales, "subtotal"), purchasesTax: sum(purchases, "tax"), purchasesSubtotal: sum(purchases, "subtotal") };
+}
+
 export async function getVatReturn(tenantId: string, from: string, to: string) {
-  const [sales, purchases] = await Promise.all([getSalesRegister(tenantId, from, to), getPurchaseRegister(tenantId, from, to)]);
-  const outputVat = sales.totalTax;
-  const inputVat = purchases.totalTax;
+  const [sales, purchases, expenseVat, returns] = await Promise.all([
+    getSalesRegister(tenantId, from, to),
+    getPurchaseRegister(tenantId, from, to),
+    getExpenseVat(tenantId, from, to),
+    getReturnsVat(tenantId, from, to),
+  ]);
+  const outputVat = round2(sales.totalTax - returns.salesTax);
+  const inputVat = round2(purchases.totalTax + expenseVat.vat - returns.purchasesTax);
   return {
     outputVat,
     inputVat,
     netVatPayable: round2(outputVat - inputVat),
-    salesTaxable: sales.totalSubtotal,
-    purchasesTaxable: purchases.totalSubtotal,
+    salesTaxable: round2(sales.totalSubtotal - returns.salesSubtotal),
+    purchasesTaxable: round2(purchases.totalSubtotal + expenseVat.taxable - returns.purchasesSubtotal),
+    // What the totals above are made of.
+    breakdown: {
+      salesVat: sales.totalTax,
+      salesReturnsVat: returns.salesTax,
+      purchasesVat: purchases.totalTax,
+      expensesVat: expenseVat.vat,
+      purchaseReturnsVat: returns.purchasesTax,
+    },
   };
 }
 

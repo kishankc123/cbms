@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 
@@ -60,6 +60,8 @@ export const purchaseBills = pgTable("purchase_bills", {
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
   purchaseType: purchaseTypeEnum("purchase_type").notNull().default("credit"),
   billType: billTypeEnum("bill_type").notNull().default("no_bill"),
+  // Whether the paper bill is physically in hand (an audit-readiness input). Null on bills entered before it was asked.
+  billAvailable: boolean("bill_available"),
 });
 
 // A purchase return (credit note for the supplier): goods sent back to them. Mirrors a stockable

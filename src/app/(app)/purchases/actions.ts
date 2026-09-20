@@ -183,7 +183,7 @@ function computeCashRowTax(amount: number, billType: CashBillType, vatRate: numb
 // Each row in the grid is its own independent cash purchase — settled
 // immediately, no Accounts Payable involved, mirroring how the Sales
 // invoice-wise grid treats every row as a separate transaction.
-export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }) {
+export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[]; billAvailable?: boolean }) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
 
@@ -258,6 +258,7 @@ export async function createCashPurchaseBatch(input: { rows: CashPurchaseRow[] }
         purchaseType: "cash",
         status: "paid",
         amountPaid: total.toFixed(2),
+        billAvailable: input.billAvailable ?? null,
       })
       .returning();
 
@@ -317,6 +318,7 @@ export type UpdateCashPurchaseInput = {
   description: string;
   amount: number;
   payments: { accountId: string; amount: number }[];
+  billAvailable?: boolean;
 };
 
 // Editing a posted consumable purchase reverses its old entry and posts a
@@ -381,6 +383,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
       taxAmount: tax.toFixed(2),
       total: total.toFixed(2),
       amountPaid: total.toFixed(2),
+      ...(input.billAvailable !== undefined ? { billAvailable: input.billAvailable } : {}),
     })
     .where(eq(purchaseBills.id, input.billId));
 
@@ -412,6 +415,7 @@ export type CashPurchaseEditData = {
   description: string;
   amount: number;
   payments: { accountId: string; amount: number }[];
+  billAvailable: boolean | null;
 };
 
 // Purchase_bills only stores the aggregate amount, so the category and
@@ -445,6 +449,7 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
     description: bill.description ?? "",
     amount: Number(bill.subtotal),
     payments,
+    billAvailable: bill.billAvailable,
   };
 }
 
@@ -549,6 +554,7 @@ export type PurchaseInvoiceInput = {
   vendorId: string;
   billType: CashBillType;
   dueDate?: string | null;
+  billAvailable?: boolean;
   lines: PurchaseLineItem[];
   payments: PurchaseInvoicePayment[];
 };
@@ -607,6 +613,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
       purchaseType: "credit",
       status,
       amountPaid: paid.toFixed(2),
+      billAvailable: input.billAvailable ?? null,
     })
     .returning();
 
@@ -648,6 +655,7 @@ export type PurchaseInvoiceEditData = {
   invoiceDate: string;
   vendorId: string;
   dueDate: string | null;
+  billAvailable: boolean | null;
   billType: CashBillType;
   lineItems: PurchaseLineItem[];
   payments: PurchaseInvoicePayment[];
@@ -680,6 +688,7 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
     invoiceDate: bill.billDate,
     vendorId: bill.vendorId ?? "",
     dueDate: bill.dueDate,
+    billAvailable: bill.billAvailable,
     billType: bill.billType as CashBillType,
     lineItems: bill.lineItems as PurchaseLineItem[],
     payments,
@@ -757,6 +766,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
       total: total.toFixed(2),
       status,
       amountPaid: paid.toFixed(2),
+      ...(input.billAvailable !== undefined ? { billAvailable: input.billAvailable } : {}),
     })
     .where(eq(purchaseBills.id, input.billId));
 

@@ -1,7 +1,7 @@
-import { pgTable, uuid, text, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, pgEnum, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
-import { vendors } from "./purchases";
+import { vendors, billTypeEnum } from "./purchases";
 
 export const expenseStatusEnum = pgEnum("expense_status", ["unpaid", "partially_paid", "paid", "void"]);
 
@@ -28,6 +28,10 @@ export const expenses = pgTable("expenses", {
   // Optional — when set, an unpaid/partially-paid expense past this date
   // counts toward the "Overdue" summary card.
   dueDate: date("due_date"),
+  // The kind of supporting bill (as on purchases). VAT can only be recorded on a VAT bill.
+  billType: billTypeEnum("bill_type").notNull().default("no_bill"),
+  // Whether the paper bill is physically in hand (an audit-readiness input). Null on expenses entered before it was asked.
+  billAvailable: boolean("bill_available"),
   taxTreatment: expenseTaxTreatmentEnum("tax_treatment").notNull().default("taxable"),
   taxableAmount: numeric("taxable_amount", { precision: 18, scale: 2 }).notNull(),
   vatAmount: numeric("vat_amount", { precision: 18, scale: 2 }).notNull().default("0"),
@@ -42,4 +46,4 @@ export const expenses = pgTable("expenses", {
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
   status: expenseStatusEnum("status").notNull().default("unpaid"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [uniqueIndex("expenses_tenant_number").on(t.tenantId, t.expenseNumber)]);

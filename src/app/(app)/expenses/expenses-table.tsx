@@ -154,7 +154,7 @@ export function ExpensesTable({
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by payee, expense #..."
+          placeholder="Search by supplier, expense #..."
           className="rounded border border-gray-300 px-3 py-1.5 text-sm w-56"
         />
         <div>
@@ -197,7 +197,7 @@ export function ExpensesTable({
           <tr>
             <th className="px-4 py-2 font-medium">Expense #</th>
             <th className="px-4 py-2 font-medium">Date</th>
-            <th className="px-4 py-2 font-medium">Payee</th>
+            <th className="px-4 py-2 font-medium">Supplier</th>
             <th className="px-4 py-2 font-medium">Category</th>
             <th className="px-4 py-2 font-medium">Description</th>
             <th className="px-4 py-2 font-medium">Net amount</th>
@@ -218,7 +218,7 @@ export function ExpensesTable({
               <td className="px-4 py-2">{fmt(e.subtotal)}</td>
               <td className="px-4 py-2">{fmt(e.tax)}</td>
               <td className="px-4 py-2">{fmt(e.total)}</td>
-              <td className="px-4 py-2 capitalize">{e.status.replace("_", " ")}</td>
+              <td className={`px-4 py-2 capitalize ${(e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "font-medium text-red-600" : ""}`}>{((e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "overdue" : e.status).replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-2 whitespace-nowrap">
                 <button type="button" onClick={() => setViewingRow(e)} className="text-xs text-gray-600 hover:underline">
                   View
@@ -312,7 +312,7 @@ export function ExpensesTable({
                 <p className="text-gray-900"><D value={viewingRow.expenseDate} /></p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Payee</p>
+                <p className="text-xs text-gray-500">Supplier</p>
                 <p className="text-gray-900">{viewingRow.payee}</p>
               </div>
               <div>
@@ -368,7 +368,7 @@ function toInitial(data: ExpenseEditData): InitialExpense {
 }
 
 function exportCsv(rows: ExpenseRow[], dateMode: DateDisplayMode) {
-  const header = ["Expense #", ...exportDateHeaders(dateMode), "Payee", "Category", "Description", "Net amount", "Tax", "Total", "Status"];
+  const header = ["Expense #", ...exportDateHeaders(dateMode), "Supplier", "Category", "Description", "Net amount", "Tax", "Total", "Status"];
   const lines = rows.map((e) =>
     [e.expenseNumber, ...exportDateColumns(dateMode, e.expenseDate), e.payee, e.category, e.description, e.subtotal, e.tax, e.total, e.status]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)

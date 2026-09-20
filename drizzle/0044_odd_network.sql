@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "expenses_tenant_number" ON "expenses" USING btree ("tenant_id","expense_number");

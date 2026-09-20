@@ -2,14 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createExpense, updateExpense, type ExpenseInput, type ExpenseTaxTreatment } from "./actions";
+import { createExpense, updateExpense, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { SupplierSelect } from "@/components/quick-add/pickers";
+import { BillAvailableToggle } from "@/components/bill-available-toggle";
+import { useProblem } from "@/components/problem-dialog";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
-type CategoryAccount = { id: string; code: string; name: string };
+// Only lowest-level accounts are offered; `group` is the account they sit under, if any.
+type CategoryAccount = { id: string; code: string; name: string; group?: string | null };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { accountId: string; amount: number };
 
@@ -19,16 +24,47 @@ const TAX_TREATMENTS: { value: ExpenseTaxTreatment; label: string }[] = [
   { value: "zero_rated", label: "Zero-rated" },
 ];
 
+const BILL_TYPES: { value: ExpenseBillType; label: string }[] = [
+  { value: "no_bill", label: "No bill" },
+  { value: "vat", label: "VAT" },
+  { value: "pan", label: "PAN" },
+  { value: "estimate", label: "Estimate" },
+  { value: "challan", label: "Challan" },
+];
+
 const today = () => todayIso();
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string };
 
+type FieldKey = "expenseDate" | "category" | "supplier" | "billType" | "invoiceNumber" | "invoiceDate" | "dueDate" | "taxable" | "taxTreatment" | "vat" | "tds" | "pay";
+
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+function fieldForMessage(message: string): string | null {
+  const rules: [RegExp, FieldKey][] = [
+    [/closed period|expense date/i, "expenseDate"],
+    [/bill type is VAT/i, "billType"],
+    [/exempt|zero-rated/i, "taxTreatment"],
+    [/invoice/i, "invoiceNumber"],
+    [/due date/i, "dueDate"],
+    [/category/i, "category"],
+    [/supplier/i, "supplier"],
+    [/taxable amount/i, "taxable"],
+    [/TDS/, "tds"],
+    [/payment|Cash or Bank/i, "pay"],
+  ];
+  const key = rules.find(([re]) => re.test(message))?.[1];
+  return key ? at(key) : null;
+}
+
+// The selector of a field on this form: a marked control, or a date picker by id.
+const at = (key: FieldKey) => `[data-field="${key}"], #exp-${key}`;
+
 // New Expense and Edit Expense share one form — sections mirror the spec:
 // Expense Information, Invoice/Supporting Document, Tax Information, Amount
 // (computed, read-only), Settlement.
 export function ExpenseFormModal({
-  vendors,
+  vendors: vendorsProp,
   categoryAccounts,
   cashBankAccounts,
   vatRate,
@@ -45,14 +81,16 @@ export function ExpenseFormModal({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const [vendors, addVendor] = useWithAdded(vendorsProp);
   const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? today());
   const [categoryAccountId, setCategoryAccountId] = useState(initial?.categoryAccountId ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
-  const [payeeName, setPayeeName] = useState(initial?.payeeName ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
+  const [billType, setBillType] = useState<ExpenseBillType>(initial?.billType ?? "no_bill");
+  const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
   const [taxTreatment, setTaxTreatment] = useState<ExpenseTaxTreatment>(initial?.taxTreatment ?? "taxable");
   const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : "");
   const [vatAmount, setVatAmount] = useState(initial ? String(initial.vatAmount) : "0.00");
@@ -63,15 +101,18 @@ export function ExpenseFormModal({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmSave, setConfirmSave] = useState(false);
+  // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { problem, report, dialog } = useProblem();
 
   // Auto-fills VAT/TDS from the tenant's configured rates as the taxable
   // amount or treatment changes — never hard-coded, and the user can still
   // type their own figure, which then stops the auto-fill for that field.
   useEffect(() => {
     const amount = parseFloat(taxableAmount) || 0;
-    if (!vatTouched) {
+    if (billType !== "vat") {
+      setVatAmount("0.00");
+    } else if (!vatTouched) {
       const rate = taxTreatment === "taxable" ? vatRate : 0;
       setVatAmount(round2(amount * (rate / 100)).toFixed(2));
     }
@@ -79,15 +120,25 @@ export function ExpenseFormModal({
       setTdsAmount(round2(amount * (tdsRate / 100)).toFixed(2));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taxableAmount, taxTreatment]);
+  }, [taxableAmount, taxTreatment, billType]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showPayment && !confirmSave) onClose();
+      if (e.key === "Escape" && !showPayment && !confirmSave && !problem) onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, showPayment, confirmSave]);
+  }, [onClose, showPayment, confirmSave, problem]);
+
+  // Categories that have sub-categories are shown only as group headings — the sub-categories are what can be chosen.
+  const categoryGroups: { label: string | null; items: CategoryAccount[] }[] = [];
+  for (const a of categoryAccounts) {
+    const label = a.group ?? null;
+    const g = categoryGroups.find((x) => x.label === label);
+    if (g) g.items.push(a);
+    else categoryGroups.push({ label, items: [a] });
+  }
+  categoryGroups.sort((a, b) => (a.label === null ? -1 : b.label === null ? 1 : a.label.localeCompare(b.label)));
 
   const accountLabels: Record<string, string> = {};
   for (const g of cashBankAccounts) {
@@ -105,22 +156,11 @@ export function ExpenseFormModal({
   const remaining = Math.max(round2(amountPayable - paidTotal), 0);
 
   function handleSaveClick() {
-    setSaveError(null);
-    if (!categoryAccountId) {
-      setSaveError("Select an expense category");
-      return;
-    }
-    if (!vendorId && !payeeName.trim()) {
-      setSaveError("Select a supplier or enter a payee name");
-      return;
-    }
-    if (subtotal <= 0) {
-      setSaveError("Taxable amount must be greater than zero");
-      return;
-    }
-    if (amountPayable < 0) {
-      setSaveError("TDS and other withholdings cannot exceed the total expense amount");
-      return;
+    if (!categoryAccountId) return report("Select an expense category.", at("category"));
+    if (subtotal <= 0) return report("Taxable amount must be greater than zero.", at("taxable"));
+    if (amountPayable < 0) return report("TDS and other withholdings cannot exceed the total expense amount.", at("tds"));
+    if (!vendorId && remaining > 0) {
+      return report("Select a supplier: the unpaid balance needs someone it is owed to. A supplier isn't needed once the expense is paid in full.", at("supplier"));
     }
     setConfirmSave(true);
   }
@@ -133,11 +173,12 @@ export function ExpenseFormModal({
         expenseDate,
         categoryAccountId,
         vendorId: vendorId || null,
-        payeeName,
         description,
         invoiceNumber,
         invoiceDate,
         dueDate,
+        billType,
+        billAvailable,
         taxTreatment,
         taxableAmount: subtotal,
         vatAmount: vat,
@@ -157,7 +198,8 @@ export function ExpenseFormModal({
       router.refresh();
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      report(message, fieldForMessage(message));
     } finally {
       setSaving(false);
     }
@@ -188,45 +230,47 @@ export function ExpenseFormModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense date</label>
-              <DatePicker max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker id="exp-expenseDate" max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense category</label>
               <select
+                data-field="category"
                 value={categoryAccountId}
                 onChange={(e) => setCategoryAccountId(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               >
                 <option value="">Select category</option>
-                {categoryAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.code} — {a.name}
-                  </option>
-                ))}
+                {categoryGroups.map((g) =>
+                  g.label ? (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.items.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.code} — {a.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    g.items.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code} — {a.name}
+                      </option>
+                    ))
+                  )
+                )}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Payee / Supplier</label>
-              <select
+              <label className="block text-xs text-gray-500 mb-1">Supplier {remaining > 0 ? <span className="text-red-500">*</span> : <span className="text-gray-400">(optional once paid in full)</span>}</label>
+              <div data-field="supplier" data-opens>
+              <SupplierSelect
                 value={vendorId}
-                onChange={(e) => setVendorId(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Not a registered supplier</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-              {!vendorId && (
-                <input
-                  value={payeeName}
-                  onChange={(e) => setPayeeName(e.target.value)}
-                  placeholder="Payee name"
-                  className="mt-2 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                />
-              )}
+                options={vendors}
+                onChange={(id) => setVendorId(id)}
+                onAdded={addVendor}
+                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              />
+              </div>
             </div>
             <div className="col-span-2">
               <label className="block text-xs text-gray-500 mb-1">Description</label>
@@ -241,10 +285,21 @@ export function ExpenseFormModal({
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-700">Invoice / Supporting Document</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Bill type</label>
+              <select data-field="billType" value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">
+                {BILL_TYPES.map((b) => (
+                  <option key={b.value} value={b.value}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Invoice number (optional)</label>
               <input
+                data-field="invoiceNumber"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -252,13 +307,14 @@ export function ExpenseFormModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Invoice date</label>
-              <DatePicker max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker id="exp-invoiceDate" max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Due date (optional)</label>
-              <DatePicker value={dueDate} onChange={(v) => setDueDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker id="exp-dueDate" min={invoiceDate || expenseDate} value={dueDate} onChange={(v) => setDueDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
           </div>
+          <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </section>
 
         <section className="space-y-3">
@@ -270,6 +326,7 @@ export function ExpenseFormModal({
                 type="number"
                 step="0.01"
                 min="0"
+                data-field="taxable"
                 value={taxableAmount}
                 onChange={(e) => setTaxableAmount(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -278,6 +335,7 @@ export function ExpenseFormModal({
             <div>
               <label className="block text-xs text-gray-500 mb-1">Tax treatment</label>
               <select
+                data-field="taxTreatment"
                 value={taxTreatment}
                 onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -291,11 +349,13 @@ export function ExpenseFormModal({
             </div>
             <div />
             <div>
-              <label className="block text-xs text-gray-500 mb-1">VAT ({vatRate}% default)</label>
+              <label className="block text-xs text-gray-500 mb-1">VAT ({vatRate}% default){billType !== "vat" && <span className="text-gray-400"> — VAT bill only</span>}</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
+                data-field="vat"
+                disabled={billType !== "vat"}
                 value={vatAmount}
                 onChange={(e) => {
                   setVatTouched(true);
@@ -310,6 +370,7 @@ export function ExpenseFormModal({
                 type="number"
                 step="0.01"
                 min="0"
+                data-field="tds"
                 value={tdsAmount}
                 onChange={(e) => {
                   setTdsTouched(true);
@@ -388,9 +449,9 @@ export function ExpenseFormModal({
         </section>
 
         <div className="flex items-center justify-end gap-3">
-          {saveError && <span className="text-xs text-red-600">{saveError}</span>}
           <button
             type="button"
+            data-field="pay"
             onClick={() => setShowPayment(true)}
             disabled={amountPayable <= 0}
             className="whitespace-nowrap rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
@@ -414,6 +475,8 @@ export function ExpenseFormModal({
             Cancel
           </button>
         </div>
+
+        {dialog}
 
         {confirmSave && (
           <ConfirmDialog message="Do you want to save?" onYes={performSave} onNo={() => setConfirmSave(false)} />

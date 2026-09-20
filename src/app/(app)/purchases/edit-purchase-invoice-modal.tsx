@@ -66,6 +66,7 @@ export function EditPurchaseInvoiceModal({
               invoiceNumber: data.invoiceNumber,
               invoiceDate: data.invoiceDate,
               dueDate: data.dueDate,
+              billAvailable: data.billAvailable,
               vendorId: data.vendorId,
               billType: data.billType,
               lines: data.lineItems,

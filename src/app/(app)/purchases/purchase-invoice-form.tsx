@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
+import { BillAvailableToggle } from "@/components/bill-available-toggle";
+import { useProblem } from "@/components/problem-dialog";
 import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
 import { InfoDialog } from "../inventory/info-dialog";
 import { InvoicePaymentModal } from "./invoice-payment-modal";
@@ -61,6 +63,7 @@ export type InitialInvoice = {
   invoiceNumber: string;
   invoiceDate: string;
   dueDate?: string | null;
+  billAvailable?: boolean | null;
   vendorId: string;
   billType: CashBillType;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
@@ -100,6 +103,7 @@ export function PurchaseInvoiceForm({
   const [items, addItem] = useWithAdded(itemsProp);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
+  const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [billType, setBillType] = useState<CashBillType>(initial?.billType ?? "no_bill");
@@ -117,7 +121,8 @@ export function PurchaseInvoiceForm({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
   const [showSavedDialog, setShowSavedDialog] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -182,14 +187,29 @@ export function PurchaseInvoiceForm({
 
   async function performSave() {
     const errors: FieldErrors = {};
-    if (!invoiceNumber.trim()) errors.invoiceNumber = "Invoice number is required.";
-    if (!invoiceDate) errors.date = "Please enter the invoice date.";
-    if (!vendorId) errors.vendorId = "Please select a supplier.";
-    if (dueDate && dueDate < invoiceDate) errors.dueDate = "The due date can't be before the invoice date.";
-    if (!lines.some(isLineComplete)) errors.items = "Add at least one item line with a valid rate and quantity.";
+    const first: { message: string; target: string }[] = [];
+    if (!invoiceDate) {
+      errors.date = "Please enter the invoice date.";
+      first.push({ message: errors.date, target: "#inv-date" });
+    }
+    if (!invoiceNumber.trim()) {
+      errors.invoiceNumber = "Invoice number is required.";
+      first.push({ message: errors.invoiceNumber, target: '[data-field="invoiceNumber"]' });
+    }
+    if (!vendorId) {
+      errors.vendorId = "Please select a supplier.";
+      first.push({ message: errors.vendorId, target: '[data-field="supplier"]' });
+    }
+    if (dueDate && dueDate < invoiceDate) {
+      errors.dueDate = "The due date can't be before the invoice date.";
+      first.push({ message: errors.dueDate, target: "#inv-due" });
+    }
+    if (!lines.some(isLineComplete)) {
+      errors.items = "Add at least one item line with a valid rate and quantity.";
+      first.push({ message: errors.items, target: '[data-field="items"]' });
+    }
     setFieldErrors(errors);
-    setSaveError(null);
-    if (Object.keys(errors).length > 0) return;
+    if (first.length > 0) return report(first[0].message, first[0].target);
 
     setSaving(true);
     try {
@@ -197,6 +217,7 @@ export function PurchaseInvoiceForm({
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
         dueDate: dueDate || null,
+        billAvailable,
         vendorId,
         billType,
         lines: lines.filter(isLineComplete).map((l) => ({
@@ -221,6 +242,7 @@ export function PurchaseInvoiceForm({
         setInvoiceDate(today());
         setInvoiceNumber("");
         setDueDate("");
+        setBillAvailable(true);
         setVendorId("");
         setBillType("no_bill");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
@@ -230,7 +252,16 @@ export function PurchaseInvoiceForm({
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      const rules: [RegExp, string][] = [
+        [/closed period|invoice date/i, "#inv-date"],
+        [/already recorded|invoice number/i, '[data-field="invoiceNumber"]'],
+        [/due date/i, "#inv-due"],
+        [/supplier/i, '[data-field="supplier"]'],
+        [/Cash or Bank|payment/i, '[data-field="pay"]'],
+        [/item line|in stock/i, '[data-field="items"]'],
+      ];
+      report(message, rules.find(([re]) => re.test(message))?.[1] ?? null);
     } finally {
       setSaving(false);
     }
@@ -243,15 +274,15 @@ export function PurchaseInvoiceForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <DatePicker max={today()} value={invoiceDate} onChange={(v) => {
+            <DatePicker id="inv-date" max={today()} value={invoiceDate} onChange={(v) => {
                 setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
-            {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Invoice Number</label>
             <input
+              data-field="invoiceNumber"
               value={invoiceNumber}
               onChange={(e) => {
                 setInvoiceNumber(e.target.value);
@@ -259,10 +290,10 @@ export function PurchaseInvoiceForm({
               }}
               className={fieldErrors.invoiceNumber ? inputErrCls : inputCls}
             />
-            {fieldErrors.invoiceNumber && <p className="mt-1 text-xs text-red-600">{fieldErrors.invoiceNumber}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Supplier</label>
+            <div data-field="supplier" data-opens>
             <SupplierSelect
               value={vendorId}
               options={vendors}
@@ -273,11 +304,12 @@ export function PurchaseInvoiceForm({
               onAdded={addVendor}
               className={fieldErrors.vendorId ? inputErrCls : inputCls}
             />
-            {fieldErrors.vendorId && <p className="mt-1 text-xs text-red-600">{fieldErrors.vendorId}</p>}
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Due Date (optional)</label>
             <DatePicker
+              id="inv-due"
               min={invoiceDate}
               value={dueDate}
               onChange={(v) => {
@@ -286,7 +318,6 @@ export function PurchaseInvoiceForm({
               }}
               className={fieldErrors.dueDate ? inputErrCls : inputCls}
             />
-            {fieldErrors.dueDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.dueDate}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
@@ -298,6 +329,9 @@ export function PurchaseInvoiceForm({
               ))}
             </select>
           </div>
+        </div>
+        <div className="mt-3">
+          <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </div>
       </section>
 
@@ -343,6 +377,7 @@ export function PurchaseInvoiceForm({
                         type="number"
                         step="0.01"
                         min="0"
+                        data-field={i === 0 ? "items" : undefined}
                         value={line.rate}
                         onChange={(e) => updateLine(i, "rate", e.target.value)}
                         className={`w-20 ${cellInputCls}`}
@@ -401,7 +436,6 @@ export function PurchaseInvoiceForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Item
         </button>
-        {fieldErrors.items && <p className="mt-1 text-xs text-red-600">{fieldErrors.items}</p>}
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -461,7 +495,6 @@ export function PurchaseInvoiceForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         <button
           type="button"
           onClick={() => setShowPayment(true)}
@@ -488,6 +521,8 @@ export function PurchaseInvoiceForm({
           </button>
         )}
       </div>
+
+      {dialog}
 
       {showSavedDialog && (
         <InfoDialog message="Purchase invoice saved successfully." onOk={() => setShowSavedDialog(false)} />

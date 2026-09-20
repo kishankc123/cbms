@@ -8,6 +8,8 @@ import { createCashPurchaseBatch, type CashBillType } from "./actions";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InfoDialog } from "../inventory/info-dialog";
 import { RecordPayModal } from "./record-pay-modal";
+import { BillAvailableToggle } from "@/components/bill-available-toggle";
+import { useProblem } from "@/components/problem-dialog";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -35,6 +37,8 @@ export const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
 ];
 
 const MIN_ROWS = 7;
+// The cell of the grid a message is about, as a selector.
+const cell = (row: number, col: string) => `[data-row="${row}"][data-col="${col}"]`;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
 const emptyRow = (): Row => ({
@@ -95,13 +99,14 @@ export function ConsumablePurchaseForm({
   const router = useRouter();
   const [vendors, addVendor] = useWithAdded(vendorsProp);
   const [billDate, setBillDate] = useState(today());
+  const [billAvailable, setBillAvailable] = useState(true);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
   const [addCount, setAddCount] = useState("1");
-  const [errorRow, setErrorRow] = useState<number | null>(null);
   const [paymentRow, setPaymentRow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSavedDialog, setShowSavedDialog] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the cell that needs attention.
+  const { report, dialog } = useProblem();
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -142,14 +147,12 @@ export function ConsumablePurchaseForm({
 
   function performReset() {
     setRows(Array.from({ length: MIN_ROWS }, emptyRow));
-    setSaveError(null);
     setConfirmReset(false);
   }
 
   function handleRecordPayClick(i: number) {
     const hasAmount = (parseFloat(rows[i].amount) || 0) > 0;
-    setErrorRow(hasAmount ? null : i);
-    if (!hasAmount) return;
+    if (!hasAmount) return report(`Row ${i + 1}: enter the amount before recording the payment.`, cell(i, "amount"));
     setPaymentRow(i);
   }
 
@@ -160,21 +163,22 @@ export function ConsumablePurchaseForm({
   }
 
   async function performSave() {
-    setSaveError(null);
-    const hasIncompleteRow = rows.some((r) => isRowTouched(r) && !isRowComplete(r));
-    if (hasIncompleteRow) {
-      setSaveError("Some rows are missing required fields — finish or clear them before saving.");
-      return;
+    const incomplete = rows.findIndex((r) => isRowTouched(r) && !isRowComplete(r));
+    if (incomplete >= 0) {
+      const r = rows[incomplete];
+      if (!r.categoryId) return report(`Row ${incomplete + 1}: select a category. Finish or clear the row before saving.`, cell(incomplete, "category"));
+      if ((parseFloat(r.amount) || 0) <= 0) return report(`Row ${incomplete + 1}: enter the amount. Finish or clear the row before saving.`, cell(incomplete, "amount"));
+      return report(`Row ${incomplete + 1}: record the payment. Finish or clear the row before saving.`, cell(incomplete, "pay"));
     }
     const validRows = rows.filter(isRowComplete);
-    if (validRows.length === 0) {
-      setSaveError("Add at least one purchase row before saving.");
-      return;
-    }
+    if (validRows.length === 0) return report("Add at least one purchase row before saving.", cell(0, "category"));
+    // Which grid row each saved row came from, so a refusal can point at the right one.
+    const rowIndexes = rows.flatMap((r, i) => (isRowComplete(r) ? [i] : []));
 
     setSaving(true);
     try {
       await createCashPurchaseBatch({
+        billAvailable,
         rows: validRows.map((r) => ({
           billNumber: r.billNumber.trim(),
           billDate,
@@ -191,7 +195,17 @@ export function ConsumablePurchaseForm({
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      const m = /^Row (\d+):/.exec(message);
+      if (m) {
+        // The server numbers the rows it received; show the number the person sees in the grid.
+        const gridRow = rowIndexes[Number(m[1]) - 1] ?? 0;
+        const shown = message.replace(/^Row \d+:/, `Row ${gridRow + 1}:`);
+        const col = /category/i.test(message) ? "category" : /payment|Cash or Bank/i.test(message) ? "pay" : /supplier/i.test(message) ? "supplier" : /number|already|twice/i.test(message) ? "billNumber" : /period|date/i.test(message) ? null : "amount";
+        report(shown, col ? cell(gridRow, col) : "#bill-date");
+      } else {
+        report(message, /period|date/i.test(message) ? "#bill-date" : null);
+      }
     } finally {
       setSaving(false);
     }
@@ -219,9 +233,12 @@ export function ConsumablePurchaseForm({
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Purchase Entries</h2>
 
-        <div className="mb-3">
-          <label className="block text-xs text-gray-500 mb-1">Date</label>
-          <DatePicker max={today()} value={billDate} onChange={(v) => setBillDate(v)} className="w-40 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
+        <div className="mb-3 flex flex-wrap items-end gap-6">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Date</label>
+            <DatePicker id="bill-date" max={today()} value={billDate} onChange={(v) => setBillDate(v)} className="w-40 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
+          </div>
+          <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -261,12 +278,15 @@ export function ConsumablePurchaseForm({
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input
+                        data-row={i}
+                        data-col="billNumber"
                         value={row.billNumber}
                         onChange={(e) => updateRow(i, "billNumber", e.target.value)}
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
+                      <div data-row={i} data-col="supplier" data-opens>
                       <SupplierSelect
                         value={row.vendorId}
                         options={vendors}
@@ -274,9 +294,12 @@ export function ConsumablePurchaseForm({
                         onAdded={addVendor}
                         className={`w-36 ${cellInputCls}`}
                       />
+                      </div>
                     </td>
                     <td className="px-1 py-1 text-center">
                       <select
+                        data-row={i}
+                        data-col="category"
                         value={row.categoryId}
                         onChange={(e) => updateRow(i, "categoryId", e.target.value)}
                         className={`w-36 ${cellInputCls}`}
@@ -309,6 +332,8 @@ export function ConsumablePurchaseForm({
                         type="number"
                         step="0.01"
                         min="0"
+                        data-row={i}
+                        data-col="amount"
                         value={row.amount}
                         onChange={(e) => updateRow(i, "amount", e.target.value)}
                         className={`w-24 text-center ${cellInputCls}`}
@@ -325,13 +350,14 @@ export function ConsumablePurchaseForm({
                     <td className="px-1 py-1 text-center">
                       <button
                         type="button"
+                        data-row={i}
+                        data-col="pay"
                         onClick={() => handleRecordPayClick(i)}
                         className="whitespace-nowrap rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs px-2.5 py-1"
                       >
                         {row.payments.length > 0 ? "Edit Payment" : "Record Payment"}
                       </button>
-                      {errorRow === i && <p className="mt-1 w-40 text-xs text-red-600">Amount is required.</p>}
-                    </td>
+                                    </td>
                   </tr>
                 );
               })}
@@ -397,7 +423,6 @@ export function ConsumablePurchaseForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         <button
           type="button"
           onClick={performSave}
@@ -423,6 +448,8 @@ export function ConsumablePurchaseForm({
           onNo={() => setConfirmReset(false)}
         />
       )}
+
+      {dialog}
 
       {showSavedDialog && (
         <InfoDialog message="Purchase saved successfully." onOk={() => setShowSavedDialog(false)} />
