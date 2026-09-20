@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { memberships, tenants, users } from "@/db/schema";
 import type { Permissions } from "@/db/schema/tenancy";
 import { effectivePermissions, type OrgRole } from "@/lib/roles";
+import { isSessionExpired } from "@/lib/session-expiry";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -33,6 +34,7 @@ export type AppSession = {
 export const requireUserSession = cache(async () => {
   const session = await auth();
   if (!session?.user) throw new UnauthorizedError();
+  if (isSessionExpired(session.user.remember, session.user.loginAt)) throw new UnauthorizedError();
 
   const [user] = await db
     .select({ id: users.id, name: users.name, email: users.email, status: users.status, sessionVersion: users.sessionVersion, emailVerifiedAt: users.emailVerifiedAt, isPlatformAdmin: users.isPlatformAdmin })

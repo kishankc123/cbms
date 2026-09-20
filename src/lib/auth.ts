@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { listActiveMemberships, hasActiveMembership } from "@/lib/memberships";
+import { REMEMBER_MS } from "@/lib/session-expiry";
 
 declare module "next-auth" {
   interface Session {
@@ -15,6 +16,8 @@ declare module "next-auth" {
       activeTenantId: string | null;
       sessionVersion: number;
       isPlatformAdmin: boolean;
+      remember: boolean;
+      loginAt: number;
       name: string;
       email: string;
     };
@@ -27,6 +30,8 @@ declare module "@auth/core/jwt" {
     activeTenantId: string | null;
     sessionVersion: number;
     isPlatformAdmin: boolean;
+    remember: boolean;
+    loginAt: number;
   }
 }
 
@@ -36,13 +41,14 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8y0BqVxYvY8v8bKq0hQ8bXo0vJv7iG";
 
 export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: REMEMBER_MS / 1000 },
   pages: { signIn: "/login" },
   providers: [
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        remember: { label: "Remember me", type: "text" },
       },
       authorize: async (credentials) => {
         const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
@@ -75,6 +81,7 @@ export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
           email: user.email,
           sessionVersion: user.sessionVersion,
           isPlatformAdmin: user.isPlatformAdmin,
+          remember: credentials?.remember === "true",
         };
       },
     }),
@@ -82,10 +89,12 @@ export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        const u = user as { sessionVersion: number; isPlatformAdmin: boolean };
+        const u = user as { sessionVersion: number; isPlatformAdmin: boolean; remember: boolean };
         token.id = user.id as string;
         token.sessionVersion = u.sessionVersion;
         token.isPlatformAdmin = u.isPlatformAdmin;
+        token.remember = u.remember;
+        token.loginAt = Date.now();
         // One organization -> enter it straight away; several -> the user
         // chooses on /select-organization.
         const orgs = await listActiveMemberships(token.id);
@@ -106,6 +115,8 @@ export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
       session.user.activeTenantId = token.activeTenantId ?? null;
       session.user.sessionVersion = token.sessionVersion;
       session.user.isPlatformAdmin = token.isPlatformAdmin;
+      session.user.remember = token.remember;
+      session.user.loginAt = token.loginAt;
       return session;
     },
   },

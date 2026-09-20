@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { isSessionExpired } from "@/lib/session-expiry";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/signed-out"];
 // Reachable while signed in but before an organization is chosen.
@@ -9,9 +10,15 @@ const startsWithAny = (path: string, list: string[]) => list.some((p) => path.st
 
 export default auth((req) => {
   const path = req.nextUrl.pathname;
-  const isLoggedIn = Boolean(req.auth);
+  const expired = req.auth?.user ? isSessionExpired(req.auth.user.remember, req.auth.user.loginAt) : false;
+  const isLoggedIn = Boolean(req.auth) && !expired;
   const isPublicPage = startsWithAny(path, PUBLIC_PATHS) || path.startsWith("/accept-invite");
 
+  // A signed-in token past its allowed lifetime: end it via /signed-out so the
+  // login page doesn't bounce straight back into the app.
+  if (expired && !isPublicPage) {
+    return NextResponse.redirect(new URL("/signed-out", req.url));
+  }
   if (!isLoggedIn && !isPublicPage) {
     const url = new URL("/login", req.url);
     if (path !== "/") url.searchParams.set("callbackUrl", path);
