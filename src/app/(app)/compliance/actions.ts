@@ -12,6 +12,8 @@ import {
   users,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { listOrgUsers } from "@/lib/org-users";
+import { isOrgAdmin } from "@/lib/roles";
 import { runComplianceScan } from "@/lib/compliance/exception-scan";
 import { generateNepaliDefaultItems } from "@/lib/compliance/nepal-calendar";
 import {
@@ -69,7 +71,7 @@ export async function getComplianceDashboard() {
   const completed = calendarItems.filter((i) => done.has(i.status)).length;
   const overdue = calendarItems.filter((i) => !done.has(i.status) && i.dueDate < today).length;
 
-  const userList = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.tenantId, session.tenantId));
+  const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
 
   return {
@@ -149,7 +151,7 @@ export async function closePeriod(periodId: string) {
 // same pattern used for reopening a bank reconciliation.
 export async function reopenPeriod(input: { periodId: string; reason: string }) {
   const session = await requireTenantSession();
-  if (session.role !== "admin") throw new Error("Only an admin can reopen a closed period");
+  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can reopen a closed period");
   if (!input.reason.trim()) throw new Error("A reason is required to reopen a period");
 
   const [period] = await db
@@ -298,7 +300,7 @@ export async function listExceptions() {
     .where(eq(complianceExceptions.tenantId, session.tenantId))
     .orderBy(desc(complianceExceptions.detectedDate));
 
-  const userList = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.tenantId, session.tenantId));
+  const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
 
   return rows.map((r) => ({ ...r, assignedUserName: r.assignedUserId ? nameById[r.assignedUserId] ?? "—" : null }));
@@ -306,7 +308,7 @@ export async function listExceptions() {
 
 export async function listAssignableUsers() {
   const session = await requireTenantSession();
-  return db.select({ id: users.id, name: users.name }).from(users).where(eq(users.tenantId, session.tenantId)).orderBy(asc(users.name));
+  return listOrgUsers(session.tenantId);
 }
 
 export async function runScan() {
@@ -371,7 +373,7 @@ export async function listCalendarItems() {
     .where(eq(complianceCalendarItems.tenantId, session.tenantId))
     .orderBy(asc(complianceCalendarItems.dueDate));
 
-  const userList = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.tenantId, session.tenantId));
+  const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
 
   return rows.map((r) => ({ ...r, responsibleUserName: r.responsibleUserId ? nameById[r.responsibleUserId] ?? "—" : "—" }));
@@ -501,7 +503,7 @@ export async function listAuditTrail(input: { from?: string; to?: string; entity
     .orderBy(desc(auditLog.timestamp))
     .limit(500);
 
-  const userList = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.tenantId, session.tenantId));
+  const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
 
   return rows.map((r) => ({ ...r, userName: r.userId ? nameById[r.userId] ?? "—" : "System" }));

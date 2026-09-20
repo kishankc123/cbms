@@ -1,9 +1,11 @@
-import { requireTenantSession } from "@/lib/session";
-import { db } from "@/db";
-import { tenants } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
+import { requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
+import { listActiveMemberships } from "@/lib/memberships";
+import { roleLabel } from "@/lib/roles";
 import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
+import { OrgSwitcher } from "./org-switcher";
+import { VerifyBanner } from "./verify-banner";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -89,22 +91,38 @@ const NAV = [
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireTenantSession();
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
+  // Resolve the session first; redirect() must not run inside a try/catch.
+  let session: Awaited<ReturnType<typeof requireTenantSession>> | null = null;
+  let failure: "no-org" | "invalid" | null = null;
+  try {
+    session = await requireTenantSession();
+  } catch (e) {
+    failure = e instanceof TenantScopeError ? "no-org" : "invalid";
+  }
+  if (failure === "no-org") redirect("/select-organization");
+  if (!session) redirect("/signed-out");
+
+  const user = await requireUserSession();
+  const orgs = await listActiveMemberships(user.id);
 
   return (
     <div className="flex min-h-screen">
       <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
-        <div className="px-4 py-4 border-b border-[var(--sidebar-border)]">
-          <p className="text-sm font-semibold text-white">{tenant?.companyName}</p>
-          <p className="text-xs text-[var(--sidebar-text)]">{session.role}</p>
+        <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
+          <OrgSwitcher
+            orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: roleLabel(o.role) }))}
+            activeId={session.tenantId}
+          />
         </div>
         <AppNav items={NAV} />
         <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">
           <SignOutButton />
         </div>
       </aside>
-      <main className="flex-1 p-8">{children}</main>
+      <main className="flex-1 p-8">
+        {!user.emailVerifiedAt && <VerifyBanner />}
+        {children}
+      </main>
     </div>
   );
 }

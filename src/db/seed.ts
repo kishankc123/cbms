@@ -1,28 +1,27 @@
 import bcrypt from "bcryptjs";
 import { db } from "./index";
-import { tenants, users, accounts } from "./schema";
+import { users, memberships, tenants, subscriptions, accounts } from "./schema";
 import { DEFAULT_CHART_OF_ACCOUNTS } from "../lib/ledger/default-chart-of-accounts";
 
 async function main() {
   const superAdminEmail = "super@cbms.local";
   const superAdminPassword = "ChangeMe123!";
-  const passwordHash = await bcrypt.hash(superAdminPassword, 12);
 
   await db
     .insert(users)
     .values({
-      tenantId: null,
       name: "Super Admin",
       email: superAdminEmail,
-      passwordHash,
-      role: "super_admin",
-      permissions: {},
+      passwordHash: await bcrypt.hash(superAdminPassword, 12),
+      isPlatformAdmin: true,
+      emailVerifiedAt: new Date(),
     })
     .onConflictDoNothing({ target: users.email });
 
   const [demoTenant] = await db
     .insert(tenants)
     .values({
+      clientCode: "CL-000001",
       companyName: "Demo Client Pvt. Ltd.",
       industry: "General",
       fiscalYearStartMonth: 1,
@@ -39,21 +38,23 @@ async function main() {
       subCategory: a.subCategory,
     }))
   );
+  await db.insert(subscriptions).values({ tenantId: demoTenant.id });
 
-  const adminPasswordHash = await bcrypt.hash("ChangeMe123!", 12);
-  await db.insert(users).values({
-    tenantId: demoTenant.id,
-    name: "Demo Admin",
-    email: "admin@demo.local",
-    passwordHash: adminPasswordHash,
-    role: "admin",
-    permissions: {},
-  });
+  const [demoOwner] = await db
+    .insert(users)
+    .values({
+      name: "Demo Admin",
+      email: "admin@demo.local",
+      passwordHash: await bcrypt.hash("ChangeMe123!", 12),
+      emailVerifiedAt: new Date(),
+    })
+    .returning();
+  await db.insert(memberships).values({ userId: demoOwner.id, tenantId: demoTenant.id, role: "owner" });
 
   console.log("Seeded:");
-  console.log(`  Super Admin: ${superAdminEmail} / ${superAdminPassword}`);
-  console.log(`  Demo Tenant: ${demoTenant.companyName} (${demoTenant.id})`);
-  console.log(`  Demo Admin: admin@demo.local / ChangeMe123!`);
+  console.log(`  Platform admin: ${superAdminEmail} / ${superAdminPassword}`);
+  console.log(`  Demo organization: ${demoTenant.companyName} (${demoTenant.clientCode})`);
+  console.log(`  Demo owner: admin@demo.local / ChangeMe123!`);
   process.exit(0);
 }
 

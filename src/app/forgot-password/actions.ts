@@ -1,21 +1,25 @@
 "use server";
 
-import { randomBytes } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users, passwordResetTokens } from "@/db/schema";
+import { users } from "@/db/schema";
+import { createAuthToken } from "@/lib/tokens";
+import { sendEmail, passwordResetEmail, appUrl } from "@/lib/email";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-export async function requestPasswordReset(email: string): Promise<{ resetUrl: string | null }> {
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user) return { resetUrl: null };
+// Always answers the same way whether or not the email has an account, and the
+// link is only ever delivered by email — never returned to the browser.
+export async function requestPasswordReset(email: string): Promise<{ ok: true }> {
+  const normalized = email.trim().toLowerCase();
+  const allowed = rateLimit(`reset-ip:${await clientIp()}`, 10, 60 * 60 * 1000) && rateLimit(`reset:${normalized}`, 3, 60 * 60 * 1000);
+  if (!allowed) return { ok: true };
 
-  const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
-  await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
-
-  // No email provider is configured yet, so the link is handed back directly
-  // instead of being emailed.
-  return { resetUrl: `/reset-password/${token}` };
+  const [user] = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+  if (user && user.status === "active") {
+    const token = await createAuthToken(user.id, "password_reset", TOKEN_TTL_MS);
+    await sendEmail({ to: user.email, ...passwordResetEmail(`${appUrl()}/reset-password/${token}`) });
+  }
+  return { ok: true };
 }

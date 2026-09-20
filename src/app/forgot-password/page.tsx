@@ -7,15 +7,13 @@ import { requestPasswordReset } from "./actions";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const result = await requestPasswordReset(email);
+    await requestPasswordReset(email);
     setLoading(false);
-    setResetUrl(result.resetUrl);
     setSubmitted(true);
   }
 
@@ -26,9 +24,7 @@ export default function ForgotPasswordPage() {
 
         {!submitted ? (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Enter your account email and we&apos;ll give you a link to reset your password.
-            </p>
+            <p className="text-sm text-gray-600">Enter your account email and we&apos;ll email you a link to reset your password.</p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
@@ -49,17 +45,9 @@ export default function ForgotPasswordPage() {
             </button>
           </form>
         ) : (
-          <div className="space-y-3 text-sm">
-            <p className="text-gray-600">
-              If an account exists for <span className="font-medium">{email}</span>, use the link below to reset the
-              password. (No email service is configured yet, so the link is shown here instead of being emailed.)
-            </p>
-            {resetUrl && (
-              <Link href={resetUrl} className="block text-[var(--color-primary)] hover:underline break-all">
-                {resetUrl}
-              </Link>
-            )}
-          </div>
+          <p className="text-sm text-gray-600">
+            If an account exists for <span className="font-medium">{email}</span>, a password reset link is on its way. It expires in 1 hour.
+          </p>
         )}
 
         <Link href="/login" className="block text-center text-xs text-gray-500 hover:underline">

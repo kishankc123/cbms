@@ -18,6 +18,7 @@ import {
   accounts,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { isOrgAdmin } from "@/lib/roles";
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { normalizeStatementRows, type ColumnMapping } from "@/lib/banking/normalize-rows";
@@ -687,7 +688,7 @@ export async function markReconciled(input: { bankAccountId: string; periodStart
 // recorded (who/when/reason) so it stays auditable.
 export async function reopenReconciliation(input: { reconciliationId: string; reason: string }) {
   const session = await requireTenantSession();
-  if (session.role !== "admin") throw new Error("Only an admin can reopen a reconciled period");
+  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can reopen a reconciled period");
   if (!input.reason.trim()) throw new Error("A reason is required to reopen a reconciliation");
 
   const [reconciliation] = await db

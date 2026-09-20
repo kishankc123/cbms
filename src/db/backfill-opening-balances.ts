@@ -9,7 +9,8 @@
 // opening balance always reverses whatever was posted before first.
 import { eq, isNull } from "drizzle-orm";
 import { db } from "./index";
-import { customers, vendors, employees, users } from "./schema";
+import { customers, vendors, employees } from "./schema";
+import { listOrgUsers } from "../lib/org-users";
 import { createCustomerReceivableAccount, createSupplierPayableAccount } from "../lib/ledger/subledger-accounts";
 import { syncCustomerOpeningBalanceEntry, syncSupplierOpeningBalanceEntry } from "../lib/ledger/opening-balance";
 import { createEmployeePayableAccount } from "../lib/ledger/payroll-accounts";
@@ -31,7 +32,7 @@ async function main() {
 
     const openingBalance = Number(customer.openingBalance);
     if (openingBalance === 0) continue;
-    const [systemUser] = await db.select({ id: users.id }).from(users).where(eq(users.tenantId, customer.tenantId)).limit(1);
+    const [systemUser] = await listOrgUsers(customer.tenantId);
     if (!systemUser) continue;
 
     await syncCustomerOpeningBalanceEntry(customer.tenantId, customer.id, customer.name, openingBalance, systemUser.id);
@@ -55,7 +56,7 @@ async function main() {
 
     const openingBalance = Number(vendor.openingBalance);
     if (openingBalance === 0) continue;
-    const [systemUser] = await db.select({ id: users.id }).from(users).where(eq(users.tenantId, vendor.tenantId)).limit(1);
+    const [systemUser] = await listOrgUsers(vendor.tenantId);
     if (!systemUser) continue;
 
     await syncSupplierOpeningBalanceEntry(vendor.tenantId, vendor.id, vendor.name, openingBalance, systemUser.id);

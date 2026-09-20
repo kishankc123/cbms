@@ -4,15 +4,17 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import type { Permissions } from "@/db/schema/tenancy";
+import { listActiveMemberships, hasActiveMembership } from "@/lib/memberships";
 
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      tenantId: string | null;
-      role: "super_admin" | "admin" | "user";
-      permissions: Permissions;
+      // The organization this session is currently working in. null until the
+      // user picks one (or when they belong to none).
+      activeTenantId: string | null;
+      sessionVersion: number;
+      isPlatformAdmin: boolean;
       name: string;
       email: string;
     };
@@ -22,67 +24,88 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
-    tenantId: string | null;
-    role: "super_admin" | "admin" | "user";
-    permissions: Permissions;
+    activeTenantId: string | null;
+    sessionVersion: number;
+    isPlatformAdmin: boolean;
   }
 }
 
-// Identifies which tenant a login belongs to. Until the super admin UI for
-// issuing per-tenant client codes exists, this single test code is accepted.
-const TEST_CLIENT_CODE = "101";
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+// Used to spend the same time on unknown emails as on real ones.
+const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8y0BqVxYvY8v8bKq0hQ8bXo0vJv7iG";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
     Credentials({
       credentials: {
-        clientCode: { label: "Client Code", type: "text" },
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials) => {
-        const clientCode = credentials?.clientCode as string | undefined;
-        const email = credentials?.email as string | undefined;
+        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
         const password = credentials?.password as string | undefined;
-        if (!clientCode || !email || !password) return null;
-        if (clientCode !== TEST_CLIENT_CODE) return null;
+        if (!email || !password) return null;
 
         const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-        if (!user || user.status !== "active") return null;
+        if (!user) {
+          await bcrypt.compare(password, DUMMY_HASH);
+          return null;
+        }
+        if (user.status !== "active") return null;
+        if (user.lockedUntil && user.lockedUntil > new Date()) return null;
 
         const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          const failed = user.failedLoginCount + 1;
+          await db
+            .update(users)
+            .set(failed >= MAX_FAILED_LOGINS ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MS) } : { failedLoginCount: failed })
+            .where(eq(users.id, user.id));
+          return null;
+        }
 
-        await db.update(users).set({ lastLogin: new Date() }).where(eq(users.id, user.id));
+        await db.update(users).set({ lastLogin: new Date(), failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
 
         return {
           id: user.id,
-          tenantId: user.tenantId,
-          role: user.role,
-          permissions: user.permissions,
           name: user.name,
           email: user.email,
+          sessionVersion: user.sessionVersion,
+          isPlatformAdmin: user.isPlatformAdmin,
         };
       },
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
+        const u = user as { sessionVersion: number; isPlatformAdmin: boolean };
         token.id = user.id as string;
-        token.tenantId = (user as { tenantId: string | null }).tenantId;
-        token.role = (user as { role: "super_admin" | "admin" | "user" }).role;
-        token.permissions = (user as { permissions: Permissions }).permissions;
+        token.sessionVersion = u.sessionVersion;
+        token.isPlatformAdmin = u.isPlatformAdmin;
+        // One organization -> enter it straight away; several -> the user
+        // chooses on /select-organization.
+        const orgs = await listActiveMemberships(token.id);
+        token.activeTenantId = orgs.length === 1 ? orgs[0].tenantId : null;
+      }
+
+      // Switching organization. The requested id comes from the client, so it
+      // is never trusted: the membership is verified here before it is accepted.
+      if (trigger === "update" && session && "activeTenantId" in session) {
+        const requested = (session as { activeTenantId: string | null }).activeTenantId;
+        if (requested === null) token.activeTenantId = null;
+        else if (await hasActiveMembership(token.id, requested)) token.activeTenantId = requested;
       }
       return token;
     },
     session({ session, token }) {
       session.user.id = token.id;
-      session.user.tenantId = token.tenantId;
-      session.user.role = token.role;
-      session.user.permissions = token.permissions;
+      session.user.activeTenantId = token.activeTenantId ?? null;
+      session.user.sessionVersion = token.sessionVersion;
+      session.user.isPlatformAdmin = token.isPlatformAdmin;
       return session;
     },
   },

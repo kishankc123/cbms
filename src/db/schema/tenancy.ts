@@ -9,16 +9,32 @@ import {
   pgEnum,
   date,
   numeric,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "user"]);
-export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended"]);
+export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "cancelled"]);
+// Role a user holds *within one organization* (see memberships) — never
+// global. "super_admin" (platform owner) is deliberately not here: it is a
+// separate flag on the user, not an organization role.
+export const orgRoleEnum = pgEnum("org_role", ["owner", "admin", "accountant", "staff"]);
+export const membershipStatusEnum = pgEnum("membership_status", ["active", "suspended"]);
+export const invitationStatusEnum = pgEnum("invitation_status", ["pending", "accepted", "revoked"]);
+export const authTokenTypeEnum = pgEnum("auth_token_type", ["email_verification", "password_reset"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["trial", "active", "past_due", "cancelled"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "invited", "disabled"]);
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Human-readable support reference (CL-000001) — auto-generated, never
+  // used for login or as a foreign key; the uuid id is the real identifier.
+  clientCode: text("client_code").unique(),
   companyName: text("company_name").notNull(),
   industry: text("industry"),
+  country: text("country"),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  vatRegistrationNumber: text("vat_registration_number"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
   // Nepali (Bikram Sambat) fiscal year, e.g. "2081/82", plus the AD calendar
   // dates it corresponds to — kept separate from fiscalYearStartMonth above,
@@ -56,26 +72,22 @@ export type Permissions = Record<
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // null only for super_admin, who is platform-wide and not scoped to a tenant
-  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  // A person, independent of any organization — which organizations they can
+  // enter, and their role in each, live in `memberships`.
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: userRoleEnum("role").notNull(),
-  permissions: jsonb("permissions").$type<Permissions>().notNull().default({}),
   status: userStatusEnum("status").notNull().default("active"),
+  mobile: text("mobile"),
+  // Platform (software owner) administrator — separate from any organization
+  // role and not tied to a tenant.
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  // Bumped on password change/reset so every existing session is rejected.
+  sessionVersion: integer("session_version").notNull().default(0),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
   lastLogin: timestamp("last_login", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const passwordResetTokens = pgTable("password_reset_tokens", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -90,4 +102,59 @@ export const auditLog = pgTable("audit_log", {
   beforeValue: jsonb("before_value"),
   afterValue: jsonb("after_value"),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// USER <-> ORGANIZATION (many-to-many). The role and permissions a person has
+// are decided here, per organization — the same user can be Owner of one
+// business and Staff in another.
+export const memberships = pgTable(
+  "memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    role: orgRoleEnum("role").notNull(),
+    // Optional per-member override of the role's default permissions.
+    permissions: jsonb("permissions").$type<Permissions>(),
+    status: membershipStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("memberships_user_tenant_idx").on(t.userId, t.tenantId)]
+);
+
+export const invitations = pgTable("invitations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: orgRoleEnum("role").notNull(),
+  // Only a SHA-256 hash of the emailed token is stored.
+  tokenHash: text("token_hash").notNull().unique(),
+  invitedBy: uuid("invited_by").notNull().references(() => users.id),
+  status: invitationStatusEnum("status").notNull().default("pending"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Email verification and password reset tokens (hash only).
+export const authTokens = pgTable("auth_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: authTokenTypeEnum("type").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Billing/plan state lives apart from the organization so plans can change
+// without touching the organization's identity or status.
+export const subscriptions = pgTable("subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().unique().references(() => tenants.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull().default("trial"),
+  status: subscriptionStatusEnum("status").notNull().default("trial"),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

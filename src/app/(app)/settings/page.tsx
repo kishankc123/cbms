@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
@@ -18,7 +19,12 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
+      <div className="flex items-start justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
+        <Link href="/settings/users" className="text-sm text-[var(--color-primary)] hover:underline">
+          Manage users →
+        </Link>
+      </div>
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium text-gray-900">Details</h2>
