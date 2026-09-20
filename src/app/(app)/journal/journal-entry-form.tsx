@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { createManualJournalEntry } from "./actions";
-
+
+import { DateField } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Account = { id: string; code: string; name: string };
 
 const EMPTY_ROW = { accountId: "", debitAmount: "", creditAmount: "", description: "" };
@@ -26,13 +28,7 @@ export function JournalEntryForm({ accounts }: { accounts: Account[] }) {
       <div className="flex flex-wrap gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Entry date</label>
-          <input
-            type="date"
-            name="entryDate"
-            required
-            defaultValue={new Date().toISOString().slice(0, 10)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          />
+          <DateField name="entryDate" required defaultValue={todayIso()} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Reference #</label>

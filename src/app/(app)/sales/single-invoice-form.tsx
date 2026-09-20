@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createSingleInvoice, updateSingleInvoice } from "./actions";
 import { PaymentModal } from "./payment-modal";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -20,7 +22,7 @@ type LineRow = {
 
 const MIN_LINES = 4;
 const fmt = (n: number) => n.toFixed(2);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0" });
 
 function computeLine(line: LineRow, vatRate: number) {
@@ -223,16 +225,10 @@ export function SingleInvoiceForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <input
-              type="date"
-              max={today()}
-              value={invoiceDate}
-              onChange={(e) => {
-                setInvoiceDate(e.target.value);
+            <DatePicker max={today()} value={invoiceDate} onChange={(v) => {
+                setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
-              }}
-              className={fieldErrors.date ? inputErrCls : inputCls}
-            />
+              }} className={fieldErrors.date ? inputErrCls : inputCls} />
             {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>

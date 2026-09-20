@@ -8,12 +8,17 @@ import { NewPaymentModal } from "./new-payment-modal";
 import { PaymentDetailDrawer } from "./payment-detail-drawer";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { presetRange, todayIso, type CalendarSystem, type DateRange, type RangePreset } from "@/lib/calendar";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { D } from "@/components/calendar/date-text";
+import { DateDisplayControl, useDateDisplay } from "@/components/calendar/report-dates";
 type FormOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 type PaymentRow = Awaited<ReturnType<typeof listPayments>>[number];
 type Summary = Awaited<ReturnType<typeof getPaymentSummary>>;
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 const DATE_PRESETS = [
   { value: "this_month", label: "This month" },
@@ -24,29 +29,8 @@ const DATE_PRESETS = [
   { value: "custom", label: "Custom date range" },
 ] as const;
 
-function resolvePreset(preset: string): { from: string; to: string } {
-  const now = new Date();
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
-  if (preset === "today") return { from: toISO(now), to: toISO(now) };
-  if (preset === "this_week") {
-    const day = now.getUTCDay();
-    const monday = new Date(now);
-    monday.setUTCDate(now.getUTCDate() - ((day + 6) % 7));
-    return { from: toISO(monday), to: toISO(now) };
-  }
-  if (preset === "last_month") {
-    const firstOfThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const lastMonthEnd = new Date(firstOfThisMonth.getTime() - 86400000);
-    const lastMonthStart = new Date(Date.UTC(lastMonthEnd.getUTCFullYear(), lastMonthEnd.getUTCMonth(), 1));
-    return { from: toISO(lastMonthStart), to: toISO(lastMonthEnd) };
-  }
-  if (preset === "this_fiscal_year") {
-    // Falls back to calendar year — actual fiscal year dates live in
-    // Settings and aren't threaded through this lightweight preset.
-    return { from: `${now.getUTCFullYear()}-01-01`, to: toISO(now) };
-  }
-  // this_month / default
-  return { from: today().slice(0, 8) + "01", to: toISO(now) };
+function resolvePreset(preset: string, calendar: CalendarSystem, fiscal: DateRange | null): { from: string; to: string } {
+  return presetRange(preset as RangePreset, calendar, todayIso(), fiscal);
 }
 
 const ALLOCATION_TONE: Record<string, StatusTone> = {
@@ -64,6 +48,7 @@ export function PaymentsWorkspace({
   initialFrom,
   initialTo,
   fixedDirection,
+  fiscal = null,
 }: {
   formOptions: FormOptions;
   initialPayments: PaymentRow[];
@@ -71,7 +56,10 @@ export function PaymentsWorkspace({
   initialFrom: string;
   initialTo: string;
   fixedDirection?: "money_in" | "money_out";
+  /** The organization's configured fiscal year (real AD boundaries). */
+  fiscal?: DateRange | null;
 }) {
+  const calendar = useCalendar();
   const router = useRouter();
   const [datePreset, setDatePreset] = useState("this_month");
   const [from, setFrom] = useState(initialFrom);
@@ -127,7 +115,7 @@ export function PaymentsWorkspace({
 
   useEffect(() => {
     if (datePreset === "custom") return;
-    const { from: f, to: t } = resolvePreset(datePreset);
+    const { from: f, to: t } = resolvePreset(datePreset, calendar, fiscal);
     setFrom(f);
     setTo(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,8 +136,10 @@ export function PaymentsWorkspace({
     setSearch("");
   }
 
+  const [exportDates, setExportDates] = useDateDisplay();
+
   async function handleExport() {
-    const csv = await exportPaymentsCsv(filters);
+    const csv = await exportPaymentsCsv(filters, exportDates);
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -167,7 +157,8 @@ export function PaymentsWorkspace({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
+      <div className="flex items-end justify-end gap-2">
+        <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
         <button type="button" disabled className="rounded border border-gray-300 text-gray-400 text-sm px-4 py-1.5 cursor-not-allowed" title="Coming soon">
           Import
         </button>
@@ -206,11 +197,11 @@ export function PaymentsWorkspace({
             <>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">From</label>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">To</label>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
             </>
           )}
@@ -317,7 +308,7 @@ export function PaymentsWorkspace({
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.paymentNumber}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.paymentDate}</td>
+                <td className="px-3 py-2 whitespace-nowrap"><D value={r.paymentDate} /></td>
                 <td className="px-3 py-2 whitespace-nowrap">{PAYMENT_TYPE_LABELS[r.paymentType] ?? r.paymentType}</td>
                 <td className="px-3 py-2">{r.party}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{r.accountName}</td>

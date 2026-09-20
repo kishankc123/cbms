@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { voidBill } from "./actions";
 
+import { D } from "@/components/calendar/date-text";
 type Vendor = { id: string; name: string };
 type Bill = {
   id: string;
@@ -140,7 +141,7 @@ export function BillsTable({
         <tbody>
           {filtered.map((b) => (
             <tr key={b.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{b.billDate}</td>
+              <td className="px-4 py-2"><D value={b.billDate} /></td>
               <td className="px-4 py-2 font-mono">{b.billNumber}</td>
               <td className="px-4 py-2">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>

@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { getPaymentDetail, voidPayment } from "./actions";
 import { PAYMENT_TYPE_LABELS } from "./payment-types";
 import { StatusPill } from "@/components/ui/status-pill";
+import { useFormatDate, useFormatDateTime } from "@/components/calendar/calendar-provider";
 
 type Detail = Awaited<ReturnType<typeof getPaymentDetail>>;
 const fmt = (n: number) => n.toFixed(2);
 
 export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentId: string; onClose: () => void; onVoided: () => void }) {
+  const fmtDT = useFormatDateTime();
+  const fmtDate = useFormatDate();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showVoid, setShowVoid] = useState(false);
@@ -78,7 +81,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentI
               </div>
               <DetailGrid
                 rows={[
-                  ["Date", detail.paymentDate],
+                  ["Date", fmtDate(detail.paymentDate)],
                   ["Direction", detail.direction === "money_in" ? "Money In" : "Money Out"],
                   ["Type", PAYMENT_TYPE_LABELS[detail.paymentType] ?? detail.paymentType],
                   ["Party", detail.party],
@@ -162,9 +165,9 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentI
               <h3 className="text-sm font-semibold text-gray-900">Audit Trail</h3>
               <DetailGrid
                 rows={[
-                  ["Created", new Date(detail.createdAt).toLocaleString()],
-                  ...(detail.postedAt ? [["Posted", new Date(detail.postedAt).toLocaleString()] as [string, string]] : []),
-                  ...(detail.voidedAt ? [["Voided", `${new Date(detail.voidedAt).toLocaleString()} — ${detail.voidReason ?? ""}`] as [string, string]] : []),
+                  ["Created", fmtDT(detail.createdAt)],
+                  ...(detail.postedAt ? [["Posted", fmtDT(detail.postedAt)] as [string, string]] : []),
+                  ...(detail.voidedAt ? [["Voided", `${fmtDT(detail.voidedAt)} — ${detail.voidReason ?? ""}`] as [string, string]] : []),
                 ]}
               />
             </section>

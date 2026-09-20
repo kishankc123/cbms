@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "calendar_system" text DEFAULT 'AD' NOT NULL;

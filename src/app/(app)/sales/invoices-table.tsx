@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { voidInvoice } from "./actions";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 
+import { D } from "@/components/calendar/date-text";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -149,7 +150,7 @@ export function InvoicesTable({
         <tbody>
           {sorted.map((inv) => (
             <tr key={inv.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{inv.invoiceDate}</td>
+              <td className="px-4 py-2"><D value={inv.invoiceDate} /></td>
               <td className="px-4 py-2 font-mono">{inv.invoiceNumber}</td>
               <td className="px-4 py-2">{customerById[inv.customerId]?.name ?? "—"}</td>
               <td className="px-4 py-2">

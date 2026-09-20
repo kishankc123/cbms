@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # The Nepali (BS) calendar data lives in these packages. Weekly checks open a
+  # pull request when a new release exists; CI then runs the calendar
+  # cross-check tests, which fail if the data changed in a way that needs a
+  # human look before it can shift any BS date.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      bs-calendar-data:
+        patterns:
+          - "nepali-date-converter"
+          - "@remotemerge/nepali-date-converter"
+          - "bikram-sambat"
+    open-pull-requests-limit: 5

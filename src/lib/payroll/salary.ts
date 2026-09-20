@@ -2,6 +2,7 @@ import { and, eq, lte, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { salaryHistory, type prorationMethodEnum } from "@/db/schema";
 
+import { todayIso } from "@/lib/calendar";
 type ProrationMethod = (typeof prorationMethodEnum.enumValues)[number];
 
 function toDate(s: string) {
@@ -35,7 +36,7 @@ export async function getSalaryAsOf(tenantId: string, employeeId: string, asOfDa
 }
 
 export async function getCurrentSalary(tenantId: string, employeeId: string): Promise<number | null> {
-  return getSalaryAsOf(tenantId, employeeId, new Date().toISOString().slice(0, 10));
+  return getSalaryAsOf(tenantId, employeeId, todayIso());
 }
 
 export async function getSalaryTimeline(tenantId: string, employeeId: string) {

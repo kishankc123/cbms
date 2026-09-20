@@ -6,6 +6,8 @@ import { createExpense, updateExpense, type ExpenseInput, type ExpenseTaxTreatme
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 type CategoryAccount = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -17,7 +19,7 @@ const TAX_TREATMENTS: { value: ExpenseTaxTreatment; label: string }[] = [
   { value: "zero_rated", label: "Zero-rated" },
 ];
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string };
@@ -186,13 +188,7 @@ export function ExpenseFormModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense date</label>
-              <input
-                type="date"
-                max={today()}
-                value={expenseDate}
-                onChange={(e) => setExpenseDate(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <DatePicker max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense category</label>
@@ -256,22 +252,11 @@ export function ExpenseFormModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Invoice date</label>
-              <input
-                type="date"
-                max={today()}
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <DatePicker max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Due date (optional)</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <DatePicker value={dueDate} onChange={(v) => setDueDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
           </div>
         </section>

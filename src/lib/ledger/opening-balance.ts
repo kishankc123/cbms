@@ -5,13 +5,14 @@ import { postJournalEntry, reverseLatestEntryForSource, type PostLineInput } fro
 import { getOrCreateBroughtForwardAccount } from "./control-accounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 
+import { todayIso } from "@/lib/calendar";
 async function openingBalanceEntryDate(tenantId: string) {
   const [tenant] = await db
     .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
-  return tenant?.fiscalYearStartDate || new Date().toISOString().slice(0, 10);
+  return tenant?.fiscalYearStartDate || todayIso();
 }
 
 // Posts (or, if the balance is now zero, simply leaves reversed) a customer's

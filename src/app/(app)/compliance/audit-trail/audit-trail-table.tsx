@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { listAuditTrail } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { DT } from "@/components/calendar/date-text";
 type Entry = Awaited<ReturnType<typeof listAuditTrail>>[number];
 
 export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] }) {
@@ -27,11 +29,11 @@ export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] })
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Entity type</label>
@@ -56,7 +58,7 @@ export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] })
         <tbody>
           {entries.map((e) => (
             <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 whitespace-nowrap">{new Date(e.timestamp).toLocaleString()}</td>
+              <td className="px-4 py-2 whitespace-nowrap"><DT value={e.timestamp} /></td>
               <td className="px-4 py-2">{e.userName}</td>
               <td className="px-4 py-2">{e.action}</td>
               <td className="px-4 py-2">

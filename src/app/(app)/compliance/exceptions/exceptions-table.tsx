@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { runScan, updateException, type listExceptions, type listAssignableUsers } from "../actions";
 
+import { DT } from "@/components/calendar/date-text";
 type Exception = Awaited<ReturnType<typeof listExceptions>>[number];
 type AssignableUser = Awaited<ReturnType<typeof listAssignableUsers>>[number];
 
@@ -93,7 +94,7 @@ export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: E
               <td className="px-4 py-2 capitalize">{e.exceptionType.replace(/_/g, " ")}</td>
               <td className="px-4 py-2 max-w-[280px] truncate">{e.description}</td>
               <td className="px-4 py-2 capitalize">{e.severity.replace("_", " ")}</td>
-              <td className="px-4 py-2">{new Date(e.detectedDate).toLocaleDateString()}</td>
+              <td className="px-4 py-2"><DT value={e.detectedDate} dateOnly /></td>
               <td className="px-4 py-2">
                 <select
                   value={e.assignedUserId ?? ""}

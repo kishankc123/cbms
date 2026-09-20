@@ -3,16 +3,15 @@ import { profitAndLoss, trialBalance } from "@/lib/ledger/reports";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { adToBs, formatBsDate } from "@/lib/bs-date";
-
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
+import { formatAD, formatBS, presetRange, todayIso } from "@/lib/calendar";
 
 export default async function DashboardPage() {
   const session = await requireTenantSession();
-  const now = new Date();
-  const monthStart = startOfMonth(now);
+  const today = todayIso();
+  // "This month" follows the organization's calendar: a BS month for BS organizations.
+  const range = presetRange("this_month", session.calendar, today);
+  const now = new Date(today + "T00:00:00Z");
+  const monthStart = new Date(range.from + "T00:00:00Z");
 
   const [[tenant], pnl, tb] = await Promise.all([
     db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
@@ -20,12 +19,8 @@ export default async function DashboardPage() {
     trialBalance(session.tenantId, now),
   ]);
 
-  const adDateLabel = now.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  const bsDateLabel = formatBsDate(adToBs(now));
+  const adDateLabel = formatAD(today, "long");
+  const bsDateLabel = formatBS(today, "long");
 
   const cards = [
     { label: "Revenue (this month)", value: pnl.totalIncome },

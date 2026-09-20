@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { INVOICE_NUMBER_FORMATS } from "@/lib/invoice-number";
+import { logAuditEvent } from "@/lib/audit";
 
 export async function updateCompanyDetails(formData: FormData) {
   const session = await requireTenantSession();
@@ -96,6 +97,29 @@ export async function updatePaymentNumbering(formData: FormData) {
 
   revalidatePath("/settings");
   revalidatePath("/payments");
+}
+
+export async function updateCalendarSystem(formData: FormData) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
+
+  const calendarSystem = String(formData.get("calendarSystem") ?? "AD");
+  if (calendarSystem !== "AD" && calendarSystem !== "BS") throw new Error("Invalid calendar");
+  if (calendarSystem === session.calendar) return;
+
+  await db.update(tenants).set({ calendarSystem }).where(eq(tenants.id, session.tenantId));
+  await logAuditEvent({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    action: "calendar_changed",
+    entityType: "organization",
+    entityId: session.tenantId,
+    before: { calendarSystem: session.calendar },
+    after: { calendarSystem },
+  });
+
+  // Every page shows dates through the organization's calendar.
+  revalidatePath("/", "layout");
 }
 
 export async function updateFiscalYearDates(formData: FormData) {

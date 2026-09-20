@@ -1,28 +1,38 @@
 import { requireTenantSession } from "@/lib/session";
 import { balanceSheet, profitAndLoss, trialBalance } from "@/lib/ledger/reports";
+import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
+import { getFiscalRange } from "@/lib/fiscal";
+import { D } from "@/components/calendar/date-text";
+import { ReportFilter } from "@/components/calendar/report-filter";
 
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
+// Filter dates arrive as AD ISO strings (the pickers convert from BS if needed).
+const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
-  const now = new Date();
-  const monthStart = startOfMonth(now);
+  const sp = await searchParams;
+  const fiscal = await getFiscalRange(session.tenantId);
+  const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);
+  let from = asIso(sp.from) ?? dflt.from;
+  const to = asIso(sp.to) ?? dflt.to;
+  if (from > to) from = to;
+  const asOf = new Date(to + "T00:00:00Z");
+  const monthStart = new Date(from + "T00:00:00Z");
 
   const [tb, pnl, bs] = await Promise.all([
-    trialBalance(session.tenantId, now),
-    profitAndLoss(session.tenantId, monthStart, now),
-    balanceSheet(session.tenantId, now),
+    trialBalance(session.tenantId, asOf),
+    profitAndLoss(session.tenantId, monthStart, asOf),
+    balanceSheet(session.tenantId, asOf),
   ]);
 
   return (
     <div className="space-y-10">
       <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
+      <ReportFilter from={from} to={to} fiscal={fiscal} />
 
       <section>
         <h2 className="text-lg font-medium text-gray-900 mb-2">
-          Trial Balance <span className="text-sm text-gray-500">as of {now.toLocaleDateString()}</span>
+          Trial Balance <span className="text-sm text-gray-500">as of <D value={to} /></span>
         </h2>
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead className="bg-gray-50 text-left text-gray-500">
@@ -56,7 +66,7 @@ export default async function ReportsPage() {
         <h2 className="text-lg font-medium text-gray-900 mb-2">
           Profit &amp; Loss{" "}
           <span className="text-sm text-gray-500">
-            {monthStart.toLocaleDateString()} – {now.toLocaleDateString()}
+            <D value={from} /> – <D value={to} />
           </span>
         </h2>
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -97,7 +107,7 @@ export default async function ReportsPage() {
 
       <section>
         <h2 className="text-lg font-medium text-gray-900 mb-2">
-          Balance Sheet <span className="text-sm text-gray-500">as of {now.toLocaleDateString()}</span>
+          Balance Sheet <span className="text-sm text-gray-500">as of <D value={to} /></span>
         </h2>
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
           <tbody>

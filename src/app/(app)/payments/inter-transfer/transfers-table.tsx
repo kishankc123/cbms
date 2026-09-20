@@ -5,6 +5,8 @@ import Link from "next/link";
 import { listInterTransfers, type TransferListFilters } from "./actions";
 import { StatusPill } from "@/components/ui/status-pill";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { D } from "@/components/calendar/date-text";
 type Row = Awaited<ReturnType<typeof listInterTransfers>>[number];
 type Option = { id: string; label: string; kind: "Cash" | "Bank" };
 
@@ -50,11 +52,11 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">From date</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={selCls} />
+            <DatePicker value={from} onChange={(v) => setFrom(v)} className={selCls} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">To date</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={selCls} />
+            <DatePicker value={to} onChange={(v) => setTo(v)} className={selCls} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">From Account</label>
@@ -109,7 +111,7 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.transferNumber}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.transferDate}</td>
+                <td className="px-3 py-2 whitespace-nowrap"><D value={r.transferDate} /></td>
                 <td className="px-3 py-2">{r.fromAccount}</td>
                 <td className="px-3 py-2">{r.toAccount}</td>
                 <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{fmt(r.amount)}</td>

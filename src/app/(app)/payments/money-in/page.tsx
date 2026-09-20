@@ -2,14 +2,15 @@ import { requireTenantSession } from "@/lib/session";
 import { getPaymentFormOptions, listPayments, getPaymentSummary } from "../actions";
 import { PaymentsWorkspace } from "../payments-workspace";
 
-const today = () => new Date().toISOString().slice(0, 10);
-const monthStart = () => today().slice(0, 8) + "01";
+import { presetRange, todayIso } from "@/lib/calendar";
+import { getFiscalRange } from "@/lib/fiscal";
 
 export default async function MoneyInPage() {
-  await requireTenantSession();
+  const session = await requireTenantSession();
 
-  const from = monthStart();
-  const to = today();
+  // The current month in the organization's calendar (BS month for BS orgs).
+  const fiscal = await getFiscalRange(session.tenantId);
+  const { from, to } = presetRange("this_month", session.calendar, todayIso(), fiscal);
 
   const [formOptions, initialPayments, summary] = await Promise.all([
     getPaymentFormOptions(),
@@ -32,6 +33,7 @@ export default async function MoneyInPage() {
         initialSummary={summary}
         initialFrom={from}
         initialTo={to}
+        fiscal={fiscal}
         fixedDirection="money_in"
       />
     </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRule, setRuleActive, deleteRule, type listRules, type RuleInput } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
 type Rule = Awaited<ReturnType<typeof listRules>>[number];
 
 const MODULES: { value: RuleInput["applicableModule"]; label: string }[] = [
@@ -224,11 +225,11 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Effective date</label>
-                <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={effectiveDate} onChange={(v) => setEffectiveDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Expiry date</label>
-                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={expiryDate} onChange={(v) => setExpiryDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
             </div>
 

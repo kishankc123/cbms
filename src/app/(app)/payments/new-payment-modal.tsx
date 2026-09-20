@@ -12,10 +12,13 @@ import {
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
+import { D } from "@/components/calendar/date-text";
 type FormOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 type Direction = "money_in" | "money_out";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const fmt = (n: number) => n.toFixed(2);
 const inputCls = "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 const inputErrCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-400";
@@ -225,7 +228,7 @@ export function NewPaymentModal({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date</label>
-              <input type="date" max={today()} value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
+              <DatePicker max={today()} value={paymentDate} onChange={(v) => setPaymentDate(v)} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
               {fieldErrors.paymentDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.paymentDate}</p>}
             </div>
             <div>
@@ -291,7 +294,7 @@ export function NewPaymentModal({
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Cheque Date</label>
-                  <input type="date" value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} className={inputCls} />
+                  <DatePicker value={chequeDate} onChange={(v) => setChequeDate(v)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Bank</label>
@@ -412,7 +415,7 @@ export function NewPaymentModal({
                             <input type="checkbox" checked={checked} onChange={(e) => toggleAllocation(row, e.target.checked)} />
                           </td>
                           <td className="px-2 py-1 font-mono text-xs">{row.label}</td>
-                          <td className="px-2 py-1 text-gray-500">{row.date}</td>
+                          <td className="px-2 py-1 text-gray-500"><D value={row.date} /></td>
                           <td className="px-2 py-1 text-right">{fmt(row.outstanding)}</td>
                           <td className="px-2 py-1">
                             <input

@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addBenefit } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 const FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
   { value: "yearly", label: "Yearly" },
   { value: "one_time", label: "One-time" },
 ] as const;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; onClose: () => void }) {
   const router = useRouter();
@@ -97,7 +99,7 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Effective From</label>
-            <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Notes</label>

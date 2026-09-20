@@ -7,6 +7,8 @@ import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InfoDialog } from "../inventory/info-dialog";
 import { RecordPayModal } from "./record-pay-modal";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -32,7 +34,7 @@ export const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
 
 const MIN_ROWS = 7;
 const fmt = (n: number) => n.toFixed(2);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const emptyRow = (): Row => ({
   description: "",
   billNumber: "",
@@ -216,13 +218,7 @@ export function ConsumablePurchaseForm({
 
         <div className="mb-3">
           <label className="block text-xs text-gray-500 mb-1">Date</label>
-          <input
-            type="date"
-            max={today()}
-            value={billDate}
-            onChange={(e) => setBillDate(e.target.value)}
-            className="w-40 rounded border border-gray-300 bg-white px-2 py-1 text-sm"
-          />
+          <DatePicker max={today()} value={billDate} onChange={(v) => setBillDate(v)} className="w-40 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-gray-200">

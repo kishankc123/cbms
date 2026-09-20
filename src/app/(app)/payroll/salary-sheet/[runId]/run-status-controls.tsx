@@ -22,11 +22,13 @@ export function RunStatusControls({
   status,
   month,
   year,
+  calendar,
 }: {
   runId: string;
   status: string;
   month: number;
   year: number;
+  calendar: "AD" | "BS";
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,7 @@ export function RunStatusControls({
     if (!confirm("Recalculate this payroll run from the latest salary, benefits, and attendance records?")) return;
     setBusy(true);
     try {
-      await generatePayrollRun({ month, year, employeeIds: [] });
+      await generatePayrollRun({ month, year, calendar, employeeIds: [] });
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");

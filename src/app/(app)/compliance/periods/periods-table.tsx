@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPeriod, closePeriod, reopenPeriod, type listPeriods } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { D } from "@/components/calendar/date-text";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { monthChoices, todayIso } from "@/lib/calendar";
 type Period = Awaited<ReturnType<typeof listPeriods>>[number];
 
 export function PeriodsTable({ periods }: { periods: Period[] }) {
   const router = useRouter();
+  const calendar = useCalendar();
+  // Real month boundaries in the organization's calendar (BS months are 29–32 days).
+  const months = useMemo(() => monthChoices(calendar, todayIso(), 14, 2), [calendar]);
   const [showNew, setShowNew] = useState(false);
   const [label, setLabel] = useState("");
   const [periodStart, setPeriodStart] = useState("");
@@ -92,8 +99,8 @@ export function PeriodsTable({ periods }: { periods: Period[] }) {
           {periods.map((p) => (
             <tr key={p.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{p.label}</td>
-              <td className="px-4 py-2">{p.periodStart}</td>
-              <td className="px-4 py-2">{p.periodEnd}</td>
+              <td className="px-4 py-2"><D value={p.periodStart} /></td>
+              <td className="px-4 py-2"><D value={p.periodEnd} /></td>
               <td className="px-4 py-2 capitalize">{p.status.replace("_", " ")}</td>
               <td className="px-4 py-2 text-right">
                 {p.status !== "closed" ? (
@@ -124,17 +131,38 @@ export function PeriodsTable({ periods }: { periods: Period[] }) {
           <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-3">
             <h2 className="text-base font-semibold text-gray-900">New period</h2>
             <div>
+              <label className="block text-xs text-gray-500 mb-1">Quick fill from {calendar === "BS" ? "BS" : "calendar"} month</label>
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  const m = months[Number(e.target.value)];
+                  if (!m) return;
+                  setLabel(m.label);
+                  setPeriodStart(m.from);
+                  setPeriodEnd(m.to);
+                }}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Choose a month…</option>
+                {months.map((m, i) => (
+                  <option key={m.from} value={i}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-xs text-gray-500 mb-1">Label</label>
               <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Ashadh 2082" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Start</label>
-                <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">End</label>
-                <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={periodEnd} onChange={(v) => setPeriodEnd(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

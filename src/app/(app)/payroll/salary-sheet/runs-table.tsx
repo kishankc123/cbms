@@ -1,11 +1,8 @@
 import Link from "next/link";
 
-type Run = { id: string; month: number; year: number; status: string; periodStart: string; periodEnd: string };
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { D } from "@/components/calendar/date-text";
+import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+type Run = { id: string; calendarSystem: string; month: number; year: number; status: string; periodStart: string; periodEnd: string };
 
 export function RunsTable({ runs }: { runs: Run[] }) {
   return (
@@ -22,10 +19,10 @@ export function RunsTable({ runs }: { runs: Run[] }) {
         {runs.map((r) => (
           <tr key={r.id} className="border-t border-gray-100">
             <td className="px-4 py-2">
-              {MONTH_NAMES[r.month - 1]} {r.year}
+              {payrollPeriodLabel(r)}
             </td>
             <td className="px-4 py-2">
-              {r.periodStart} – {r.periodEnd}
+              <D value={r.periodStart} /> – <D value={r.periodEnd} />
             </td>
             <td className="px-4 py-2 capitalize">{r.status}</td>
             <td className="px-4 py-2 text-right">

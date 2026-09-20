@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateEmployee } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
 const EMPLOYMENT_TYPES = [
   { value: "full_time", label: "Full-time" },
   { value: "part_time", label: "Part-time" },
@@ -135,7 +136,7 @@ export function EditEmployeeModal({ employee, onClose }: { employee: Employee; o
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Joining Date</label>
-            <input type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DatePicker value={joiningDate} onChange={(v) => setJoiningDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Department</label>

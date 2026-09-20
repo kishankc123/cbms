@@ -7,6 +7,8 @@ import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Customer = { id: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type InvoiceNumbering = { prefix: string; suffix: string; format: string; nextSequence: number };
@@ -23,7 +25,7 @@ type Row = {
 const MIN_ROWS = 7;
 const DATE_FILL_AHEAD = 5;
 const fmt = (n: number) => n.toFixed(2);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", payments: [] });
 
 function computeRow(row: Row, vatRate: number) {
@@ -230,13 +232,7 @@ export function InvoiceForm({
                   >
                     <td className="px-1 py-1 text-gray-500 text-sm whitespace-nowrap">{previewNumber}</td>
                     <td className="px-1 py-1">
-                      <input
-                        type="date"
-                        max={today()}
-                        value={row.invoiceDate}
-                        onChange={(e) => updateRow(i, "invoiceDate", e.target.value)}
-                        className={`w-32 ${cellInputCls}`}
-                      />
+                      <DatePicker max={today()} value={row.invoiceDate} onChange={(v) => updateRow(i, "invoiceDate", v)} className={`w-32 ${cellInputCls}`} />
                     </td>
                     <td className="px-1 py-1">
                       <select

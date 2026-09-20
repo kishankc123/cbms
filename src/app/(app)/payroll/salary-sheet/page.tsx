@@ -12,7 +12,7 @@ export default async function SalarySheetPage() {
       .select()
       .from(payrollRuns)
       .where(eq(payrollRuns.tenantId, session.tenantId))
-      .orderBy(desc(payrollRuns.year), desc(payrollRuns.month)),
+      .orderBy(desc(payrollRuns.periodStart)),
     db.select().from(employees).where(eq(employees.tenantId, session.tenantId)).orderBy(asc(employees.employeeCode)),
   ]);
 

@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { setAttendance, type AttendanceStatus } from "../attendance-actions";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { monthCells, monthNames, weekdayOf } from "@/lib/calendar";
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "present", label: "Present" },
@@ -10,10 +12,6 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "leave", label: "Leave" },
   { value: "half_day", label: "Half day" },
 ];
-
-function daysInMonth(year: number, month: number) {
-  return new Date(year, month, 0).getDate();
-}
 
 export function AttendancePanel({
   employeeId,
@@ -27,25 +25,17 @@ export function AttendancePanel({
   records: Record<string, AttendanceStatus>;
 }) {
   const router = useRouter();
+  const calendar = useCalendar();
   const [selectedMonth, setSelectedMonth] = useState(month);
   const [selectedYear, setSelectedYear] = useState(year);
   const [saving, setSaving] = useState<string | null>(null);
 
+  // Days of the selected month in the organization's calendar; each cell keeps the
+  // real AD date, which is what attendance is stored and payroll is computed on.
   const days = useMemo(() => {
-    const count = daysInMonth(selectedYear, selectedMonth);
-    return Array.from({ length: count }, (_, i) => {
-      const d = i + 1;
-      const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const dayOfWeek = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
-      return { dateStr, dayOfWeek, label: d };
-    });
-  }, [selectedMonth, selectedYear]);
-
-  function goToMonth(monthYear: string) {
-    const [y, m] = monthYear.split("-").map(Number);
-    setSelectedYear(y);
-    setSelectedMonth(m);
-  }
+    const cells = monthCells(calendar, selectedYear, selectedMonth);
+    return (cells?.days ?? []).map((d) => ({ dateStr: d.iso, dayOfWeek: weekdayOf(d.iso), label: d.day }));
+  }, [calendar, selectedMonth, selectedYear]);
 
   async function handleChange(dateStr: string, status: AttendanceStatus) {
     setSaving(dateStr);
@@ -62,12 +52,21 @@ export function AttendancePanel({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <input
-          type="month"
-          value={`${selectedYear}-${String(selectedMonth).padStart(2, "0")}`}
-          onChange={(e) => goToMonth(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-        />
+        <div className="flex items-center gap-2">
+          <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            {monthNames(calendar).map((name, i) => (
+              <option key={name} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </div>
         <p className="text-sm text-gray-600">
           Present: <span className="font-medium text-gray-900">{presentCount}</span> / {days.length} days
         </p>

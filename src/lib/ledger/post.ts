@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-
+
+import { todayIso } from "@/lib/calendar";
 export class UnbalancedEntryError extends Error {
   constructor(totalDebits: number, totalCredits: number) {
     super(
@@ -103,7 +104,7 @@ export async function reverseJournalEntry(
   reversedBy: string,
   memo?: string
 ) {
-  const reversalDate = new Date().toISOString().slice(0, 10);
+  const reversalDate = todayIso();
   await assertPeriodOpen(tenantId, reversalDate);
 
   return db.transaction(async (tx) => {

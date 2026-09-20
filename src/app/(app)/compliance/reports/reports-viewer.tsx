@@ -4,6 +4,10 @@ import { useState } from "react";
 import { generateReport } from "../actions";
 import type { ComplianceReportType } from "@/lib/compliance/reports";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { presetRange } from "@/lib/calendar";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { DateCells, DateDisplayControl, DateHead, dateColumnCount, useDateDisplay, type DateDisplay } from "@/components/calendar/report-dates";
 const REPORT_TYPES: { value: ComplianceReportType; label: string }[] = [
   { value: "sales_register", label: "Sales Register" },
   { value: "purchase_register", label: "Purchase Register" },
@@ -15,13 +19,14 @@ const REPORT_TYPES: { value: ComplianceReportType; label: string }[] = [
 ];
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
-const today = () => new Date().toISOString().slice(0, 10);
-const monthStart = () => today().slice(0, 8) + "01";
 
 export function ReportsViewer() {
   const [type, setType] = useState<ComplianceReportType>("sales_register");
-  const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(today());
+  const calendar = useCalendar();
+  const [initial] = useState(() => presetRange("this_month", calendar));
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [mode, setMode] = useDateDisplay();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof generateReport>> | null>(null);
@@ -63,14 +68,15 @@ export function ReportsViewer() {
           <>
             <div>
               <label className="block text-xs text-gray-500 mb-1">From</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">To</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
           </>
         )}
+        <DateDisplayControl value={mode} onChange={setMode} />
         <button type="button" disabled={loading} onClick={handleGenerate} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
           {loading ? "Generating..." : "Generate"}
         </button>
@@ -78,12 +84,12 @@ export function ReportsViewer() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {result && <ReportOutput type={type} result={result} />}
+      {result && <ReportOutput type={type} result={result} mode={mode} />}
     </div>
   );
 }
 
-function ReportOutput({ type, result }: { type: ComplianceReportType; result: NonNullable<Awaited<ReturnType<typeof generateReport>>> }) {
+function ReportOutput({ type, result, mode }: { type: ComplianceReportType; result: NonNullable<Awaited<ReturnType<typeof generateReport>>>; mode: DateDisplay }) {
   if (type === "sales_register") {
     const r = result as { rows: { invoiceNumber: string; invoiceDate: string; customerName: string; subtotal: string; taxAmount: string; total: string; status: string }[]; totalSubtotal: number; totalTax: number; totalAmount: number };
     return (
@@ -92,7 +98,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2 font-medium">Invoice #</th>
-              <th className="px-4 py-2 font-medium">Date</th>
+              <DateHead mode={mode} />
               <th className="px-4 py-2 font-medium">Customer</th>
               <th className="px-4 py-2 font-medium">Subtotal</th>
               <th className="px-4 py-2 font-medium">Tax</th>
@@ -104,7 +110,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
             {r.rows.map((row, i) => (
               <tr key={i} className="border-t border-gray-100">
                 <td className="px-4 py-2 font-mono">{row.invoiceNumber}</td>
-                <td className="px-4 py-2">{row.invoiceDate}</td>
+                <DateCells mode={mode} value={row.invoiceDate} />
                 <td className="px-4 py-2">{row.customerName}</td>
                 <td className="px-4 py-2">{fmt(Number(row.subtotal))}</td>
                 <td className="px-4 py-2">{fmt(Number(row.taxAmount))}</td>
@@ -115,7 +121,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={3}>
+              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
               <td className="px-4 py-2">{fmt(r.totalSubtotal)}</td>
@@ -137,7 +143,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2 font-medium">Bill #</th>
-              <th className="px-4 py-2 font-medium">Date</th>
+              <DateHead mode={mode} />
               <th className="px-4 py-2 font-medium">Supplier</th>
               <th className="px-4 py-2 font-medium">Subtotal</th>
               <th className="px-4 py-2 font-medium">Tax</th>
@@ -149,7 +155,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
             {r.rows.map((row, i) => (
               <tr key={i} className="border-t border-gray-100">
                 <td className="px-4 py-2 font-mono">{row.billNumber}</td>
-                <td className="px-4 py-2">{row.billDate}</td>
+                <DateCells mode={mode} value={row.billDate} />
                 <td className="px-4 py-2">{row.vendorName}</td>
                 <td className="px-4 py-2">{fmt(Number(row.subtotal))}</td>
                 <td className="px-4 py-2">{fmt(Number(row.taxAmount))}</td>
@@ -160,7 +166,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={3}>
+              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
               <td className="px-4 py-2">{fmt(r.totalSubtotal)}</td>
@@ -197,7 +203,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2 font-medium">Expense #</th>
-              <th className="px-4 py-2 font-medium">Date</th>
+              <DateHead mode={mode} />
               <th className="px-4 py-2 font-medium">Payee</th>
               <th className="px-4 py-2 font-medium">Taxable amount</th>
               <th className="px-4 py-2 font-medium">TDS</th>
@@ -207,7 +213,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
             {r.rows.map((row, i) => (
               <tr key={i} className="border-t border-gray-100">
                 <td className="px-4 py-2 font-mono">{row.expenseNumber}</td>
-                <td className="px-4 py-2">{row.expenseDate}</td>
+                <DateCells mode={mode} value={row.expenseDate} />
                 <td className="px-4 py-2">{row.payee}</td>
                 <td className="px-4 py-2">{fmt(Number(row.taxableAmount))}</td>
                 <td className="px-4 py-2">{fmt(Number(row.tdsAmount))}</td>
@@ -216,7 +222,7 @@ function ReportOutput({ type, result }: { type: ComplianceReportType; result: No
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={3}>
+              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
               <td className="px-4 py-2">{fmt(r.totalTaxable)}</td>

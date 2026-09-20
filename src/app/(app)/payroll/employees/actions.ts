@@ -18,6 +18,7 @@ import { getCurrentSalary } from "@/lib/payroll/salary";
 import { computeNewSalary } from "@/lib/payroll/salary-change";
 import { createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
 
+import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 type EmploymentType = (typeof employmentTypeEnum.enumValues)[number];
@@ -278,7 +279,7 @@ export async function deactivateBenefit(input: { benefitId: string }) {
 
   await db
     .update(employeeBenefits)
-    .set({ eligibilityStatus: "inactive", effectiveTo: benefit.effectiveTo ?? new Date().toISOString().slice(0, 10) })
+    .set({ eligibilityStatus: "inactive", effectiveTo: benefit.effectiveTo ?? todayIso() })
     .where(eq(employeeBenefits.id, input.benefitId));
 
   revalidatePath(`/payroll/employees/${benefit.employeeId}`);

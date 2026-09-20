@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { useCalendar, useFormatDate } from "@/components/calendar/calendar-provider";
+import { presetRange, type RangePreset } from "@/lib/calendar";
 export type DateFilter = { mode: "all" | "range"; from: string; to: string };
 
 export function DateRangeControl({
@@ -15,6 +18,8 @@ export function DateRangeControl({
   const [draftFrom, setDraftFrom] = useState(value.from);
   const [draftTo, setDraftTo] = useState(value.to);
   const ref = useRef<HTMLDivElement>(null);
+  const calendar = useCalendar();
+  const fmtDate = useFormatDate();
 
   useEffect(() => {
     if (!open) return;
@@ -32,7 +37,7 @@ export function DateRangeControl({
     };
   }, [open]);
 
-  const label = value.mode === "all" ? "All time" : `${value.from} → ${value.to}`;
+  const label = value.mode === "all" ? "All time" : `${fmtDate(value.from)} → ${fmtDate(value.to)}`;
 
   return (
     <div className="relative" ref={ref}>
@@ -59,26 +64,33 @@ export function DateRangeControl({
             All time
           </button>
 
+          <div className="flex flex-wrap gap-1.5">
+            {([["this_month", "This month"], ["last_month", "Last month"], ["this_fiscal_year", "This fiscal year"]] as [RangePreset, string][]).map(([p, label]) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  const r = presetRange(p, calendar);
+                  onChange({ mode: "range", from: r.from, to: r.to });
+                  setOpen(false);
+                }}
+                className="rounded-full border border-gray-300 px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="space-y-2 border-t border-gray-100 pt-3">
             <p className="text-xs text-gray-500">Custom range</p>
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">From</label>
-                <input
-                  type="date"
-                  value={draftFrom}
-                  onChange={(e) => setDraftFrom(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                />
+                <DatePicker value={draftFrom} onChange={(v) => setDraftFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
               </div>
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">To</label>
-                <input
-                  type="date"
-                  value={draftTo}
-                  onChange={(e) => setDraftTo(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                />
+                <DatePicker value={draftTo} onChange={(v) => setDraftTo(v)} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
               </div>
             </div>
             <button

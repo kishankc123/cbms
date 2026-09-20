@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { deactivateBenefit } from "../actions";
 import { AddBenefitModal } from "./add-benefit-modal";
 
+import { D } from "@/components/calendar/date-text";
 type Benefit = {
   id: string;
   benefitType: string;
@@ -57,7 +58,7 @@ export function BenefitsPanel({ employeeId, benefits }: { employeeId: string; be
               <td className="px-3 py-2">{b.benefitType}</td>
               <td className="px-3 py-2">{Number(b.amount).toFixed(2)}</td>
               <td className="px-3 py-2 capitalize">{b.frequency.replace("_", " ")}</td>
-              <td className="px-3 py-2">{b.effectiveFrom}</td>
+              <td className="px-3 py-2"><D value={b.effectiveFrom} /></td>
               <td className="px-3 py-2">{b.effectiveTo ?? "Ongoing"}</td>
               <td className="px-3 py-2 capitalize">{b.eligibilityStatus}</td>
               <td className="px-3 py-2">{b.notes ?? "—"}</td>

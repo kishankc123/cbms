@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCalendarItem, updateCalendarItemStatus, deleteCalendarItem, seedNepaliDefaults, type listCalendarItems, type listAssignableUsers } from "../actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { D } from "@/components/calendar/date-text";
 type Item = Awaited<ReturnType<typeof listCalendarItems>>[number];
 type UserOption = Awaited<ReturnType<typeof listAssignableUsers>>[number];
 
@@ -114,7 +116,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
             <tr key={i.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{i.name}</td>
               <td className="px-4 py-2">{i.period}</td>
-              <td className="px-4 py-2">{i.dueDate}</td>
+              <td className="px-4 py-2"><D value={i.dueDate} /></td>
               <td className="px-4 py-2">{i.responsibleUserName}</td>
               <td className="px-4 py-2">{i.amount ? Number(i.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}</td>
               <td className="px-4 py-2">
@@ -168,7 +170,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Due date</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={dueDate} onChange={(v) => setDueDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Responsible user</label>

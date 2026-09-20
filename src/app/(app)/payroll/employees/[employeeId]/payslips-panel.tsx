@@ -1,5 +1,6 @@
 type Payslip = {
   id: string;
+  calendarSystem: string;
   month: number;
   year: number;
   status: string;
@@ -8,10 +9,7 @@ type Payslip = {
   netPay: string;
 };
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 
 export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
   return (
@@ -29,7 +27,7 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
         {payslips.map((p) => (
           <tr key={p.id} className="border-t border-gray-100">
             <td className="px-4 py-2">
-              {MONTH_NAMES[p.month - 1]} {p.year}
+              {payrollPeriodLabel(p)}
             </td>
             <td className="px-4 py-2">{Number(p.basicSalary).toFixed(2)}</td>
             <td className="px-4 py-2">{Number(p.grossPay).toFixed(2)}</td>

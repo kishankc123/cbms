@@ -16,10 +16,11 @@ export function parseStatementFile(base64: string, fileName: string): ParsedStat
     return parseCsv(binary.toString("utf-8"));
   }
 
-  const workbook = XLSX.read(binary, { type: "buffer" });
+  // cellDates: true so real Excel dates (AD serial numbers) come back as dates, not as locale-formatted text.
+  const workbook = XLSX.read(binary, { type: "buffer", cellDates: true });
   const firstSheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
-  const grid: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+  const grid: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "", dateNF: "yyyy-mm-dd" });
   return gridToParsed(grid);
 }
 

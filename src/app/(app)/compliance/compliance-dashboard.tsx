@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { getComplianceDashboard } from "./actions";
 
+import { D } from "@/components/calendar/date-text";
 type Data = Awaited<ReturnType<typeof getComplianceDashboard>>;
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone?: "bad" | "warn" | "good" }) {
@@ -56,7 +57,7 @@ export function ComplianceDashboard({ data }: { data: Data }) {
             <tr key={i.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{i.name}</td>
               <td className="px-4 py-2">{i.period}</td>
-              <td className="px-4 py-2">{i.dueDate}</td>
+              <td className="px-4 py-2"><D value={i.dueDate} /></td>
               <td className="px-4 py-2 capitalize">{i.status.replace("_", " ")}</td>
               <td className="px-4 py-2">{i.amount !== null ? i.amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}</td>
               <td className="px-4 py-2">{i.responsibleUserName}</td>

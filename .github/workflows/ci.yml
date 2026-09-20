@@ -34,5 +34,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Includes the Bikram Sambat cross-check against independent libraries, so
+      # a calendar-data change (e.g. a Dependabot upgrade) cannot merge unnoticed.
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build

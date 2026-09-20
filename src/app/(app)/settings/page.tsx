@@ -5,7 +5,8 @@ import { tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { generateFiscalYearOptions } from "@/lib/nepali-fiscal-year";
 import { INVOICE_NUMBER_FORMATS, buildInvoiceNumber } from "@/lib/invoice-number";
-import { updateCompanyDetails, updateFiscalYearDates, updateOtherSettings, updatePaymentNumbering } from "./actions";
+import { updateCompanyDetails, updateFiscalYearDates, updateOtherSettings, updatePaymentNumbering, updateCalendarSystem } from "./actions";
+import { DateField } from "@/components/calendar/date-picker";
 
 const FISCAL_YEARS = generateFiscalYearOptions();
 
@@ -81,6 +82,33 @@ export default async function SettingsPage() {
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-lg font-medium text-gray-900">Localization</h2>
+
+        <form action={updateCalendarSystem} className="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-5">
+          <div>
+            <p className="block text-xs text-gray-500 mb-2">Calendar system</p>
+            <label className="flex items-center gap-2 text-sm text-gray-800 mb-1">
+              <input type="radio" name="calendarSystem" value="AD" defaultChecked={tenant.calendarSystem !== "BS"} />
+              AD — Gregorian
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-800">
+              <input type="radio" name="calendarSystem" value="BS" defaultChecked={tenant.calendarSystem === "BS"} />
+              BS — Bikram Sambat
+            </label>
+          </div>
+          <p className="text-xs text-gray-500">
+            Choose how dates are displayed and entered throughout the system. Accounting records are internally maintained using a standard date format, so changing this never alters any transaction.
+          </p>
+          <button
+            type="submit"
+            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+          >
+            Save changes
+          </button>
+        </form>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-lg font-medium text-gray-900">Dates</h2>
 
         <form
@@ -109,21 +137,11 @@ export default async function SettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Fiscal year beginning date</label>
-              <input
-                type="date"
-                name="fiscalYearStartDate"
-                defaultValue={tenant.fiscalYearStartDate ?? ""}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <DateField name="fiscalYearStartDate" defaultValue={tenant.fiscalYearStartDate ?? ""} />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Fiscal year ending date</label>
-              <input
-                type="date"
-                name="fiscalYearEndDate"
-                defaultValue={tenant.fiscalYearEndDate ?? ""}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <DateField name="fiscalYearEndDate" defaultValue={tenant.fiscalYearEndDate ?? ""} />
             </div>
           </div>
 

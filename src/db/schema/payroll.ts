@@ -113,6 +113,9 @@ export const payrollRunStatusEnum = pgEnum("payroll_run_status", ["draft", "revi
 export const payrollRuns = pgTable("payroll_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  // month/year are in the calendar the run was created under ("BS": 6 / 2083 = Ashwin 2083);
+  // periodStart/periodEnd are the real AD dates and are what every calculation uses.
+  calendarSystem: text("calendar_system").notNull().default("AD"),
   month: integer("month").notNull(),
   year: integer("year").notNull(),
   periodStart: date("period_start").notNull(),

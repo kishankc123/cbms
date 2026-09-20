@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEmployee } from "./actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 const EMPLOYMENT_TYPES = [
   { value: "full_time", label: "Full-time" },
   { value: "part_time", label: "Part-time" },
@@ -18,7 +20,7 @@ const EMPLOYMENT_STATUSES = [
   { value: "terminated", label: "Terminated" },
 ] as const;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const router = useRouter();
@@ -101,13 +103,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Joining Date</label>
-          <input
-            type="date"
-            max={today()}
-            value={joiningDate}
-            onChange={(e) => setJoiningDate(e.target.value)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-          />
+          <DatePicker max={today()} value={joiningDate} onChange={(v) => setJoiningDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Department</label>

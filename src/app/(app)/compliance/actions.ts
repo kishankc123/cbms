@@ -28,6 +28,7 @@ import {
   type ComplianceReportType,
 } from "@/lib/compliance/reports";
 
+import { todayIso } from "@/lib/calendar";
 async function logAudit(input: {
   tenantId: string;
   userId: string;
@@ -52,7 +53,7 @@ async function logAudit(input: {
 
 export async function getComplianceDashboard() {
   const session = await requireTenantSession();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
 
   const calendarItems = await db
     .select()
@@ -276,7 +277,7 @@ export async function evaluateAmountThresholdRules(tenantId: string, module: Rul
     );
 
   const warnings: string[] = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   for (const rule of rules) {
     if (rule.effectiveDate && rule.effectiveDate > today) continue;
     if (rule.expiryDate && rule.expiryDate < today) continue;
@@ -447,7 +448,15 @@ export async function seedNepaliDefaults(monthsAhead: number) {
   const session = await requireTenantSession();
   if (!can(session, "compliance", "create")) throw new Error("Not permitted");
 
-  const items = generateNepaliDefaultItems(monthsAhead);
+  const generated = generateNepaliDefaultItems(monthsAhead, session.calendar);
+  // Re-seeding must not duplicate items already on the calendar.
+  const existing = await db
+    .select({ name: complianceCalendarItems.name, period: complianceCalendarItems.period })
+    .from(complianceCalendarItems)
+    .where(eq(complianceCalendarItems.tenantId, session.tenantId));
+  const have = new Set(existing.map((e) => `${e.name}|${e.period}`));
+  const items = generated.filter((i) => !have.has(`${i.name}|${i.period}`));
+  if (items.length === 0) return;
   await db.insert(complianceCalendarItems).values(
     items.map((i) => ({
       tenantId: session.tenantId,

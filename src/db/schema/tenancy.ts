@@ -43,6 +43,9 @@ export const tenants = pgTable("tenants", {
   fiscalYearStartDate: date("fiscal_year_start_date"),
   fiscalYearEndDate: date("fiscal_year_end_date"),
   baseCurrency: text("base_currency").notNull().default("NPR"),
+  // How dates are shown and entered for this organization: "AD" or "BS".
+  // Dates are ALWAYS stored as AD (YYYY-MM-DD) regardless of this setting.
+  calendarSystem: text("calendar_system").notNull().default("AD"),
   taxRegistrationNumber: text("tax_registration_number"),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2 }).notNull().default("13"),
   // Default TDS (Tax Deducted at Source) withholding rate applied to

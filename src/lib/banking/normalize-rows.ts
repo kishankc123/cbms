@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { resolveImportDates, type ImportDateChoice, type ImportDateResult } from "./import-dates";
 
 export type ColumnMapping = {
   date: string;
@@ -27,23 +28,6 @@ function parseAmount(cell: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseDate(cell: string | undefined): string | null {
-  if (!cell) return null;
-  const trimmed = cell.trim();
-  // Already ISO
-  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
-  // DD/MM/YYYY or MM/DD/YYYY or DD-MM-YYYY — assume DD/MM/YYYY (most bank
-  // exports in this app's target market use day-first dates).
-  const match = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (match) {
-    const [, d, m, y] = match;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-  const parsed = new Date(trimmed);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return null;
-}
-
 function columnIndex(headers: string[], name: string | undefined): number {
   if (!name) return -1;
   return headers.findIndex((h) => h.trim().toLowerCase() === name.trim().toLowerCase());
@@ -52,11 +36,14 @@ function columnIndex(headers: string[], name: string | undefined): number {
 // Applies a column mapping to raw parsed rows, producing signed amounts and
 // a dedupe hash per row — the mapping is resolved once per import, not
 // hard-coded to any particular bank's column names.
+export type DateImportOptions = { choice?: ImportDateChoice; dayFirst?: boolean; allowMixed?: boolean };
+
 export function normalizeStatementRows(
   headers: string[],
   rows: string[][],
-  mapping: ColumnMapping
-): { valid: NormalizedStatementRow[]; skipped: number } {
+  mapping: ColumnMapping,
+  dateOptions: DateImportOptions = {}
+): { valid: NormalizedStatementRow[]; skipped: number; dates: ImportDateResult } {
   const dateIdx = columnIndex(headers, mapping.date);
   const descIdx = columnIndex(headers, mapping.description);
   const debitIdx = columnIndex(headers, mapping.debit);
@@ -65,11 +52,17 @@ export function normalizeStatementRows(
   const referenceIdx = columnIndex(headers, mapping.reference);
   const balanceIdx = columnIndex(headers, mapping.balance);
 
+  // Dates may be AD or BS in the file; resolved once for the whole column, always to AD.
+  const dates = resolveImportDates(
+    rows.map((r) => (dateIdx >= 0 ? r[dateIdx] : undefined)),
+    { header: mapping.date, ...dateOptions }
+  );
+
   const valid: NormalizedStatementRow[] = [];
   let skipped = 0;
 
-  for (const row of rows) {
-    const transactionDate = parseDate(dateIdx >= 0 ? row[dateIdx] : undefined);
+  for (const [rowIndex, row] of rows.entries()) {
+    const transactionDate = dates.rows[rowIndex]?.iso ?? null;
     if (!transactionDate) {
       skipped++;
       continue;
@@ -101,5 +94,5 @@ export function normalizeStatementRows(
     valid.push({ transactionDate, description, reference, amount, runningBalance, dedupeHash, raw: row });
   }
 
-  return { valid, skipped };
+  return { valid, skipped, dates };
 }

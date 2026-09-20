@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createInterTransfer, updateInterTransfer, getSourceBalance } from "./actions";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
+import { D } from "@/components/calendar/date-text";
 type Option = { id: string; label: string; kind: "Cash" | "Bank" };
 export type TransferInitial = {
   id: string;
@@ -18,7 +21,7 @@ export type TransferInitial = {
   attachmentUrl: string | null;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const inputCls = "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 const errCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-400";
@@ -142,7 +145,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Transfer Date</label>
-            <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} className={errors.transferDate ? errCls : inputCls} />
+            <DatePicker value={transferDate} onChange={(v) => setTransferDate(v)} className={errors.transferDate ? errCls : inputCls} />
             {errors.transferDate && <p className="mt-1 text-xs text-red-600">{errors.transferDate}</p>}
           </div>
         </div>
@@ -202,7 +205,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
               <span className="text-gray-500">From Account</span><span>{labelOf(fromAccountId)}</span>
               <span className="text-gray-500">To Account</span><span>{labelOf(toAccountId)}</span>
               <span className="text-gray-500">Amount</span><span className="font-semibold">{fmt(amountNum)}</span>
-              <span className="text-gray-500">Date</span><span>{transferDate}</span>
+              <span className="text-gray-500">Date</span><span><D value={transferDate} /></span>
               <span className="text-gray-500">Reference</span><span>{reference || "—"}</span>
             </div>
             {confirming.balanceWarning && (

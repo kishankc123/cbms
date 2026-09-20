@@ -6,6 +6,7 @@ import { getCashBankAccounts } from "./cash-bank-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 
+import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type TransferAccountOption = { id: string; label: string; kind: "Cash" | "Bank" };
@@ -123,7 +124,7 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
   // Check every period the edit touches up front so it can't half-apply.
   await assertPeriodOpen(tenantId, existing.transferDate);
   await assertPeriodOpen(tenantId, input.transferDate);
-  await assertPeriodOpen(tenantId, new Date().toISOString().slice(0, 10));
+  await assertPeriodOpen(tenantId, todayIso());
 
   const entry = await postJournalEntry({
     tenantId,

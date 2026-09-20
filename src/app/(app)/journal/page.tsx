@@ -4,7 +4,8 @@ import { accounts, journalEntries, journalLines } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { JournalEntryForm } from "./journal-entry-form";
 import { reverseEntry } from "./actions";
-
+
+import { D } from "@/components/calendar/date-text";
 export default async function JournalPage() {
   const session = await requireTenantSession();
 
@@ -52,7 +53,7 @@ export default async function JournalPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    {entry.entryDate} — {entry.memo || entry.sourceType}
+                    <D value={entry.entryDate} /> — {entry.memo || entry.sourceType}
                     {entry.isReversed && (
                       <span className="ml-2 text-xs text-amber-600">(reversed)</span>
                     )}

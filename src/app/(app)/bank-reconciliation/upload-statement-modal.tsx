@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { previewStatementFile, confirmStatementImport, type StatementPreview } from "./actions";
+import { previewStatementFile, previewStatementDates, confirmStatementImport, type StatementPreview, type DatePreview } from "./actions";
 import type { ColumnMapping } from "@/lib/banking/normalize-rows";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { formatAD, formatBS } from "@/lib/calendar";
+import type { ImportDateChoice } from "@/lib/banking/import-dates";
 const MAPPING_FIELDS: { key: keyof ColumnMapping; label: string; required?: boolean }[] = [
   { key: "date", label: "Date", required: true },
   { key: "description", label: "Description" },
@@ -35,7 +38,7 @@ export function UploadStatementModal({
   onClose: () => void;
   onImported: () => void;
 }) {
-  const [step, setStep] = useState<"select" | "map" | "preview">("select");
+  const [step, setStep] = useState<"select" | "map" | "dates">("select");
   const [fileName, setFileName] = useState("");
   const [base64, setBase64] = useState("");
   const [preview, setPreview] = useState<StatementPreview | null>(null);
@@ -43,6 +46,11 @@ export function UploadStatementModal({
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [saveAsTemplateName, setSaveAsTemplateName] = useState("");
+  // How the file's date column is read. Whatever the file uses, only AD dates are stored.
+  const [dateChoice, setDateChoice] = useState<ImportDateChoice>("auto");
+  const [dayFirst, setDayFirst] = useState(true);
+  const [allowMixed, setAllowMixed] = useState(false);
+  const [datePreview, setDatePreview] = useState<DatePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ imported: number; duplicates: number; skipped: number } | null>(null);
@@ -65,6 +73,26 @@ export function UploadStatementModal({
     }
   }
 
+  async function loadDatePreview(next: { choice?: ImportDateChoice; dayFirst?: boolean; allowMixed?: boolean } = {}) {
+    const choice = next.choice ?? dateChoice;
+    const first = next.dayFirst ?? dayFirst;
+    const mixedOk = next.allowMixed ?? allowMixed;
+    setError(null);
+    setLoading(true);
+    try {
+      const p = await previewStatementDates({ bankAccountId, fileName, base64, dateColumn: mapping.date, choice, dayFirst: first, allowMixed: mixedOk });
+      setDatePreview(p);
+      setDateChoice(choice);
+      setDayFirst(first);
+      setAllowMixed(mixedOk);
+      setStep("dates");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to read the dates");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleImport() {
     setError(null);
     setLoading(true);
@@ -77,6 +105,9 @@ export function UploadStatementModal({
         statementPeriodStart: periodStart,
         statementPeriodEnd: periodEnd,
         saveAsTemplateName,
+        dateChoice,
+        dayFirst,
+        allowMixedDates: allowMixed,
       });
       setResult(res);
     } catch (e) {
@@ -156,13 +187,15 @@ export function UploadStatementModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Statement period start</label>
-                <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={periodStart} onChange={(v) => setPeriodStart(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Statement period end</label>
-                <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={periodEnd} onChange={(v) => setPeriodEnd(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
             </div>
+
+            <DateFormatControls choice={dateChoice} dayFirst={dayFirst} onChoice={(c) => setDateChoice(c)} onDayFirst={(v) => setDayFirst(v)} />
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Save this mapping as a template (optional)</label>
@@ -208,15 +241,178 @@ export function UploadStatementModal({
               </button>
               <button
                 type="button"
-                disabled={loading || !mapping.date || !periodStart || !periodEnd}
-                onClick={handleImport}
+                disabled={loading || !mapping.date || !periodStart || !periodEnd || (!mapping.debit && !mapping.credit && !mapping.amount)}
+                onClick={() => loadDatePreview()}
                 className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
               >
-                {loading ? "Importing..." : "Confirm Import"}
+                {loading ? "Reading dates..." : "Next: Review dates"}
               </button>
             </div>
           </div>
+        ) : step === "dates" && datePreview ? (
+          <DateReview
+            preview={datePreview}
+            dateColumn={mapping.date}
+            choice={dateChoice}
+            dayFirst={dayFirst}
+            allowMixed={allowMixed}
+            loading={loading}
+            error={error}
+            onReload={loadDatePreview}
+            onChangeFormat={() => setStep("map")}
+            onCancel={onClose}
+            onConfirm={handleImport}
+          />
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function DateFormatControls({ choice, dayFirst, onChoice, onDayFirst }: { choice: ImportDateChoice; dayFirst: boolean; onChoice: (c: ImportDateChoice) => void; onDayFirst: (v: boolean) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Date format in file</label>
+        <select value={choice} onChange={(e) => onChoice(e.target.value as ImportDateChoice)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <option value="auto">Auto-detect (AD or BS)</option>
+          <option value="AD">AD (Gregorian)</option>
+          <option value="BS">BS (Bikram Sambat)</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Numeric dates like 03/04/2026 are</label>
+        <select value={dayFirst ? "dmy" : "mdy"} onChange={(e) => onDayFirst(e.target.value === "dmy")} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <option value="dmy">Day first (DD/MM/YYYY)</option>
+          <option value="mdy">Month first (MM/DD/YYYY)</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  AD: "bg-blue-50 text-blue-700",
+  BS: "bg-purple-50 text-purple-700",
+  ambiguous: "bg-amber-50 text-amber-700",
+  invalid: "bg-red-50 text-red-700",
+};
+
+function DateReview({
+  preview,
+  dateColumn,
+  choice,
+  dayFirst,
+  allowMixed,
+  loading,
+  error,
+  onReload,
+  onChangeFormat,
+  onCancel,
+  onConfirm,
+}: {
+  preview: DatePreview;
+  dateColumn: string;
+  choice: ImportDateChoice;
+  dayFirst: boolean;
+  allowMixed: boolean;
+  loading: boolean;
+  error: string | null;
+  onReload: (next?: { choice?: ImportDateChoice; dayFirst?: boolean; allowMixed?: boolean }) => void;
+  onChangeFormat: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { counts } = preview;
+  const detectedText =
+    preview.detected === "AD" || preview.detected === "BS"
+      ? `${preview.detected} dates (${Math.round(preview.confidence * 100)}% confidence)`
+      : preview.detected === "mixed"
+        ? "Mixed AD and BS dates"
+        : preview.detected === "ambiguous"
+          ? "Could be AD or BS"
+          : "No dates found";
+  const summary =
+    choice === "auto"
+      ? `Detected: ${detectedText}`
+      : `Reading as ${choice} dates (chosen by you)${preview.detected !== choice && preview.detected !== "none" ? ` — the file looks like: ${detectedText}` : ""}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+        <p className="font-medium text-gray-900">{summary}</p>
+        <p className="text-xs text-gray-500">
+          Column &quot;{dateColumn}&quot; · {counts.AD} AD · {counts.BS} BS
+          {counts.ambiguous > 0 && ` · ${counts.ambiguous} ambiguous`}
+          {counts.invalid > 0 && ` · ${counts.invalid} unreadable (will be skipped)`} · Dates are stored as AD either way.
+        </p>
+      </div>
+
+      <DateFormatControls choice={choice} dayFirst={dayFirst} onChoice={(c) => onReload({ choice: c })} onDayFirst={(v) => onReload({ dayFirst: v })} />
+
+      {preview.mixed && (
+        <label className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <input type="checkbox" checked={allowMixed} onChange={(e) => onReload({ allowMixed: e.target.checked })} className="mt-0.5" />
+          <span>This file mixes AD and BS dates. Review the table below, then tick to import each row using its own detected calendar — or pick AD or BS above to force one.</span>
+        </label>
+      )}
+      {preview.hasDayMonthAmbiguity && <p className="text-xs text-amber-700">Some dates could be read day-first or month-first. Check the converted dates below, or change the numeric format above.</p>}
+      {preview.hasProjected && <p className="text-xs text-amber-700">Some BS dates are beyond the years the calendar data is verified for. They are converted from projected month lengths.</p>}
+
+      <div className="overflow-x-auto rounded border border-gray-200 max-h-72">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 sticky top-0">
+            <tr className="text-left text-gray-500">
+              <th className="px-2 py-1 font-medium">Row</th>
+              <th className="px-2 py-1 font-medium">Original</th>
+              <th className="px-2 py-1 font-medium">Detected</th>
+              <th className="px-2 py-1 font-medium">AD</th>
+              <th className="px-2 py-1 font-medium">BS</th>
+              <th className="px-2 py-1 font-medium">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.shown.map((r) => (
+              <tr key={r.rowNumber} className="border-t border-gray-100">
+                <td className="px-2 py-1 text-gray-400">{r.rowNumber}</td>
+                <td className="px-2 py-1 font-mono whitespace-nowrap">{r.raw || "—"}</td>
+                <td className="px-2 py-1">
+                  <span className={`rounded px-1.5 py-0.5 capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap">{r.iso ? formatAD(r.iso) : "—"}</td>
+                <td className="px-2 py-1 whitespace-nowrap">{r.iso ? formatBS(r.iso) : "—"}</td>
+                <td className="px-2 py-1 text-gray-500">{r.note ?? (r.dayMonthAmbiguous ? "Day/month order assumed" : r.projected ? "Projected BS date" : "")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="px-2 py-1 text-xs text-gray-400">
+          Showing {preview.shown.length} of {preview.totalRows} rows (all problem rows are included)
+        </p>
+      </div>
+
+      {preview.blocking && (
+        <p className="text-sm text-amber-700">
+          {counts.ambiguous > 0 ? "Some dates could be AD or BS. Choose the format above." : preview.mixed ? "Confirm how to treat the mixed dates above." : "No dates could be read from this column."}
+        </p>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+          Cancel
+        </button>
+        <button type="button" onClick={onChangeFormat} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          Change Format
+        </button>
+        <button
+          type="button"
+          disabled={loading || preview.blocking}
+          onClick={onConfirm}
+          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+        >
+          {loading ? "Working..." : "Confirm & Import"}
+        </button>
       </div>
     </div>
   );

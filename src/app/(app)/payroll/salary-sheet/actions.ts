@@ -6,6 +6,8 @@ import { db } from "@/db";
 import { employees, employeeBenefits, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
+import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+import { daysInMonth as calendarDaysInMonth, isoFromYmd, type CalendarSystem } from "@/lib/calendar";
 import { getOrCreateSettings } from "../setup/actions";
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import {
@@ -16,19 +18,18 @@ import {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function daysInMonth(year: number, month: number) {
-  return new Date(year, month, 0).getDate();
-}
-
-function periodForMonth(year: number, month: number, startDay: number, endDay: number) {
-  const lastDay = daysInMonth(year, month);
+// The payroll month is a month of the organization's calendar: a BS run for
+// Ashwin 2083 covers the real Ashwin days (29–32 of them). What is stored and
+// calculated on is the pair of real AD dates it maps to.
+function periodForMonth(calendar: CalendarSystem, year: number, month: number, startDay: number, endDay: number) {
+  const lastDay = calendarDaysInMonth(calendar, year, month);
+  if (!lastDay) throw new Error("That month is outside the supported calendar range");
   const start = Math.min(Math.max(startDay, 1), lastDay);
   const end = Math.min(Math.max(endDay, start), lastDay);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return {
-    periodStart: `${year}-${pad(month)}-${pad(start)}`,
-    periodEnd: `${year}-${pad(month)}-${pad(end)}`,
-  };
+  const periodStart = isoFromYmd(calendar, { year, month, day: start });
+  const periodEnd = isoFromYmd(calendar, { year, month, day: end });
+  if (!periodStart || !periodEnd) throw new Error("Invalid payroll month");
+  return { periodStart, periodEnd };
 }
 
 function dayCount(startStr: string, endStr: string) {
@@ -51,6 +52,8 @@ function eachDate(startStr: string, endStr: string) {
 export type GenerateRunInput = {
   month: number;
   year: number;
+  /** Calendar the month/year are in; defaults to the organization's. Pass a run's own calendar when regenerating it. */
+  calendar?: CalendarSystem;
   employeeIds: string[]; // empty = all active employees
 };
 
@@ -62,12 +65,13 @@ export async function generatePayrollRun(input: GenerateRunInput) {
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
 
   const settings = await getOrCreateSettings(session.tenantId);
-  const { periodStart, periodEnd } = periodForMonth(input.year, input.month, settings.payrollStartDay, settings.payrollEndDay);
+  const calendar: CalendarSystem = input.calendar ?? session.calendar;
+  const { periodStart, periodEnd } = periodForMonth(calendar, input.year, input.month, settings.payrollStartDay, settings.payrollEndDay);
 
   const [existingRun] = await db
     .select()
     .from(payrollRuns)
-    .where(and(eq(payrollRuns.tenantId, session.tenantId), eq(payrollRuns.month, input.month), eq(payrollRuns.year, input.year)))
+    .where(and(eq(payrollRuns.tenantId, session.tenantId), eq(payrollRuns.month, input.month), eq(payrollRuns.year, input.year), eq(payrollRuns.calendarSystem, calendar)))
     .limit(1);
   if (existingRun && existingRun.status === "finalized") {
     throw new Error("This payroll period is already finalized and cannot be regenerated");
@@ -96,7 +100,7 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     (
       await db
         .insert(payrollRuns)
-        .values({ tenantId: session.tenantId, month: input.month, year: input.year, periodStart, periodEnd, createdBy: session.userId })
+        .values({ tenantId: session.tenantId, calendarSystem: calendar, month: input.month, year: input.year, periodStart, periodEnd, createdBy: session.userId })
         .returning()
     )[0];
 
@@ -243,8 +247,8 @@ async function postPayrollAccrual(tenantId: string, run: typeof payrollRuns.$inf
     entryDate: run.periodEnd,
     sourceType: "payroll",
     sourceId: run.id,
-    referenceNumber: `PR-${run.year}-${String(run.month).padStart(2, "0")}`,
-    memo: `Payroll for ${run.year}-${String(run.month).padStart(2, "0")}`,
+    referenceNumber: `PR-${run.calendarSystem === "BS" ? "BS-" : ""}${run.year}-${String(run.month).padStart(2, "0")}`,
+    memo: `Payroll for ${payrollPeriodLabel(run)}`,
     createdBy: userId,
     lines: postLines,
   });

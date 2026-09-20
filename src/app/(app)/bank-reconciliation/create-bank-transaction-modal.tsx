@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createBankTransaction, type StatementLineRow } from "./actions";
 
+import { D } from "@/components/calendar/date-text";
 type OffsetAccount = { id: string; code: string; name: string; category: string };
 
 const TYPES: { value: "payment" | "receipt" | "bank_charge" | "transfer" | "other"; label: string }[] = [
@@ -64,7 +65,7 @@ export function CreateBankTransactionModal({
         </div>
 
         <p className="text-sm text-gray-600">
-          {line.transactionDate} — {line.description || "—"} —{" "}
+          <D value={line.transactionDate} /> — {line.description || "—"} —{" "}
           <span className={moneyIn ? "text-green-600" : "text-red-600"}>
             {moneyIn ? "+" : ""}
             {line.amount.toFixed(2)}

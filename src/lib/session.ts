@@ -6,6 +6,7 @@ import { memberships, tenants, users } from "@/db/schema";
 import type { Permissions } from "@/db/schema/tenancy";
 import { effectivePermissions, type OrgRole } from "@/lib/roles";
 import { isSessionExpired } from "@/lib/session-expiry";
+import type { CalendarSystem } from "@/lib/calendar";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -24,6 +25,8 @@ export type AppSession = {
   tenantId: string;
   role: OrgRole;
   permissions: Permissions;
+  /** How this organization shows/enters dates (storage is always AD). */
+  calendar: CalendarSystem;
 };
 
 /**
@@ -59,7 +62,7 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
   if (!user.activeTenantId) throw new TenantScopeError();
 
   const [row] = await db
-    .select({ role: memberships.role, permissions: memberships.permissions })
+    .select({ role: memberships.role, permissions: memberships.permissions, calendar: tenants.calendarSystem })
     .from(memberships)
     .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
     .where(
@@ -78,6 +81,7 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
     tenantId: user.activeTenantId,
     role: row.role,
     permissions: effectivePermissions(row.role, row.permissions),
+    calendar: row.calendar === "BS" ? "BS" : "AD",
   };
 });
 

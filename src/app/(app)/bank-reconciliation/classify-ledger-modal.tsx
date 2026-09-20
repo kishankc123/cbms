@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { classifyUnmatchedLedgerLine, type UnmatchedLedgerRow } from "./actions";
 
+import { D } from "@/components/calendar/date-text";
 const CLASSIFICATIONS: { value: Parameters<typeof classifyUnmatchedLedgerLine>[0]["classification"]; label: string }[] = [
   { value: "outstanding_cheque", label: "Outstanding cheque" },
   { value: "pending_bank_transaction", label: "Pending bank transaction" },
@@ -55,7 +56,7 @@ export function ClassifyLedgerModal({
         </div>
 
         <p className="text-sm text-gray-600">
-          {line.entryDate} — {line.memo || line.description || "—"} — {line.signedAmount.toFixed(2)}
+          <D value={line.entryDate} /> — {line.memo || line.description || "—"} — {line.signedAmount.toFixed(2)}
         </p>
 
         <div>

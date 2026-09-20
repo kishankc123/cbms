@@ -4,9 +4,10 @@ import { employees, salaryHistory } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { EmployeesTabs } from "./employees-tabs";
 
+import { todayIso } from "@/lib/calendar";
 export default async function EmployeesPage() {
   const session = await requireTenantSession();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
 
   const [employeeList, salaryRows] = await Promise.all([
     db.select().from(employees).where(eq(employees.tenantId, session.tenantId)).orderBy(asc(employees.employeeCode)),

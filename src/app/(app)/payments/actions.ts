@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq, gte, lte, or, ilike, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
+import { exportDateColumns, exportDateHeaders, type DateDisplayMode } from "@/lib/calendar";
 import {
   payments,
   paymentAllocations,
@@ -348,11 +349,12 @@ export async function getPaymentDetail(paymentId: string) {
 
 // ---------- CSV export (respects filters) ----------
 
-export async function exportPaymentsCsv(filters: PaymentListFilters): Promise<string> {
+export async function exportPaymentsCsv(filters: PaymentListFilters, dateMode: DateDisplayMode = "AD"): Promise<string> {
   const rows = await listPayments(filters);
-  const header = ["Payment No.", "Date", "Direction", "Type", "Party", "Account", "Reference", "Amount", "Allocation", "Reconciliation", "Status"];
+  // Date columns as AD, BS, or both — always derived from the one stored AD date.
+  const header = ["Payment No.", ...exportDateHeaders(dateMode), "Direction", "Type", "Party", "Account", "Reference", "Amount", "Allocation", "Reconciliation", "Status"];
   const lines = rows.map((r) =>
-    [r.paymentNumber, r.paymentDate, r.direction, r.paymentType, r.party, r.accountName, r.referenceNumber ?? "", r.amount.toFixed(2), r.allocationStatus, r.reconciliationStatus, r.status]
+    [r.paymentNumber, ...exportDateColumns(dateMode, r.paymentDate), r.direction, r.paymentType, r.party, r.accountName, r.referenceNumber ?? "", r.amount.toFixed(2), r.allocationStatus, r.reconciliationStatus, r.status]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );

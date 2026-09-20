@@ -2,6 +2,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, salaryHistory, employeeBenefits, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { ProfileTabs } from "./profile-tabs";
 import type { AttendanceStatus } from "../attendance-actions";
@@ -19,9 +20,10 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
     return <p className="text-sm text-red-600">Employee not found.</p>;
   }
 
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  // The attendance month opens on the current month of the organization's calendar.
+  const current = ymdOf(session.calendar, todayIso()) ?? ymdOf("AD", todayIso())!;
+  const month = current.month;
+  const year = current.year;
 
   const [currentSalary, salaryRows, benefitRows, attendanceRows, payslipRows] = await Promise.all([
     getCurrentSalary(session.tenantId, employeeId),
@@ -55,6 +57,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
     db
       .select({
         id: payrollLines.id,
+        calendarSystem: payrollRuns.calendarSystem,
         month: payrollRuns.month,
         year: payrollRuns.year,
         status: payrollRuns.status,
@@ -67,7 +70,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       .where(
         and(eq(payrollLines.tenantId, session.tenantId), eq(payrollLines.employeeId, employeeId), eq(payrollRuns.status, "finalized"))
       )
-      .orderBy(desc(payrollRuns.year), desc(payrollRuns.month)),
+      .orderBy(desc(payrollRuns.periodStart)),
   ]);
 
   const attendanceMap: Record<string, AttendanceStatus> = {};

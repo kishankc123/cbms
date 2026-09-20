@@ -6,6 +6,7 @@ import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
 import { OrgSwitcher } from "./org-switcher";
 import { VerifyBanner } from "./verify-banner";
+import { CalendarProvider } from "@/components/calendar/calendar-provider";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -86,7 +87,14 @@ const NAV = [
     ],
   },
   { href: "/journal", label: "Journal Entries" },
-  { href: "/reports", label: "Reports" },
+  {
+    href: "/reports",
+    label: "Reports",
+    children: [
+      { href: "/reports", label: "Financial Reports" },
+      { href: "/reports/ledger", label: "Ledger" },
+    ],
+  },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -106,6 +114,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const orgs = await listActiveMemberships(user.id);
 
   return (
+    <CalendarProvider calendar={session.calendar}>
     <div className="flex min-h-screen">
       <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
         <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
@@ -124,5 +133,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
     </div>
+    </CalendarProvider>
   );
 }

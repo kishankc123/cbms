@@ -17,6 +17,8 @@ import { UploadStatementModal } from "./upload-statement-modal";
 import { CreateBankTransactionModal } from "./create-bank-transaction-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
 
+import { todayIso } from "@/lib/calendar";
+import { D, DT } from "@/components/calendar/date-text";
 type BankAccountOption = { id: string; label: string };
 type OffsetAccount = { id: string; code: string; name: string; category: string };
 type Workspace = Awaited<ReturnType<typeof getReconciliationWorkspace>>;
@@ -62,7 +64,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [showReopen, setShowReopen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
 
   async function load() {
     if (!bankAccountId) return;
@@ -242,7 +244,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
       {isLocked && (
         <div className="flex items-center justify-between rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <span>
-            Reconciled through {latest.periodEnd} by an admin on {new Date(latest.reconciledAt ?? "").toLocaleDateString()}.
+            Reconciled through <D value={latest.periodEnd} /> by an admin on <DT value={latest.reconciledAt} dateOnly />.
           </span>
           <button type="button" onClick={() => setShowReopen(true)} className="text-amber-900 underline">
             Reopen
@@ -285,7 +287,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           <tbody>
             {workspace.statementLines.map((l) => (
               <tr key={l.id} className="border-t border-gray-100">
-                <td className="px-4 py-2">{l.transactionDate}</td>
+                <td className="px-4 py-2"><D value={l.transactionDate} /></td>
                 <td className="px-4 py-2">{l.description || "—"}</td>
                 <td className="px-4 py-2">{l.reference || "—"}</td>
                 <td className="px-4 py-2">{fmt(l.amount)}</td>
@@ -318,7 +320,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
               .filter((l) => l.matchStatus === "matched")
               .map((l) => (
                 <tr key={l.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2">{l.transactionDate}</td>
+                  <td className="px-4 py-2"><D value={l.transactionDate} /></td>
                   <td className="px-4 py-2">{l.description || "—"}</td>
                   <td className="px-4 py-2">{fmt(l.amount)}</td>
                   <td className="px-4 py-2 text-right">
@@ -361,11 +363,11 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
               return (
                 <tr key={l.id} className="border-t border-gray-100">
                   <td className="px-4 py-2">
-                    {l.transactionDate} — {l.description || "—"}
+                    <D value={l.transactionDate} /> — {l.description || "—"}
                   </td>
                   <td className="px-4 py-2">{fmt(l.amount)}</td>
                   <td className="px-4 py-2">
-                    {c.entryDate} — {c.memo || c.description || "—"}
+                    <D value={c.entryDate} /> — {c.memo || c.description || "—"}
                   </td>
                   <td className="px-4 py-2">
                     <span className={c.tier === "exact" ? "text-green-600 font-medium" : "text-amber-600"}>
@@ -414,7 +416,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                 <td className="px-4 py-2">
                   <input type="checkbox" checked={selectedBankLines.has(l.id)} onChange={() => toggleBankLine(l.id)} disabled={isLocked} />
                 </td>
-                <td className="px-4 py-2">{l.transactionDate}</td>
+                <td className="px-4 py-2"><D value={l.transactionDate} /></td>
                 <td className="px-4 py-2">{l.description || "—"}</td>
                 <td className="px-4 py-2">{l.reference || "—"}</td>
                 <td className="px-4 py-2">{fmt(l.amount)}</td>
@@ -465,7 +467,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                     disabled={isLocked}
                   />
                 </td>
-                <td className="px-4 py-2">{l.entryDate}</td>
+                <td className="px-4 py-2"><D value={l.entryDate} /></td>
                 <td className="px-4 py-2">{l.memo || l.description || "—"}</td>
                 <td className="px-4 py-2">{fmt(l.signedAmount)}</td>
                 <td className="px-4 py-2 capitalize">{l.classification?.replace(/_/g, " ") ?? "—"}</td>
@@ -507,7 +509,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
               const days = Math.floor((new Date(today).getTime() - new Date(l.transactionDate).getTime()) / 86400000);
               return (
                 <tr key={l.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2">{l.transactionDate}</td>
+                  <td className="px-4 py-2"><D value={l.transactionDate} /></td>
                   <td className="px-4 py-2">{l.description || "—"}</td>
                   <td className="px-4 py-2">{fmt(l.amount)}</td>
                   <td className="px-4 py-2 text-red-600">{days} days</td>

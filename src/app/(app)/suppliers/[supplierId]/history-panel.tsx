@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupplierHistory, type LedgerRow } from "../actions";
 import { DateRangeControl, type DateFilter } from "../date-range-control";
 
+import { todayIso } from "@/lib/calendar";
+import { D } from "@/components/calendar/date-text";
+import { DateCells, DateDisplayControl, DateHead, dateColumnCount, useDateDisplay } from "@/components/calendar/report-dates";
 export function HistoryPanel({
   supplierId,
   fiscalYearStartDate,
@@ -12,13 +15,14 @@ export function HistoryPanel({
   fiscalYearStartDate: string | null;
 }) {
   const [dateFilter, setDateFilter] = useState<DateFilter>({ mode: "all", from: "", to: "" });
+  const [mode, setMode] = useDateDisplay();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{ openingBalance: number; closingBalance: number; rows: LedgerRow[] } | null>(
     null
   );
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => todayIso(), []);
   const effectiveFrom = dateFilter.mode === "range" ? dateFilter.from : fiscalYearStartDate ?? "";
   const effectiveTo = dateFilter.mode === "range" ? dateFilter.to : today;
 
@@ -50,10 +54,13 @@ export function HistoryPanel({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-gray-500">
-          From: <span className="font-medium text-gray-700">{effectiveFrom || "—"}</span> &nbsp; To:{" "}
-          <span className="font-medium text-gray-700">{effectiveTo || "—"}</span>
+          From: <span className="font-medium text-gray-700">{effectiveFrom ? <D value={effectiveFrom} /> : "—"}</span> &nbsp; To:{" "}
+          <span className="font-medium text-gray-700">{effectiveTo ? <D value={effectiveTo} /> : "—"}</span>
         </p>
-        <DateRangeControl value={dateFilter} onChange={setDateFilter} />
+        <div className="flex items-end gap-3">
+          <DateDisplayControl value={mode} onChange={setMode} />
+          <DateRangeControl value={dateFilter} onChange={setDateFilter} />
+        </div>
       </div>
 
       {loading && <p className="text-sm text-gray-400">Loading...</p>}
@@ -62,7 +69,7 @@ export function HistoryPanel({
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Date</th>
+              <DateHead mode={mode} />
               <th className="px-4 py-2 font-medium">Details</th>
               <th className="px-4 py-2 font-medium">Debit</th>
               <th className="px-4 py-2 font-medium">Credit</th>
@@ -72,7 +79,7 @@ export function HistoryPanel({
           </thead>
           <tbody>
             <tr className="border-t border-gray-100 bg-gray-50/50">
-              <td className="px-4 py-2 text-gray-500">{effectiveFrom || "—"}</td>
+              <DateCells mode={mode} value={effectiveFrom} className="px-4 py-2 text-gray-500" />
               <td className="px-4 py-2 text-gray-500">Opening balance</td>
               <td className="px-4 py-2"></td>
               <td className="px-4 py-2"></td>
@@ -81,7 +88,7 @@ export function HistoryPanel({
             </tr>
             {data.rows.map((r, i) => (
               <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-2">{r.date}</td>
+                <DateCells mode={mode} value={r.date} />
                 <td className="px-4 py-2">{r.details}</td>
                 <td className="px-4 py-2">{r.debit > 0 ? fmt(r.debit) : ""}</td>
                 <td className="px-4 py-2">{r.credit > 0 ? fmt(r.credit) : ""}</td>
@@ -91,14 +98,14 @@ export function HistoryPanel({
             ))}
             {data.rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5 + dateColumnCount(mode)} className="px-4 py-6 text-center text-gray-400">
                   No transactions in this period
                 </td>
               </tr>
             )}
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2">{effectiveTo || "—"}</td>
-              <td className="px-4 py-2">Closing balance on {effectiveTo || "—"}</td>
+              <DateCells mode={mode} value={effectiveTo} />
+              <td className="px-4 py-2">Closing balance on {effectiveTo ? <D value={effectiveTo} /> : "—"}</td>
               <td className="px-4 py-2"></td>
               <td className="px-4 py-2"></td>
               <td className="px-4 py-2">{fmt(data.closingBalance)}</td>

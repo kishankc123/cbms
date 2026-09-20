@@ -1,0 +1,1 @@
+ALTER TABLE "payroll_runs" ADD COLUMN "calendar_system" text DEFAULT 'AD' NOT NULL;

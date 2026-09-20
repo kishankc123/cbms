@@ -5,6 +5,11 @@ import { voidExpense, getExpenseForEdit, type ExpenseEditData } from "./actions"
 import { ExpenseFormModal, type InitialExpense } from "./expense-form-modal";
 import { RecordExpensePaymentModal } from "./record-expense-payment-modal";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
+import { D } from "@/components/calendar/date-text";
+import { DateDisplayControl, useDateDisplay } from "@/components/calendar/report-dates";
+import { exportDateColumns, exportDateHeaders, type DateDisplayMode } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 type CategoryAccount = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -61,6 +66,7 @@ export function ExpensesTable({
   vatRate: number;
   tdsRate: number;
 }) {
+  const [exportDates, setExportDates] = useDateDisplay();
   const [showNewForm, setShowNewForm] = useState(false);
   const [editData, setEditData] = useState<InitialExpense | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -73,7 +79,7 @@ export function ExpensesTable({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => todayIso(), []);
 
   const summary = useMemo(() => {
     const active = expenses.filter((e) => e.status !== "void");
@@ -111,7 +117,7 @@ export function ExpensesTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-end justify-end gap-2">
         <button
           type="button"
           onClick={() => setShowNewForm(true)}
@@ -119,6 +125,7 @@ export function ExpensesTable({
         >
           + New Expense
         </button>
+        <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
         <button
           type="button"
           disabled
@@ -129,7 +136,7 @@ export function ExpensesTable({
         </button>
         <button
           type="button"
-          onClick={() => exportCsv(filtered)}
+          onClick={() => exportCsv(filtered, exportDates)}
           className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5"
         >
           Export
@@ -152,21 +159,11 @@ export function ExpensesTable({
         />
         <div>
           <label className="block text-xs text-gray-500 mb-1">From</label>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          />
+          <DatePicker value={dateFrom} onChange={(v) => setDateFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">To</label>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          />
+          <DatePicker value={dateTo} onChange={(v) => setDateTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <select
           value={categoryFilter}
@@ -214,7 +211,7 @@ export function ExpensesTable({
           {filtered.map((e) => (
             <tr key={e.id} className="border-t border-gray-100">
               <td className="px-4 py-2 font-mono">{e.expenseNumber}</td>
-              <td className="px-4 py-2">{e.expenseDate}</td>
+              <td className="px-4 py-2"><D value={e.expenseDate} /></td>
               <td className="px-4 py-2">{e.payee}</td>
               <td className="px-4 py-2">{e.category}</td>
               <td className="px-4 py-2 max-w-[200px] truncate">{e.description || "—"}</td>
@@ -312,7 +309,7 @@ export function ExpensesTable({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-xs text-gray-500">Date</p>
-                <p className="text-gray-900">{viewingRow.expenseDate}</p>
+                <p className="text-gray-900"><D value={viewingRow.expenseDate} /></p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Payee</p>
@@ -370,10 +367,10 @@ function toInitial(data: ExpenseEditData): InitialExpense {
   return { ...data };
 }
 
-function exportCsv(rows: ExpenseRow[]) {
-  const header = ["Expense #", "Date", "Payee", "Category", "Description", "Net amount", "Tax", "Total", "Status"];
+function exportCsv(rows: ExpenseRow[], dateMode: DateDisplayMode) {
+  const header = ["Expense #", ...exportDateHeaders(dateMode), "Payee", "Category", "Description", "Net amount", "Tax", "Total", "Status"];
   const lines = rows.map((e) =>
-    [e.expenseNumber, e.expenseDate, e.payee, e.category, e.description, e.subtotal, e.tax, e.total, e.status]
+    [e.expenseNumber, ...exportDateColumns(dateMode, e.expenseDate), e.payee, e.category, e.description, e.subtotal, e.tax, e.total, e.status]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );

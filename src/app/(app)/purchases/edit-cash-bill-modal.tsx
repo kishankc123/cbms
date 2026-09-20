@@ -6,6 +6,8 @@ import { getCashPurchaseForEdit, updateCashPurchase, type CashBillType } from ".
 import { RecordPayModal } from "./record-pay-modal";
 import { BILL_TYPE_OPTIONS } from "./consumable-purchase-form";
 
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -134,13 +136,7 @@ export function EditCashBillModal({
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Date</label>
-                <input
-                  type="date"
-                  max={new Date().toISOString().slice(0, 10)}
-                  value={billDate}
-                  onChange={(e) => setBillDate(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                />
+                <DatePicker max={todayIso()} value={billDate} onChange={(v) => setBillDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Supplier</label>

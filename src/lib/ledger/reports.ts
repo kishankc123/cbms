@@ -1,4 +1,4 @@
-import { and, eq, lte, gte, inArray } from "drizzle-orm";
+import { and, eq, lt, lte, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
@@ -197,7 +197,20 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
     .orderBy(journalEntries.entryDate);
 
   const normal = NORMAL_BALANCE[account.category];
-  let running = 0;
+
+  // Balance carried in from before the period, so the running balance is real.
+  const priorLines = await db
+    .select({ debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalLines.accountId, accountId), lt(journalEntries.entryDate, toDateStr(periodStart))));
+  let openingBalance = 0;
+  for (const l of priorLines) {
+    const d = Number(l.debitAmount) - Number(l.creditAmount);
+    openingBalance += normal === "debit" ? d : -d;
+  }
+
+  let running = openingBalance;
   const withRunningBalance = rows.map((r) => {
     const debit = Number(r.debitAmount);
     const credit = Number(r.creditAmount);
@@ -205,5 +218,5 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
     return { ...r, debit, credit, runningBalance: running };
   });
 
-  return { account, lines: withRunningBalance };
+  return { account, openingBalance, lines: withRunningBalance };
 }

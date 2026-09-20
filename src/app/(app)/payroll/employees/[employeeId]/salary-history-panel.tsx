@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AddSalaryChangeModal } from "./add-salary-change-modal";
 
+import { D, DT } from "@/components/calendar/date-text";
 type SalaryRecord = {
   id: string;
   effectiveFrom: string;
@@ -70,7 +71,7 @@ export function SalaryHistoryPanel({
         <tbody>
           {records.map((r) => (
             <tr key={r.id} className="border-t border-gray-100">
-              <td className="px-3 py-2 whitespace-nowrap">{r.effectiveFrom}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><D value={r.effectiveFrom} /></td>
               <td className="px-3 py-2 whitespace-nowrap">{Number(r.basicSalary).toFixed(2)}</td>
               <td className="px-3 py-2 whitespace-nowrap">{CHANGE_TYPE_LABELS[r.changeType] ?? r.changeType}</td>
               <td className="px-3 py-2 whitespace-nowrap">{r.previousSalary ? Number(r.previousSalary).toFixed(2) : "—"}</td>
@@ -78,7 +79,7 @@ export function SalaryHistoryPanel({
               <td className="px-3 py-2 whitespace-nowrap">{r.changePercentage ? `${Number(r.changePercentage).toFixed(2)}%` : "—"}</td>
               <td className="px-3 py-2">{r.reason ?? "—"}</td>
               <td className="px-3 py-2">{r.notes ?? "—"}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><DT value={r.createdAt} dateOnly /></td>
               <td className="px-3 py-2 whitespace-nowrap">{r.createdByName}</td>
             </tr>
           ))}

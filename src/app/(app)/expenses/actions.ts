@@ -10,6 +10,7 @@ import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateEx
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { evaluateAmountThresholdRules } from "../compliance/actions";
 
+import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type ExpenseTaxTreatment = "taxable" | "exempt" | "zero_rated";
@@ -319,7 +320,7 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
 
   const entry = await postJournalEntry({
     tenantId: session.tenantId,
-    entryDate: new Date().toISOString().slice(0, 10),
+    entryDate: todayIso(),
     sourceType: "payment",
     sourceId: expense.id,
     referenceNumber: expense.expenseNumber,
@@ -341,7 +342,7 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
       paymentNumber,
       direction: "money_out",
       paymentType: "expense_payment",
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: todayIso(),
       partyType: expense.vendorId ? "supplier" : expense.payeeName ? "other" : "none",
       vendorId: expense.vendorId,
       partyOtherName: expense.vendorId ? null : expense.payeeName,
