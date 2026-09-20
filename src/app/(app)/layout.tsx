@@ -20,12 +20,13 @@ const NAV = [
     ],
   },
   { href: "/customers", label: "Customers" },
+  { href: "/sales", label: "Sales" },
   {
-    href: "/sales",
-    label: "Sales",
+    href: "/return",
+    label: "Return",
     children: [
-      { href: "/sales", label: "Add new" },
-      { href: "/sales/invoices", label: "Invoices" },
+      { href: "/return/sales", label: "Sales return" },
+      { href: "/return/purchase", label: "Purchase return" },
     ],
   },
   {

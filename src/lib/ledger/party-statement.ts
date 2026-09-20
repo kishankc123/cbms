@@ -35,6 +35,8 @@ export function describeLine(l: PartyLine): string {
   const kind = lineKind(l.sourceType);
   let label: string;
   if (l.sourceType === "sale") label = `Sales invoice${l.reference ? ` ${l.reference}` : ""}`;
+  else if (l.sourceType === "sales_return") label = `Debit note (sales return)${l.reference ? ` ${l.reference}` : ""}`;
+  else if (l.sourceType === "purchase_return") label = `Credit note (purchase return)${l.reference ? ` ${l.reference}` : ""}`;
   else if (l.sourceType === "purchase") label = `Purchase bill${l.reference ? ` ${l.reference}` : ""}`;
   else if (kind === "payment") label = l.sourceType === "receipt" ? "Payment received" : "Payment made";
   else if (kind === "opening") label = "Opening balance";

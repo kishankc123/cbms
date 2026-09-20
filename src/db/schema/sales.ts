@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 
@@ -57,3 +57,21 @@ export const salesInvoices = pgTable("sales_invoices", {
   status: invoiceStatusEnum("status").notNull().default("draft"),
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
 });
+
+// A sales return (issued to the customer as a debit note): goods sent back or a price
+// correction. Mirrors an invoice in shape, but reduces what the customer owes.
+export const salesReturns = pgTable("sales_returns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  customerId: uuid("customer_id").notNull().references(() => customers.id),
+  noteNumber: text("note_number").notNull(),
+  noteDate: date("note_date").notNull(),
+  lineItems: jsonb("line_items").$type<LineItem[]>().notNull().default([]),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  discountAmount: numeric("discount_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
+  taxAmount: numeric("tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  total: numeric("total", { precision: 18, scale: 2 }).notNull(),
+  status: text("status").$type<"issued" | "void">().notNull().default("issued"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("sales_returns_tenant_number").on(t.tenantId, t.noteNumber)]);

@@ -31,6 +31,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
 
   // Income
   { code: "4000", name: "Sales Revenue", category: "income", subCategory: "Revenue" },
+  { code: "4050", name: "Sales Returns", category: "income", subCategory: "Revenue" },
   { code: "4100", name: "Other Income", category: "income", subCategory: "Revenue" },
 
   // Expenses

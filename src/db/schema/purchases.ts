@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 
@@ -61,3 +61,19 @@ export const purchaseBills = pgTable("purchase_bills", {
   purchaseType: purchaseTypeEnum("purchase_type").notNull().default("credit"),
   billType: billTypeEnum("bill_type").notNull().default("no_bill"),
 });
+
+// A purchase return (credit note for the supplier): goods sent back to them. Mirrors a stockable
+// purchase invoice in shape, but reduces what we owe the supplier.
+export const purchaseReturns = pgTable("purchase_returns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  vendorId: uuid("vendor_id").notNull().references(() => vendors.id),
+  noteNumber: text("note_number").notNull(),
+  noteDate: date("note_date").notNull(),
+  lineItems: jsonb("line_items").$type<PurchaseLineItem[]>().notNull().default([]),
+  subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
+  taxAmount: numeric("tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  total: numeric("total", { precision: 18, scale: 2 }).notNull(),
+  status: text("status").$type<"issued" | "void">().notNull().default("issued"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("purchase_returns_tenant_number").on(t.tenantId, t.noteNumber)]);

@@ -106,7 +106,7 @@ export async function createPayment(input: CreatePaymentActionInput) {
   revalidatePath("/payments");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
-  revalidatePath("/sales/invoices");
+  revalidatePath("/sales");
   revalidatePath("/purchases/stockable");
   revalidatePath("/expenses");
   revalidatePath("/customers");
@@ -124,7 +124,7 @@ export async function voidPayment(paymentId: string, reason: string) {
   revalidatePath("/payments");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
-  revalidatePath("/sales/invoices");
+  revalidatePath("/sales");
   revalidatePath("/purchases/stockable");
   revalidatePath("/expenses");
   revalidatePath("/customers");
