@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { voidBill } from "./actions";
 
 import { D } from "@/components/calendar/date-text";
+import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 type Bill = {
   id: string;
@@ -11,9 +12,16 @@ type Bill = {
   vendorId: string | null;
   description: string | null;
   billDate: string;
+  dueDate?: string | null;
   total: string;
   status: string;
 };
+
+// An unpaid or part-paid bill past its due date shows as overdue. Derived, not stored, so it can't go stale.
+function shownStatus(b: Bill, today: string) {
+  const open = b.status === "open" || b.status === "partially_paid" || b.status === "draft";
+  return open && b.dueDate && b.dueDate < today ? "overdue" : b.status;
+}
 
 type SortKey = "date" | "billNumber" | "supplier" | "total" | "status";
 type SortDir = "asc" | "desc";
@@ -30,6 +38,7 @@ export function BillsTable({
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const today = todayIso();
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -71,8 +80,8 @@ export function BillsTable({
             bv = Number(b.total);
             break;
           case "status":
-            av = a.status;
-            bv = b.status;
+            av = shownStatus(a, today);
+            bv = shownStatus(b, today);
             break;
           default:
             av = vendorById.get(a.vendorId ?? "")?.name ?? a.description ?? "";
@@ -84,7 +93,7 @@ export function BillsTable({
     }
 
     return rows;
-  }, [bills, search, vendorById, sortKey, sortDir]);
+  }, [bills, search, vendorById, sortKey, sortDir, today]);
 
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
@@ -145,7 +154,7 @@ export function BillsTable({
               <td className="px-4 py-2 font-mono">{b.billNumber}</td>
               <td className="px-4 py-2">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              <td className="px-4 py-2 capitalize">{b.status.replace("_", " ")}</td>
+              <td className={`px-4 py-2 capitalize ${shownStatus(b, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(b, today).replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 {b.status !== "void" && onEdit && (
                   <button type="button" onClick={() => onEdit(b.id)} className="text-xs text-gray-600 hover:underline">

@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { journalEntries, journalLines } from "@/db/schema";
+import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
@@ -53,6 +53,22 @@ function refreshViews() {
  * journal_lines directly — this is what guarantees debits always equal credits
  * and that every posted fact is tenant-scoped.
  */
+/**
+ * Every account a posting touches must be an ACTIVE account of the same organization. Account ids often
+ * arrive from the browser, so this is checked here, in the one place all postings pass through, rather
+ * than trusting each form: it stops a crafted request from posting to another organization's account.
+ */
+export async function assertAccountsUsable(tenantId: string, accountIds: string[]) {
+  const ids = [...new Set(accountIds)];
+  const found = await db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name, isActive: accounts.isActive })
+    .from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), inArray(accounts.id, ids)));
+  if (found.length !== ids.length) throw new Error("A line refers to an account that isn't in this organization's Chart of Accounts");
+  const inactive = found.find((a) => !a.isActive);
+  if (inactive) throw new Error(`Account ${inactive.code} ${inactive.name} is inactive — reactivate it or choose another account`);
+}
+
 export async function postJournalEntry(input: PostJournalEntryInput) {
   await assertPeriodOpen(input.tenantId, input.entryDate);
 
@@ -75,6 +91,8 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
     if (d < 0 || c < 0) throw new Error("Journal line amounts cannot be negative");
     if (d > 0 && c > 0) throw new Error("A journal line cannot have both a debit and a credit");
   }
+
+  await assertAccountsUsable(input.tenantId, input.lines.map((l) => l.accountId));
 
   const posted = await db.transaction(async (tx) => {
     const [entry] = await tx

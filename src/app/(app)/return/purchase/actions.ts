@@ -10,6 +10,7 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { applyStockDelta } from "@/lib/inventory/stock";
+import { inputVatClaimable } from "@/lib/purchases/vat";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -91,8 +92,10 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
   const apId = await getOrCreateSupplierPayableAccountId(session.tenantId, input.vendorId);
   const inventory = await findControlAccount(session.tenantId, ["1200"], "Inventory");
   if (!inventory) throw new Error("No Inventory account found — add one to the Chart of Accounts first");
+  // Without a VAT registration the VAT on the original purchase was part of the cost, so it comes back off Inventory.
+  const claimable = await inputVatClaimable(session.tenantId);
   let taxReceivableId: string | null = null;
-  if (taxAmount > 0) {
+  if (taxAmount > 0 && claimable) {
     const tax = await findControlAccount(session.tenantId, ["1300"], "Tax Receivable");
     if (!tax) throw new Error("No Tax Receivable account found — add one to the Chart of Accounts first");
     taxReceivableId = tax.id;
@@ -115,7 +118,7 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
   try {
     const lines: PostLineInput[] = [
       { accountId: apId, debitAmount: total, description: `Credit note ${noteNumber}` },
-      { accountId: inventory.id, creditAmount: subtotal, description: `Purchase return ${noteNumber}` },
+      { accountId: inventory.id, creditAmount: taxReceivableId ? subtotal : total, description: `Purchase return ${noteNumber}` },
     ];
     if (taxAmount > 0 && taxReceivableId) lines.push({ accountId: taxReceivableId, creditAmount: taxAmount, description: `Tax on purchase return ${noteNumber}` });
     await postJournalEntry({

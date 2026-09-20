@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, items, journalEntries, journalLines, purchaseReturns, vendors } from "@/db/schema";
+import { accounts, items, journalEntries, journalLines, purchaseReturns, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -37,6 +37,7 @@ afterAll(async () => {
 
 describe("purchase returns (credit notes to suppliers)", () => {
   it("reduces what we owe, reverses input VAT and takes stock out; void undoes it all", async () => {
+    await db.insert(tenantTaxRegistrations).values({ tenantId: org.tenantId, taxTypeKey: "vat", status: "active" });
     const [vendor] = await db.insert(vendors).values({ tenantId: org.tenantId, name: "Return Supplier" }).returning();
     const apId = await getOrCreateSupplierPayableAccountId(org.tenantId, vendor.id);
     const inventory = await acct("1200");

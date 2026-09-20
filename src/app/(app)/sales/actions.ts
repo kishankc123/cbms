@@ -25,6 +25,7 @@ import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { salesVatRate } from "@/lib/sales/vat";
+import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -277,6 +278,7 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
 
   // Refuse up front if any invoice date sits in a locked period, before anything is saved.
   for (const date of new Set(validRows.map((r) => r.invoiceDate))) await assertPeriodOpen(session.tenantId, date);
+  await assertCashBankAccounts(session.tenantId, validRows.flatMap((r) => r.payments.filter((p) => p.amount > 0).map((p) => p.accountId)));
 
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
@@ -431,6 +433,7 @@ export async function voidInvoice(formData: FormData) {
     .limit(1);
   if (!invoice) throw new Error("Invoice not found");
   if (invoice.status === "void") throw new Error("Invoice is already void");
+  await assertNoLaterPayments(session.tenantId, "sales_invoice", invoiceId, "invoice");
 
   await reverseActiveEntriesForInvoice(
     session.tenantId,
@@ -566,6 +569,8 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   // checked before anything is reversed so a locked period cannot leave the invoice half-edited.
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertPeriodOpen(session.tenantId, todayIso());
+  await assertNoLaterPayments(session.tenantId, "sales_invoice", input.invoiceId, "invoice");
+  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
   const vatRate = await salesVatRate(session.tenantId);
 
@@ -735,6 +740,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   await assertInvoiceNumberFree(session.tenantId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
+  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
   const vatRate = await salesVatRate(session.tenantId);
 
