@@ -15,7 +15,7 @@ vi.mock("@/lib/session", () => ({
   can: () => true,
 }));
 
-const { createPurchaseInvoice, updatePurchaseInvoice, voidBill, createCashPurchaseBatch } = await import("./actions");
+const { createPurchaseInvoice, updatePurchaseInvoice, voidBill, createCashPurchase, updateCashPurchase, getCashPurchaseForEdit } = await import("./actions");
 
 const acct = async (tenantId: string, code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, code))))[0];
 async function balance(code: string) {
@@ -125,23 +125,68 @@ describe("stockable purchases", () => {
 });
 
 describe("consumable purchases", () => {
-  const row = (over: Record<string, unknown> = {}) => ({ billNumber: "", billDate: "2026-09-08", vendorId: "", categoryId, billType: "no_bill" as const, description: "Paper", amount: 100, payments: [{ accountId: cashId, amount: 100 }], ...over });
+  const purchase = (over: Record<string, unknown> = {}) => ({
+    billNumber: "",
+    billDate: "2026-09-08",
+    vendorId: "",
+    billType: "no_bill" as const,
+    lines: [{ description: "Paper", categoryId, rate: 50, quantity: 2, discount: 0 }],
+    payments: [{ accountId: cashId, amount: 100 }],
+    ...over,
+  });
 
   it("refuses payments that don't add up to the bill, and saves nothing", async () => {
     const before = (await bills()).length;
-    await expect(createCashPurchaseBatch({ rows: [row({ payments: [{ accountId: cashId, amount: 90 }] })] })).rejects.toThrow(/must equal the bill total/);
+    await expect(createCashPurchase(purchase({ payments: [{ accountId: cashId, amount: 90 }] }))).rejects.toThrow(/must equal the bill total/);
     expect((await bills()).length).toBe(before);
   });
 
   it("refuses a category that isn't one of this organization's purchase categories", async () => {
     const foreign = await acct(other.tenantId, "5000");
-    await expect(createCashPurchaseBatch({ rows: [row({ categoryId: foreign.id })] })).rejects.toThrow(/valid purchase category/);
+    await expect(createCashPurchase(purchase({ lines: [{ description: "x", categoryId: foreign.id, rate: 50, quantity: 2, discount: 0 }] }))).rejects.toThrow(/valid purchase category/);
   });
 
   it("numbers bills without a supplier number without clashing", async () => {
-    await createCashPurchaseBatch({ rows: [row(), row()] });
+    await createCashPurchase(purchase());
+    await createCashPurchase(purchase());
     const autos = (await bills()).filter((b) => b.billNumber.startsWith("AUTO-")).map((b) => b.billNumber);
     expect(new Set(autos).size).toBe(autos.length);
     expect(autos.length).toBe(2);
+  });
+
+  it("one bill can carry several lines booked to different categories, and is editable with its lines", async () => {
+    const cogs = await acct(org.tenantId, "5000");
+    const second = (await createSubAccount(org.tenantId, cogs, "Cleaning")).id;
+    await createCashPurchase(
+      purchase({
+        billNumber: "MULTI-1",
+        vendorId: vendorA,
+        billType: "vat" as const,
+        billAvailable: false,
+        lines: [
+          { description: "Paper", categoryId, rate: 100, quantity: 1, discount: 0 },
+          { description: "Mop", categoryId: second, rate: 200, quantity: 1, discount: 0 },
+        ],
+        payments: [{ accountId: cashId, amount: 339 }], // 300 + 13% VAT
+      })
+    );
+    const bill = (await bills()).find((b) => b.billNumber === "MULTI-1")!;
+    expect(Number(bill.total)).toBe(339);
+    expect(bill.description).toBe("Paper, Mop");
+    expect(bill.billAvailable).toBe(false);
+    // each category got its own line (VAT is registered in this org by now, so it is claimed separately)
+    const edit = await getCashPurchaseForEdit(bill.id);
+    expect(edit.lines.map((l) => [l.description, l.categoryId])).toEqual([["Paper", categoryId], ["Mop", second]]);
+
+    await updateCashPurchase({
+      billId: bill.id,
+      billNumber: "MULTI-1",
+      billDate: "2026-09-08",
+      vendorId: vendorA,
+      billType: "no_bill",
+      lines: [{ description: "Mop", categoryId: second, rate: 200, quantity: 1, discount: 0 }],
+      payments: [{ accountId: cashId, amount: 200 }],
+    });
+    expect(Number((await bills()).find((b) => b.id === bill.id)!.total)).toBe(200);
   });
 });

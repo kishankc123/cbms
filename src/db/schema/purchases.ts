@@ -23,6 +23,8 @@ export const billTypeEnum = pgEnum("bill_type", ["vat", "pan", "estimate", "chal
 // item master when picked from the dropdown; left null for a free-typed line.
 export type PurchaseLineItem = {
   itemId: string | null;
+  // Set on Consumable purchase lines: the purchase category (Cost of Goods Sold sub-group) the line is booked to.
+  categoryId?: string | null;
   description: string;
   rate: number;
   quantity: number;
