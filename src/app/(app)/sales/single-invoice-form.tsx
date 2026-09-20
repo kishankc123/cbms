@@ -60,8 +60,8 @@ const inputCls =
 const inputErrCls =
   "w-full rounded border border-red-400 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-400";
 const cellInputCls =
-  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm text-right focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
-const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-right text-gray-600";
+  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm text-center focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
+const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center text-gray-600";
 
 // Same shape as the Stockable purchase invoice form (header + item-line
 // grid + Record Pay + Save), mirrored on the sales side — one customer
@@ -270,16 +270,16 @@ export function SingleInvoiceForm({
 
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+            <thead className="bg-gray-50 text-center text-gray-500">
               <tr>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Item</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Rate</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Qty</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Gross</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Discount</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Taxable</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">VAT</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Total</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Item</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Rate</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap"></th>
               </tr>
             </thead>
@@ -288,11 +288,11 @@ export function SingleInvoiceForm({
                 const c = computedLines[i];
                 return (
                   <tr key={i} className="border-t border-gray-100">
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <select
                         value={line.itemId}
                         onChange={(e) => updateLine(i, "itemId", e.target.value)}
-                        className="w-32 rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
+                        className="w-48 rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
                       >
                         <option value="">Custom</option>
                         {items.map((it) => (
@@ -302,7 +302,7 @@ export function SingleInvoiceForm({
                         ))}
                       </select>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -312,7 +312,7 @@ export function SingleInvoiceForm({
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -322,10 +322,10 @@ export function SingleInvoiceForm({
                         className={`w-16 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -335,14 +335,14 @@ export function SingleInvoiceForm({
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.vat)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.vat)}</div>
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 rounded bg-gray-50 px-1.5 py-1 text-sm text-right font-medium text-gray-900`}>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 rounded bg-gray-50 px-1.5 py-1 text-sm text-center font-medium text-gray-900`}>
                         {fmt(c.total)}
                       </div>
                     </td>
