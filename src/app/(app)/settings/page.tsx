@@ -63,13 +63,22 @@ export default async function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Tax registration number</label>
+              <label className="block text-xs text-gray-500 mb-1">Company registration number</label>
               <input
-                name="taxRegistrationNumber"
-                defaultValue={tenant.taxRegistrationNumber ?? ""}
+                name="companyRegistrationNumber"
+                defaultValue={tenant.companyRegistrationNumber ?? ""}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">PAN / VAT number</label>
+            <input
+              name="panVatNumber"
+              defaultValue={tenant.panVatNumber ?? ""}
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            />
           </div>
 
           <button

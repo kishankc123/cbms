@@ -54,6 +54,7 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
         supplier={{
           id: supplier.id,
           name: supplier.name,
+          panNumber: supplier.panNumber ?? "",
           phone: contactInfo?.phone ?? "",
           details: contactInfo?.details ?? "",
           openingBalance,

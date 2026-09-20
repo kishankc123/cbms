@@ -31,10 +31,26 @@ export const tenants = pgTable("tenants", {
   companyName: text("company_name").notNull(),
   industry: text("industry"),
   country: text("country"),
+  // Compliance framework: which country configuration (compliance_countries.code)
+  // and entity type (compliance_entity_types.key) decide this organization's
+  // requirements. Existing organizations are Nepal; entity type is set on Company Details.
+  countryCode: text("country_code").notNull().default("NP"),
+  entityType: text("entity_type"),
   address: text("address"),
   phone: text("phone"),
   email: text("email"),
+  // DEPRECATED: replaced by panVatNumber below (in Nepal the PAN is the VAT number). Kept only so
+  // existing data survives; nothing reads or writes it any more.
   vatRegistrationNumber: text("vat_registration_number"),
+  // Company Details (Compliance). Legal name is companyName; the business address is `address`.
+  tradingName: text("trading_name"),
+  companyRegistrationNumber: text("company_registration_number"),
+  registrationDate: date("registration_date"),
+  registeredOffice: text("registered_office"),
+  // The organization's PAN / VAT number — one number, one place.
+  panVatNumber: text("pan_vat_number"),
+  companyStatus: text("company_status").notNull().default("active"),
+  companyStatusNote: text("company_status_note"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
   // Nepali (Bikram Sambat) fiscal year, e.g. "2081/82", plus the AD calendar
   // dates it corresponds to — kept separate from fiscalYearStartMonth above,
@@ -46,6 +62,7 @@ export const tenants = pgTable("tenants", {
   // How dates are shown and entered for this organization: "AD" or "BS".
   // Dates are ALWAYS stored as AD (YYYY-MM-DD) regardless of this setting.
   calendarSystem: text("calendar_system").notNull().default("AD"),
+  // DEPRECATED: held the PAN before panVatNumber / companyRegistrationNumber existed. Not used any more.
   taxRegistrationNumber: text("tax_registration_number"),
   vatRate: numeric("vat_rate", { precision: 5, scale: 2 }).notNull().default("13"),
   // Default TDS (Tax Deducted at Source) withholding rate applied to

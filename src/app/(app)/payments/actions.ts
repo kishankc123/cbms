@@ -16,7 +16,9 @@ import {
   expenses,
   journalLines,
   bankReconciliationMatchJournalLines,
+  complianceObligations,
 } from "@/db/schema";
+import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
@@ -308,6 +310,17 @@ export async function getPaymentDetail(paymentId: string) {
   ]);
   const targetLabelById = new Map<string, { label: string; total: number; amountPaid: number }>();
   for (const r of [...invoiceRows, ...billRows, ...expenseRows]) targetLabelById.set(r.id, { label: r.label, total: Number(r.total), amountPaid: Number(r.amountPaid) });
+
+  // Tax compliance items the payment settled: shown by name and period; the balance is worked out live.
+  const taxTargetIds = allocations.filter((a) => a.targetType === "tax_obligation").map((a) => a.targetId);
+  if (taxTargetIds.length > 0) {
+    const obs = await db.select().from(complianceObligations).where(and(eq(complianceObligations.tenantId, session.tenantId), inArray(complianceObligations.id, taxTargetIds)));
+    const amounts = await obligationAmounts(session.tenantId, obs);
+    for (const o of obs) {
+      const a = amounts.get(o.id)!;
+      targetLabelById.set(o.id, { label: `${o.name} — ${o.periodLabel}`, total: a.due, amountPaid: a.paid });
+    }
+  }
 
   const allocationDetails = allocations.map((a) => {
     const target = targetLabelById.get(a.targetId);

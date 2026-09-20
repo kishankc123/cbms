@@ -7,29 +7,24 @@ import { tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { INVOICE_NUMBER_FORMATS } from "@/lib/invoice-number";
 import { logAuditEvent } from "@/lib/audit";
+import { saveCompanyProfile } from "@/lib/company-profile";
 
 export async function updateCompanyDetails(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "settings", "edit")) throw new Error("Not permitted");
 
-  const companyName = String(formData.get("companyName") ?? "").trim();
-  if (!companyName) throw new Error("Company name is required");
-  const industry = String(formData.get("industry") ?? "").trim();
-  const baseCurrency = String(formData.get("baseCurrency") ?? "").trim() || "NPR";
-  const taxRegistrationNumber = String(formData.get("taxRegistrationNumber") ?? "").trim();
-
-  await db
-    .update(tenants)
-    .set({
-      companyName,
-      industry: industry || null,
-      baseCurrency,
-      taxRegistrationNumber: taxRegistrationNumber || null,
-    })
-    .where(eq(tenants.id, session.tenantId));
+  // One shared writer, so Settings and Compliance > Company Details can never disagree.
+  await saveCompanyProfile(session.tenantId, session.userId, {
+    companyName: String(formData.get("companyName") ?? ""),
+    industry: String(formData.get("industry") ?? ""),
+    baseCurrency: String(formData.get("baseCurrency") ?? "").trim() || "NPR",
+    companyRegistrationNumber: String(formData.get("companyRegistrationNumber") ?? ""),
+    panVatNumber: String(formData.get("panVatNumber") ?? ""),
+  });
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/compliance");
 }
 
 export async function updateOtherSettings(formData: FormData) {

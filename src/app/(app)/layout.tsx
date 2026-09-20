@@ -75,10 +75,16 @@ const NAV = [
   },
   {
     href: "/compliance",
-    label: "Compliance & Controls",
+    label: "Compliance",
     children: [
-      { href: "/compliance", label: "Dashboard" },
+      { href: "/compliance", label: "Overview" },
+      { href: "/compliance/company", label: "Company Details" },
+      { href: "/compliance/ownership", label: "Ownership & Capital" },
+      { href: "/compliance/registrations", label: "Tax Registrations" },
+      { href: "/compliance/tax", label: "Tax Compliance" },
+      { href: "/compliance/statutory", label: "Statutory Compliance" },
       { href: "/compliance/calendar", label: "Compliance Calendar" },
+      { href: "/compliance/history", label: "Compliance History" },
       { href: "/compliance/reports", label: "Reports" },
       { href: "/compliance/rules", label: "Rules & Policies" },
       { href: "/compliance/exceptions", label: "Exception Centre" },

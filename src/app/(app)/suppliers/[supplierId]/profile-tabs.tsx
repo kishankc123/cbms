@@ -18,7 +18,7 @@ export function ProfileTabs({
   outstanding,
   fiscalYearStartDate,
 }: {
-  supplier: { id: string; name: string; phone: string; details: string; openingBalance: number };
+  supplier: { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
   purchases: number;
   paid: number;
   outstanding: number;

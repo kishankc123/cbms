@@ -49,7 +49,7 @@ export const paymentStatusEnum = pgEnum("payment_status", ["draft", "posted", "v
 // and every type with no other home) — fully voidable here.
 export const paymentOriginEnum = pgEnum("payment_origin", ["standalone", "embedded"]);
 
-export const paymentAllocationTargetEnum = pgEnum("payment_allocation_target", ["sales_invoice", "purchase_bill", "expense"]);
+export const paymentAllocationTargetEnum = pgEnum("payment_allocation_target", ["sales_invoice", "purchase_bill", "expense", "tax_obligation"]);
 
 export const payments = pgTable("payments_ledger", {
   id: uuid("id").primaryKey().defaultRandom(),

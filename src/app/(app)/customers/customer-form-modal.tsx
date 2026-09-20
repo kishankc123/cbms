@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 type Initial = {
   name: string;
+  panNumber: string;
   phone: string;
   details: string;
   openingBalance: number;
@@ -65,6 +66,14 @@ export function CustomerFormModal({
                   required
                   autoFocus
                   defaultValue={initial?.name}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">PAN / VAT number</label>
+                <input
+                  name="panNumber"
+                  defaultValue={initial?.panNumber}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>

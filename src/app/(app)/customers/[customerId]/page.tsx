@@ -53,6 +53,7 @@ export default async function CustomerProfilePage({ params }: { params: Promise<
         customer={{
           id: customer.id,
           name: customer.name,
+          panNumber: customer.panNumber ?? "",
           phone: customer.contactInfo?.phone ?? "",
           details: customer.contactInfo?.details ?? "",
           openingBalance,

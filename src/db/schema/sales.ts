@@ -21,6 +21,7 @@ export const customers = pgTable("customers", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  panNumber: text("pan_number"),
   contactInfo: jsonb("contact_info").$type<ContactInfo>(),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
   // This customer's own sub-account under Accounts Receivable — every sale,

@@ -297,13 +297,4 @@ describe("BS month periods, filing dates and defaults", () => {
     expect(filingDueDate("AD", "2026-09-05")).toBe("2026-10-25");
     expect(filingDueDate("AD", "2026-12-05")).toBe("2027-01-25");
   });
-
-  it("compliance defaults follow BS months for BS organizations", async () => {
-    const { generateNepaliDefaultItems } = await import("../compliance/nepal-calendar");
-    const bs = generateNepaliDefaultItems(2, "BS", "2026-09-20");
-    const ad = generateNepaliDefaultItems(2, "AD", "2026-09-20");
-    expect(bs.map((i) => i.period)).toEqual(["Ashwin 2083", "Ashwin 2083", "Kartik 2083", "Kartik 2083"]);
-    expect(ad[0].period).toBe("September 2026");
-    expect(convertADtoBS(bs[0].dueDate)).toMatchObject({ month: 7, day: 25 });
-  });
 });

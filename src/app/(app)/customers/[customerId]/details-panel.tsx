@@ -4,7 +4,7 @@ import { useState } from "react";
 import { updateCustomer, deleteCustomer } from "../actions";
 import { CustomerFormModal } from "../customer-form-modal";
 
-type Customer = { id: string; name: string; phone: string; details: string; openingBalance: number };
+type Customer = { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -63,6 +63,7 @@ export function DetailsPanel({
 
       <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-white p-5">
         <Field label="Name" value={customer.name} />
+        <Field label="PAN / VAT Number" value={customer.panNumber} />
         <Field label="Contact Number" value={customer.phone} />
         <Field label="Address" value={customer.details} />
         <Field label="Opening Balance" value={`${fmt(customer.openingBalance)} ${drCr(customer.openingBalance)}`} />

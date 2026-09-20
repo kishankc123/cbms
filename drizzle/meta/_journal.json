@@ -239,6 +239,48 @@
       "when": 1789882475480,
       "tag": "0033_fixed_cardiac",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789885684558,
+      "tag": "0034_rainy_iron_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789886976264,
+      "tag": "0035_moaning_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789887151894,
+      "tag": "0036_wild_jack_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789887304314,
+      "tag": "0037_sturdy_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789888662259,
+      "tag": "0038_stiff_ego",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789890460402,
+      "tag": "0039_pale_namorita",
+      "breakpoints": true
     }
   ]
 }

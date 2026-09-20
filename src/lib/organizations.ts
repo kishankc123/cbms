@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { tenants, accounts, memberships, subscriptions } from "@/db/schema";
 import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-accounts";
 import { logAuditEvent } from "@/lib/audit";
+import { ensurePanRegistration } from "@/lib/compliance/registrations";
 
 export type BusinessInfo = {
   name: string;
@@ -11,8 +12,9 @@ export type BusinessInfo = {
   address?: string;
   phone?: string;
   email?: string;
+  /** PAN / VAT number — one number. */
   panNumber?: string;
-  vatNumber?: string;
+  companyRegistrationNumber?: string;
 };
 
 // CL-000001, CL-000002... — a human-readable support reference only.
@@ -41,8 +43,8 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
             address: info.address?.trim() || null,
             phone: info.phone?.trim() || null,
             email: info.email?.trim().toLowerCase() || null,
-            taxRegistrationNumber: info.panNumber?.trim() || null,
-            vatRegistrationNumber: info.vatNumber?.trim() || null,
+            panVatNumber: info.panNumber?.trim() || null,
+            companyRegistrationNumber: info.companyRegistrationNumber?.trim() || null,
             baseCurrency: "NPR",
           })
           .returning();
@@ -61,6 +63,7 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
         return t;
       });
 
+      if (tenant.panVatNumber) await ensurePanRegistration(tenant.id);
       await logAuditEvent({ tenantId: tenant.id, userId: ownerUserId, action: "organization_created", entityType: "organization", entityId: tenant.id, after: { name: tenant.companyName, clientCode } });
       return tenant;
     } catch (e) {

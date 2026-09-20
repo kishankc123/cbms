@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   payments,
@@ -10,6 +10,7 @@ import {
   salesInvoices,
   purchaseBills,
   expenses,
+  complianceObligations,
   type paymentTypeEnum,
   type paymentDirectionEnum,
   type paymentPartyTypeEnum,
@@ -18,6 +19,8 @@ import {
 } from "@/db/schema";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
 import { findControlAccount } from "./control-accounts";
+import { ensureTaxPayableAccount } from "@/lib/compliance/tax-accounts";
+import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/tax-amounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getOrCreateExpensePayableAccount } from "./expense-accounts";
 import {
@@ -172,6 +175,13 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [primaryLine, { accountId: loans.id, creditAmount: amount, description: label }];
     }
     case "capital_introduced": {
+      // Capital paid in by a specific shareholder is credited to THEIR capital sub-account
+      // (chosen as the classification account); otherwise it goes to the capital group.
+      if (input.categoryAccountId) {
+        const [target] = await db.select().from(accounts).where(and(eq(accounts.id, input.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
+        if (!target || target.category !== "equity") throw new Error("Capital must be credited to an equity account");
+        return [primaryLine, { accountId: target.id, creditAmount: amount, description: label }];
+      }
       const capital = await findControlAccount(tenantId, ["3000"], "Owner's Capital");
       if (!capital) throw new Error("No Owner's Capital account found — add one to the Chart of Accounts first");
       return [primaryLine, { accountId: capital.id, creditAmount: amount, description: label }];
@@ -219,9 +229,30 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [{ accountId: expensePayable.id, debitAmount: amount, description: label }, primaryLine];
     }
     case "tax_payment": {
-      const taxAccountId = input.categoryAccountId ?? (await findControlAccount(tenantId, ["2100"], "Tax Payable"))?.id;
-      if (!taxAccountId) throw new Error("Select which tax liability account this payment settles");
-      return [{ accountId: taxAccountId, debitAmount: amount, description: label }, primaryLine];
+      const lines: PostLineInput[] = [];
+      // Payments linked to compliance items settle each item's own tax payable account
+      // (VAT, TDS, ...); anything not linked goes to the chosen (or default) tax account.
+      const linked = allocations.filter((a) => a.targetType === "tax_obligation");
+      if (linked.length > 0) {
+        const obs = await db.select().from(complianceObligations).where(and(eq(complianceObligations.tenantId, tenantId), inArray(complianceObligations.id, linked.map((a) => a.targetId))));
+        const typeById = new Map(obs.map((o) => [o.id, o.taxTypeKey]));
+        const perAccount = new Map<string, number>();
+        for (const a of linked) {
+          const taxTypeKey = typeById.get(a.targetId);
+          const account = taxTypeKey ? await ensureTaxPayableAccount(tenantId, taxTypeKey) : null;
+          if (!account) throw new Error("This compliance item's tax type has no payable account configured");
+          perAccount.set(account.id, round2((perAccount.get(account.id) ?? 0) + a.allocatedAmount));
+        }
+        for (const [accountId, value] of perAccount) lines.push({ accountId, debitAmount: value, description: label });
+      }
+      const rest = round2(amount - round2(linked.reduce((s, a) => s + a.allocatedAmount, 0)));
+      if (rest > 0) {
+        const taxAccountId = input.categoryAccountId ?? (await findControlAccount(tenantId, ["2100"], "Tax Payable"))?.id;
+        if (!taxAccountId) throw new Error("Select which tax liability account this payment settles");
+        lines.push({ accountId: taxAccountId, debitAmount: rest, description: label });
+      }
+      lines.push(primaryLine);
+      return lines;
     }
     case "loan_repayment": {
       const loans = await findControlAccount(tenantId, ["2200"], "Loans Payable");
@@ -261,6 +292,28 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
   }
 }
 
+// Checked before anything is posted: a payment may only settle tax compliance items that
+// belong to this organization and are still owed, and never more than their balance.
+async function validateTaxAllocations(tenantId: string, input: CreatePaymentInput) {
+  const linked = (input.allocations ?? []).filter((a) => a.targetType === "tax_obligation");
+  if (linked.length === 0) return;
+  if (input.paymentType !== "tax_payment") throw new Error("Only a tax payment can settle a compliance item.");
+
+  const wanted = new Map<string, number>();
+  for (const a of linked) wanted.set(a.targetId, round2((wanted.get(a.targetId) ?? 0) + a.allocatedAmount));
+
+  const obs = await db.select().from(complianceObligations).where(and(eq(complianceObligations.tenantId, tenantId), inArray(complianceObligations.id, [...wanted.keys()])));
+  const amounts = await obligationAmounts(tenantId, obs);
+  for (const [id, value] of wanted) {
+    const ob = obs.find((o) => o.id === id);
+    if (!ob) throw new Error("Compliance item not found");
+    if (ob.categoryKey !== "tax") throw new Error(`"${ob.name}" is not a tax item`);
+    if (ob.status === "not_applicable") throw new Error(`"${ob.name}" is marked not applicable`);
+    const balance = amounts.get(id)!.balance;
+    if (value > balance + 0.005) throw new Error(`The allocation exceeds the balance of ${ob.name} (${ob.periodLabel}): ${balance.toFixed(2)}`);
+  }
+}
+
 function validateInput(input: CreatePaymentInput) {
   if (!(input.amount > 0)) throw new Error("Amount must be greater than zero.");
   if (!input.paymentDate) throw new Error("Payment date is required.");
@@ -296,7 +349,9 @@ function validateInput(input: CreatePaymentInput) {
 }
 
 async function applyAllocationToTarget(tenantId: string, allocation: AllocationInput) {
-  if (allocation.targetType === "sales_invoice") {
+  if (allocation.targetType === "tax_obligation") {
+    await syncObligationFromPayments(tenantId, allocation.targetId);
+  } else if (allocation.targetType === "sales_invoice") {
     const [invoice] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.id, allocation.targetId), eq(salesInvoices.tenantId, tenantId))).limit(1);
     if (!invoice) throw new Error("Invoice not found");
     if (invoice.status === "void") throw new Error("Cannot allocate against a cancelled invoice");
@@ -326,9 +381,12 @@ async function applyAllocationToTarget(tenantId: string, allocation: AllocationI
   }
 }
 
-async function revertAllocationOnTarget(tenantId: string, allocation: { targetType: PaymentAllocationTarget; targetId: string; allocatedAmount: string }) {
+async function revertAllocationOnTarget(tenantId: string, allocation: { targetType: PaymentAllocationTarget; targetId: string; allocatedAmount: string; paymentId?: string }) {
   const amount = Number(allocation.allocatedAmount);
-  if (allocation.targetType === "sales_invoice") {
+  if (allocation.targetType === "tax_obligation") {
+    // The payment is not marked voided yet, so leave it out of the paid total explicitly.
+    await syncObligationFromPayments(tenantId, allocation.targetId, { excludePaymentId: allocation.paymentId });
+  } else if (allocation.targetType === "sales_invoice") {
     const [invoice] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.id, allocation.targetId), eq(salesInvoices.tenantId, tenantId))).limit(1);
     if (!invoice) return;
     const newPaid = round2(Math.max(Number(invoice.amountPaid) - amount, 0));
@@ -368,6 +426,7 @@ export async function createPayment(
   input: CreatePaymentInput
 ): Promise<CreatePaymentResult> {
   validateInput(input);
+  await validateTaxAllocations(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
 

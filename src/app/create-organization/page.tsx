@@ -7,7 +7,7 @@ import { createAdditionalOrganization } from "../select-organization/actions";
 const inputCls = "w-full rounded border border-gray-300 px-3 py-2 text-sm";
 
 export default function CreateOrganizationPage() {
-  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", vatNumber: "" });
+  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -44,8 +44,8 @@ export default function CreateOrganizationPage() {
           {f("email", "Business email", "email")}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {f("panNumber", "PAN / Tax reg. no.")}
-          {f("vatNumber", "VAT reg. no.")}
+          {f("panNumber", "PAN / VAT number")}
+          {f("companyRegistrationNumber", "Company registration no.")}
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex gap-2">

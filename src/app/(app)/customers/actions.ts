@@ -23,6 +23,7 @@ export async function createCustomer(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Customer name is required");
+  const panNumber = String(formData.get("panNumber") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -32,6 +33,7 @@ export async function createCustomer(formData: FormData) {
     .values({
       tenantId: session.tenantId,
       name,
+      panNumber: panNumber || null,
       contactInfo: {
         phone: phone || undefined,
         details: details || undefined,
@@ -60,6 +62,7 @@ export async function updateCustomer(formData: FormData) {
   const id = String(formData.get("customerId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) throw new Error("Customer name is required");
+  const panNumber = String(formData.get("panNumber") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -75,6 +78,7 @@ export async function updateCustomer(formData: FormData) {
     .update(customers)
     .set({
       name,
+      panNumber: panNumber || null,
       contactInfo: {
         phone: phone || undefined,
         details: details || undefined,

@@ -15,7 +15,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1);
-  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", vatNumber: "" });
+  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
   const [a, setA] = useState({ fullName: "", email: "", mobile: "", password: "", confirmPassword: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -76,11 +76,11 @@ export default function RegisterPage() {
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="PAN / Tax reg. no.">
+              <Field label="PAN / VAT number">
                 <input className={inputCls} value={b.panNumber} onChange={(e) => setB({ ...b, panNumber: e.target.value })} />
               </Field>
-              <Field label="VAT reg. no.">
-                <input className={inputCls} value={b.vatNumber} onChange={(e) => setB({ ...b, vatNumber: e.target.value })} />
+              <Field label="Company registration no.">
+                <input className={inputCls} value={b.companyRegistrationNumber} onChange={(e) => setB({ ...b, companyRegistrationNumber: e.target.value })} />
               </Field>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
