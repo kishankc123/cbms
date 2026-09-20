@@ -5,6 +5,7 @@ import { unstable_update } from "@/lib/auth";
 import { requireUserSession } from "@/lib/session";
 import { hasActiveMembership, listActiveMemberships } from "@/lib/memberships";
 import { createOrganization, type BusinessInfo } from "@/lib/organizations";
+import { panError } from "@/lib/pan";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAuditEvent } from "@/lib/audit";
 
@@ -30,6 +31,8 @@ export async function createAdditionalOrganization(info: BusinessInfo): Promise<
   const user = await requireUserSession();
   if (!rateLimit(`create-org:${user.id}`, 5, 60 * 60 * 1000)) return { ok: false, error: "Too many attempts. Please try again later." };
   if (!info.name.trim()) return { ok: false, error: "Business name is required." };
+  const panProblem = panError(info.panNumber, "PAN / VAT number");
+  if (panProblem) return { ok: false, error: panProblem };
 
   const tenant = await createOrganization(info, user.id);
   await unstable_update({ activeTenantId: tenant.id } as never);

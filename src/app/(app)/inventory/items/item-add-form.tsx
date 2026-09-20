@@ -2,14 +2,28 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createItem } from "./actions";
+import { createItem, type CreatedItem } from "./actions";
 import { InfoDialog } from "../info-dialog";
 
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
 
-export function ItemAddForm({ units, groups, categories }: { units: Unit[]; groups: Group[]; categories: Category[] }) {
+export function ItemAddForm({
+  units,
+  groups,
+  categories,
+  onCreated,
+  embedded,
+}: {
+  units: Unit[];
+  groups: Group[];
+  categories: Category[];
+  /** Called with the saved item (used when the form is opened from a sales/purchase screen). */
+  onCreated?: (item: CreatedItem) => void;
+  /** Inside a dialog: no card border, and no separate "created" message. */
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [unitId, setUnitId] = useState("");
@@ -42,14 +56,15 @@ export function ItemAddForm({ units, groups, categories }: { units: Unit[]; grou
     setSaving(true);
     try {
       const savedName = name.trim();
-      await createItem({ name, unitId, categoryId, purchasePrice: purchase, sellingPrice: selling });
+      const created = await createItem({ name, unitId, categoryId, purchasePrice: purchase, sellingPrice: selling });
       setName("");
       setUnitId("");
       setGroupId("");
       setCategoryId("");
       setPurchasePrice("");
       setSellingPrice("");
-      setCreatedName(savedName);
+      if (onCreated) onCreated(created);
+      else setCreatedName(savedName);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
@@ -59,7 +74,7 @@ export function ItemAddForm({ units, groups, categories }: { units: Unit[]; grou
   }
 
   return (
-    <div className="max-w-xl space-y-4 rounded-lg border border-gray-200 bg-white p-5">
+    <div className={embedded ? "space-y-4" : "max-w-xl space-y-4 rounded-lg border border-gray-200 bg-white p-5"}>
       <div>
         <label className="block text-xs text-gray-500 mb-1">Name</label>
         <input

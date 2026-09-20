@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { panError } from "@/lib/pan";
 
 type Initial = {
   name: string;
@@ -16,14 +17,44 @@ export function SupplierFormModal({
   supplierId,
   initial,
   trigger,
+  open: openProp,
+  onOpenChange,
+  onCreated,
 }: {
   title: string;
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => unknown;
   supplierId?: string;
   initial?: Initial;
-  trigger: (open: () => void) => ReactNode;
+  trigger?: (open: () => void) => ReactNode;
+  /** Controlled mode (used by the "+ Add new" inside a dropdown): the parent decides when it is open. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Called with the saved record when a new one is created (so a form can fill the field with it). */
+  onCreated?: (record: { id: string; name: string }) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = openProp ?? innerOpen;
+  const setOpen = (v: boolean) => (openProp === undefined ? setInnerOpen(v) : onOpenChange?.(v));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const panProblem = panError(data.get("panNumber"), "PAN / VAT number");
+    if (panProblem) return setError(panProblem);
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await action(data);
+      setOpen(false);
+      if (onCreated && result && typeof result === "object" && "id" in result && "name" in result) onCreated(result as { id: string; name: string });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
   const [drCr, setDrCr] = useState<"DR" | "CR">(initial && initial.openingBalance < 0 ? "DR" : "CR");
 
   useEffect(() => {
@@ -37,7 +68,7 @@ export function SupplierFormModal({
 
   return (
     <>
-      {trigger(() => setOpen(true))}
+      {trigger?.(() => setOpen(true))}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -56,7 +87,7 @@ export function SupplierFormModal({
               </button>
             </div>
 
-            <form action={action} onSubmit={() => setOpen(false)} className="space-y-3">
+            <form onSubmit={submit} className="space-y-3">
               {supplierId && <input type="hidden" name="supplierId" value={supplierId} />}
 
               <div>
@@ -70,9 +101,15 @@ export function SupplierFormModal({
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">PAN / VAT number</label>
+                <label className="block text-xs text-gray-500 mb-1">PAN / VAT number *</label>
                 <input
                   name="panNumber"
+                  required
+                  inputMode="numeric"
+                  maxLength={9}
+                  pattern="[0-9]{9}"
+                  title="Exactly 9 digits"
+                  placeholder="9 digits"
                   defaultValue={initial?.panNumber}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />
@@ -124,6 +161,7 @@ export function SupplierFormModal({
                 </div>
               </div>
 
+              {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -134,9 +172,10 @@ export function SupplierFormModal({
                 </button>
                 <button
                   type="submit"
-                  className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+                  disabled={saving}
+                  className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
                 >
-                  Save
+                  {saving ? "Saving..." : "Save"}
                 </button>
               </div>
             </form>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors, purchaseBills, tenants } from "@/db/schema";
@@ -34,9 +33,6 @@ export default async function ConsumablePurchasePage() {
           <h1 className="text-2xl font-semibold text-gray-900">Consumable Purchase</h1>
           <p className="mt-0.5 text-sm text-gray-500">Record operating purchases and settlement details.</p>
         </div>
-        <Link href="/suppliers" className="mt-1 text-sm text-gray-500 hover:text-[var(--color-primary)] hover:underline">
-          Manage Suppliers
-        </Link>
       </div>
 
       <ConsumablePurchaseTabs

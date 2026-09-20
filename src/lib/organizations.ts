@@ -4,6 +4,7 @@ import { tenants, accounts, memberships, subscriptions } from "@/db/schema";
 import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-accounts";
 import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
+import { requirePan } from "@/lib/pan";
 
 export type BusinessInfo = {
   name: string;
@@ -43,7 +44,7 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
             address: info.address?.trim() || null,
             phone: info.phone?.trim() || null,
             email: info.email?.trim().toLowerCase() || null,
-            panVatNumber: info.panNumber?.trim() || null,
+            panVatNumber: requirePan(info.panNumber, "PAN / VAT number"),
             companyRegistrationNumber: info.companyRegistrationNumber?.trim() || null,
             baseCurrency: "NPR",
           })

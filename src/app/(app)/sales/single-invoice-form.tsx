@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { createSingleInvoice, updateSingleInvoice } from "./actions";
 import { PaymentModal } from "./payment-modal";
 
@@ -68,8 +70,8 @@ const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center te
 // invoice with multiple item lines, created (or, with `initial`, edited) in
 // a single Save.
 export function SingleInvoiceForm({
-  customers,
-  items,
+  customers: customersProp,
+  items: itemsProp,
   cashBankAccounts,
   customerBalances,
   vatRate,
@@ -87,6 +89,9 @@ export function SingleInvoiceForm({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
+  // Options plus anything just created with "Add new" (the server list catches up after a refresh).
+  const [customers, addCustomer] = useWithAdded(customersProp);
+  const [items, addItem] = useWithAdded(itemsProp);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
@@ -130,12 +135,12 @@ export function SingleInvoiceForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceNumber, customerId, payments, lines]);
 
-  function updateLine(i: number, field: keyof LineRow, value: string) {
+  function updateLine(i: number, field: keyof LineRow, value: string, known?: Item) {
     setLines((prev) =>
       prev.map((l, idx) => {
         if (idx !== i) return l;
         if (field === "itemId") {
-          const item = items.find((it) => it.id === value);
+          const item = known ?? items.find((it) => it.id === value);
           return {
             ...l,
             itemId: value,
@@ -245,21 +250,16 @@ export function SingleInvoiceForm({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Customer</label>
-            <select
+            <CustomerSelect
               value={customerId}
-              onChange={(e) => {
-                setCustomerId(e.target.value);
+              options={customers}
+              onChange={(id) => {
+                setCustomerId(id);
                 if (fieldErrors.customerId) setFieldErrors((p) => ({ ...p, customerId: undefined }));
               }}
+              onAdded={addCustomer}
               className={fieldErrors.customerId ? inputErrCls : inputCls}
-            >
-              <option value="">Select customer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            />
             {fieldErrors.customerId && <p className="mt-1 text-xs text-red-600">{fieldErrors.customerId}</p>}
           </div>
         </div>
@@ -289,18 +289,18 @@ export function SingleInvoiceForm({
                 return (
                   <tr key={i} className="border-t border-gray-100">
                     <td className="px-1 py-1 text-center">
-                      <select
+                      <ItemSelect
                         value={line.itemId}
-                        onChange={(e) => updateLine(i, "itemId", e.target.value)}
+                        options={items}
+                        placeholder="Custom"
+                        onChange={(id) => updateLine(i, "itemId", id)}
+                        onAdded={(it) => {
+                          const item = { id: it.id, name: it.name, sellingPrice: it.sellingPrice };
+                          addItem(item);
+                          updateLine(i, "itemId", it.id, item);
+                        }}
                         className="w-48 rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
-                      >
-                        <option value="">Custom</option>
-                        {items.map((it) => (
-                          <option key={it.id} value={it.id}>
-                            {it.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input

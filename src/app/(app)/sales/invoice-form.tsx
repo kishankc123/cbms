@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { CustomerSelect } from "@/components/quick-add/pickers";
 import { recordSalesBatch } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -57,7 +59,7 @@ const cellInputCls =
 const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center text-gray-600";
 
 export function InvoiceForm({
-  customers,
+  customers: customersProp,
   vatRate,
   cashBankAccounts,
   customerBalances,
@@ -72,6 +74,7 @@ export function InvoiceForm({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
+  const [customers, addCustomer] = useWithAdded(customersProp);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
   const [addCount, setAddCount] = useState("1");
   const [errorRow, setErrorRow] = useState<number | null>(null);
@@ -235,20 +238,13 @@ export function InvoiceForm({
                       <DatePicker max={today()} value={row.invoiceDate} onChange={(v) => updateRow(i, "invoiceDate", v)} className={`w-32 ${cellInputCls}`} />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <select
+                      <CustomerSelect
                         value={row.customerId}
-                        onChange={(e) => updateRow(i, "customerId", e.target.value)}
+                        options={customers}
+                        onChange={(id) => updateRow(i, "customerId", id)}
+                        onAdded={addCustomer}
                         className={`w-40 ${cellInputCls}`}
-                      >
-                        <option value="" className="text-gray-400">
-                          Select customer
-                        </option>
-                        {customers.map((cu) => (
-                          <option key={cu.id} value={cu.id}>
-                            {cu.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input

@@ -76,8 +76,8 @@ export default function RegisterPage() {
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="PAN / VAT number">
-                <input className={inputCls} value={b.panNumber} onChange={(e) => setB({ ...b, panNumber: e.target.value })} />
+              <Field label="PAN / VAT number *">
+                <input className={inputCls} required inputMode="numeric" maxLength={9} pattern="[0-9]{9}" title="Exactly 9 digits" placeholder="9 digits" value={b.panNumber} onChange={(e) => setB({ ...b, panNumber: e.target.value })} />
               </Field>
               <Field label="Company registration no.">
                 <input className={inputCls} value={b.companyRegistrationNumber} onChange={(e) => setB({ ...b, companyRegistrationNumber: e.target.value })} />

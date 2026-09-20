@@ -5,6 +5,7 @@ import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, salesInvoices } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { requirePan } from "@/lib/pan";
 import { reverseLatestEntryForSource } from "@/lib/ledger/post";
 import { createCustomerReceivableAccount } from "@/lib/ledger/subledger-accounts";
 import { syncCustomerOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
@@ -19,13 +20,13 @@ function parseOpeningBalance(formData: FormData): string {
   return signed.toFixed(2);
 }
 
-export async function createCustomer(formData: FormData) {
+export async function createCustomer(formData: FormData): Promise<{ id: string; name: string }> {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Customer name is required");
-  const panNumber = String(formData.get("panNumber") ?? "").trim();
+  const panNumber = requirePan(formData.get("panNumber"), "PAN / VAT number");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -55,6 +56,7 @@ export async function createCustomer(formData: FormData) {
   revalidatePath("/sales");
   revalidatePath("/journal");
   revalidatePath("/dashboard");
+  return { id: customer.id, name };
 }
 
 export async function updateCustomer(formData: FormData) {
@@ -64,7 +66,7 @@ export async function updateCustomer(formData: FormData) {
   const id = String(formData.get("customerId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) throw new Error("Customer name is required");
-  const panNumber = String(formData.get("panNumber") ?? "").trim();
+  const panNumber = requirePan(formData.get("panNumber"), "PAN / VAT number");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);

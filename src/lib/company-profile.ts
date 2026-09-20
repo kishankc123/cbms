@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
+import { requirePan } from "@/lib/pan";
 
 export const COMPANY_STATUSES = ["active", "dormant", "closed", "other"] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
@@ -33,6 +34,8 @@ export type CompanyProfilePatch = Partial<{
 export async function saveCompanyProfile(tenantId: string, userId: string, patch: CompanyProfilePatch) {
   if (patch.companyName !== undefined && !patch.companyName.trim()) throw new Error("Company name is required");
   if (patch.companyStatus !== undefined && !COMPANY_STATUSES.includes(patch.companyStatus)) throw new Error("Unknown company status");
+  // The organization's PAN / VAT number is compulsory and always nine digits.
+  if (patch.panVatNumber !== undefined) patch = { ...patch, panVatNumber: requirePan(patch.panVatNumber, "PAN / VAT number") };
 
   const [before] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   if (!before) throw new Error("Organization not found");

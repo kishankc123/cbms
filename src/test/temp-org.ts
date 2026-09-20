@@ -11,7 +11,7 @@ import { createOrganization } from "@/lib/organizations";
 export async function createTempOrg(name = "ZZ Integration Test") {
   const [m] = await db.select().from(memberships).limit(1);
   if (!m) throw new Error("Integration tests need at least one user in the database");
-  const tenant = await createOrganization({ name: `${name} ${Date.now()}` }, m.userId);
+  const tenant = await createOrganization({ name: `${name} ${Date.now()}`, panNumber: "999888777" }, m.userId);
   return {
     tenantId: tenant.id,
     userId: m.userId,

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { eq, asc, count } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, tenants, salesInvoices, items } from "@/db/schema";
@@ -29,9 +28,6 @@ export default async function SalesPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Add New Sale</h1>
           <p className="mt-0.5 text-sm text-gray-500">Record customer sales and settlement details.</p>
         </div>
-        <Link href="/customers" className="mt-1 text-sm text-gray-500 hover:text-[var(--color-primary)] hover:underline">
-          Manage Customers
-        </Link>
       </div>
 
       <SalesEntryTabs

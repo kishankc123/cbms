@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { SupplierSelect } from "@/components/quick-add/pickers";
 import { getCashPurchaseForEdit, updateCashPurchase, type CashBillType } from "./actions";
 import { RecordPayModal } from "./record-pay-modal";
 import { BILL_TYPE_OPTIONS } from "./consumable-purchase-form";
@@ -15,7 +17,7 @@ type PaymentLine = { accountId: string; amount: number };
 
 export function EditCashBillModal({
   billId,
-  vendors,
+  vendors: vendorsProp,
   categoryAccounts,
   cashBankAccounts,
   vatRate,
@@ -29,6 +31,7 @@ export function EditCashBillModal({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const [vendors, addVendor] = useWithAdded(vendorsProp);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [billNumber, setBillNumber] = useState("");
@@ -140,18 +143,13 @@ export function EditCashBillModal({
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Supplier</label>
-                <select
+                <SupplierSelect
                   value={vendorId}
-                  onChange={(e) => setVendorId(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">Select supplier</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
+                  options={vendors}
+                  onChange={setVendorId}
+                  onAdded={addVendor}
+                  className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Category</label>

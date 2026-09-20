@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { items, purchaseBills } from "@/db/schema";
+import { items, itemUnits, itemGroups, itemCategories, purchaseBills } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 
 export type ItemInput = {
@@ -14,23 +14,42 @@ export type ItemInput = {
   sellingPrice: number;
 };
 
-export async function createItem(input: ItemInput) {
+export type CreatedItem = { id: string; name: string; purchasePrice: string; sellingPrice: string };
+
+export async function createItem(input: ItemInput): Promise<CreatedItem> {
   const session = await requireTenantSession();
   if (!can(session, "inventory", "create")) throw new Error("Not permitted");
 
   const name = input.name.trim();
   if (!name) throw new Error("Item name is required");
 
-  await db.insert(items).values({
-    tenantId: session.tenantId,
-    name,
-    unitId: input.unitId || null,
-    categoryId: input.categoryId || null,
-    purchasePrice: (input.purchasePrice || 0).toFixed(2),
-    sellingPrice: (input.sellingPrice || 0).toFixed(2),
-  });
+  const [created] = await db
+    .insert(items)
+    .values({
+      tenantId: session.tenantId,
+      name,
+      unitId: input.unitId || null,
+      categoryId: input.categoryId || null,
+      purchasePrice: (input.purchasePrice || 0).toFixed(2),
+      sellingPrice: (input.sellingPrice || 0).toFixed(2),
+    })
+    .returning();
 
   revalidatePath("/inventory/items");
+  revalidatePath("/sales");
+  revalidatePath("/purchases", "layout");
+  return { id: created.id, name: created.name, purchasePrice: created.purchasePrice, sellingPrice: created.sellingPrice };
+}
+
+/** Units, groups and categories for the item form (used when it is opened from a sales or purchase screen). */
+export async function getItemFormOptions() {
+  const session = await requireTenantSession();
+  const [units, groups, categories] = await Promise.all([
+    db.select({ id: itemUnits.id, name: itemUnits.name }).from(itemUnits).where(eq(itemUnits.tenantId, session.tenantId)).orderBy(itemUnits.name),
+    db.select({ id: itemGroups.id, name: itemGroups.name }).from(itemGroups).where(eq(itemGroups.tenantId, session.tenantId)).orderBy(itemGroups.name),
+    db.select({ id: itemCategories.id, name: itemCategories.name, groupId: itemCategories.groupId }).from(itemCategories).where(eq(itemCategories.tenantId, session.tenantId)).orderBy(itemCategories.name),
+  ]);
+  return { units, groups, categories };
 }
 
 export async function updateItem(input: ItemInput & { itemId: string }) {

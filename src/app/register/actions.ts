@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createOrganization, type BusinessInfo } from "@/lib/organizations";
 import { validatePassword, isEmail } from "@/lib/password";
+import { panError } from "@/lib/pan";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { createAuthToken } from "@/lib/tokens";
 import { sendEmail, verificationEmail, appUrl } from "@/lib/email";
@@ -24,6 +25,8 @@ export async function registerOrganization(input: RegisterInput): Promise<{ ok: 
   const { business, admin } = input;
   const email = admin.email.trim().toLowerCase();
   if (!business.name.trim()) return { ok: false, error: "Business name is required." };
+  const panProblem = panError(business.panNumber, "PAN / VAT number");
+  if (panProblem) return { ok: false, error: panProblem };
   if (!admin.fullName.trim()) return { ok: false, error: "Full name is required." };
   if (!isEmail(email)) return { ok: false, error: "Enter a valid email address." };
   if (admin.password !== admin.confirmPassword) return { ok: false, error: "Passwords do not match." };

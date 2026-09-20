@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { SupplierSelect } from "@/components/quick-add/pickers";
 import { createCashPurchaseBatch, type CashBillType } from "./actions";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InfoDialog } from "../inventory/info-dialog";
@@ -75,10 +77,10 @@ function flattenAccounts(groups: CashBankGroup[]): Record<string, string> {
 
 const cellInputCls =
   "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
-const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-right text-gray-600";
+const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center text-gray-600";
 
 export function ConsumablePurchaseForm({
-  vendors,
+  vendors: vendorsProp,
   categoryAccounts,
   cashBankAccounts,
   vatRate,
@@ -91,6 +93,7 @@ export function ConsumablePurchaseForm({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
+  const [vendors, addVendor] = useWithAdded(vendorsProp);
   const [billDate, setBillDate] = useState(today());
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
   const [addCount, setAddCount] = useState("1");
@@ -223,17 +226,17 @@ export function ConsumablePurchaseForm({
 
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+            <thead className="bg-gray-50 text-center text-gray-500">
               <tr>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Description</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Bill No.</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Supplier</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Category</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Bill Type</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Amount</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">VAT</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Total</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Payment</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Description</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Bill No.</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Supplier</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Category</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Bill Type</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Payment</th>
               </tr>
             </thead>
             <tbody>
@@ -248,7 +251,7 @@ export function ConsumablePurchaseForm({
                       setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });
                     }}
                   >
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         value={row.description}
                         onChange={(e) => updateRow(i, "description", e.target.value)}
@@ -256,30 +259,23 @@ export function ConsumablePurchaseForm({
                         className={`w-36 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         value={row.billNumber}
                         onChange={(e) => updateRow(i, "billNumber", e.target.value)}
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <select
+                    <td className="px-1 py-1 text-center">
+                      <SupplierSelect
                         value={row.vendorId}
-                        onChange={(e) => updateRow(i, "vendorId", e.target.value)}
+                        options={vendors}
+                        onChange={(id) => updateRow(i, "vendorId", id)}
+                        onAdded={addVendor}
                         className={`w-36 ${cellInputCls}`}
-                      >
-                        <option value="" className="text-gray-400">
-                          Select supplier
-                        </option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <select
                         value={row.categoryId}
                         onChange={(e) => updateRow(i, "categoryId", e.target.value)}
@@ -295,7 +291,7 @@ export function ConsumablePurchaseForm({
                         ))}
                       </select>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <select
                         value={row.billType}
                         onChange={(e) => updateRow(i, "billType", e.target.value)}
@@ -308,25 +304,25 @@ export function ConsumablePurchaseForm({
                         ))}
                       </select>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         value={row.amount}
                         onChange={(e) => updateRow(i, "amount", e.target.value)}
-                        className={`w-24 text-right ${cellInputCls}`}
+                        className={`w-24 text-center ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.tax)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.tax)}</div>
                     </td>
-                    <td className="px-1 py-1">
-                      <div className="w-24 rounded bg-gray-50 px-1.5 py-1 text-sm text-right font-medium text-gray-900">
+                    <td className="px-1 py-1 text-center">
+                      <div className="mx-auto w-24 rounded bg-gray-50 px-1.5 py-1 text-sm text-center font-medium text-gray-900">
                         {fmt(c.total)}
                       </div>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <button
                         type="button"
                         onClick={() => handleRecordPayClick(i)}

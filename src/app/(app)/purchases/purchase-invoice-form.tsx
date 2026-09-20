@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWithAdded } from "@/components/quick-add/use-with-added";
+import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
 import { InfoDialog } from "../inventory/info-dialog";
 import { InvoicePaymentModal } from "./invoice-payment-modal";
@@ -71,12 +73,12 @@ const inputCls =
 const inputErrCls =
   "w-full rounded border border-red-400 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-400";
 const cellInputCls =
-  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm text-right focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
-const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-right text-gray-600";
+  "rounded border border-gray-300 bg-white px-1.5 py-1 text-sm text-center focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
+const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center text-gray-600";
 
 export function PurchaseInvoiceForm({
-  vendors,
-  items,
+  vendors: vendorsProp,
+  items: itemsProp,
   cashBankAccounts,
   vatRate,
   initial,
@@ -92,6 +94,9 @@ export function PurchaseInvoiceForm({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
+  // Options plus anything just created with "Add new" (the server list catches up after a refresh).
+  const [vendors, addVendor] = useWithAdded(vendorsProp);
+  const [items, addItem] = useWithAdded(itemsProp);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
@@ -136,12 +141,12 @@ export function PurchaseInvoiceForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceNumber, vendorId, payments, lines]);
 
-  function updateLine(i: number, field: keyof LineRow, value: string) {
+  function updateLine(i: number, field: keyof LineRow, value: string, known?: Item) {
     setLines((prev) =>
       prev.map((l, idx) => {
         if (idx !== i) return l;
         if (field === "itemId") {
-          const item = items.find((it) => it.id === value);
+          const item = known ?? items.find((it) => it.id === value);
           return {
             ...l,
             itemId: value,
@@ -253,21 +258,16 @@ export function PurchaseInvoiceForm({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Supplier</label>
-            <select
+            <SupplierSelect
               value={vendorId}
-              onChange={(e) => {
-                setVendorId(e.target.value);
+              options={vendors}
+              onChange={(id) => {
+                setVendorId(id);
                 if (fieldErrors.vendorId) setFieldErrors((p) => ({ ...p, vendorId: undefined }));
               }}
+              onAdded={addVendor}
               className={fieldErrors.vendorId ? inputErrCls : inputCls}
-            >
-              <option value="">Select supplier</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
+            />
             {fieldErrors.vendorId && <p className="mt-1 text-xs text-red-600">{fieldErrors.vendorId}</p>}
           </div>
           <div>
@@ -288,17 +288,17 @@ export function PurchaseInvoiceForm({
 
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+            <thead className="bg-gray-50 text-center text-gray-500">
               <tr>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap">Item</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Rate</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Qty</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Gross</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Discount</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Taxable</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">VAT</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-right whitespace-nowrap">Total</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap"></th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Item</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Rate</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody>
@@ -306,21 +306,21 @@ export function PurchaseInvoiceForm({
                 const c = computedLines[i];
                 return (
                   <tr key={i} className="border-t border-gray-100">
-                    <td className="px-1 py-1">
-                      <select
+                    <td className="px-1 py-1 text-center">
+                      <ItemSelect
                         value={line.itemId}
-                        onChange={(e) => updateLine(i, "itemId", e.target.value)}
-                        className="w-[9.6rem] rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
-                      >
-                        <option value="">Select product</option>
-                        {items.map((it) => (
-                          <option key={it.id} value={it.id}>
-                            {it.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={items}
+                        placeholder="Select product"
+                        onChange={(id) => updateLine(i, "itemId", id)}
+                        onAdded={(it) => {
+                          const item = { id: it.id, name: it.name, purchasePrice: it.purchasePrice };
+                          addItem(item);
+                          updateLine(i, "itemId", it.id, item);
+                        }}
+                        className="w-[13.35rem] rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
+                      />
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -330,7 +330,7 @@ export function PurchaseInvoiceForm({
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -340,10 +340,10 @@ export function PurchaseInvoiceForm({
                         className={`w-16 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <input
                         type="number"
                         step="0.01"
@@ -353,18 +353,18 @@ export function PurchaseInvoiceForm({
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
-                    <td className="px-1 py-1">
-                      <div className={`w-20 ${calculatedCellCls}`}>{fmt(c.vat)}</div>
+                    <td className="px-1 py-1 text-center">
+                      <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.vat)}</div>
                     </td>
-                    <td className="px-1 py-1">
-                      <div className="w-20 rounded bg-gray-50 px-1.5 py-1 text-sm text-right font-medium text-gray-900">
+                    <td className="px-1 py-1 text-center">
+                      <div className="mx-auto w-20 rounded bg-gray-50 px-1.5 py-1 text-sm text-center font-medium text-gray-900">
                         {fmt(c.total)}
                       </div>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-1 py-1 text-center">
                       <button
                         type="button"
                         onClick={() => handleDeleteLine(i)}

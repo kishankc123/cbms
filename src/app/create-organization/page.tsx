@@ -24,7 +24,13 @@ export default function CreateOrganizationPage() {
   const f = (key: keyof typeof b, label: string, type = "text") => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input type={type} className={inputCls} value={b[key]} onChange={(e) => setB({ ...b, [key]: e.target.value })} />
+      <input
+        type={type}
+        className={inputCls}
+        value={b[key]}
+        onChange={(e) => setB({ ...b, [key]: e.target.value })}
+        {...(key === "panNumber" ? { required: true, inputMode: "numeric" as const, maxLength: 9, pattern: "[0-9]{9}", title: "Exactly 9 digits" } : {})}
+      />
     </div>
   );
 
@@ -44,7 +50,7 @@ export default function CreateOrganizationPage() {
           {f("email", "Business email", "email")}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {f("panNumber", "PAN / VAT number")}
+          {f("panNumber", "PAN / VAT number *")}
           {f("companyRegistrationNumber", "Company registration no.")}
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}

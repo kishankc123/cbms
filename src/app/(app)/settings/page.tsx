@@ -73,9 +73,14 @@ export default async function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">PAN / VAT number</label>
+            <label className="block text-xs text-gray-500 mb-1">PAN / VAT number *</label>
             <input
               name="panVatNumber"
+              required
+              inputMode="numeric"
+              maxLength={9}
+              pattern="[0-9]{9}"
+              title="Exactly 9 digits"
               defaultValue={tenant.panVatNumber ?? ""}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
             />

@@ -95,8 +95,8 @@ export function CompanyForm({ data }: { data: Data }) {
           <Field label="Registration date">
             <DatePicker value={v.registrationDate} onChange={(d) => set("registrationDate", d)} disabled={disabled} className={input} />
           </Field>
-          <Field label="PAN / VAT number" hint="One number, used everywhere — invoices, VAT and tax registrations.">
-            <input className={input} value={v.panVatNumber} onChange={(e) => set("panVatNumber", e.target.value)} disabled={disabled} />
+          <Field label="PAN / VAT number *" hint="Exactly 9 digits. One number, used everywhere — invoices, VAT and tax registrations.">
+            <input className={input} value={v.panVatNumber} onChange={(e) => set("panVatNumber", e.target.value)} disabled={disabled} inputMode="numeric" maxLength={9} placeholder="9 digits" />
           </Field>
           <Field label="Nature of business">
             <input className={input} value={v.natureOfBusiness} onChange={(e) => set("natureOfBusiness", e.target.value)} disabled={disabled} />
