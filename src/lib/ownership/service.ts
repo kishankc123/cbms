@@ -4,6 +4,7 @@ import { accounts, capitalChanges, journalEntries, journalLines, shareLagatEntri
 import { validateADDate } from "@/lib/calendar";
 import { logAuditEvent } from "@/lib/audit";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { nextChildCodeFor } from "@/lib/ledger/chart";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { createPayment, voidPayment, type CreatePaymentResult } from "@/lib/ledger/payments-engine";
@@ -289,10 +290,10 @@ export async function addShareholder(
 
   const group = await ensureShareCapitalGroup(tenantId);
   const holder = await db.transaction(async (tx) => {
-    const siblings = await tx.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, group.id)));
+    const code = await nextChildCodeFor(tx, tenantId, group.code);
     const [account] = await tx
       .insert(accounts)
-      .values({ tenantId, code: `${group.code}.${String(siblings.length + 1).padStart(2, "0")}`, name, category: group.category, subCategory: group.subCategory, parentAccountId: group.id })
+      .values({ tenantId, code, name, category: group.category, subCategory: group.subCategory, parentAccountId: group.id })
       .returning();
     const [row] = await tx
       .insert(shareholders)

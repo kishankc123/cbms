@@ -24,7 +24,7 @@ export function SupplierFormModal({
   trigger: (open: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [drCr, setDrCr] = useState<"DR" | "CR">(initial && initial.openingBalance < 0 ? "CR" : "DR");
+  const [drCr, setDrCr] = useState<"DR" | "CR">(initial && initial.openingBalance < 0 ? "DR" : "CR");
 
   useEffect(() => {
     if (!open) return;

@@ -12,6 +12,10 @@ type Supplier = {
   phone: string;
   details: string;
   openingBalance: number;
+  /** The opening balance as the ledger has it (what the balance builds on). */
+  ledgerOpening: number;
+  /** Other entries posted to the supplier's account (manual vouchers...), signed to the balance. */
+  others: { date: string; amount: number }[];
   bills: { date: string; total: number }[];
   payments: { date: string; amount: number }[];
 };
@@ -28,13 +32,15 @@ function computePeriod(s: Supplier, filter: DateFilter) {
   };
 
   const opening =
-    s.openingBalance +
+    s.ledgerOpening +
     s.bills.filter((b) => isBeforeFrom(b.date)).reduce((sum, b) => sum + b.total, 0) -
-    s.payments.filter((p) => isBeforeFrom(p.date)).reduce((sum, p) => sum + p.amount, 0);
+    s.payments.filter((p) => isBeforeFrom(p.date)).reduce((sum, p) => sum + p.amount, 0) +
+    s.others.filter((o) => isBeforeFrom(o.date)).reduce((sum, o) => sum + o.amount, 0);
 
   const purchases = s.bills.filter((b) => inRange(b.date)).reduce((sum, b) => sum + b.total, 0);
   const paid = s.payments.filter((p) => inRange(p.date)).reduce((sum, p) => sum + p.amount, 0);
-  const outstanding = opening + purchases - paid;
+  const otherInRange = s.others.filter((o) => inRange(o.date)).reduce((sum, o) => sum + o.amount, 0);
+  const outstanding = opening + purchases - paid + otherInRange;
 
   return { opening, purchases, paid, outstanding };
 }

@@ -11,7 +11,7 @@ export async function getOrCreateCustomerAdvanceAccount(tenantId: string) {
   if (existing) return existing;
   const [created] = await db
     .insert(accounts)
-    .values({ tenantId, code: "2350", name: "Customer Advance", category: "liability", subCategory: "Current Liability" })
+    .values({ tenantId, code: "2350", name: "Customer Advance", category: "liability", subCategory: "Current liabilities" })
     .returning();
   return created;
 }
@@ -43,7 +43,7 @@ export async function getOrCreateSupplierAdvanceAccount(tenantId: string) {
   if (existing) return existing;
   const [created] = await db
     .insert(accounts)
-    .values({ tenantId, code: "1350", name: "Supplier Advance", category: "asset", subCategory: "Current Asset" })
+    .values({ tenantId, code: "1350", name: "Supplier Advance", category: "asset", subCategory: "Current assets" })
     .returning();
   return created;
 }

@@ -8,12 +8,14 @@ import { requireTenantSession, can } from "@/lib/session";
 import { reverseLatestEntryForSource } from "@/lib/ledger/post";
 import { createCustomerReceivableAccount } from "@/lib/ledger/subledger-accounts";
 import { syncCustomerOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
-import { getCustomerPaymentRows } from "@/lib/ledger/customer-balances";
+import { getPartyLines } from "@/lib/ledger/party-ledger";
+import { signedOpeningBalance } from "@/lib/ledger/opening-sign";
+import { buildStatement } from "@/lib/ledger/party-statement";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
-  const signed = type === "CR" ? -amount : amount;
+  const signed = signedOpeningBalance("customer", amount, type === "CR" ? "CR" : "DR");
   return signed.toFixed(2);
 }
 
@@ -139,50 +141,9 @@ export async function getCustomerHistory(customerId: string, from?: string, to?:
     .limit(1);
   if (!customer) throw new Error("Customer not found");
 
-  const [invoices, customerReceipts] = await Promise.all([
-    db
-      .select({
-        date: salesInvoices.invoiceDate,
-        invoiceNumber: salesInvoices.invoiceNumber,
-        total: salesInvoices.total,
-        status: salesInvoices.status,
-      })
-      .from(salesInvoices)
-      .where(and(eq(salesInvoices.customerId, customerId), eq(salesInvoices.tenantId, session.tenantId)))
-      .orderBy(asc(salesInvoices.invoiceDate)),
-    getCustomerPaymentRows(session.tenantId, customerId),
-  ]);
-
-  const activeInvoices = invoices.filter((inv) => inv.status !== "void");
-
-  const isBeforeFrom = (date: string) => !!from && date < from;
-  const inRange = (date: string) => {
-    if (from && date < from) return false;
-    if (to && date > to) return false;
-    return true;
-  };
-
-  const openingBalance =
-    Number(customer.openingBalance) +
-    activeInvoices.filter((i) => isBeforeFrom(i.date)).reduce((s, i) => s + Number(i.total), 0) -
-    customerReceipts.filter((r) => isBeforeFrom(r.date)).reduce((s, r) => s + Number(r.amount), 0);
-
-  const rows: Omit<LedgerRow, "balance">[] = [];
-  for (const inv of activeInvoices) {
-    if (!inRange(inv.date)) continue;
-    rows.push({ date: inv.date, details: `Sales invoice ${inv.invoiceNumber}`, debit: Number(inv.total), credit: 0 });
-  }
-  for (const r of customerReceipts) {
-    if (!inRange(r.date)) continue;
-    rows.push({ date: r.date, details: "Payment received", debit: 0, credit: Number(r.amount) });
-  }
-  rows.sort((a, b) => a.date.localeCompare(b.date));
-
-  let running = openingBalance;
-  const ledgerRows: LedgerRow[] = rows.map((r) => {
-    running += r.debit - r.credit;
-    return { ...r, balance: running };
-  });
-
-  return { name: customer.name, openingBalance, closingBalance: running, rows: ledgerRows };
+  // Read from the customer's own ledger account: invoices, receipts, the opening balance and any
+  // manual journal voucher posted to it, so it always agrees with the Chart of Accounts.
+  const lines = customer.receivableAccountId ? (await getPartyLines(session.tenantId, [customer.receivableAccountId])).get(customer.receivableAccountId) ?? [] : [];
+  const statement = buildStatement(lines, "debit", { from, to });
+  return { name: customer.name, openingBalance: statement.openingBalance, closingBalance: statement.closingBalance, rows: statement.rows };
 }

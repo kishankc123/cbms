@@ -14,6 +14,7 @@
     "db:seed": "node --env-file=.env.local node_modules/.bin/tsx src/db/seed.ts",
     "compliance:setup": "node --env-file=.env.local node_modules/tsx/dist/cli.mjs src/db/compliance-setup.ts",
     "test": "vitest run",
+    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run -c vitest.int.config.ts",
     "calendar:audit": "vitest run src/lib/calendar"
   },
   "dependencies": {

@@ -16,6 +16,7 @@ const NAV = [
     children: [
       { href: "/chart-of-accounts", label: "Group" },
       { href: "/chart-of-accounts/sub-groups", label: "Sub-group" },
+      { href: "/chart-of-accounts/structure", label: "Structure" },
     ],
   },
   { href: "/customers", label: "Customers" },

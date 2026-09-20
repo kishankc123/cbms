@@ -49,6 +49,8 @@ export const tenants = pgTable("tenants", {
   registeredOffice: text("registered_office"),
   // The organization's PAN / VAT number — one number, one place.
   panVatNumber: text("pan_vat_number"),
+  // Last manual journal voucher number issued (JV-0001...). Bumped atomically, so numbers never repeat.
+  journalVoucherSeq: integer("journal_voucher_seq").notNull().default(0),
   companyStatus: text("company_status").notNull().default("active"),
   companyStatusNote: text("company_status_note"),
   fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),

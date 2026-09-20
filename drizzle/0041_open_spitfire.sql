@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "journal_voucher_seq" integer DEFAULT 0 NOT NULL;

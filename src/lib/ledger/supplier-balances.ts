@@ -1,25 +1,20 @@
-import { eq, ne, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { purchaseBills, payments, paymentAllocations } from "@/db/schema";
+import { vendors } from "@/db/schema";
+import { buildStatement, getPartyLines, type PartyLine } from "./party-ledger";
 
 /**
- * Payments actually applied against this supplier's bills — the allocated
- * amount from the unified Payment module, not a payment's full amount (an
- * overpayment's unallocated remainder becomes a Supplier Advance instead of
- * reducing what's owed on any bill). Voided payments are excluded.
+ * Every supplier's ledger lines, from their own payable sub-account — bills, payments, the opening
+ * balance and any manual journal voucher posted to it. Suppliers are credit-normal.
  */
-export async function getSupplierPaymentRows(tenantId: string, vendorId?: string) {
-  const conditions = [
-    eq(payments.tenantId, tenantId),
-    eq(paymentAllocations.targetType, "purchase_bill"),
-    ne(payments.status, "voided"),
-  ];
-  if (vendorId) conditions.push(eq(purchaseBills.vendorId, vendorId));
+export async function getSupplierLines(tenantId: string): Promise<Map<string, PartyLine[]>> {
+  const list = await db.select({ id: vendors.id, accountId: vendors.payableAccountId }).from(vendors).where(eq(vendors.tenantId, tenantId));
+  const linesByAccount = await getPartyLines(tenantId, list.map((v) => v.accountId).filter((x): x is string => Boolean(x)));
+  return new Map(list.map((v) => [v.id, v.accountId ? linesByAccount.get(v.accountId) ?? [] : []]));
+}
 
-  return db
-    .select({ vendorId: purchaseBills.vendorId, date: payments.paymentDate, amount: paymentAllocations.allocatedAmount })
-    .from(paymentAllocations)
-    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
-    .innerJoin(purchaseBills, eq(purchaseBills.id, paymentAllocations.targetId))
-    .where(and(...conditions));
+/** Each supplier's current balance (positive = we owe them), read from the ledger. */
+export async function getSupplierBalances(tenantId: string): Promise<Record<string, number>> {
+  const lines = await getSupplierLines(tenantId);
+  return Object.fromEntries([...lines].map(([id, l]) => [id, buildStatement(l, "credit").closingBalance]));
 }

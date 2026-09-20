@@ -15,12 +15,15 @@ export function ProfileTabs({
   supplier,
   purchases,
   paid,
+  other,
   outstanding,
   fiscalYearStartDate,
 }: {
   supplier: { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
   purchases: number;
   paid: number;
+  /** Net of other entries posted to the supplier's account (e.g. journal vouchers). */
+  other: number;
   outstanding: number;
   fiscalYearStartDate: string | null;
 }) {
@@ -44,7 +47,7 @@ export function ProfileTabs({
       </div>
 
       {tab === "details" && (
-        <DetailsPanel supplier={supplier} purchases={purchases} paid={paid} outstanding={outstanding} />
+        <DetailsPanel supplier={supplier} purchases={purchases} paid={paid} other={other} outstanding={outstanding} />
       )}
       {tab === "history" && <HistoryPanel supplierId={supplier.id} fiscalYearStartDate={fiscalYearStartDate} />}
     </div>

@@ -8,12 +8,14 @@ import { requireTenantSession, can } from "@/lib/session";
 import { reverseLatestEntryForSource } from "@/lib/ledger/post";
 import { createSupplierPayableAccount } from "@/lib/ledger/subledger-accounts";
 import { syncSupplierOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
-import { getSupplierPaymentRows } from "@/lib/ledger/supplier-balances";
+import { getPartyLines } from "@/lib/ledger/party-ledger";
+import { signedOpeningBalance } from "@/lib/ledger/opening-sign";
+import { buildStatement } from "@/lib/ledger/party-statement";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
   const type = String(formData.get("openingBalanceType") ?? "DR");
-  const signed = type === "CR" ? -amount : amount;
+  const signed = signedOpeningBalance("supplier", amount, type === "CR" ? "CR" : "DR");
   return signed.toFixed(2);
 }
 
@@ -139,52 +141,9 @@ export async function getSupplierHistory(supplierId: string, from?: string, to?:
     .limit(1);
   if (!supplier) throw new Error("Supplier not found");
 
-  const [bills, supplierPayments] = await Promise.all([
-    db
-      .select({
-        date: purchaseBills.billDate,
-        billNumber: purchaseBills.billNumber,
-        total: purchaseBills.total,
-        status: purchaseBills.status,
-      })
-      .from(purchaseBills)
-      .where(and(eq(purchaseBills.vendorId, supplierId), eq(purchaseBills.tenantId, session.tenantId)))
-      .orderBy(asc(purchaseBills.billDate)),
-    getSupplierPaymentRows(session.tenantId, supplierId),
-  ]);
-
-  const activeBills = bills.filter((b) => b.status !== "void");
-
-  const isBeforeFrom = (date: string) => !!from && date < from;
-  const inRange = (date: string) => {
-    if (from && date < from) return false;
-    if (to && date > to) return false;
-    return true;
-  };
-
-  const openingBalance =
-    Number(supplier.openingBalance) +
-    activeBills.filter((b) => isBeforeFrom(b.date)).reduce((s, b) => s + Number(b.total), 0) -
-    supplierPayments.filter((p) => isBeforeFrom(p.date)).reduce((s, p) => s + Number(p.amount), 0);
-
-  // Accounts Payable is a liability — a purchase bill increases what we owe,
-  // which is a credit to this account, while a payment reduces it (a debit).
-  const rows: Omit<LedgerRow, "balance">[] = [];
-  for (const b of activeBills) {
-    if (!inRange(b.date)) continue;
-    rows.push({ date: b.date, details: `Purchase bill ${b.billNumber}`, debit: 0, credit: Number(b.total) });
-  }
-  for (const p of supplierPayments) {
-    if (!inRange(p.date)) continue;
-    rows.push({ date: p.date, details: "Payment made", debit: Number(p.amount), credit: 0 });
-  }
-  rows.sort((a, b) => a.date.localeCompare(b.date));
-
-  let running = openingBalance;
-  const ledgerRows: LedgerRow[] = rows.map((r) => {
-    running += r.credit - r.debit;
-    return { ...r, balance: running };
-  });
-
-  return { name: supplier.name, openingBalance, closingBalance: running, rows: ledgerRows };
+  // Read from the supplier's own ledger account: bills, payments, the opening balance and any
+  // manual journal voucher posted to it, so it always agrees with the Chart of Accounts.
+  const lines = supplier.payableAccountId ? (await getPartyLines(session.tenantId, [supplier.payableAccountId])).get(supplier.payableAccountId) ?? [] : [];
+  const statement = buildStatement(lines, "credit", { from, to });
+  return { name: supplier.name, openingBalance: statement.openingBalance, closingBalance: statement.closingBalance, rows: statement.rows };
 }

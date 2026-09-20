@@ -1,9 +1,10 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { vendors, purchaseBills, tenants } from "@/db/schema";
+import { vendors, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
-import { getSupplierPaymentRows } from "@/lib/ledger/supplier-balances";
+import { getPartyLines } from "@/lib/ledger/party-ledger";
+import { buildStatement, partyBuckets } from "@/lib/ledger/party-statement";
 import { ProfileTabs } from "./profile-tabs";
 
 export default async function SupplierProfilePage({ params }: { params: Promise<{ supplierId: string }> }) {
@@ -17,31 +18,16 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
     .limit(1);
   if (!supplier) notFound();
 
-  const [tenant, bills, supplierPayments] = await Promise.all([
-    db
-      .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
-      .from(tenants)
-      .where(eq(tenants.id, session.tenantId))
-      .limit(1)
-      .then((rows) => rows[0]),
-    db
-      .select({ total: purchaseBills.total })
-      .from(purchaseBills)
-      .where(
-        and(
-          eq(purchaseBills.vendorId, supplierId),
-          eq(purchaseBills.tenantId, session.tenantId),
-          ne(purchaseBills.status, "void")
-        )
-      ),
-    getSupplierPaymentRows(session.tenantId, supplierId),
-  ]);
+  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
 
+  // Everything below is read from the supplier's own ledger account.
+  const lines = supplier.payableAccountId ? (await getPartyLines(session.tenantId, [supplier.payableAccountId])).get(supplier.payableAccountId) ?? [] : [];
+  const b = partyBuckets(lines, "credit");
   const contactInfo = supplier.contactInfo as { phone?: string; details?: string } | null;
-  const openingBalance = Number(supplier.openingBalance);
-  const purchasesTotal = bills.reduce((s, b) => s + Number(b.total), 0);
-  const paid = supplierPayments.reduce((s, p) => s + Number(p.amount), 0);
-  const outstanding = openingBalance + purchasesTotal - paid;
+  const purchasesTotal = b.invoices.reduce((s, i) => s + i.total, 0);
+  const paid = b.payments.reduce((s, p) => s + p.amount, 0);
+  const other = b.others.reduce((s, o) => s + o.amount, 0);
+  const outstanding = buildStatement(lines, "credit").closingBalance;
 
   return (
     <div className="space-y-6">
@@ -57,10 +43,11 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
           panNumber: supplier.panNumber ?? "",
           phone: contactInfo?.phone ?? "",
           details: contactInfo?.details ?? "",
-          openingBalance,
+          openingBalance: Number(supplier.openingBalance),
         }}
         purchases={purchasesTotal}
         paid={paid}
+        other={Math.round(other * 100) / 100}
         outstanding={outstanding}
         fiscalYearStartDate={tenant?.fiscalYearStartDate ?? null}
       />

@@ -1,6 +1,7 @@
 import { and, eq, inArray, ilike } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
+import { insertChildAccount } from "./chart";
 
 /**
  * Locates a tenant's control account (e.g. Accounts Receivable, Tax Payable) by
@@ -52,23 +53,8 @@ export async function createSubAccount(
   parent: { id: string; code: string; category: (typeof accounts.$inferSelect)["category"]; subCategory: string | null },
   name: string
 ) {
-  const siblings = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, parent.id)));
-
-  const code = `${parent.code}.${String(siblings.length + 1).padStart(2, "0")}`;
-  const [created] = await db
-    .insert(accounts)
-    .values({
-      tenantId,
-      code,
-      name,
-      category: parent.category,
-      subCategory: parent.subCategory,
-      parentAccountId: parent.id,
-    })
-    .returning();
+  // Next free code = highest existing sequence + 1 (never reused after a delete).
+  const created = await insertChildAccount(tenantId, { ...parent, code: parent.code }, { name });
   return created;
 }
 

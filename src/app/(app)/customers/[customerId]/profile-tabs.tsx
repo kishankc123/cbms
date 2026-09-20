@@ -15,12 +15,15 @@ export function ProfileTabs({
   customer,
   sales,
   paid,
+  other,
   outstanding,
   fiscalYearStartDate,
 }: {
   customer: { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
   sales: number;
   paid: number;
+  /** Net of other entries posted to the customer's account (e.g. journal vouchers). */
+  other: number;
   outstanding: number;
   fiscalYearStartDate: string | null;
 }) {
@@ -43,7 +46,7 @@ export function ProfileTabs({
         ))}
       </div>
 
-      {tab === "details" && <DetailsPanel customer={customer} sales={sales} paid={paid} outstanding={outstanding} />}
+      {tab === "details" && <DetailsPanel customer={customer} sales={sales} paid={paid} other={other} outstanding={outstanding} />}
       {tab === "history" && <HistoryPanel customerId={customer.id} fiscalYearStartDate={fiscalYearStartDate} />}
     </div>
   );

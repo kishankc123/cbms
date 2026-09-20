@@ -1,50 +1,34 @@
-import { eq, asc, ne, and } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, salesInvoices } from "@/db/schema";
+import { customers } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
-import { getCustomerPaymentRows } from "@/lib/ledger/customer-balances";
+import { getCustomerLines } from "@/lib/ledger/customer-balances";
+import { partyBuckets } from "@/lib/ledger/party-statement";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
   const session = await requireTenantSession();
 
-  const [customerList, invoices, customerReceipts] = await Promise.all([
-    db
-      .select()
-      .from(customers)
-      .where(eq(customers.tenantId, session.tenantId))
-      .orderBy(asc(customers.name)),
-    db
-      .select({ customerId: salesInvoices.customerId, date: salesInvoices.invoiceDate, total: salesInvoices.total })
-      .from(salesInvoices)
-      .where(and(eq(salesInvoices.tenantId, session.tenantId), ne(salesInvoices.status, "void"))),
-    getCustomerPaymentRows(session.tenantId),
+  const [customerList, lines] = await Promise.all([
+    db.select().from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
+    getCustomerLines(session.tenantId),
   ]);
 
-  const invoicesByCustomer = new Map<string, { date: string; total: number }[]>();
-  for (const inv of invoices) {
-    const list = invoicesByCustomer.get(inv.customerId) ?? [];
-    list.push({ date: inv.date, total: Number(inv.total) });
-    invoicesByCustomer.set(inv.customerId, list);
-  }
-
-  const receiptsByCustomer = new Map<string, { date: string; amount: number }[]>();
-  for (const r of customerReceipts) {
-    if (!r.customerId) continue;
-    const list = receiptsByCustomer.get(r.customerId) ?? [];
-    list.push({ date: r.date, amount: Number(r.amount) });
-    receiptsByCustomer.set(r.customerId, list);
-  }
-
-  const rows = customerList.map((c) => ({
-    id: c.id,
-    name: c.name,
-    phone: c.contactInfo?.phone ?? "",
-    details: c.contactInfo?.details ?? "",
-    openingBalance: Number(c.openingBalance),
-    invoices: invoicesByCustomer.get(c.id) ?? [],
-    receipts: receiptsByCustomer.get(c.id) ?? [],
-  }));
+  // Balances come from each customer's own ledger account, so a manual journal voucher posted to it is included.
+  const rows = customerList.map((c) => {
+    const b = partyBuckets(lines.get(c.id) ?? [], "debit");
+    return {
+      id: c.id,
+      name: c.name,
+      phone: c.contactInfo?.phone ?? "",
+      details: c.contactInfo?.details ?? "",
+      openingBalance: Number(c.openingBalance),
+      ledgerOpening: b.opening,
+      invoices: b.invoices,
+      receipts: b.payments,
+      others: b.others,
+    };
+  });
 
   return (
     <div className="space-y-6">

@@ -19,11 +19,13 @@ export function DetailsPanel({
   customer,
   sales,
   paid,
+  other,
   outstanding,
 }: {
   customer: Customer;
   sales: number;
   paid: number;
+  other: number;
   outstanding: number;
 }) {
   const [deleting, setDeleting] = useState(false);

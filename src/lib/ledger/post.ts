@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries, journalLines } from "@/db/schema";
@@ -34,6 +35,17 @@ export type PostJournalEntryInput = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// A posting changes balances everywhere (chart of accounts, customer/supplier pages, reports, dashboard).
+// Refresh every cached page so none keeps showing the old figures. Outside a web request (scripts, tests)
+// there is no cache to refresh, and that is fine.
+function refreshViews() {
+  try {
+    revalidatePath("/", "layout");
+  } catch {
+    /* not in a request */
+  }
+}
+
 /**
  * The single entry point for writing to the ledger. Every transactional module
  * (sales, purchases, expenses, payments, receipts, bank adjustments, manual entry)
@@ -64,7 +76,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
     if (d > 0 && c > 0) throw new Error("A journal line cannot have both a debit and a credit");
   }
 
-  return db.transaction(async (tx) => {
+  const posted = await db.transaction(async (tx) => {
     const [entry] = await tx
       .insert(journalEntries)
       .values({
@@ -90,6 +102,8 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
 
     return entry;
   });
+  refreshViews();
+  return posted;
 }
 
 /**
@@ -107,7 +121,7 @@ export async function reverseJournalEntry(
   const reversalDate = todayIso();
   await assertPeriodOpen(tenantId, reversalDate);
 
-  return db.transaction(async (tx) => {
+  const reversed = await db.transaction(async (tx) => {
     const [original] = await tx
       .select()
       .from(journalEntries)
@@ -150,6 +164,8 @@ export async function reverseJournalEntry(
 
     return reversal;
   });
+  refreshViews();
+  return reversed;
 }
 
 /**

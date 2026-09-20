@@ -12,6 +12,10 @@ type Customer = {
   phone: string;
   details: string;
   openingBalance: number;
+  /** The opening balance as the ledger has it (what the balance builds on). */
+  ledgerOpening: number;
+  /** Other entries posted to the customer's account (manual vouchers...), signed to the balance. */
+  others: { date: string; amount: number }[];
   invoices: { date: string; total: number }[];
   receipts: { date: string; amount: number }[];
 };
@@ -28,13 +32,15 @@ function computePeriod(c: Customer, filter: DateFilter) {
   };
 
   const opening =
-    c.openingBalance +
+    c.ledgerOpening +
     c.invoices.filter((i) => isBeforeFrom(i.date)).reduce((s, i) => s + i.total, 0) -
-    c.receipts.filter((r) => isBeforeFrom(r.date)).reduce((s, r) => s + r.amount, 0);
+    c.receipts.filter((r) => isBeforeFrom(r.date)).reduce((s, r) => s + r.amount, 0) +
+    c.others.filter((o) => isBeforeFrom(o.date)).reduce((s, o) => s + o.amount, 0);
 
   const sales = c.invoices.filter((i) => inRange(i.date)).reduce((s, i) => s + i.total, 0);
   const paid = c.receipts.filter((r) => inRange(r.date)).reduce((s, r) => s + r.amount, 0);
-  const outstanding = opening + sales - paid;
+  const otherInRange = c.others.filter((o) => inRange(o.date)).reduce((s, o) => s + o.amount, 0);
+  const outstanding = opening + sales - paid + otherInRange;
 
   return { opening, sales, paid, outstanding };
 }

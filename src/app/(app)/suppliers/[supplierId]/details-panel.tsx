@@ -19,11 +19,13 @@ export function DetailsPanel({
   supplier,
   purchases,
   paid,
+  other,
   outstanding,
 }: {
   supplier: Supplier;
   purchases: number;
   paid: number;
+  other: number;
   outstanding: number;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -74,6 +76,7 @@ export function DetailsPanel({
       <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-white p-5">
         <Field label="Total Purchases (all time)" value={fmt(purchases)} />
         <Field label="Total Paid (all time)" value={fmt(paid)} />
+        {Math.abs(other) > 0.005 && <Field label="Other entries (journal vouchers)" value={`${fmt(other)} ${other >= 0 ? "Cr" : "Dr"}`} />}
         <Field label="Outstanding (AP)" value={`${fmt(outstanding)} ${drCr(outstanding)}`} />
       </div>
     </div>
