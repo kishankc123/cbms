@@ -2,6 +2,7 @@ import { and, count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { interTransfers, journalLines, journalEntries } from "@/db/schema";
 import { postJournalEntry, reverseJournalEntry } from "./post";
+import { assertEntryNotReconciled } from "./reconciliation-guards";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
@@ -135,6 +136,7 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
     createdBy: userId,
     lines: entryLines(input, existing.transferNumber),
   });
+  await assertEntryNotReconciled(tenantId, existing.journalEntryId, "transfer");
   await reverseJournalEntry(tenantId, existing.journalEntryId, userId, `Edit of transfer ${existing.transferNumber}`);
 
   await db
@@ -159,6 +161,7 @@ export async function voidTransfer(tenantId: string, userId: string, transferId:
   if (!existing) throw new Error("Transfer not found");
   if (existing.status === "voided") throw new Error("Transfer is already voided.");
 
+  await assertEntryNotReconciled(tenantId, existing.journalEntryId, "transfer");
   await reverseJournalEntry(tenantId, existing.journalEntryId, userId, `Void of transfer ${existing.transferNumber}: ${reason}`);
   await db
     .update(interTransfers)

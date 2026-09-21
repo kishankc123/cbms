@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { advanceApplications, creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { getCogsSubGroups } from "./control-accounts";
+import { assertSourceNotReconciled } from "./reconciliation-guards";
 
 /** Every id must be a Cash or Bank account of this organization (what a payment can be received into / paid from). */
 export async function assertCashBankAccounts(tenantId: string, accountIds: string[]) {
@@ -67,4 +68,6 @@ export async function assertNoLaterPayments(tenantId: string, targetType: "purch
   if (rows.length > 0) {
     throw new Error(`This ${what} has payment ${[...new Set(rows.map((r) => r.n))].join(", ")} recorded in Payments — void ${rows.length > 1 ? "those payments" : "that payment"} first`);
   }
+  // ...nor once one of its bank lines has been matched to a bank statement.
+  await assertSourceNotReconciled(tenantId, targetId, what);
 }

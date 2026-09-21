@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { classifyUnmatchedLedgerLine, type UnmatchedLedgerRow } from "./actions";
 
 import { D } from "@/components/calendar/date-text";
@@ -28,17 +29,16 @@ export function ClassifyLedgerModal({
   );
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { report, dialog } = useProblem();
 
   async function handleSubmit() {
     setSaving(true);
-    setError(null);
     try {
       await classifyUnmatchedLedgerLine({ journalLineId: line.journalLineId, bankAccountId, classification, notes });
       onClassified();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to classify");
+      report(e instanceof Error ? e.message : "Failed to classify", null);
     } finally {
       setSaving(false);
     }
@@ -79,7 +79,6 @@ export function ClassifyLedgerModal({
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
 
-        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
@@ -95,6 +94,7 @@ export function ClassifyLedgerModal({
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

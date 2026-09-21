@@ -98,3 +98,42 @@ export async function syncSupplierOpeningBalanceEntry(
     lines,
   });
 }
+
+// Posts a bank/cash account's opening balance against "Brought forward", so the ledger (and the trial balance) carry
+// it — the same way customer and supplier opening balances are carried. A positive balance is money in the account;
+// a negative one is an overdraft. Reverses whatever was posted before first, so it is safe on every create/update.
+export async function syncBankOpeningBalanceEntry(
+  tenantId: string,
+  bankAccountId: string,
+  bankName: string,
+  ledgerAccountId: string,
+  openingBalance: number,
+  userId: string
+) {
+  await reverseLatestEntryForSource(tenantId, "opening_balance", bankAccountId, userId, `Opening balance update - ${bankName}`);
+  if (openingBalance === 0) return;
+
+  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
+  const amount = Math.abs(openingBalance);
+  const lines: PostLineInput[] =
+    openingBalance > 0
+      ? [
+          { accountId: ledgerAccountId, debitAmount: amount, description: `Opening balance - ${bankName}` },
+          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${bankName}` },
+        ]
+      : [
+          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${bankName}` },
+          { accountId: ledgerAccountId, creditAmount: amount, description: `Opening balance - ${bankName}` },
+        ];
+
+  await postJournalEntry({
+    tenantId,
+    entryDate: await openingBalanceEntryDate(tenantId),
+    sourceType: "opening_balance",
+    sourceId: bankAccountId,
+    referenceNumber: bankName,
+    memo: `Opening balance - ${bankName}`,
+    createdBy: userId,
+    lines,
+  });
+}

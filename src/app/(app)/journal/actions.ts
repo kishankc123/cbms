@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
+import { assertEntryNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { validateADDate } from "@/lib/calendar";
 import { issueVoucher } from "@/lib/ledger/voucher";
@@ -65,6 +66,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
 export async function reverseEntry(formData: FormData) {
   const session = await requireTenantSession();
   const journalEntryId = String(formData.get("journalEntryId"));
+  await assertEntryNotReconciled(session.tenantId, journalEntryId, "entry");
   await reverseJournalEntry(session.tenantId, journalEntryId, session.userId);
   revalidatePath("/journal");
   revalidatePath("/dashboard");

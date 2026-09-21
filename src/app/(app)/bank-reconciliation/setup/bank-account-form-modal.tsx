@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createBankAccount, updateBankAccount, type BankAccountInput } from "../actions";
 
@@ -26,10 +27,12 @@ export function BankAccountFormModal({
   const [chartOfAccountsLink, setChartOfAccountsLink] = useState(initial?.chartOfAccountsLink ?? "");
   const [openingBalance, setOpeningBalance] = useState(initial ? String(initial.openingBalance) : "0");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
 
   async function handleSubmit() {
-    setError(null);
+    if (!accountName.trim()) return report("Enter the account name.", '[data-field="name"]');
+    if (!chartOfAccountsLink) return report("Select the ledger account this bank account is tied to.", '[data-field="ledger"]');
     setSaving(true);
     try {
       const payload: BankAccountInput = {
@@ -49,7 +52,8 @@ export function BankAccountFormModal({
       router.refresh();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      report(message, /ledger|Cash or Bank|sub-account|linked/i.test(message) ? '[data-field="ledger"]' : /name/i.test(message) ? '[data-field="name"]' : null);
     } finally {
       setSaving(false);
     }
@@ -74,7 +78,7 @@ export function BankAccountFormModal({
           <div>
             <label className="block text-xs text-gray-500 mb-1">Account name</label>
             <input
-              value={accountName}
+              data-field="name" value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
               required
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -108,7 +112,7 @@ export function BankAccountFormModal({
               <input disabled value={initial.ledgerLabel} className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-400" />
             ) : (
               <select
-                value={chartOfAccountsLink}
+                data-field="ledger" value={chartOfAccountsLink}
                 onChange={(e) => setChartOfAccountsLink(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               >
@@ -123,7 +127,6 @@ export function BankAccountFormModal({
           </div>
         </div>
 
-        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
@@ -139,6 +142,7 @@ export function BankAccountFormModal({
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

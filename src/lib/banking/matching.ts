@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, notInArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { journalLines, journalEntries, bankReconciliationMatchJournalLines } from "@/db/schema";
+import { journalLines, journalEntries, bankReconciliationMatchJournalLines, bankReconciliationMatches } from "@/db/schema";
 
 export type MatchCandidate = {
   journalLineId: string;
@@ -55,7 +55,11 @@ export async function findMatchCandidates(
   const fromStr = from.toISOString().slice(0, 10);
   const toStr = to.toISOString().slice(0, 10);
 
-  const alreadyMatched = await db.select({ id: bankReconciliationMatchJournalLines.journalLineId }).from(bankReconciliationMatchJournalLines);
+  const alreadyMatched = await db
+    .select({ id: bankReconciliationMatchJournalLines.journalLineId })
+    .from(bankReconciliationMatchJournalLines)
+    .innerJoin(bankReconciliationMatches, eq(bankReconciliationMatches.id, bankReconciliationMatchJournalLines.matchId))
+    .where(eq(bankReconciliationMatches.tenantId, tenantId));
   const excludeIds = alreadyMatched.map((r) => r.id);
 
   const rows = await db

@@ -8,6 +8,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { assertCashBankAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
+import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -513,6 +514,7 @@ export async function voidExpense(formData: FormData) {
     .limit(1);
   if (!expense) throw new Error("Expense not found");
   if (expense.status === "void") throw new Error("Expense is already void");
+  await assertSourceNotReconciled(session.tenantId, expenseId, "expense");
 
   await reverseAllActiveEntriesForSource(session.tenantId, expenseId, session.userId, `Void of expense ${expense.expenseNumber}`);
   await voidPaymentsForExpense(session.tenantId, expenseId, session.userId, `Void of expense ${expense.expenseNumber}`);

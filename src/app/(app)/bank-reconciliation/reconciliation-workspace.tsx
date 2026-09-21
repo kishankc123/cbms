@@ -7,6 +7,7 @@ import {
   confirmMatch,
   unmatch,
   markReconciled,
+  previewReconciliation,
   reopenReconciliation,
   listReconciliationHistory,
   type StatementLineRow,
@@ -18,6 +19,9 @@ import { CreateBankTransactionModal } from "./create-bank-transaction-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
 
 import { todayIso } from "@/lib/calendar";
+import { DatePicker } from "@/components/calendar/date-picker";
+import { ConfirmDialog } from "../sales/confirm-dialog";
+import { useProblem } from "@/components/problem-dialog";
 import { D, DT } from "@/components/calendar/date-text";
 type BankAccountOption = { id: string; label: string };
 type OffsetAccount = { id: string; code: string; name: string; category: string };
@@ -59,7 +63,10 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [classifyingLine, setClassifyingLine] = useState<UnmatchedLedgerRow | null>(null);
   const [selectedBankLines, setSelectedBankLines] = useState<Set<string>>(new Set());
   const [selectedLedgerLines, setSelectedLedgerLines] = useState<Set<string>>(new Set());
-  const [actionError, setActionError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
+  const [reconcileEnd, setReconcileEnd] = useState(todayIso());
+  const [confirmReconcile, setConfirmReconcile] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showReopen, setShowReopen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
@@ -69,7 +76,6 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   async function load() {
     if (!bankAccountId) return;
     setLoading(true);
-    setActionError(null);
     try {
       const [ws, sugg, hist] = await Promise.all([
         getReconciliationWorkspace(bankAccountId),
@@ -82,7 +88,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
       setSelectedBankLines(new Set());
       setSelectedLedgerLines(new Set());
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to load");
+      report(e instanceof Error ? e.message : "Failed to load", null);
     } finally {
       setLoading(false);
     }
@@ -112,7 +118,6 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
   async function handleConfirmSuggested(line: StatementLineRow, candidate: MatchCandidate) {
     setBusy(true);
-    setActionError(null);
     try {
       await confirmMatch({
         bankAccountId,
@@ -123,7 +128,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
       });
       await load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to confirm match");
+      report(e instanceof Error ? e.message : "Failed to confirm match", null);
     } finally {
       setBusy(false);
     }
@@ -132,12 +137,11 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   async function handleUnmatch(matchId: string | null) {
     if (!matchId) return;
     setBusy(true);
-    setActionError(null);
     try {
       await unmatch(matchId);
       await load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to unmatch");
+      report(e instanceof Error ? e.message : "Failed to unmatch", null);
     } finally {
       setBusy(false);
     }
@@ -146,7 +150,6 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   async function handleManualMatch() {
     if (selectedBankLines.size === 0 || selectedLedgerLines.size === 0) return;
     setBusy(true);
-    setActionError(null);
     try {
       await confirmMatch({
         bankAccountId,
@@ -156,23 +159,42 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
       });
       await load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to match — check the selected amounts agree");
+      report(e instanceof Error ? e.message : "Failed to match — check the selected amounts agree", null);
     } finally {
       setBusy(false);
     }
   }
 
+  // Shows what would be recorded (or why it can't be yet) before anything is saved.
   async function handleMarkReconciled() {
-    if (!workspace) return;
-    if (!confirm("Mark this bank account reconciled as of today?")) return;
     setBusy(true);
-    setActionError(null);
     try {
-      const start = history[0]?.periodEnd ?? "2000-01-01";
-      await markReconciled({ bankAccountId, periodStart: start, periodEnd: today });
+      const p = await previewReconciliation({ bankAccountId, periodEnd: reconcileEnd });
+      if (p.blockers.length > 0) {
+        report("This can't be marked reconciled yet: " + p.blockers.join(" "), null);
+        return;
+      }
+      const outstanding = p.unmatchedLedger.length;
+      setConfirmReconcile(
+        `Mark this account reconciled from ${p.periodStart} to ${p.periodEnd}? Statement balance ${fmt(p.statementBalance)}, ledger balance ${fmt(p.ledgerBalance)}${
+          outstanding > 0 ? `, with ${outstanding} explained ledger item(s) not yet on the statement` : ""
+        }. Nothing can be posted to this bank account inside the period afterwards unless it is reopened.`
+      );
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Failed to check the reconciliation", null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function performMarkReconciled() {
+    setConfirmReconcile(null);
+    setBusy(true);
+    try {
+      await markReconciled({ bankAccountId, periodEnd: reconcileEnd });
       await load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to mark reconciled");
+      report(e instanceof Error ? e.message : "Failed to mark reconciled", null);
     } finally {
       setBusy(false);
     }
@@ -180,14 +202,13 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
   async function handleReopen(reconciliationId: string) {
     setBusy(true);
-    setActionError(null);
     try {
       await reopenReconciliation({ reconciliationId, reason: reopenReason });
       setShowReopen(false);
       setReopenReason("");
       await load();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Failed to reopen");
+      report(e instanceof Error ? e.message : "Failed to reopen", null);
     } finally {
       setBusy(false);
     }
@@ -198,6 +219,8 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
   const latest = history[0];
   const isLocked = latest?.status === "reconciled";
+  const lockedThrough = history.filter((h) => h.status === "reconciled").reduce((m, h) => (h.periodEnd > m ? h.periodEnd : m), "");
+  const lockedOn = (date: string) => Boolean(lockedThrough) && date <= lockedThrough;
 
   const unmatchedBank = workspace.statementLines.filter((l) => l.matchStatus !== "matched");
   const suggestedRows = unmatchedBank.filter((l) => suggestions[l.id]);
@@ -271,8 +294,6 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         ))}
       </div>
 
-      {actionError && <p className="text-sm text-red-600">{actionError}</p>}
-
       {tab === "all" && (
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead className="bg-gray-50 text-left text-gray-500">
@@ -326,7 +347,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      disabled={busy || isLocked}
+                      disabled={busy || lockedOn(l.transactionDate)}
                       onClick={() => handleUnmatch(l.matchId)}
                       className="text-xs text-red-600 hover:underline disabled:opacity-40"
                     >
@@ -377,7 +398,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      disabled={busy || isLocked}
+                      disabled={busy || lockedOn(l.transactionDate)}
                       onClick={() => handleConfirmSuggested(l, c)}
                       className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40"
                     >
@@ -414,7 +435,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
             {trueUnmatchedBank.map((l) => (
               <tr key={l.id} className="border-t border-gray-100">
                 <td className="px-4 py-2">
-                  <input type="checkbox" checked={selectedBankLines.has(l.id)} onChange={() => toggleBankLine(l.id)} disabled={isLocked} />
+                  <input type="checkbox" checked={selectedBankLines.has(l.id)} onChange={() => toggleBankLine(l.id)} disabled={lockedOn(l.transactionDate)} />
                 </td>
                 <td className="px-4 py-2"><D value={l.transactionDate} /></td>
                 <td className="px-4 py-2">{l.description || "—"}</td>
@@ -424,7 +445,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                   <p className="text-xs text-gray-400 mb-1">Bank transaction not found in ledger</p>
                   <button
                     type="button"
-                    disabled={isLocked}
+                    disabled={lockedOn(l.transactionDate)}
                     onClick={() => setCreatingForLine(l)}
                     className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40"
                   >
@@ -464,7 +485,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                     type="checkbox"
                     checked={selectedLedgerLines.has(l.journalLineId)}
                     onChange={() => toggleLedgerLine(l.journalLineId)}
-                    disabled={isLocked}
+                    disabled={lockedOn(l.entryDate)}
                   />
                 </td>
                 <td className="px-4 py-2"><D value={l.entryDate} /></td>
@@ -474,7 +495,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                 <td className="px-4 py-2 text-right">
                   <button
                     type="button"
-                    disabled={isLocked}
+                    disabled={lockedOn(l.entryDate)}
                     onClick={() => setClassifyingLine(l)}
                     className="text-xs text-gray-600 hover:underline disabled:opacity-40"
                   >
@@ -558,7 +579,9 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         <p className="text-xs text-gray-500">
           {history.length > 0 ? `${history.length} past reconciliation${history.length === 1 ? "" : "s"} on record` : "No reconciliations recorded yet"}
         </p>
-        {!isLocked && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Reconcile up to</label>
+          <DatePicker max={today} value={reconcileEnd} onChange={setReconcileEnd} className="w-36 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
           <button
             type="button"
             disabled={busy}
@@ -567,8 +590,11 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           >
             Mark Reconciled
           </button>
-        )}
+        </div>
       </div>
+
+      {dialog}
+      {confirmReconcile && <ConfirmDialog message={confirmReconcile} onYes={performMarkReconciled} onNo={() => setConfirmReconcile(null)} />}
 
       {showUpload && <UploadStatementModal bankAccountId={bankAccountId} onClose={() => setShowUpload(false)} onImported={load} />}
       {creatingForLine && (

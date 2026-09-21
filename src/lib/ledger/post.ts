@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { assertBankPeriodOpen } from "./reconciliation-guards";
 
 import { todayIso } from "@/lib/calendar";
 export class UnbalancedEntryError extends Error {
@@ -93,6 +94,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
   }
 
   await assertAccountsUsable(input.tenantId, input.lines.map((l) => l.accountId));
+  await assertBankPeriodOpen(input.tenantId, input.entryDate, input.lines.map((l) => l.accountId));
 
   const posted = await db.transaction(async (tx) => {
     const [entry] = await tx

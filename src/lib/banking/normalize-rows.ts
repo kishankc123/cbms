@@ -60,6 +60,10 @@ export function normalizeStatementRows(
 
   const valid: NormalizedStatementRow[] = [];
   let skipped = 0;
+  // Two identical transactions on the same day are two transactions: the n-th identical row in a file gets its own
+  // identity (the first keeps the plain one, so files imported earlier still match), and re-importing the same
+  // file — or an overlapping one — still recognises every row.
+  const occurrences = new Map<string, number>();
 
   for (const [rowIndex, row] of rows.entries()) {
     const transactionDate = dates.rows[rowIndex]?.iso ?? null;
@@ -86,9 +90,12 @@ export function normalizeStatementRows(
       continue;
     }
 
+    const key = `${transactionDate}|${amount.toFixed(2)}|${description}|${reference}`;
+    const occurrence = (occurrences.get(key) ?? 0) + 1;
+    occurrences.set(key, occurrence);
     const dedupeHash = crypto
       .createHash("sha256")
-      .update(`${transactionDate}|${amount.toFixed(2)}|${description}|${reference}`)
+      .update(occurrence === 1 ? key : `${key}|#${occurrence}`)
       .digest("hex");
 
     valid.push({ transactionDate, description, reference, amount, runningBalance, dedupeHash, raw: row });

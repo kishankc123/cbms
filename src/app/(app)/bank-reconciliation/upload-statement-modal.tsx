@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { previewStatementFile, previewStatementDates, confirmStatementImport, type StatementPreview, type DatePreview } from "./actions";
 import type { ColumnMapping } from "@/lib/banking/normalize-rows";
 
@@ -52,11 +53,10 @@ export function UploadStatementModal({
   const [allowMixed, setAllowMixed] = useState(false);
   const [datePreview, setDatePreview] = useState<DatePreview | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { report, dialog } = useProblem();
   const [result, setResult] = useState<{ imported: number; duplicates: number; skipped: number } | null>(null);
 
   async function handleFileSelect(file: File) {
-    setError(null);
     setLoading(true);
     try {
       const b64 = await fileToBase64(file);
@@ -67,7 +67,7 @@ export function UploadStatementModal({
       setMapping(p.suggestedMapping ?? { date: "" });
       setStep("map");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to read this file");
+      report(e instanceof Error ? e.message : "Failed to read this file", null);
     } finally {
       setLoading(false);
     }
@@ -77,7 +77,6 @@ export function UploadStatementModal({
     const choice = next.choice ?? dateChoice;
     const first = next.dayFirst ?? dayFirst;
     const mixedOk = next.allowMixed ?? allowMixed;
-    setError(null);
     setLoading(true);
     try {
       const p = await previewStatementDates({ bankAccountId, fileName, base64, dateColumn: mapping.date, choice, dayFirst: first, allowMixed: mixedOk });
@@ -87,14 +86,13 @@ export function UploadStatementModal({
       setAllowMixed(mixedOk);
       setStep("dates");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to read the dates");
+      report(e instanceof Error ? e.message : "Failed to read the dates", null);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleImport() {
-    setError(null);
     setLoading(true);
     try {
       const res = await confirmStatementImport({
@@ -111,7 +109,7 @@ export function UploadStatementModal({
       });
       setResult(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to import");
+      report(e instanceof Error ? e.message : "Failed to import", null);
     } finally {
       setLoading(false);
     }
@@ -156,7 +154,6 @@ export function UploadStatementModal({
               className="text-sm"
             />
             {loading && <p className="text-sm text-gray-400">Reading file...</p>}
-            {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
         ) : step === "map" && preview ? (
           <div className="space-y-4">
@@ -233,8 +230,6 @@ export function UploadStatementModal({
               <p className="px-2 py-1 text-xs text-gray-400">Showing {preview.sampleRows.length} of {preview.totalRows} rows</p>
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setStep("select")} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Back
@@ -257,7 +252,6 @@ export function UploadStatementModal({
             dayFirst={dayFirst}
             allowMixed={allowMixed}
             loading={loading}
-            error={error}
             onReload={loadDatePreview}
             onChangeFormat={() => setStep("map")}
             onCancel={onClose}
@@ -265,6 +259,7 @@ export function UploadStatementModal({
           />
         ) : null}
       </div>
+      {dialog}
     </div>
   );
 }
@@ -305,7 +300,6 @@ function DateReview({
   dayFirst,
   allowMixed,
   loading,
-  error,
   onReload,
   onChangeFormat,
   onCancel,
@@ -317,7 +311,6 @@ function DateReview({
   dayFirst: boolean;
   allowMixed: boolean;
   loading: boolean;
-  error: string | null;
   onReload: (next?: { choice?: ImportDateChoice; dayFirst?: boolean; allowMixed?: boolean }) => void;
   onChangeFormat: () => void;
   onCancel: () => void;
@@ -396,7 +389,6 @@ function DateReview({
           {counts.ambiguous > 0 ? "Some dates could be AD or BS. Choose the format above." : preview.mixed ? "Confirm how to treat the mixed dates above." : "No dates could be read from this column."}
         </p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">

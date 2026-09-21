@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { createBankTransaction, type StatementLineRow } from "./actions";
 
 import { D } from "@/components/calendar/date-text";
@@ -31,21 +32,21 @@ export function CreateBankTransactionModal({
   const [description, setDescription] = useState(line.description ?? "");
   const [offsetAccountId, setOffsetAccountId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
 
   async function handleSubmit() {
     if (!offsetAccountId) {
-      setError("Select the offset account");
+      report("Select the offset account: the account this bank transaction belongs to.", '[data-field="offset"]');
       return;
     }
     setSaving(true);
-    setError(null);
     try {
       await createBankTransaction({ statementLineId: line.id, bankAccountId, type, description, offsetAccountId });
       onCreated();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create transaction");
+      report(e instanceof Error ? e.message : "Failed to create transaction", /offset|bank account itself|customer and supplier/i.test(e instanceof Error ? e.message : "") ? '[data-field="offset"]' : null);
     } finally {
       setSaving(false);
     }
@@ -87,7 +88,7 @@ export function CreateBankTransactionModal({
           <label className="block text-xs text-gray-500 mb-1">
             {moneyIn ? "Where did this money come from?" : "What was this paid for?"}
           </label>
-          <select value={offsetAccountId} onChange={(e) => setOffsetAccountId(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select data-field="offset" value={offsetAccountId} onChange={(e) => setOffsetAccountId(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
             <option value="">Select account</option>
             {offsetAccounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -102,7 +103,6 @@ export function CreateBankTransactionModal({
           <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
 
-        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
@@ -118,6 +118,7 @@ export function CreateBankTransactionModal({
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }
