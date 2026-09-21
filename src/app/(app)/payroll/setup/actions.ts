@@ -35,6 +35,10 @@ export async function updateSettings(input: {
 }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (input.weeklyHolidays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw new Error("Weekly holidays must be days of the week");
+  if (input.publicHolidays.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) throw new Error("Public holidays must be valid dates");
+  if (![input.payrollStartDay, input.payrollEndDay].every((d) => Number.isInteger(d) && d >= 1 && d <= 32)) throw new Error("The payroll start and end days must be between 1 and 32");
+  if (input.payrollStartDay > input.payrollEndDay) throw new Error("The payroll start day can't be after the end day");
 
   await getOrCreateSettings(session.tenantId);
   await db
@@ -59,6 +63,9 @@ export async function createComponent(input: { name: string; type: ComponentType
 
   const name = input.name.trim();
   if (!name) throw new Error("Component name is required");
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error("The amount can't be negative");
+  const same = await db.select({ id: payrollComponents.id }).from(payrollComponents).where(and(eq(payrollComponents.tenantId, session.tenantId), eq(payrollComponents.name, name)));
+  if (same.length > 0) throw new Error(`There is already a payroll component called ${name}`);
 
   await db.insert(payrollComponents).values({
     tenantId: session.tenantId,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createComponent, deleteComponent } from "./actions";
 
@@ -13,11 +14,11 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
   const [type, setType] = useState<"allowance" | "deduction">("allowance");
   const [amount, setAmount] = useState("");
   const [taxable, setTaxable] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
-    setError(null);
     if (!name.trim()) return;
     setBusy(true);
     try {
@@ -27,7 +28,7 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
       setShowAdd(false);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setBusy(false);
     }
@@ -42,7 +43,6 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={() => setShowAdd(true)}
@@ -126,6 +126,7 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
           </div>
         </div>
       )}
+      {dialog}
     </div>
   );
 }

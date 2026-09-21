@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createEmployee } from "./actions";
 
@@ -31,6 +32,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState("");
   const [panNumber, setPanNumber] = useState("");
   const [joiningDate, setJoiningDate] = useState(today());
+  const [leavingDate, setLeavingDate] = useState("");
   const [department, setDepartment] = useState("");
   const [designation, setDesignation] = useState("");
   const [employmentType, setEmploymentType] = useState<(typeof EMPLOYMENT_TYPES)[number]["value"]>("full_time");
@@ -39,12 +41,12 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [initialSalary, setInitialSalary] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
 
   async function handleSave() {
-    setError(null);
     if (!employeeCode.trim() || !fullName.trim()) {
-      setError("Employee ID and full name are required.");
+      report("Employee ID and full name are required.", null);
       return;
     }
     setSaving(true);
@@ -57,6 +59,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         email,
         panNumber,
         joiningDate,
+        leavingDate,
         department,
         designation,
         employmentType,
@@ -68,7 +71,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
       router.refresh();
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setSaving(false);
     }
@@ -104,6 +107,10 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Joining Date</label>
           <DatePicker max={today()} value={joiningDate} onChange={(v) => setJoiningDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Leaving Date (if left)</label>
+          <DatePicker min={joiningDate} value={leavingDate} onChange={(v) => setLeavingDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Department</label>
@@ -164,7 +171,6 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={handleSave}
@@ -174,6 +180,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
           {saving ? "Saving..." : "+ Add employee"}
         </button>
       </div>
+      {dialog}
     </div>
   );
 }

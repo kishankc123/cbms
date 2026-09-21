@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { addBenefit } from "../actions";
 
@@ -22,7 +23,8 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -33,9 +35,8 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
   }, [onClose]);
 
   async function handleSave() {
-    setError(null);
     if (!benefitType.trim()) {
-      setError("Benefit type is required.");
+      report("Benefit type is required.", null);
       return;
     }
     setSaving(true);
@@ -44,7 +45,7 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
       router.refresh();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setSaving(false);
     }
@@ -108,7 +109,6 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          {error && <span className="mr-auto self-center text-xs text-red-600">{error}</span>}
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
             Cancel
           </button>
@@ -122,6 +122,7 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

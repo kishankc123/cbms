@@ -8,6 +8,7 @@ import {
   getOutstandingExpenses,
   getPaymentFormOptions,
   getCustomerRefundable,
+  getEmployeeOwed,
   type PaymentAllocationInput,
 } from "./actions";
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
@@ -28,6 +29,7 @@ const inputErrCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 t
 function typeConfig(paymentType: string) {
   return {
     needsCustomer: paymentType === "customer_payment" || paymentType === "customer_advance" || paymentType === "customer_refund",
+    needsEmployee: paymentType === "salary_payment",
     needsVendor: paymentType === "supplier_payment" || paymentType === "supplier_advance",
     optionalVendor: paymentType === "expense_payment" || paymentType === "refund_received",
     optionalOtherParty: ["loan_received", "capital_introduced", "loan_repayment", "owner_withdrawal", "other_receipt", "other_payment"].includes(paymentType),
@@ -73,6 +75,8 @@ export function NewPaymentModal({
   const [referenceNumber, setReferenceNumber] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [vendorId, setVendorId] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [owed, setOwed] = useState<number | null>(null);
   const [partyOtherName, setPartyOtherName] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -99,6 +103,7 @@ export function NewPaymentModal({
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");
     setCustomerId("");
     setVendorId("");
+    setEmployeeId("");
     setOutstanding([]);
     setAllocated({});
   }, [direction]);
@@ -126,6 +131,11 @@ export function NewPaymentModal({
     setRefundable(null);
     if (paymentType === "customer_refund" && customerId) getCustomerRefundable(customerId).then(setRefundable).catch(() => setRefundable(null));
   }, [paymentType, customerId]);
+
+  useEffect(() => {
+    setOwed(null);
+    if (paymentType === "salary_payment" && employeeId) getEmployeeOwed(employeeId).then((r) => setOwed(r.owed)).catch(() => setOwed(null));
+  }, [paymentType, employeeId]);
 
   const allocations: PaymentAllocationInput[] = useMemo(() => {
     const targetType = paymentType === "customer_payment" ? "sales_invoice" : paymentType === "supplier_payment" ? "purchase_bill" : "expense";
@@ -165,6 +175,7 @@ export function NewPaymentModal({
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
+    if (config.needsEmployee && !employeeId) bad("employeeId", "Please select an employee.", '[data-field="employee"]');
     if (!(amountNum > 0)) bad("amount", "Amount must be greater than zero.", '[data-field="amount"]');
     if (paymentMethod === "cheque" && !chequeNumber.trim()) bad("chequeNumber", "Cheque number is required for a cheque payment.", '[data-field="cheque"]');
     if (paymentType === "expense_payment" && allocations.length !== 1) bad("allocation", "Select the expense this payment settles.", '[data-field="allocation"]');
@@ -177,8 +188,9 @@ export function NewPaymentModal({
         direction,
         paymentType: paymentType as never,
         paymentDate,
-        partyType: config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none",
+        partyType: config.needsEmployee ? "employee" : config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none",
         customerId: config.needsCustomer ? customerId : null,
+        employeeId: config.needsEmployee ? employeeId : null,
         vendorId: config.needsVendor || config.optionalVendor ? vendorId || null : null,
         partyOtherName: config.optionalOtherParty ? partyOtherName || null : null,
         accountId,
@@ -206,10 +218,11 @@ export function NewPaymentModal({
       const message = e instanceof Error ? e.message : "Failed to save payment";
       const rules: [RegExp, string][] = [
         [/closed period|payment date/i, "#pay-date"],
-        [/owed|credit to refund/i, '[data-field="amount"]'],
+        [/owed|credit to refund|isn't owed/i, '[data-field="amount"]'],
         [/classification/i, '[data-field="category"]'],
         [/Cash or Bank|account/i, '[data-field="account"]'],
         [/different (customer|supplier)|allocat|invoice|bill|expense/i, '[data-field="allocation"]'],
+        [/employee|salary/i, '[data-field="employee"]'],
         [/customer/i, '[data-field="customer"]'],
         [/supplier/i, '[data-field="vendor"]'],
         [/amount/i, '[data-field="amount"]'],
@@ -346,6 +359,20 @@ export function NewPaymentModal({
                     Can be refunded: {fmt(refundable.total)} (credit {fmt(refundable.credit)} + advance {fmt(refundable.advance)})
                   </p>
                 )}
+              </div>
+            )}
+            {config.needsEmployee && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Employee</label>
+                <select data-field="employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={fieldErrors.employeeId ? inputErrCls : inputCls}>
+                  <option value="">Select employee</option>
+                  {formOptions.employees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
+                {owed !== null && <p className="mt-1 text-xs text-gray-500">Owed to this employee: {fmt(owed)}</p>}
               </div>
             )}
             {(config.needsVendor || config.optionalVendor) && (

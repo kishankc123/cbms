@@ -19,6 +19,7 @@ import {
   complianceObligations,
 } from "@/db/schema";
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
+import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
@@ -101,6 +102,13 @@ export async function getCustomerRefundable(customerId: string) {
   const credit = round2(Math.max(-(balances[customerId] ?? 0), 0));
   const adv = round2(Math.max(advance, 0));
   return { credit, advance: adv, total: round2(credit + adv) };
+}
+
+/** What an employee is owed and hasn't been paid — the limit of a salary payment. */
+export async function getEmployeeOwed(employeeId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  return { owed: Math.max(await getEmployeePayableBalance(session.tenantId, employeeId), 0) };
 }
 
 // ---------- Create / void ----------

@@ -24,6 +24,8 @@ import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts } from "./account-guards";
 import { getCustomerBalances } from "./customer-balances";
 import { getSupplierBalances } from "./supplier-balances";
+import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { createEmployeePayableAccount } from "./payroll-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { todayIso } from "@/lib/calendar";
@@ -59,6 +61,7 @@ export const MONEY_IN_TYPES: PaymentType[] = [
 export const MONEY_OUT_TYPES: PaymentType[] = [
   "supplier_payment",
   "customer_refund",
+  "salary_payment",
   "expense_payment",
   "tax_payment",
   "loan_repayment",
@@ -123,7 +126,7 @@ async function checkDuplicate(tenantId: string, input: CreatePaymentInput) {
   to.setUTCDate(to.getUTCDate() + 2);
 
   const candidates = await db
-    .select({ id: payments.id, amount: payments.amount, customerId: payments.customerId, vendorId: payments.vendorId, referenceNumber: payments.referenceNumber })
+    .select({ id: payments.id, amount: payments.amount, customerId: payments.customerId, vendorId: payments.vendorId, employeeId: payments.employeeId, referenceNumber: payments.referenceNumber })
     .from(payments)
     .where(
       and(
@@ -140,6 +143,7 @@ async function checkDuplicate(tenantId: string, input: CreatePaymentInput) {
       Math.abs(Number(c.amount) - input.amount) < 0.005 &&
       (input.customerId ? c.customerId === input.customerId : true) &&
       (input.vendorId ? c.vendorId === input.vendorId : true) &&
+      (input.employeeId ? c.employeeId === input.employeeId : true) &&
       (input.referenceNumber ? c.referenceNumber === input.referenceNumber : true)
   );
 }
@@ -261,6 +265,14 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       lines.push(primaryLine);
       return lines;
     }
+    case "salary_payment": {
+      // Pay-out of what an employee is owed: settles their own Salary Payable account.
+      const [emp] = await db.select({ id: employees.id, fullName: employees.fullName, payableAccountId: employees.payableAccountId }).from(employees).where(and(eq(employees.id, input.employeeId!), eq(employees.tenantId, tenantId))).limit(1);
+      if (!emp) throw new Error("Employee not found");
+      const payableId = emp.payableAccountId ?? (await createEmployeePayableAccount(tenantId, emp.fullName)).id;
+      if (!emp.payableAccountId) await db.update(employees).set({ payableAccountId: payableId }).where(eq(employees.id, emp.id));
+      return [{ accountId: payableId, debitAmount: amount, description: label }, primaryLine];
+    }
     case "expense_payment": {
       const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
       return [{ accountId: expensePayable.id, debitAmount: amount, description: label }, primaryLine];
@@ -359,6 +371,7 @@ function validateInput(input: CreatePaymentInput) {
   const needsVendor = input.paymentType === "supplier_payment" || input.paymentType === "supplier_advance";
   if (needsCustomer && !input.customerId) throw new Error("Select a customer.");
   if (needsVendor && !input.vendorId) throw new Error("Select a supplier.");
+  if (input.paymentType === "salary_payment" && !input.employeeId) throw new Error("Select an employee.");
 
   if (TRANSFER_TYPES.includes(input.paymentType) && !input.transferToAccountId) {
     throw new Error("Select the destination account.");
@@ -544,6 +557,19 @@ async function validateRefund(tenantId: string, input: CreatePaymentInput) {
   }
 }
 
+// A salary payment settles what the employee is owed (their Salary Payable balance), so it can't be more than that.
+async function validateSalaryPayment(tenantId: string, input: CreatePaymentInput) {
+  if (input.paymentType !== "salary_payment") return;
+  const owed = Math.max(await getEmployeePayableBalance(tenantId, input.employeeId!), 0);
+  if (round2(input.amount) > owed + 0.005) {
+    throw new Error(
+      owed > 0
+        ? `This employee is owed ${owed.toFixed(2)}, so a salary payment can't be more than that`
+        : "This employee isn't owed any salary — finalize their payroll run first (or there is nothing left to pay)"
+    );
+  }
+}
+
 // The money a payment put into an advance account can't be taken away (by voiding the payment) once it has been
 // applied to a document or refunded.
 async function assertAdvanceStillThere(tenantId: string, payment: typeof payments.$inferSelect, allocatedTotal: number) {
@@ -587,6 +613,7 @@ export async function createPayment(
   await validateTaxAllocations(tenantId, input);
   await validateAllocations(tenantId, input);
   await validateRefund(tenantId, input);
+  await validateSalaryPayment(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
 

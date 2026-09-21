@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  accounts,
   employees,
   salaryHistory,
   employeeBenefits,
@@ -32,6 +33,8 @@ export type EmployeeInput = {
   email: string;
   panNumber: string;
   joiningDate: string;
+  /** Last day of employment, if they have left (empty = still employed). */
+  leavingDate: string;
   department: string;
   designation: string;
   employmentType: EmploymentType;
@@ -39,6 +42,12 @@ export type EmployeeInput = {
   bankName: string;
   bankAccountNumber: string;
 };
+
+// An employee ID (code) is unique within the organization.
+async function assertEmployeeCodeFree(tenantId: string, employeeCode: string, excludeEmployeeId?: string) {
+  const same = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.employeeCode, employeeCode)));
+  if (same.some((e) => e.id !== excludeEmployeeId)) throw new Error(`Employee ID ${employeeCode} is already used by another employee`);
+}
 
 // Creating an employee also writes the first salaryHistory row (changeType
 // "initial") — an employee must never exist without a salary source-of-truth
@@ -53,6 +62,8 @@ export async function createEmployee(input: EmployeeInput & { initialSalary: num
   if (!fullName) throw new Error("Full name is required");
   if (!input.joiningDate) throw new Error("Joining date is required");
   if (input.initialSalary <= 0) throw new Error("Initial basic salary must be greater than zero");
+  if (input.leavingDate && input.leavingDate < input.joiningDate) throw new Error("The leaving date can't be before the joining date");
+  await assertEmployeeCodeFree(session.tenantId, employeeCode);
 
   const [employee] = await db
     .insert(employees)
@@ -65,6 +76,7 @@ export async function createEmployee(input: EmployeeInput & { initialSalary: num
       email: input.email.trim() || null,
       panNumber: input.panNumber.trim() || null,
       joiningDate: input.joiningDate,
+      leavingDate: input.leavingDate || null,
       department: input.department.trim() || null,
       designation: input.designation.trim() || null,
       employmentType: input.employmentType,
@@ -106,7 +118,9 @@ export async function createEmployee(input: EmployeeInput & { initialSalary: num
 }
 
 // Only master-data fields — never touches salary. Salary changes must go
-// through addSalaryChange so the historical record is never bypassed.
+// through addSalaryChange so the historical record is never bypassed. Keeps the
+// things that hang off the master data in step: a changed joining date moves the
+// initial salary record with it, and a rename renames the employee's payable account.
 export async function updateEmployee(input: EmployeeInput & { employeeId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
@@ -115,6 +129,16 @@ export async function updateEmployee(input: EmployeeInput & { employeeId: string
   const fullName = input.fullName.trim();
   if (!employeeCode) throw new Error("Employee ID is required");
   if (!fullName) throw new Error("Full name is required");
+  if (!input.joiningDate) throw new Error("Joining date is required");
+  if (input.leavingDate && input.leavingDate < input.joiningDate) throw new Error("The leaving date can't be before the joining date");
+
+  const [existing] = await db
+    .select()
+    .from(employees)
+    .where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId)))
+    .limit(1);
+  if (!existing) throw new Error("Employee not found");
+  await assertEmployeeCodeFree(session.tenantId, employeeCode, existing.id);
 
   await db
     .update(employees)
@@ -126,6 +150,7 @@ export async function updateEmployee(input: EmployeeInput & { employeeId: string
       email: input.email.trim() || null,
       panNumber: input.panNumber.trim() || null,
       joiningDate: input.joiningDate,
+      leavingDate: input.leavingDate || null,
       department: input.department.trim() || null,
       designation: input.designation.trim() || null,
       employmentType: input.employmentType,
@@ -135,8 +160,20 @@ export async function updateEmployee(input: EmployeeInput & { employeeId: string
     })
     .where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId)));
 
+  if (input.joiningDate !== existing.joiningDate) {
+    // The initial salary starts the day they join.
+    await db
+      .update(salaryHistory)
+      .set({ effectiveFrom: input.joiningDate })
+      .where(and(eq(salaryHistory.tenantId, session.tenantId), eq(salaryHistory.employeeId, existing.id), eq(salaryHistory.changeType, "initial")));
+  }
+  if (fullName !== existing.fullName && existing.payableAccountId) {
+    await db.update(accounts).set({ name: fullName }).where(and(eq(accounts.id, existing.payableAccountId), eq(accounts.tenantId, session.tenantId)));
+  }
+
   revalidatePath("/payroll/employees");
   revalidatePath(`/payroll/employees/${input.employeeId}`);
+  revalidatePath("/chart-of-accounts");
 }
 
 type ChangeType = (typeof salaryChangeTypeEnum.enumValues)[number];
@@ -229,6 +266,8 @@ export async function addBenefit(input: BenefitInput) {
   if (!benefitType) throw new Error("Benefit type is required");
   if (!input.effectiveFrom) throw new Error("Effective from date is required");
   if (input.amount <= 0) throw new Error("Amount must be greater than zero");
+  const [owner] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId))).limit(1);
+  if (!owner) throw new Error("Employee not found");
 
   const openEnded = await db
     .select()

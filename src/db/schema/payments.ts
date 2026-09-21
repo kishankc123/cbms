@@ -26,6 +26,7 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   // Money out
   "supplier_payment",
   "customer_refund",
+  "salary_payment",
   "expense_payment",
   "tax_payment",
   "loan_repayment",

@@ -7,6 +7,7 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
   other_receipt: "Other Receipt",
   supplier_payment: "Supplier Payment",
   customer_refund: "Customer Refund",
+  salary_payment: "Salary Payment",
   expense_payment: "Expense Payment",
   tax_payment: "Tax Payment",
   loan_repayment: "Loan Repayment",
@@ -29,6 +30,7 @@ export const MONEY_IN_TYPE_OPTIONS = [
 export const MONEY_OUT_TYPE_OPTIONS = [
   { value: "supplier_payment", label: "Supplier Payment" },
   { value: "customer_refund", label: "Customer Refund" },
+  { value: "salary_payment", label: "Salary Payment" },
   { value: "expense_payment", label: "Expense Payment" },
   { value: "tax_payment", label: "Tax Payment" },
   { value: "loan_repayment", label: "Loan Repayment" },

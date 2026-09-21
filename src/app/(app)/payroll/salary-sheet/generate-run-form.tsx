@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { generatePayrollRun } from "./actions";
 import { useCalendar } from "@/components/calendar/calendar-provider";
@@ -17,20 +18,20 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
   const [year, setYear] = useState(current.year);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
 
   function toggleEmployee(id: string) {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   }
 
   async function handleGenerate() {
-    setError(null);
     setSaving(true);
     try {
       const runId = await generatePayrollRun({ month, year, calendar, employeeIds: selectedIds });
       router.push(`/payroll/salary-sheet/${runId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to generate");
+      report(e instanceof Error ? e.message : "Failed to generate", null);
     } finally {
       setSaving(false);
     }
@@ -70,7 +71,6 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={handleGenerate}
@@ -80,6 +80,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
           {saving ? "Generating..." : "Generate salary sheet"}
         </button>
       </div>
+      {dialog}
     </div>
   );
 }

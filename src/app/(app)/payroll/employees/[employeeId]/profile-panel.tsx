@@ -12,6 +12,7 @@ type Employee = {
   email: string | null;
   panNumber: string | null;
   joiningDate: string;
+  leavingDate: string | null;
   department: string | null;
   designation: string | null;
   employmentType: string;
@@ -48,6 +49,7 @@ export function ProfilePanel({ employee, currentSalary }: { employee: Employee; 
         <Field label="Email" value={employee.email ?? ""} />
         <Field label="PAN Number" value={employee.panNumber ?? ""} />
         <Field label="Joining Date" value={employee.joiningDate} />
+        {employee.leavingDate && <Field label="Leaving Date" value={employee.leavingDate} />}
         <Field label="Department" value={employee.department ?? ""} />
         <Field label="Designation" value={employee.designation ?? ""} />
         <Field label="Employment Type" value={employee.employmentType.replace("_", " ")} />

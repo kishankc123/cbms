@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, date, numeric, integer, boolean, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, date, numeric, integer, boolean, timestamp, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 
@@ -15,6 +15,8 @@ export const employees = pgTable("employees", {
   email: text("email"),
   panNumber: text("pan_number"),
   joiningDate: date("joining_date").notNull(),
+  // Last day of employment, when they have left. Pay stops after it (a run prorates the month they leave in).
+  leavingDate: date("leaving_date"),
   department: text("department"),
   designation: text("designation"),
   employmentType: employmentTypeEnum("employment_type").notNull().default("full_time"),
@@ -25,7 +27,7 @@ export const employees = pgTable("employees", {
   // accruals to — a sub-group under the tenant's Salary Payable group,
   // created alongside the employee (see payroll-accounts.ts).
   payableAccountId: uuid("payable_account_id").references(() => accounts.id),
-});
+}, (t) => [uniqueIndex("employees_tenant_code").on(t.tenantId, t.employeeCode)]);
 
 // "current basic salary" is deliberately NOT stored here — the employee's
 // salary at any point in time (including "now") is always derived from
