@@ -6,6 +6,7 @@ import { RunStatusControls } from "./run-status-controls";
 
 import { D } from "@/components/calendar/date-text";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+import { getRunRecoveryBreakdown } from "@/lib/payroll/staff-advances";
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
@@ -29,7 +30,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       absentDays: payrollLines.absentDays,
       proratedBasic: payrollLines.proratedBasic,
       allowances: payrollLines.allowances,
+      employeeId: payrollLines.employeeId,
       deductions: payrollLines.deductions,
+      advanceRecovered: payrollLines.advanceRecovered,
       benefitsAmount: payrollLines.benefitsAmount,
       grossPay: payrollLines.grossPay,
       netPay: payrollLines.netPay,
@@ -39,6 +42,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
     .where(eq(payrollLines.payrollRunId, runId));
 
   const totalNet = lines.reduce((s, l) => s + Number(l.netPay), 0);
+  const hasAdvances = lines.some((l) => Number(l.advanceRecovered) > 0);
+  const recoveries = hasAdvances ? await getRunRecoveryBreakdown(session.tenantId, run) : [];
+  const nameOf = new Map(lines.map((l) => [l.employeeId, l.fullName]));
 
   return (
     <div className="space-y-6">
@@ -68,6 +74,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
               <th className="px-3 py-2 font-medium whitespace-nowrap">Benefits</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Deductions</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Gross Pay</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Advance Recovered</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Net Pay</th>
             </tr>
           </thead>
@@ -86,12 +93,13 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.benefitsAmount).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.deductions).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.grossPay).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{Number(l.advanceRecovered).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.netPay).toFixed(2)}</td>
               </tr>
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={12} className="px-4 py-6 text-center text-gray-400">
                   No lines in this run
                 </td>
               </tr>
@@ -100,7 +108,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           {lines.length > 0 && (
             <tfoot>
               <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                <td colSpan={10} className="px-3 py-2 text-right">
+                <td colSpan={11} className="px-3 py-2 text-right">
                   Total Net Pay
                 </td>
                 <td className="px-3 py-2">{totalNet.toFixed(2)}</td>
@@ -109,6 +117,31 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           )}
         </table>
       </div>
-    </div>
+
+      {recoveries.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h2 className="text-sm font-semibold text-gray-900">Staff advances {run.status === "finalized" ? "recovered in" : "to be recovered in"} this run</h2>
+          <table className="mt-2 w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr>
+                <th className="py-1 pr-3 font-medium">Employee</th>
+                <th className="py-1 pr-3 font-medium">Advance date</th>
+                <th className="py-1 pr-3 font-medium">Taken against</th>
+                <th className="py-1 text-right font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recoveries.map((r, i) => (
+                <tr key={i} className="border-t border-gray-100">
+                  <td className="py-1 pr-3">{nameOf.get(r.employeeId)}</td>
+                  <td className="py-1 pr-3"><D value={r.advanceDate} /></td>
+                  <td className="py-1 pr-3">{payrollPeriodLabel({ calendarSystem: r.forCalendar, month: r.forMonth, year: r.forYear })}</td>
+                  <td className="py-1 text-right">{r.amount.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}    </div>
   );
 }

@@ -1,9 +1,9 @@
-import { pgTable, uuid, text, timestamp, date, numeric, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, integer, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 import { customers } from "./sales";
 import { vendors } from "./purchases";
-import { employees } from "./payroll";
+import { employees, payrollRuns } from "./payroll";
 import { journalEntries } from "./ledger";
 
 // Unified Payment module — the single source of truth for every money
@@ -27,6 +27,7 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "supplier_payment",
   "customer_refund",
   "salary_payment",
+  "staff_advance",
   "expense_payment",
   "tax_payment",
   "loan_repayment",
@@ -161,3 +162,31 @@ export const advanceApplications = pgTable(
   },
   (t) => [index("advance_applications_target").on(t.tenantId, t.targetId), index("advance_applications_party").on(t.tenantId, t.partyId)]
 );
+
+// Money paid to an employee ahead of salary (payment type "staff_advance"). It is recovered from the pay of the month
+// it was taken against, or later months if that pay isn't enough. What has been recovered is the sum of its recoveries.
+export const staffAdvances = pgTable("staff_advances", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  paymentId: uuid("payment_id").notNull().references(() => payments.id, { onDelete: "cascade" }),
+  advanceDate: date("advance_date").notNull(),
+  // The month it is taken against, in the calendar it was chosen in; forPeriodStart is that month's first day as a real (AD) date.
+  forCalendar: text("for_calendar").notNull().default("AD"),
+  forMonth: integer("for_month").notNull(),
+  forYear: integer("for_year").notNull(),
+  forPeriodStart: date("for_period_start").notNull(),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+  status: text("status").notNull().default("open"), // open | void
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("staff_advances_payment").on(t.paymentId), index("staff_advances_employee").on(t.tenantId, t.employeeId)]);
+
+// One row per advance per finalized payroll run that recovered part of it. Removed when that run is reversed.
+export const staffAdvanceRecoveries = pgTable("staff_advance_recoveries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  advanceId: uuid("advance_id").notNull().references(() => staffAdvances.id, { onDelete: "cascade" }),
+  payrollRunId: uuid("payroll_run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("staff_advance_recoveries_run").on(t.payrollRunId)]);

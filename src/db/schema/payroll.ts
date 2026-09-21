@@ -27,6 +27,8 @@ export const employees = pgTable("employees", {
   // accruals to — a sub-group under the tenant's Salary Payable group,
   // created alongside the employee (see payroll-accounts.ts).
   payableAccountId: uuid("payable_account_id").references(() => accounts.id),
+  // The employee's own sub-account under Staff Advances (money paid to them ahead of salary).
+  advanceAccountId: uuid("advance_account_id").references(() => accounts.id),
 }, (t) => [uniqueIndex("employees_tenant_code").on(t.tenantId, t.employeeCode)]);
 
 // "current basic salary" is deliberately NOT stored here — the employee's
@@ -147,6 +149,8 @@ export const payrollLines = pgTable("payroll_lines", {
   overtimeAmount: numeric("overtime_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   benefitsAmount: numeric("benefits_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   grossPay: numeric("gross_pay", { precision: 18, scale: 2 }).notNull(),
+  // Staff advances recovered from this pay; net pay = gross - deductions - advance recovered.
+  advanceRecovered: numeric("advance_recovered", { precision: 18, scale: 2 }).notNull().default("0"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 

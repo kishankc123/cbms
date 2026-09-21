@@ -9,6 +9,7 @@ import {
   getPaymentFormOptions,
   getCustomerRefundable,
   getEmployeeOwed,
+  getEmployeeAdvanceInfo,
   type PaymentAllocationInput,
 } from "./actions";
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
@@ -16,7 +17,8 @@ import { ConfirmDialog } from "../sales/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 
 import { DatePicker } from "@/components/calendar/date-picker";
-import { todayIso } from "@/lib/calendar";
+import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
+import { useCalendar } from "@/components/calendar/calendar-provider";
 import { D } from "@/components/calendar/date-text";
 type FormOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 type Direction = "money_in" | "money_out";
@@ -29,7 +31,8 @@ const inputErrCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 t
 function typeConfig(paymentType: string) {
   return {
     needsCustomer: paymentType === "customer_payment" || paymentType === "customer_advance" || paymentType === "customer_refund",
-    needsEmployee: paymentType === "salary_payment",
+    needsEmployee: paymentType === "salary_payment" || paymentType === "staff_advance",
+    needsAdvanceMonth: paymentType === "staff_advance",
     needsVendor: paymentType === "supplier_payment" || paymentType === "supplier_advance",
     optionalVendor: paymentType === "expense_payment" || paymentType === "refund_received",
     optionalOtherParty: ["loan_received", "capital_introduced", "loan_repayment", "owner_withdrawal", "other_receipt", "other_payment"].includes(paymentType),
@@ -77,6 +80,12 @@ export function NewPaymentModal({
   const [vendorId, setVendorId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [owed, setOwed] = useState<number | null>(null);
+  // A staff advance is taken against a payroll month of the organization's calendar; it opens on the current month.
+  const calendar = useCalendar();
+  const currentMonth = ymdOf(calendar, todayIso()) ?? ymdOf("AD", todayIso())!;
+  const [advMonth, setAdvMonth] = useState(currentMonth.month);
+  const [advYear, setAdvYear] = useState(currentMonth.year);
+  const [advInfo, setAdvInfo] = useState<{ outstanding: number; basic: number } | null>(null);
   const [partyOtherName, setPartyOtherName] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -134,7 +143,9 @@ export function NewPaymentModal({
 
   useEffect(() => {
     setOwed(null);
+    setAdvInfo(null);
     if (paymentType === "salary_payment" && employeeId) getEmployeeOwed(employeeId).then((r) => setOwed(r.owed)).catch(() => setOwed(null));
+    if (paymentType === "staff_advance" && employeeId) getEmployeeAdvanceInfo(employeeId).then(setAdvInfo).catch(() => setAdvInfo(null));
   }, [paymentType, employeeId]);
 
   const allocations: PaymentAllocationInput[] = useMemo(() => {
@@ -175,6 +186,7 @@ export function NewPaymentModal({
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
+    if (config.needsAdvanceMonth && (!advMonth || !advYear)) bad("advanceMonth", "Select the month this advance is against.", '[data-field="advance-month"]');
     if (config.needsEmployee && !employeeId) bad("employeeId", "Please select an employee.", '[data-field="employee"]');
     if (!(amountNum > 0)) bad("amount", "Amount must be greater than zero.", '[data-field="amount"]');
     if (paymentMethod === "cheque" && !chequeNumber.trim()) bad("chequeNumber", "Cheque number is required for a cheque payment.", '[data-field="cheque"]');
@@ -191,6 +203,7 @@ export function NewPaymentModal({
         partyType: config.needsEmployee ? "employee" : config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none",
         customerId: config.needsCustomer ? customerId : null,
         employeeId: config.needsEmployee ? employeeId : null,
+        advanceMonth: config.needsAdvanceMonth ? { calendar, month: advMonth, year: advYear } : null,
         vendorId: config.needsVendor || config.optionalVendor ? vendorId || null : null,
         partyOtherName: config.optionalOtherParty ? partyOtherName || null : null,
         accountId,
@@ -222,7 +235,8 @@ export function NewPaymentModal({
         [/classification/i, '[data-field="category"]'],
         [/Cash or Bank|account/i, '[data-field="account"]'],
         [/different (customer|supplier)|allocat|invoice|bill|expense/i, '[data-field="allocation"]'],
-        [/employee|salary/i, '[data-field="employee"]'],
+        [/month|payroll/i, '[data-field="advance-month"]'],
+        [/employee|salary|joined|left/i, '[data-field="employee"]'],
         [/customer/i, '[data-field="customer"]'],
         [/supplier/i, '[data-field="vendor"]'],
         [/amount/i, '[data-field="amount"]'],
@@ -372,7 +386,29 @@ export function NewPaymentModal({
                     </option>
                   ))}
                 </select>
-                {owed !== null && <p className="mt-1 text-xs text-gray-500">Owed to this employee: {fmt(owed)}</p>}
+                {paymentType === "salary_payment" && owed !== null && <p className="mt-1 text-xs text-gray-500">Owed to this employee: {fmt(owed)}</p>}
+                {paymentType === "staff_advance" && advInfo && (
+                  <p className={`mt-1 text-xs ${advInfo.outstanding + amountNum > advInfo.basic && advInfo.basic > 0 ? "text-amber-700" : "text-gray-500"}`}>
+                    Advances not yet recovered: {fmt(advInfo.outstanding)} · Monthly basic: {fmt(advInfo.basic)}
+                    {advInfo.basic > 0 && advInfo.outstanding + amountNum > advInfo.basic ? " — this would take their advances above one month's basic salary" : ""}
+                  </p>
+                )}
+              </div>
+            )}
+            {config.needsAdvanceMonth && (
+              <div data-field="advance-month">
+                <label className="block text-xs text-gray-500 mb-1">Advance for month</label>
+                <div className="flex gap-2">
+                  <select value={advMonth} onChange={(e) => setAdvMonth(Number(e.target.value))} className={inputCls}>
+                    {monthNames(calendar).map((name, i) => (
+                      <option key={i} value={i + 1}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <input type="number" value={advYear} onChange={(e) => setAdvYear(Number(e.target.value))} className={`${inputCls} w-24`} />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Recovered from that month&apos;s salary sheet.</p>
               </div>
             )}
             {(config.needsVendor || config.optionalVendor) && (

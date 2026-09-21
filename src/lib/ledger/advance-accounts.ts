@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, customers, vendors, journalEntries, journalLines } from "@/db/schema";
+import { accounts, customers, employees, vendors, journalEntries, journalLines } from "@/db/schema";
 import { findControlAccount, createSubAccount } from "./control-accounts";
 
 // Money received from a customer before an invoice exists, or the
@@ -117,4 +117,34 @@ export async function getSupplierAdvanceBalance(tenantId: string, vendorId: stri
   const [v] = await db.select({ a: vendors.advanceAccountId }).from(vendors).where(and(eq(vendors.id, vendorId), eq(vendors.tenantId, tenantId))).limit(1);
   if (!v?.a) return 0;
   return await debitMinusCredit(tenantId, v.a);
+}
+
+// ---- staff advances: money paid to an employee ahead of salary (an asset until recovered from their pay)
+
+export async function getOrCreateStaffAdvanceAccount(tenantId: string) {
+  const existing = await findControlAccount(tenantId, ["1360"], "Staff Advances");
+  if (existing) return existing;
+  const [created] = await db
+    .insert(accounts)
+    .values({ tenantId, code: "1360", name: "Staff Advances", category: "asset", subCategory: "Current assets" })
+    .returning();
+  return created;
+}
+
+/** The employee's own Staff Advances sub-account, created (and linked to them by id) on first use. */
+export async function getOrCreateEmployeeAdvanceAccountId(tenantId: string, employeeId: string): Promise<string> {
+  const [e] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId))).limit(1);
+  if (!e) throw new Error("Employee not found");
+  if (e.advanceAccountId) return e.advanceAccountId;
+  const parent = await getOrCreateStaffAdvanceAccount(tenantId);
+  const id = (await createSubAccount(tenantId, parent, e.fullName)).id;
+  await db.update(employees).set({ advanceAccountId: id }).where(eq(employees.id, employeeId));
+  return id;
+}
+
+/** What we have advanced an employee and not yet recovered (an asset: debit-normal), from the ledger. */
+export async function getEmployeeAdvanceBalance(tenantId: string, employeeId: string): Promise<number> {
+  const [e] = await db.select({ a: employees.advanceAccountId }).from(employees).where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId))).limit(1);
+  if (!e?.a) return 0;
+  return await debitMinusCredit(tenantId, e.a);
 }

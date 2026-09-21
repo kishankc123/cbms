@@ -7,6 +7,8 @@ import {
   customers,
   vendors,
   employees,
+  staffAdvances,
+  staffAdvanceRecoveries,
   salesInvoices,
   purchaseBills,
   expenses,
@@ -25,6 +27,9 @@ import { assertCashBankAccounts } from "./account-guards";
 import { getCustomerBalances } from "./customer-balances";
 import { getSupplierBalances } from "./supplier-balances";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { assertMonthOpenForAdvance } from "@/lib/payroll/staff-advances";
+import { getOrCreateEmployeeAdvanceAccountId } from "./advance-accounts";
+import { isoFromYmd, type CalendarSystem } from "@/lib/calendar";
 import { createEmployeePayableAccount } from "./payroll-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
@@ -62,6 +67,7 @@ export const MONEY_OUT_TYPES: PaymentType[] = [
   "supplier_payment",
   "customer_refund",
   "salary_payment",
+  "staff_advance",
   "expense_payment",
   "tax_payment",
   "loan_repayment",
@@ -104,6 +110,8 @@ export type CreatePaymentInput = {
   allocations?: AllocationInput[];
   origin?: "standalone" | "embedded";
   confirmDuplicate?: boolean;
+  /** Staff advance only: the payroll month it is taken against, in the calendar it was chosen in. */
+  advanceMonth?: { calendar: CalendarSystem; month: number; year: number } | null;
 };
 
 export class DuplicatePaymentWarning extends Error {
@@ -273,6 +281,11 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       if (!emp.payableAccountId) await db.update(employees).set({ payableAccountId: payableId }).where(eq(employees.id, emp.id));
       return [{ accountId: payableId, debitAmount: amount, description: label }, primaryLine];
     }
+    case "staff_advance": {
+      // Money handed to an employee ahead of salary: it sits on their own Staff Advance account until payroll recovers it.
+      const advanceId = await getOrCreateEmployeeAdvanceAccountId(tenantId, input.employeeId!);
+      return [{ accountId: advanceId, debitAmount: amount, description: label }, primaryLine];
+    }
     case "expense_payment": {
       const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
       return [{ accountId: expensePayable.id, debitAmount: amount, description: label }, primaryLine];
@@ -371,7 +384,8 @@ function validateInput(input: CreatePaymentInput) {
   const needsVendor = input.paymentType === "supplier_payment" || input.paymentType === "supplier_advance";
   if (needsCustomer && !input.customerId) throw new Error("Select a customer.");
   if (needsVendor && !input.vendorId) throw new Error("Select a supplier.");
-  if (input.paymentType === "salary_payment" && !input.employeeId) throw new Error("Select an employee.");
+  if ((input.paymentType === "salary_payment" || input.paymentType === "staff_advance") && !input.employeeId) throw new Error("Select an employee.");
+  if (input.paymentType === "staff_advance" && !input.advanceMonth) throw new Error("Select the month this advance is against.");
 
   if (TRANSFER_TYPES.includes(input.paymentType) && !input.transferToAccountId) {
     throw new Error("Select the destination account.");
@@ -570,6 +584,20 @@ async function validateSalaryPayment(tenantId: string, input: CreatePaymentInput
   }
 }
 
+// A staff advance goes to someone who is employed on the day it is paid, against a payroll month that is still open.
+async function validateStaffAdvance(tenantId: string, input: CreatePaymentInput) {
+  if (input.paymentType !== "staff_advance") return;
+  const m = input.advanceMonth!;
+  const forPeriodStart = Number.isInteger(m.month) && Number.isInteger(m.year) ? isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 }) : null;
+  if (!forPeriodStart) throw new Error("Choose a valid month for this advance");
+  const [emp] = await db.select().from(employees).where(and(eq(employees.id, input.employeeId!), eq(employees.tenantId, tenantId))).limit(1);
+  if (!emp) throw new Error("Employee not found");
+  if (emp.employmentStatus === "inactive" || emp.employmentStatus === "terminated") throw new Error(`${emp.fullName} is not an active employee`);
+  if (emp.joiningDate > input.paymentDate) throw new Error(`${emp.fullName} hadn't joined by that date`);
+  if (emp.leavingDate && emp.leavingDate < input.paymentDate) throw new Error(`${emp.fullName} had already left by that date`);
+  await assertMonthOpenForAdvance(tenantId, m.calendar, m.month, m.year, forPeriodStart);
+}
+
 // The money a payment put into an advance account can't be taken away (by voiding the payment) once it has been
 // applied to a document or refunded.
 async function assertAdvanceStillThere(tenantId: string, payment: typeof payments.$inferSelect, allocatedTotal: number) {
@@ -614,6 +642,7 @@ export async function createPayment(
   await validateAllocations(tenantId, input);
   await validateRefund(tenantId, input);
   await validateSalaryPayment(tenantId, input);
+  await validateStaffAdvance(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
 
@@ -682,6 +711,21 @@ export async function createPayment(
 
     await db.update(payments).set({ status: "posted", journalEntryId: entry.id, postedBy: userId, postedAt: new Date() }).where(eq(payments.id, paymentRow.id));
 
+    if (input.paymentType === "staff_advance") {
+      const m = input.advanceMonth!;
+      await db.insert(staffAdvances).values({
+        tenantId,
+        employeeId: input.employeeId!,
+        paymentId: paymentRow.id,
+        advanceDate: input.paymentDate,
+        forCalendar: m.calendar,
+        forMonth: m.month,
+        forYear: m.year,
+        forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })!,
+        amount: input.amount.toFixed(2),
+      });
+    }
+
     const allocations = input.allocations ?? [];
     if (allocations.length > 0) {
       await db.insert(paymentAllocations).values(
@@ -731,6 +775,13 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
     throw new Error("This payment has been matched in a bank reconciliation — undo that match before voiding it");
   }
 
+  if (payment.paymentType === "staff_advance") {
+    // Once payroll has taken part of it back, reverse that payroll run first (its recovery is what a void would strand).
+    const [adv] = await db.select({ id: staffAdvances.id }).from(staffAdvances).where(eq(staffAdvances.paymentId, paymentId)).limit(1);
+    const [rec] = adv ? await db.select({ id: staffAdvanceRecoveries.id }).from(staffAdvanceRecoveries).where(eq(staffAdvanceRecoveries.advanceId, adv.id)).limit(1) : [];
+    if (rec) throw new Error("Part of this advance has already been recovered through payroll — reverse that payroll run first, then void the advance");
+  }
+
   const allocations = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
   await assertAdvanceStillThere(tenantId, payment, round2(allocations.reduce((s, a) => s + Number(a.allocatedAmount), 0)));
   for (const a of allocations) {
@@ -741,6 +792,7 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
     await reverseJournalEntry(tenantId, payment.journalEntryId, userId, `Void of payment ${payment.paymentNumber}: ${reason}`);
   }
 
+  if (payment.paymentType === "staff_advance") await db.update(staffAdvances).set({ status: "void" }).where(eq(staffAdvances.paymentId, paymentId));
   await db
     .update(payments)
     .set({ status: "voided", voidReason: reason, voidedBy: userId, voidedAt: new Date() })

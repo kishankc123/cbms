@@ -20,6 +20,8 @@ import {
 } from "@/db/schema";
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
+import { getCurrentSalary } from "@/lib/payroll/salary";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
@@ -109,6 +111,14 @@ export async function getEmployeeOwed(employeeId: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
   return { owed: Math.max(await getEmployeePayableBalance(session.tenantId, employeeId), 0) };
+}
+
+/** For a staff advance: what the employee still has to pay back on earlier advances, and their monthly basic salary. */
+export async function getEmployeeAdvanceInfo(employeeId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  const [outstanding, basic] = await Promise.all([getEmployeeAdvanceOutstanding(session.tenantId, employeeId), getCurrentSalary(session.tenantId, employeeId)]);
+  return { outstanding, basic: basic ?? 0 };
 }
 
 // ---------- Create / void ----------

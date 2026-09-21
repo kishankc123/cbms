@@ -11,6 +11,7 @@ import { daysInMonth as calendarDaysInMonth, isoFromYmd, type CalendarSystem } f
 import { getOrCreateSettings } from "../setup/actions";
 import { reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, removeRunRecoveries } from "@/lib/payroll/staff-advances";
 import { postPayrollAccrual, activePayrollEntries, getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { todayIso } from "@/lib/calendar";
 
@@ -182,7 +183,10 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     );
 
     const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal);
-    const netPay = round2(grossPay - deductionTotal);
+    // Staff advances taken against this month (or earlier ones still unrecovered) come out of the pay, oldest first, but never
+    // more than the employee takes home — anything left over is recovered from later months.
+    const { total: advanceRecovered } = await planEmployeeRecovery(session.tenantId, employee.id, periodEnd, grossPay - deductionTotal, run.id);
+    const netPay = round2(grossPay - deductionTotal - advanceRecovered);
 
     await db.insert(payrollLines).values({
       tenantId: session.tenantId,
@@ -198,6 +202,7 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       overtimeAmount: "0.00",
       benefitsAmount: benefitsAmount.toFixed(2),
       grossPay: grossPay.toFixed(2),
+      advanceRecovered: advanceRecovered.toFixed(2),
       netPay: netPay.toFixed(2),
     });
   }
@@ -228,10 +233,13 @@ export async function advanceRunStatus(input: { runId: string }) {
     // The salary entry is posted FIRST (and refused up front when the period is closed or there is nothing to post), and the
     // run is only marked finalized once it exists — a run can never be finalized with no accounting behind it.
     await assertPeriodOpen(session.tenantId, run.periodEnd);
+    await assertRunAdvancesCurrent(session.tenantId, run);
     const entryId = await postPayrollAccrual(session.tenantId, run, session.userId);
     try {
+      await recordRunRecoveries(session.tenantId, run);
       await db.update(payrollRuns).set({ status: "finalized", finalizedAt: new Date() }).where(eq(payrollRuns.id, input.runId));
     } catch (e) {
+      await removeRunRecoveries(session.tenantId, run.id).catch(() => {});
       await reverseJournalEntry(session.tenantId, entryId, session.userId, "Rolled back — the run could not be finalized").catch(() => {});
       throw e;
     }
@@ -294,6 +302,7 @@ export async function reverseFinalizedRun(input: { runId: string; reason: string
     }
   }
 
+  await removeRunRecoveries(session.tenantId, run.id); // the advances it recovered are outstanding again
   await db.update(payrollRuns).set({ status: "draft", finalizedAt: null }).where(eq(payrollRuns.id, run.id));
   await db.insert(auditLog).values({
     tenantId: session.tenantId,

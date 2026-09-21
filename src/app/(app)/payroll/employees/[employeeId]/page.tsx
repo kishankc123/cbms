@@ -4,6 +4,7 @@ import { employees, salaryHistory, employeeBenefits, attendanceRecords, payrollL
 import { requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
+import { listEmployeeAdvances } from "@/lib/payroll/staff-advances";
 import { ProfileTabs } from "./profile-tabs";
 import type { AttendanceStatus } from "../attendance-actions";
 
@@ -25,7 +26,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   const month = current.month;
   const year = current.year;
 
-  const [currentSalary, salaryRows, benefitRows, attendanceRows, payslipRows] = await Promise.all([
+  const [currentSalary, salaryRows, benefitRows, attendanceRows, payslipRows, advanceRows] = await Promise.all([
     getCurrentSalary(session.tenantId, employeeId),
     db
       .select({
@@ -63,6 +64,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         status: payrollRuns.status,
         basicSalary: payrollLines.basicSalary,
         grossPay: payrollLines.grossPay,
+        advanceRecovered: payrollLines.advanceRecovered,
         netPay: payrollLines.netPay,
       })
       .from(payrollLines)
@@ -71,6 +73,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         and(eq(payrollLines.tenantId, session.tenantId), eq(payrollLines.employeeId, employeeId), eq(payrollRuns.status, "finalized"))
       )
       .orderBy(desc(payrollRuns.periodStart)),
+    listEmployeeAdvances(session.tenantId, employeeId),
   ]);
 
   const attendanceMap: Record<string, AttendanceStatus> = {};
@@ -92,6 +95,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         attendanceYear={year}
         attendanceRecords={attendanceMap}
         payslips={payslipRows}
+        advances={advanceRows}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, journalEntries, journalLines, payrollLines, type payrollRuns } from "@/db/schema";
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
+import { getOrCreateEmployeeAdvanceAccountId } from "@/lib/ledger/advance-accounts";
 import { getOrCreateSalaryExpenseAccount, getOrCreatePayrollDeductionsAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 
@@ -17,7 +18,8 @@ export async function activePayrollEntries(tenantId: string, runId: string) {
 
 /**
  * Posts the ledger accrual for a finalized run: every employee's own Salary Payable sub-account is credited with
- * their net pay, Salary Expense is debited with gross pay, and deductions withheld go to Payroll Deductions Payable.
+ * their net pay, Salary Expense is debited with gross pay, deductions withheld go to Payroll Deductions Payable, and any staff
+ * advance recovered from the pay clears the employee's Staff Advance account (gross = net + deductions + advance recovered).
  * Returns the entry's id. It refuses to post twice for the same run, and refuses when there is nothing to post (so a
  * run can never be finalized with no accounting behind it).
  */
@@ -25,7 +27,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
   if ((await activePayrollEntries(tenantId, run.id)).length > 0) throw new Error("This payroll run has already been posted to the ledger");
 
   const lines = await db
-    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, netPay: payrollLines.netPay })
+    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, netPay: payrollLines.netPay, advanceRecovered: payrollLines.advanceRecovered })
     .from(payrollLines)
     .where(eq(payrollLines.payrollRunId, run.id));
   if (lines.length === 0) throw new Error("This payroll run has no employee lines — generate it first");
@@ -54,10 +56,12 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     const gross = Number(line.grossPay);
     const deductions = Number(line.deductions);
     const net = Number(line.netPay);
+    const advance = Number(line.advanceRecovered);
     if (gross <= 0) continue;
 
     postLines.push({ accountId: salaryExpense.id, debitAmount: gross, description: `Salary expense - ${employee.fullName}` });
     if (net > 0) postLines.push({ accountId: payableAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
+    if (advance > 0) postLines.push({ accountId: await getOrCreateEmployeeAdvanceAccountId(tenantId, employee.id), creditAmount: advance, description: `Staff advance recovered - ${employee.fullName}` });
     if (deductions > 0 && deductionsAccount) postLines.push({ accountId: deductionsAccount.id, creditAmount: deductions, description: `Payroll deductions - ${employee.fullName}` });
   }
   if (postLines.length === 0) throw new Error("Nobody has any pay in this run, so there is nothing to post");

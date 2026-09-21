@@ -6,6 +6,7 @@ import { SalaryHistoryPanel } from "./salary-history-panel";
 import { BenefitsPanel } from "./benefits-panel";
 import { AttendancePanel } from "./attendance-panel";
 import { PayslipsPanel } from "./payslips-panel";
+import { AdvancesPanel } from "./advances-panel";
 import type { AttendanceStatus } from "../attendance-actions";
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
   { id: "benefits", label: "Benefits" },
   { id: "attendance", label: "Attendance" },
   { id: "payslips", label: "Payslips" },
+  { id: "advances", label: "Advances" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -27,6 +29,7 @@ export function ProfileTabs(props: {
   attendanceYear: number;
   attendanceRecords: Record<string, AttendanceStatus>;
   payslips: Parameters<typeof PayslipsPanel>[0]["payslips"];
+  advances: Parameters<typeof AdvancesPanel>[0]["advances"];
 }) {
   const [tab, setTab] = useState<TabId>("profile");
 
@@ -61,6 +64,7 @@ export function ProfileTabs(props: {
         />
       )}
       {tab === "payslips" && <PayslipsPanel payslips={props.payslips} />}
+      {tab === "advances" && <AdvancesPanel advances={props.advances} />}
     </div>
   );
 }
