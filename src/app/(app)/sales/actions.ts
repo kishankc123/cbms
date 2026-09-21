@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, or, desc, type SQL } from "drizzle-orm";
+import { and, eq, isNull, or, desc, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   salesInvoices,
@@ -21,7 +21,8 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { withPaymentNumber } from "@/lib/payment-number";
-import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
+import { assertInventoryDate, assertItemsUsable, assertStockAvailable, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
@@ -57,7 +58,7 @@ async function reverseLatestActiveEntry(tenantId: string, where: SQL | undefined
   const [entry] = await db
     .select()
     .from(journalEntries)
-    .where(where)
+    .where(and(where, isNull(journalEntries.reversalOfId))) // a reversal is never itself reversed
     .orderBy(desc(journalEntries.createdAt))
     .limit(1);
 
@@ -127,9 +128,8 @@ async function postCogsEntry(
   invoiceId: string,
   invoiceNumber: string,
   userId: string,
-  lines: { itemId?: string | null; quantity: number }[]
+  cost: number
 ) {
-  const cost = await computeCogsTotal(tenantId, lines);
   if (cost <= 0) return;
 
   const cogs = await findControlAccount(tenantId, ["5000"], "Cost of Goods Sold");
@@ -450,7 +450,7 @@ export async function voidInvoice(formData: FormData) {
     `Void of invoice ${invoice.invoiceNumber}`
   );
   await deleteEmbeddedPaymentsForInvoice(session.tenantId, invoiceId);
-  await applyStockDelta(session.tenantId, (invoice.lineItems ?? []) as LineItem[], 1);
+  await unwindStock(session.tenantId, { date: todayIso(), sourceType: "sale", sourceId: invoiceId, userId: session.userId });
 
   await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
 
@@ -460,6 +460,8 @@ export async function voidInvoice(formData: FormData) {
   revalidatePath("/journal");
   revalidatePath("/customers");
   revalidatePath("/inventory/items");
+  // Later sales were costed with these goods in the average — replay the history so they are costed right.
+  await recalculateAfter(session.tenantId, ((invoice.lineItems ?? []) as LineItem[]).map((l) => l.itemId), session.userId, `Void of invoice ${invoice.invoiceNumber}`);
 }
 
 export type SingleInvoiceEditLine = {
@@ -590,6 +592,10 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
   const taxAmount = round2(computed.reduce((s, c) => s + c.vat, 0));
   const total = round2(subtotal + taxAmount);
+  // What is taken out of stock must be there (counting what this invoice already holds), unless negative stock is allowed.
+  await assertItemsUsable(session.tenantId, validLines, { stillAllowed: ((existing.lineItems ?? []) as LineItem[]).map((l) => l.itemId) });
+  await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
+  await assertStockAvailable(session.tenantId, validLines, { date: input.invoiceDate, excludeSource: { sourceType: "sale", sourceId: input.invoiceId } });
 
   const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
@@ -614,8 +620,12 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     `Edit of invoice ${existing.invoiceNumber}`
   );
   await deleteEmbeddedPaymentsForInvoice(session.tenantId, input.invoiceId);
-  await applyStockDelta(session.tenantId, (existing.lineItems ?? []) as LineItem[], 1);
-  await applyStockDelta(session.tenantId, validLines, -1);
+  await unwindStock(session.tenantId, { date: existing.invoiceDate, sourceType: "sale", sourceId: input.invoiceId, userId: session.userId });
+  const issued = await moveStock(
+    session.tenantId,
+    { type: "sale", date: input.invoiceDate, sourceType: "sale", sourceId: input.invoiceId, userId: session.userId },
+    validLines.map((l) => ({ itemId: l.itemId, quantity: -l.quantity }))
+  );
 
   await db
     .update(salesInvoices)
@@ -661,7 +671,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     lines,
   });
 
-  await postCogsEntry(session.tenantId, input.invoiceDate, input.invoiceId, invoiceNumber, session.userId, validLines);
+  await postCogsEntry(session.tenantId, input.invoiceDate, input.invoiceId, invoiceNumber, session.userId, Math.abs(issued.value));
 
   if (paid > 0) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
@@ -703,6 +713,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   revalidatePath("/journal");
   revalidatePath("/customers");
   revalidatePath("/inventory/items");
+  await recalculateAfter(session.tenantId, [...validLines, ...((existing.lineItems ?? []) as LineItem[])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
 }
 
 export type SingleInvoiceLine = {
@@ -764,6 +775,10 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
+  // What is sold must be in stock, unless the organization allows negative stock.
+  await assertItemsUsable(session.tenantId, validLines);
+  await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
+  await assertStockAvailable(session.tenantId, validLines, { date: input.invoiceDate });
 
   const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
@@ -823,9 +838,14 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       lines,
     });
 
-    await postCogsEntry(session.tenantId, input.invoiceDate, invoice.id, invoiceNumber, session.userId, validLines);
-    await applyStockDelta(session.tenantId, validLines, -1);
+    // The goods leave stock at their average cost; that cost is the cost of goods sold.
+    const issued = await moveStock(
+      session.tenantId,
+      { type: "sale", date: input.invoiceDate, sourceType: "sale", sourceId: invoice.id, userId: session.userId },
+      validLines.map((l) => ({ itemId: l.itemId, quantity: -l.quantity }))
+    );
     stockApplied = true;
+    await postCogsEntry(session.tenantId, input.invoiceDate, invoice.id, invoiceNumber, session.userId, Math.abs(issued.value));
 
     if (paid > 0) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
@@ -861,7 +881,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       );
     }
   } catch (e) {
-    if (stockApplied) await applyStockDelta(session.tenantId, validLines, 1).catch(() => {});
+    if (stockApplied) await unwindStock(session.tenantId, { date: input.invoiceDate, sourceType: "sale", sourceId: invoice.id, userId: session.userId }).catch(() => {});
     await discardInvoice(session.tenantId, invoice.id, session.userId);
     throw e;
   }
@@ -875,6 +895,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   revalidatePath("/journal");
   revalidatePath("/customers");
   revalidatePath("/inventory/items");
+  await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Invoice ${invoiceNumber}`);
 }
 
 // ---- applying a customer's advance to one invoice by hand (it is also applied automatically when an invoice is created)

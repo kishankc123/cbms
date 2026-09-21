@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne, desc, inArray } from "drizzle-orm";
+import { and, eq, isNull, ne, desc, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { purchaseBills, journalEntries, journalLines, tenants, payments, paymentAllocations, items, type PurchaseLineItem } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
-import { applyStockDelta } from "@/lib/inventory/stock";
+import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { recalculateAfter } from "@/lib/inventory/recalc";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
@@ -99,18 +100,6 @@ async function discardBill(tenantId: string, billId: string, userId: string) {
   await db.delete(purchaseBills).where(eq(purchaseBills.id, billId));
 }
 
-// Stock can't be taken out (by voiding or shrinking a purchase) beyond what is on hand — some of it has
-// already been sold or returned.
-async function assertStockCovers(tenantId: string, lines: { itemId?: string | null; quantity: number }[]) {
-  const need = new Map<string, number>();
-  for (const l of lines) if (l.itemId && l.quantity > 0) need.set(l.itemId, (need.get(l.itemId) ?? 0) + l.quantity);
-  if (need.size === 0) return;
-  const rows = await db.select({ id: items.id, name: items.name, qty: items.stockQuantity }).from(items).where(and(eq(items.tenantId, tenantId), inArray(items.id, [...need.keys()])));
-  for (const r of rows) {
-    if (Number(r.qty) < (need.get(r.id) ?? 0)) throw new Error(`Only ${Number(r.qty)} of ${r.name} in stock — some of this purchase has already been sold or returned`);
-  }
-}
-
 // Finds the entry currently in force for a bill (i.e. not superseded by a
 // reversal) and reverses it — used by both void and edit, since editing a
 // posted bill means reversing the old entry and posting a fresh one.
@@ -123,7 +112,8 @@ async function reverseActiveEntry(tenantId: string, billId: string, userId: stri
         eq(journalEntries.tenantId, tenantId),
         eq(journalEntries.sourceType, "purchase"),
         eq(journalEntries.sourceId, billId),
-        eq(journalEntries.isReversed, false)
+        eq(journalEntries.isReversed, false),
+        isNull(journalEntries.reversalOfId) // a reversal is never itself reversed
       )
     )
     .orderBy(desc(journalEntries.createdAt))
@@ -430,11 +420,12 @@ export async function voidBill(formData: FormData) {
   if (bill.status === "void") throw new Error("Bill is already void");
 
   await assertNoLaterPayments(session.tenantId, "purchase_bill", billId, "bill");
-  await assertStockCovers(session.tenantId, bill.lineItems ?? []);
+  // Voiding takes the goods back out — at no point since their date may that leave less than nothing.
+  await assertStockTimeline(session.tenantId, { excludeSource: { sourceType: "purchase", sourceId: billId } });
 
   await reverseActiveEntry(session.tenantId, billId, session.userId, `Void of bill ${bill.billNumber}`);
   await deleteEmbeddedPaymentsForBill(session.tenantId, billId);
-  await applyStockDelta(session.tenantId, bill.lineItems ?? [], -1);
+  await unwindStock(session.tenantId, { date: todayIso(), sourceType: "purchase", sourceId: billId, userId: session.userId });
 
   await db.update(purchaseBills).set({ status: "void" }).where(eq(purchaseBills.id, billId));
 
@@ -444,6 +435,8 @@ export async function voidBill(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
+  // Later sales were costed with these goods in the average — replay the history so they are costed right.
+  await recalculateAfter(session.tenantId, (bill.lineItems ?? []).map((l) => l.itemId), session.userId, `Void of bill ${bill.billNumber}`);
 }
 
 export type PurchaseInvoicePayment = { accountId: string; amount: number };
@@ -469,7 +462,7 @@ async function computeInvoiceTotals(tenantId: string, lines: PurchaseLineItem[],
   const taxAmount = round2(computed.reduce((s, c) => s + c.vat, 0));
   const total = round2(subtotal + taxAmount);
 
-  return { validLines, subtotal, taxAmount, total };
+  return { validLines, computed, subtotal, taxAmount, total };
 }
 
 // Stockable purchases post to Inventory (an asset), not straight to an
@@ -510,6 +503,12 @@ async function buildInvoiceJournalLines(
   return lines;
 }
 
+// What each stocked line adds to the Inventory account: its taxable amount, plus its share of the VAT when the VAT can't be claimed
+// back (it is then part of the cost). The parts add up to exactly what the entry debits Inventory with.
+function inventoryValues(computed: { taxable: number; vat: number }[], subtotal: number, taxAmount: number, claimable: boolean) {
+  return allocateProportional(claimable ? subtotal : round2(subtotal + taxAmount), computed.map((c) => (claimable ? c.taxable : c.taxable + c.vat)));
+}
+
 export type PurchaseInvoiceInput = {
   invoiceNumber: string;
   invoiceDate: string;
@@ -534,8 +533,10 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
-  const { validLines, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
+  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
   if (validLines.length === 0) throw new Error("Add at least one item line");
+  await assertItemsUsable(session.tenantId, validLines, { requireItem: true });
+  await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
 
   const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
@@ -548,6 +549,8 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   await assertBillNumberFree(session.tenantId, input.vendorId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
 
+  const claimable = await inputVatClaimable(session.tenantId);
+  const stockValues = inventoryValues(computed, subtotal, taxAmount, claimable);
   const journalLines = await buildInvoiceJournalLines(
     session.tenantId,
     input.vendorId,
@@ -556,7 +559,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     taxAmount,
     remaining,
     input.payments,
-    await inputVatClaimable(session.tenantId)
+    claimable
   );
 
   const [bill] = await db
@@ -591,7 +594,11 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
       createdBy: session.userId,
       lines: journalLines,
     });
-    await applyStockDelta(session.tenantId, validLines, 1);
+    await moveStock(
+      session.tenantId,
+      { type: "purchase", date: input.invoiceDate, sourceType: "purchase", sourceId: bill.id, userId: session.userId },
+      validLines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, value: stockValues[i] }))
+    );
     stockApplied = true;
 
     if (paid > 0) {
@@ -599,7 +606,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
       await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber);
     }
   } catch (e) {
-    if (stockApplied) await applyStockDelta(session.tenantId, validLines, -1).catch(() => {});
+    if (stockApplied) await unwindStock(session.tenantId, { date: input.invoiceDate, sourceType: "purchase", sourceId: bill.id, userId: session.userId }, { allowNegative: true }).catch(() => {});
     await discardBill(session.tenantId, bill.id, session.userId);
     throw e;
   }
@@ -612,6 +619,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/inventory/items");
+  await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Purchase ${invoiceNumber}`);
 }
 
 export type PurchaseInvoiceEditData = {
@@ -680,8 +688,9 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
-  const { validLines, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
+  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
   if (validLines.length === 0) throw new Error("Add at least one item line");
+  await assertItemsUsable(session.tenantId, validLines, { requireItem: true, stillAllowed: (existing.lineItems ?? []).map((l) => l.itemId) });
 
   const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
@@ -696,11 +705,11 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertPeriodOpen(session.tenantId, todayIso());
   // Shrinking the purchase takes stock out: only what is still on hand can go.
-  const shrink = new Map<string, number>();
-  for (const l of existing.lineItems ?? []) if (l.itemId) shrink.set(l.itemId, (shrink.get(l.itemId) ?? 0) + l.quantity);
-  for (const l of validLines) if (l.itemId) shrink.set(l.itemId, (shrink.get(l.itemId) ?? 0) - l.quantity);
-  await assertStockCovers(session.tenantId, [...shrink].map(([itemId, quantity]) => ({ itemId, quantity })));
+  await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
+  await assertStockTimeline(session.tenantId, { excludeSource: { sourceType: "purchase", sourceId: input.billId }, add: validLines.map((l) => ({ itemId: l.itemId, date: input.invoiceDate, quantity: l.quantity })) });
 
+  const claimable = await inputVatClaimable(session.tenantId);
+  const stockValues = inventoryValues(computed, subtotal, taxAmount, claimable);
   const journalLines = await buildInvoiceJournalLines(
     session.tenantId,
     input.vendorId,
@@ -709,13 +718,17 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     taxAmount,
     remaining,
     input.payments,
-    await inputVatClaimable(session.tenantId)
+    claimable
   );
 
   await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of invoice ${existing.billNumber}`);
   await deleteEmbeddedPaymentsForBill(session.tenantId, input.billId);
-  await applyStockDelta(session.tenantId, existing.lineItems ?? [], -1);
-  await applyStockDelta(session.tenantId, validLines, 1);
+  await unwindStock(session.tenantId, { date: existing.billDate, sourceType: "purchase", sourceId: input.billId, userId: session.userId });
+  await moveStock(
+    session.tenantId,
+    { type: "purchase", date: input.invoiceDate, sourceType: "purchase", sourceId: input.billId, userId: session.userId },
+    validLines.map((l, i) => ({ itemId: l.itemId, quantity: l.quantity, value: stockValues[i] }))
+  );
 
   await db
     .update(purchaseBills)
@@ -756,6 +769,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   revalidatePath("/dashboard");
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
+  await recalculateAfter(session.tenantId, [...validLines, ...(existing.lineItems ?? [])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
 }
 
 // ---- applying an advance paid to a supplier to one bill by hand (it is also applied automatically when a bill is created)

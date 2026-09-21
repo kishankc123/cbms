@@ -1,0 +1,1 @@
+ALTER TYPE "public"."journal_source_type" ADD VALUE 'stock_adjustment';

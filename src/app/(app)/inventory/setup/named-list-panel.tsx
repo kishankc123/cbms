@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { InfoDialog } from "../info-dialog";
 
@@ -27,7 +28,8 @@ export function NamedListPanel({
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
   const [createdName, setCreatedName] = useState<string | null>(null);
 
@@ -41,7 +43,6 @@ export function NamedListPanel({
   }, [showAdd]);
 
   async function handleCreate() {
-    setError(null);
     if (!newName.trim()) return;
     setBusy(true);
     try {
@@ -52,14 +53,13 @@ export function NamedListPanel({
       setCreatedName(savedName);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setBusy(false);
     }
   }
 
   async function handleUpdate(id: string) {
-    setError(null);
     if (!editName.trim()) return;
     setBusy(true);
     try {
@@ -67,21 +67,20 @@ export function NamedListPanel({
       setEditingId(null);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setBusy(false);
     }
   }
 
   async function handleDelete(id: string, name: string) {
-    setError(null);
     if (!confirm(`Delete ${name}?`)) return;
     setBusy(true);
     try {
       await onDelete(id);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete");
+      report(e instanceof Error ? e.message : "Failed to delete", null);
     } finally {
       setBusy(false);
     }
@@ -90,7 +89,6 @@ export function NamedListPanel({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={() => setShowAdd(true)}
@@ -207,6 +205,7 @@ export function NamedListPanel({
       )}
 
       {createdName && <InfoDialog message={`${createdName} has been created`} onOk={() => setCreatedName(null)} />}
+      {dialog}
     </div>
   );
 }

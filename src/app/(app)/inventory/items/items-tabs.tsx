@@ -14,6 +14,9 @@ type Item = {
   categoryId: string | null;
   purchasePrice: string;
   sellingPrice: string;
+  isActive: boolean;
+  stockQuantity: string;
+  stockValue: string;
 };
 
 const TABS = [

@@ -20,7 +20,7 @@ export default async function StockablePurchasePage() {
       .from(purchaseBills)
       .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.purchaseType, "credit")))
       .orderBy(desc(purchaseBills.billDate)),
-    db.select().from(items).where(eq(items.tenantId, session.tenantId)).orderBy(asc(items.name)),
+    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
     getCashBankAccounts(session.tenantId),
     db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
   ]);

@@ -7,6 +7,8 @@ import { AppNav } from "./nav";
 import { OrgSwitcher } from "./org-switcher";
 import { VerifyBanner } from "./verify-banner";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
+import { InventoryProvider } from "@/components/inventory/opening-date";
+import { getOpeningDate } from "@/lib/inventory/stock";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -53,6 +55,7 @@ const NAV = [
     label: "Inventory",
     children: [
       { href: "/inventory/items", label: "Items" },
+      { href: "/inventory/stock", label: "Stock" },
       { href: "/inventory/setup", label: "Setup" },
     ],
   },
@@ -120,9 +123,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const user = await requireUserSession();
   const orgs = await listActiveMemberships(user.id);
+  const inventoryOpeningDate = await getOpeningDate(session.tenantId);
 
   return (
     <CalendarProvider calendar={session.calendar}>
+    <InventoryProvider openingDate={inventoryOpeningDate}>
     <div className="flex min-h-screen">
       <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
         <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
@@ -141,6 +146,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
     </div>
+    </InventoryProvider>
     </CalendarProvider>
   );
 }

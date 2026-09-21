@@ -1,5 +1,6 @@
 "use server";
 
+import { todayIso } from "@/lib/calendar";
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -10,7 +11,8 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from "@/lib/ledger/credit-applications";
-import { applyStockDelta } from "@/lib/inventory/stock";
+import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { recalculateAfter } from "@/lib/inventory/recalc";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -71,19 +73,11 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
+  await assertItemsUsable(session.tenantId, validLines);
+  await assertInventoryDate(session.tenantId, input.noteDate, validLines);
 
-  // You can't send back more than you hold.
-  const wanted = new Map<string, number>();
-  for (const l of validLines) if (l.itemId) wanted.set(l.itemId, (wanted.get(l.itemId) ?? 0) + l.quantity);
-  if (wanted.size > 0) {
-    const stock = await db
-      .select({ id: items.id, name: items.name, qty: items.stockQuantity })
-      .from(items)
-      .where(and(eq(items.tenantId, session.tenantId), inArray(items.id, [...wanted.keys()])));
-    for (const s of stock) {
-      if (Number(s.qty) < (wanted.get(s.id) ?? 0)) throw new Error(`Only ${Number(s.qty)} of ${s.name} in stock — can't return ${wanted.get(s.id)}`);
-    }
-  }
+  // You can't send back more than you hold — on that date, and from then on.
+  await assertStockTimeline(session.tenantId, { add: validLines.map((l) => ({ itemId: l.itemId, date: input.noteDate, quantity: -l.quantity })) });
 
   const computed = validLines.map((l) => computeLine(l, vatRate));
   const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
@@ -116,7 +110,19 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
     })
     .returning();
 
+  let stockApplied = false;
   try {
+    // The goods go out of stock, and Inventory is credited with what they were returned for — the same amount is taken off the
+    // items' stock value, so the two stay equal.
+    const creditTotal = taxReceivableId ? subtotal : total;
+    const values = allocateProportional(creditTotal, computed.map((c) => (taxReceivableId ? c.taxable : c.taxable + c.vat)));
+    await moveStock(
+      session.tenantId,
+      { type: "purchase_return", date: input.noteDate, sourceType: "purchase_return", sourceId: note.id, userId: session.userId },
+      validLines.map((l, i) => ({ itemId: l.itemId, quantity: -l.quantity, value: values[i] })),
+      { allowNegative: false }
+    );
+    stockApplied = true;
     const lines: PostLineInput[] = [
       { accountId: apId, debitAmount: total, description: `Credit note ${noteNumber}` },
       { accountId: inventory.id, creditAmount: taxReceivableId ? subtotal : total, description: `Purchase return ${noteNumber}` },
@@ -134,12 +140,13 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
     });
   } catch (e) {
     // Nothing was booked, so don't leave the document behind without its accounting.
+    if (stockApplied) await unwindStock(session.tenantId, { date: input.noteDate, sourceType: "purchase_return", sourceId: note.id, userId: session.userId }, { allowNegative: true }).catch(() => {});
     await db.delete(purchaseReturns).where(eq(purchaseReturns.id, note.id));
     throw e;
   }
 
-  await applyStockDelta(session.tenantId, validLines, -1);
   refresh();
+  await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Purchase return ${noteNumber}`);
 }
 
 /** Voids a credit note: reverses what it posted and puts the goods back into stock. */
@@ -158,9 +165,10 @@ export async function voidPurchaseReturn(formData: FormData) {
 
   await assertNoAppliedCredit(session.tenantId, note.id, note.noteNumber);
   await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Void of credit note ${note.noteNumber}`);
-  await applyStockDelta(session.tenantId, (note.lineItems ?? []) as PurchaseLineItem[], 1);
+  await unwindStock(session.tenantId, { date: todayIso(), sourceType: "purchase_return", sourceId: note.id, userId: session.userId });
   await db.update(purchaseReturns).set({ status: "void" }).where(eq(purchaseReturns.id, id));
   refresh();
+  await recalculateAfter(session.tenantId, ((note.lineItems ?? []) as { itemId?: string | null }[]).map((l) => l.itemId), session.userId, `Void of credit note ${note.noteNumber}`);
 }
 
 // ---- applying this note's credit to the party's open bills

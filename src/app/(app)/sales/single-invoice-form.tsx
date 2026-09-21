@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
@@ -173,7 +174,11 @@ export function SingleInvoiceForm({
   const remaining = Math.max(grandTotal - paidTotal, 0);
   const paymentStatus = paidTotal <= 0 ? "Unpaid" : remaining <= 0.005 ? "Paid" : "Partially paid";
 
+  // A document dated before the Inventory Opening Date can't move stock: say so at once, and ask what to do when saving.
+  const { guard: guardOpeningDate, notice: openingDateNotice } = useOpeningDateGuard(invoiceDate, lines.some((l) => Boolean(l.itemId)));
+
   async function performSave() {
+    if (!guardOpeningDate()) return;
     const errors: FieldErrors = {};
     if (!invoiceNumber.trim()) errors.invoiceNumber = "Invoice number is required.";
     if (!invoiceDate) errors.date = "Please enter the invoice date.";
@@ -239,6 +244,7 @@ export function SingleInvoiceForm({
                 setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
+            {openingDateNotice}
             {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>

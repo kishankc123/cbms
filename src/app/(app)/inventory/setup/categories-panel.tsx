@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createCategory, updateCategory, deleteCategory } from "./actions";
 import { InfoDialog } from "../info-dialog";
@@ -20,7 +21,8 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editGroupId, setEditGroupId] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -60,7 +62,6 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
   }
 
   async function handleCreate() {
-    setError(null);
     if (!newName.trim() || !newGroupId) return;
     setBusy(true);
     try {
@@ -72,14 +73,13 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
       setCreatedName(savedName);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setBusy(false);
     }
   }
 
   async function handleUpdate(id: string) {
-    setError(null);
     if (!editName.trim() || !editGroupId) return;
     setBusy(true);
     try {
@@ -87,21 +87,20 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
       setEditingId(null);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setBusy(false);
     }
   }
 
   async function handleDelete(id: string, name: string) {
-    setError(null);
     if (!confirm(`Delete category ${name}?`)) return;
     setBusy(true);
     try {
       await deleteCategory({ categoryId: id });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete");
+      report(e instanceof Error ? e.message : "Failed to delete", null);
     } finally {
       setBusy(false);
     }
@@ -110,7 +109,6 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={() => setShowAdd(true)}
@@ -268,6 +266,7 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
       )}
 
       {createdName && <InfoDialog message={`${createdName} has been created`} onOk={() => setCreatedName(null)} />}
+      {dialog}
     </div>
   );
 }

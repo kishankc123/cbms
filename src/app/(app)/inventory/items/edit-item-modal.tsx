@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { updateItem } from "./actions";
 
@@ -39,7 +40,8 @@ export function EditItemModal({
   const [purchasePrice, setPurchasePrice] = useState(item.purchasePrice);
   const [sellingPrice, setSellingPrice] = useState(item.sellingPrice);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
 
   const categoriesInGroup = useMemo(() => categories.filter((c) => c.groupId === groupId), [categories, groupId]);
 
@@ -62,9 +64,8 @@ export function EditItemModal({
   }
 
   async function handleSave() {
-    setError(null);
     if (!name.trim()) {
-      setError("Item name is required.");
+      report("Item name is required.", null);
       return;
     }
     setSaving(true);
@@ -80,7 +81,7 @@ export function EditItemModal({
       router.refresh();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setSaving(false);
     }
@@ -155,7 +156,7 @@ export function EditItemModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Purchase price (excl. tax)</label>
+              <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
               <input
                 type="number"
                 step="0.01"
@@ -190,7 +191,6 @@ export function EditItemModal({
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          {error && <span className="mr-auto self-center text-xs text-red-600">{error}</span>}
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
             Cancel
           </button>
@@ -204,6 +204,7 @@ export function EditItemModal({
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

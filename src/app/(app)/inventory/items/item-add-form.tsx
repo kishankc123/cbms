@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createItem, type CreatedItem } from "./actions";
 import { InfoDialog } from "../info-dialog";
@@ -32,7 +33,8 @@ export function ItemAddForm({
   const [purchasePrice, setPurchasePrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
   const [createdName, setCreatedName] = useState<string | null>(null);
 
   const categoriesInGroup = useMemo(() => categories.filter((c) => c.groupId === groupId), [categories, groupId]);
@@ -48,9 +50,8 @@ export function ItemAddForm({
   }
 
   async function handleSave() {
-    setError(null);
     if (!name.trim()) {
-      setError("Item name is required.");
+      report("Item name is required.", null);
       return;
     }
     setSaving(true);
@@ -67,7 +68,7 @@ export function ItemAddForm({
       else setCreatedName(savedName);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
       setSaving(false);
     }
@@ -131,7 +132,7 @@ export function ItemAddForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Purchase price (excl. tax)</label>
+          <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
           <input
             type="number"
             step="0.01"
@@ -165,7 +166,6 @@ export function ItemAddForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <button
           type="button"
           onClick={handleSave}
@@ -177,6 +177,7 @@ export function ItemAddForm({
       </div>
 
       {createdName && <InfoDialog message={`${createdName} has been created`} onOk={() => setCreatedName(null)} />}
+      {dialog}
     </div>
   );
 }

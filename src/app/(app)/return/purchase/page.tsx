@@ -1,4 +1,4 @@
-import { eq, asc, desc } from "drizzle-orm";
+import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors, items, purchaseReturns, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
@@ -10,7 +10,7 @@ export default async function PurchaseReturnPage({ searchParams }: { searchParam
 
   const [vendorList, itemList, noteList, [tenant]] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
-    db.select().from(items).where(eq(items.tenantId, session.tenantId)).orderBy(asc(items.name)),
+    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
     db.select().from(purchaseReturns).where(eq(purchaseReturns.tenantId, session.tenantId)).orderBy(desc(purchaseReturns.noteDate), desc(purchaseReturns.createdAt)),
     db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
   ]);

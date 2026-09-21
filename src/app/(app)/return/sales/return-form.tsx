@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
@@ -118,7 +119,11 @@ export function SalesReturnForm({
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
 
+  // A document dated before the Inventory Opening Date can't move stock: say so at once, and ask what to do when saving.
+  const { guard: guardOpeningDate, notice: openingDateNotice } = useOpeningDateGuard(noteDate, lines.some((l) => Boolean(l.itemId)));
+
   async function performSave() {
+    if (!guardOpeningDate()) return;
     const errors: FieldErrors = {};
     if (!noteNumber.trim()) errors.noteNumber = "Debit note number is required.";
     if (!noteDate) errors.date = "Please enter the date.";
@@ -169,6 +174,7 @@ export function SalesReturnForm({
                 setNoteDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
+            {openingDateNotice}
             {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>

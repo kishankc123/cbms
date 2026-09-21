@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
-import { deleteItem } from "./actions";
+import { deleteItem, setItemActive } from "./actions";
 import { EditItemModal } from "./edit-item-modal";
 
 type Unit = { id: string; name: string };
@@ -15,6 +16,9 @@ type Item = {
   categoryId: string | null;
   purchasePrice: string;
   sellingPrice: string;
+  isActive: boolean;
+  stockQuantity: string;
+  stockValue: string;
 };
 
 type SortKey = "name" | "category";
@@ -37,7 +41,8 @@ export function ItemsTable({
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why.
+  const { report, dialog } = useProblem();
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -69,21 +74,28 @@ export function ItemsTable({
     return sortDir === "asc" ? " ▲" : " ▼";
   }
 
+  async function handleActive(id: string, isActive: boolean) {
+    try {
+      await setItemActive({ itemId: id, isActive });
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Failed to update", null);
+    }
+  }
+
   async function handleDelete(id: string, name: string) {
-    setError(null);
     if (!confirm(`Delete item ${name}?`)) return;
     try {
       await deleteItem({ itemId: id });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete");
+      report(e instanceof Error ? e.message : "Failed to delete", null);
     }
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        {error && <span className="text-xs text-red-600">{error}</span>}
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -105,6 +117,8 @@ export function ItemsTable({
             >
               Category{sortIndicator("category")}
             </th>
+            <th className="px-4 py-2 font-medium text-right">On hand</th>
+            <th className="px-4 py-2 font-medium text-right">Stock value</th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -112,11 +126,19 @@ export function ItemsTable({
           {filtered.map((it, i) => (
             <tr key={it.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{i + 1}</td>
-              <td className="px-4 py-2">{it.name}</td>
+              <td className="px-4 py-2">
+                {it.name}
+                {!it.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
+              </td>
               <td className="px-4 py-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>
+              <td className="px-4 py-2 text-right">{Number(it.stockQuantity)}</td>
+              <td className="px-4 py-2 text-right">{Number(it.stockValue).toFixed(2)}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 <button type="button" onClick={() => setEditingId(it.id)} className="text-xs text-gray-600 hover:underline">
                   Edit
+                </button>
+                <button type="button" onClick={() => handleActive(it.id, !it.isActive)} className="text-xs text-gray-600 hover:underline">
+                  {it.isActive ? "Make inactive" : "Make active"}
                 </button>
                 <button type="button" onClick={() => handleDelete(it.id, it.name)} className="text-xs text-red-600 hover:underline">
                   Delete
@@ -126,7 +148,7 @@ export function ItemsTable({
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                 No items yet
               </td>
             </tr>
@@ -143,6 +165,7 @@ export function ItemsTable({
           onClose={() => setEditingId(null)}
         />
       )}
+      {dialog}
     </div>
   );
 }

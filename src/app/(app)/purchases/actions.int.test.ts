@@ -28,7 +28,9 @@ async function balance(code: string) {
   return lines.reduce((s, l) => s + Number(l.d) - Number(l.c), 0);
 }
 const bills = () => db.select().from(purchaseBills).where(eq(purchaseBills.tenantId, org.tenantId));
-const line = (rate: number, quantity: number, itemId: string | null = null) => ({ itemId, description: "Widget", rate, quantity, discount: 0 });
+// A stockable purchase line always names an item; most tests here don't care which.
+let defaultItemId: string;
+const line = (rate: number, quantity: number, itemId: string | null = null) => ({ itemId: itemId ?? defaultItemId, description: "Widget", rate, quantity, discount: 0 });
 
 let vendorA: string;
 let vendorB: string;
@@ -41,6 +43,7 @@ beforeAll(async () => {
   [{ id: vendorA }] = await db.insert(vendors).values({ tenantId: org.tenantId, name: "Supplier A" }).returning({ id: vendors.id });
   [{ id: vendorB }] = await db.insert(vendors).values({ tenantId: org.tenantId, name: "Supplier B" }).returning({ id: vendors.id });
   cashId = (await acct(org.tenantId, "1000")).id;
+  defaultItemId = (await db.insert(items).values({ tenantId: org.tenantId, name: "Default item" }).returning({ id: items.id }))[0].id;
   const cogs = await acct(org.tenantId, "5000");
   categoryId = (await createSubAccount(org.tenantId, cogs, "Consumables")).id;
 });

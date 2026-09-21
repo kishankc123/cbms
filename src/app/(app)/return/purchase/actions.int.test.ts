@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, items, journalEntries, journalLines, purchaseReturns, tenantTaxRegistrations, vendors } from "@/db/schema";
+import { accounts, items, journalEntries, journalLines, purchaseReturns, stockMovements, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -54,7 +54,9 @@ describe("purchase returns (credit notes to suppliers)", () => {
         { accountId: apId, creditAmount: 1130 },
       ],
     });
-    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Widget", purchasePrice: "100", sellingPrice: "150", stockQuantity: "5" }).returning();
+    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Widget", purchasePrice: "100", sellingPrice: "150", stockQuantity: "5", stockValue: "1000" }).returning();
+    // stock that is on hand is on the stock card: the 5 units (worth the 1,000 posted to Inventory above) came in on 1 Sep
+    await db.insert(stockMovements).values({ tenantId: org.tenantId, itemId: item.id, movementDate: "2026-09-01", type: "opening", quantity: "5", value: "1000", sourceType: "opening", sourceId: item.id });
 
     await createPurchaseReturn({ noteNumber: "PDN-1", noteDate: "2026-09-10", vendorId: vendor.id, withVat: true, lines: [{ itemId: item.id, description: "Widget", rate: 100, quantity: 2, discount: 0 }] });
 

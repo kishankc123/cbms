@@ -1,5 +1,6 @@
 "use server";
 
+import { todayIso } from "@/lib/calendar";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -12,7 +13,8 @@ import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-a
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from "@/lib/ledger/credit-applications";
 import { salesVatRate } from "@/lib/sales/vat";
-import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
+import { assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { recalculateAfter } from "@/lib/inventory/recalc";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -65,6 +67,8 @@ export async function createSalesReturn(input: SalesReturnInput) {
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
+  await assertItemsUsable(session.tenantId, validLines);
+  await assertInventoryDate(session.tenantId, input.noteDate, validLines);
 
   const computed = validLines.map((l) => computeLine(l, vatRate));
   const grossAmount = round2(computed.reduce((s, c) => s + c.gross, 0));
@@ -81,10 +85,9 @@ export async function createSalesReturn(input: SalesReturnInput) {
     if (!tax) throw new Error("No Tax Payable account found — add one to the Chart of Accounts first");
     taxPayableId = tax.id;
   }
-  const cost = await computeCogsTotal(session.tenantId, validLines);
   let cogsId: string | null = null;
   let inventoryId: string | null = null;
-  if (cost > 0) {
+  if (validLines.some((l) => l.itemId)) {
     const cogs = await findControlAccount(session.tenantId, ["5000"], "Cost of Goods Sold");
     const inventory = await findControlAccount(session.tenantId, ["1200"], "Inventory");
     if (!cogs || !inventory) throw new Error("Cost of Goods Sold and Inventory accounts are needed to return stocked items");
@@ -117,7 +120,16 @@ export async function createSalesReturn(input: SalesReturnInput) {
     })
     .returning();
 
+  let stockApplied = false;
   try {
+    // The goods come back into stock at their current average cost; that is what is taken back out of cost of goods sold.
+    const restocked = await moveStock(
+      session.tenantId,
+      { type: "sales_return", date: input.noteDate, sourceType: "sales_return", sourceId: note.id, userId: session.userId },
+      validLines.map((l) => ({ itemId: l.itemId, quantity: l.quantity }))
+    );
+    stockApplied = true;
+    const cost = Math.abs(restocked.value);
     const lines: PostLineInput[] = [
       { accountId: returnsAccount.id, debitAmount: subtotal, description: `Sales return ${noteNumber}` },
       { accountId: arId, creditAmount: total, description: `Debit note ${noteNumber}` },
@@ -151,13 +163,14 @@ export async function createSalesReturn(input: SalesReturnInput) {
     }
   } catch (e) {
     // Nothing was booked, so don't leave the document behind without its accounting.
+    if (stockApplied) await unwindStock(session.tenantId, { date: input.noteDate, sourceType: "sales_return", sourceId: note.id, userId: session.userId }, { allowNegative: true }).catch(() => {});
     await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Rolled back ${noteNumber}`).catch(() => {});
     await db.delete(salesReturns).where(eq(salesReturns.id, note.id));
     throw e;
   }
 
-  await applyStockDelta(session.tenantId, validLines, 1);
   refresh();
+  await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Sales return ${noteNumber}`);
 }
 
 /** Voids a debit note: reverses what it posted and takes the returned stock back out. */
@@ -175,10 +188,13 @@ export async function voidSalesReturn(formData: FormData) {
   if (note.status === "void") throw new Error("Debit note is already void");
 
   await assertNoAppliedCredit(session.tenantId, note.id, note.noteNumber);
+  // The returned goods must still be there to take back out (checked before anything is reversed).
+  await assertStockTimeline(session.tenantId, { excludeSource: { sourceType: "sales_return", sourceId: note.id } });
+  await unwindStock(session.tenantId, { date: todayIso(), sourceType: "sales_return", sourceId: note.id, userId: session.userId });
   await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Void of debit note ${note.noteNumber}`);
-  await applyStockDelta(session.tenantId, (note.lineItems ?? []) as LineItem[], -1);
   await db.update(salesReturns).set({ status: "void" }).where(eq(salesReturns.id, id));
   refresh();
+  await recalculateAfter(session.tenantId, ((note.lineItems ?? []) as { itemId?: string | null }[]).map((l) => l.itemId), session.userId, `Void of debit note ${note.noteNumber}`);
 }
 
 // ---- applying this note's credit to the party's open invoices

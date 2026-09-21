@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { NamedListPanel } from "./named-list-panel";
 import { CategoriesPanel } from "./categories-panel";
+import { StockSettingsPanel } from "./stock-settings-panel";
 import { createUnit, updateUnit, deleteUnit, createGroup, updateGroup, deleteGroup } from "./actions";
 
 type NamedRow = { id: string; name: string };
@@ -12,6 +13,7 @@ const TABS = [
   { id: "units", label: "Units" },
   { id: "groups", label: "Groups" },
   { id: "categories", label: "Categories" },
+  { id: "stock", label: "Stock" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -20,7 +22,9 @@ export function SetupTabs({
   units,
   groups,
   categories,
+  allowNegativeStock,
 }: {
+  allowNegativeStock: boolean;
   units: NamedRow[];
   groups: NamedRow[];
   categories: Category[];
@@ -63,6 +67,7 @@ export function SetupTabs({
         />
       )}
       {tab === "categories" && <CategoriesPanel categories={categories} groups={groups} />}
+      {tab === "stock" && <StockSettingsPanel allowNegativeStock={allowNegativeStock} />}
     </div>
   );
 }

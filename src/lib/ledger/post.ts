@@ -1,11 +1,11 @@
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertBankPeriodOpen } from "./reconciliation-guards";
-
+
 import { todayIso } from "@/lib/calendar";
 export class UnbalancedEntryError extends Error {
   constructor(totalDebits: number, totalCredits: number) {
@@ -210,7 +210,8 @@ export async function reverseLatestEntryForSource(
         eq(journalEntries.tenantId, tenantId),
         eq(journalEntries.sourceType, sourceType),
         eq(journalEntries.sourceId, sourceId),
-        eq(journalEntries.isReversed, false)
+        eq(journalEntries.isReversed, false),
+        isNull(journalEntries.reversalOfId) // a reversal is never itself reversed
       )
     )
     .orderBy(desc(journalEntries.createdAt))
@@ -237,7 +238,7 @@ export async function reverseAllActiveEntriesForSource(
   const activeEntries = await db
     .select()
     .from(journalEntries)
-    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, sourceId), eq(journalEntries.isReversed, false)));
+    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, sourceId), eq(journalEntries.isReversed, false), isNull(journalEntries.reversalOfId)));
 
   for (const entry of activeEntries) {
     await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
