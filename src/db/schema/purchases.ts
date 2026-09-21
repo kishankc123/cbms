@@ -42,6 +42,8 @@ export const vendors = pgTable("vendors", {
   // payment, and opening balance posts here instead of the shared AP
   // control account (see subledger-accounts.ts).
   payableAccountId: uuid("payable_account_id").references(() => accounts.id),
+  // This supplier's own sub-account under Supplier Advance (money we paid ahead of a bill). Linked by id, never by name.
+  advanceAccountId: uuid("advance_account_id").references(() => accounts.id),
 });
 
 export const purchaseBills = pgTable("purchase_bills", {

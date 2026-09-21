@@ -112,18 +112,20 @@ describe("voiding", () => {
 
 describe("refunds and credits", () => {
   it("pays a customer back only what they are owed, against their own account", async () => {
-    const ar = await getOrCreateCustomerReceivableAccountId(org.tenantId, custA);
+    // a customer with no advance, so only the return credit can be refunded
+    const custR = (await db.insert(customers).values({ tenantId: org.tenantId, name: "Refund Customer" }).returning())[0].id;
+    const ar = await getOrCreateCustomerReceivableAccountId(org.tenantId, custR);
     const salesReturnsAcct = await ensureSalesReturnsAccount(org.tenantId);
-    const before = (await getCustomerBalances(org.tenantId))[custA] ?? 0;
+    const before = (await getCustomerBalances(org.tenantId))[custR] ?? 0;
     // a sales return of 226 makes us owe the customer
     await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-06", sourceType: "sales_return", createdBy: org.userId, lines: [{ accountId: salesReturnsAcct.id, debitAmount: 226 }, { accountId: ar, creditAmount: 226 }] });
-    const owed = -((await getCustomerBalances(org.tenantId))[custA] ?? 0);
+    const owed = -((await getCustomerBalances(org.tenantId))[custR] ?? 0);
     expect(owed).toBeGreaterThan(0);
 
-    const refund = (amount: number) => pay({ direction: "money_out", paymentType: "customer_refund", paymentDate: "2026-09-07", partyType: "customer", customerId: custA, accountId: cashId, paymentMethod: "cash", amount, confirmDuplicate: true } as never);
+    const refund = (amount: number) => pay({ direction: "money_out", paymentType: "customer_refund", paymentDate: "2026-09-07", partyType: "customer", customerId: custR, accountId: cashId, paymentMethod: "cash", amount, confirmDuplicate: true } as never);
     await expect(refund(owed + 1)).rejects.toThrow(/owed/);
     await refund(owed);
-    expect((await getCustomerBalances(org.tenantId))[custA] ?? 0).toBeCloseTo(0, 2);
+    expect((await getCustomerBalances(org.tenantId))[custR] ?? 0).toBeCloseTo(0, 2);
     expect(before).toBeDefined();
     await expect(refund(1)).rejects.toThrow(/isn't owed anything|owed/);
   });

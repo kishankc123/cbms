@@ -7,6 +7,7 @@ import {
   getOutstandingBillsForSupplier,
   getOutstandingExpenses,
   getPaymentFormOptions,
+  getCustomerRefundable,
   type PaymentAllocationInput,
 } from "./actions";
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
@@ -78,6 +79,7 @@ export function NewPaymentModal({
   const [notes, setNotes] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
 
+  const [refundable, setRefundable] = useState<{ credit: number; advance: number; total: number } | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
   const [allocated, setAllocated] = useState<Record<string, string>>({});
 
@@ -119,6 +121,11 @@ export function NewPaymentModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType, customerId, vendorId]);
+
+  useEffect(() => {
+    setRefundable(null);
+    if (paymentType === "customer_refund" && customerId) getCustomerRefundable(customerId).then(setRefundable).catch(() => setRefundable(null));
+  }, [paymentType, customerId]);
 
   const allocations: PaymentAllocationInput[] = useMemo(() => {
     const targetType = paymentType === "customer_payment" ? "sales_invoice" : paymentType === "supplier_payment" ? "purchase_bill" : "expense";
@@ -334,6 +341,11 @@ export function NewPaymentModal({
                     </option>
                   ))}
                 </select>
+                {paymentType === "customer_refund" && refundable && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Can be refunded: {fmt(refundable.total)} (credit {fmt(refundable.credit)} + advance {fmt(refundable.advance)})
+                  </p>
+                )}
               </div>
             )}
             {(config.needsVendor || config.optionalVendor) && (

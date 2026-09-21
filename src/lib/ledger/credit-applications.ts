@@ -32,7 +32,7 @@ async function appliedRows(tenantId: string, returnId: string) {
 }
 
 // Moves a document's paid amount by `delta` (positive = more is settled) and keeps its status in step.
-async function bumpPaid(tenantId: string, kind: CreditKind, targetId: string, delta: number) {
+export async function bumpPaid(tenantId: string, kind: CreditKind, targetId: string, delta: number) {
   if (kind === "sales_return") {
     const [inv] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.id, targetId), eq(salesInvoices.tenantId, tenantId))).limit(1);
     if (!inv) throw new Error("Invoice not found");

@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accountingPeriods, customers, journalEntries, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
+import { accountingPeriods, accounts, customers, journalEntries, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
+import { createPayment } from "@/lib/ledger/payments-engine";
+import { getCustomerAdvanceBalance } from "@/lib/ledger/advance-accounts";
 import { createTempOrg } from "@/test/temp-org";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -56,5 +58,17 @@ describe("sales invoice rules", () => {
     await expect(createSingleInvoice({ invoiceNumber: "R-LOCKED", invoiceDate: "2026-01-15", customerId, lines: [line(100)], payments: [] })).rejects.toThrow(/closed period/);
     expect((await invoices()).length).toBe(before);
     expect((await db.select().from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId)))).length).toBe(entriesBefore);
+  });
+
+  it("an advance the customer has paid is applied to the new invoice automatically", async () => {
+    // a customer with no other open invoices, so the new one is the oldest
+    const [{ id: advCustomer }] = await db.insert(customers).values({ tenantId: org.tenantId, name: "Advance Customer" }).returning({ id: customers.id });
+    const [cash] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, "1000")));
+    await createPayment(org.tenantId, org.userId, "TMP-ADV", { direction: "money_in", paymentType: "customer_advance", paymentDate: "2026-09-01", partyType: "customer", customerId: advCustomer, accountId: cash.id, paymentMethod: "cash", amount: 500, confirmDuplicate: true });
+    await createSingleInvoice({ invoiceNumber: "ADV-1", invoiceDate: "2026-09-10", customerId: advCustomer, lines: [line(200)], payments: [] });
+    const inv = (await invoices()).find((i) => i.invoiceNumber === "ADV-1")!;
+    expect(inv.status).toBe("paid");
+    expect(Number(inv.amountPaid)).toBe(Number(inv.total));
+    expect(await getCustomerAdvanceBalance(org.tenantId, advCustomer)).toBe(500 - Number(inv.total));
   });
 });

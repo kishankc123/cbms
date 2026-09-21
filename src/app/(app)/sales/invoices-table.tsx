@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { voidInvoice } from "./actions";
+import { voidInvoice, getInvoiceAdvance, applyInvoiceAdvance, removeInvoiceAdvance } from "./actions";
+import { ApplyAdvanceModal } from "@/components/apply-advance-modal";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 
 import { D } from "@/components/calendar/date-text";
@@ -49,6 +50,7 @@ export function InvoicesTable({
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [advanceId, setAdvanceId] = useState<string | null>(null);
   const today = todayIso();
 
   function toggleSort(key: SortKey) {
@@ -167,6 +169,11 @@ export function InvoicesTable({
               </td>
               <td className={`px-4 py-2 capitalize ${shownStatus(inv, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(inv, today).replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
+                {(inv.status === "sent" || inv.status === "partially_paid" || inv.status === "overdue") && (
+                  <button type="button" onClick={() => setAdvanceId(inv.id)} className="text-xs text-gray-600 hover:underline">
+                    Apply advance
+                  </button>
+                )}
                 {inv.status !== "void" && (
                   <button type="button" onClick={() => setEditingId(inv.id)} className="text-xs text-gray-600 hover:underline">
                     Edit
@@ -208,6 +215,17 @@ export function InvoicesTable({
           customerBalances={customerBalances}
           vatRate={vatRate}
           onClose={() => setEditingId(null)}
+        />
+      )}
+      {advanceId && (
+        <ApplyAdvanceModal
+          title="Apply customer advance"
+          documentWord="invoice"
+          partyWord="customer"
+          load={() => getInvoiceAdvance(advanceId)}
+          onApply={(amount) => applyInvoiceAdvance(advanceId, amount)}
+          onRemove={(id) => removeInvoiceAdvance(id)}
+          onClose={() => setAdvanceId(null)}
         />
       )}
     </>

@@ -330,6 +330,13 @@
       "when": 1789930187329,
       "tag": "0046_yummy_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789970627618,
+      "tag": "0047_lyrical_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

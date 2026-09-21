@@ -15,6 +15,7 @@ import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assert
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { todayIso } from "@/lib/calendar";
+import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 
 // Deletes the embedded (paid-at-creation) Payment-module row(s) recorded
 // for this bill, cascading to their allocation rows — called before a void
@@ -603,6 +604,9 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     throw e;
   }
 
+  // Any advance paid to this supplier goes to their oldest open bills first.
+  await autoApplyAdvance(session.tenantId, session.userId, "supplier", input.vendorId);
+
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
@@ -752,4 +756,26 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   revalidatePath("/dashboard");
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
+}
+
+// ---- applying an advance paid to a supplier to one bill by hand (it is also applied automatically when a bill is created)
+
+export async function getBillAdvance(billId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
+  return getAdvanceInfo(session.tenantId, "supplier", billId);
+}
+
+export async function applyBillAdvance(billId: string, amount: number) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await applyAdvance(session.tenantId, session.userId, "supplier", billId, amount);
+  for (const p of ["/purchases/stockable", "/suppliers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
+}
+
+export async function removeBillAdvance(applicationId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await unapplyAdvance(session.tenantId, session.userId, "supplier", applicationId);
+  for (const p of ["/purchases/stockable", "/suppliers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
 }

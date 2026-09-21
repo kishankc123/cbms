@@ -21,6 +21,8 @@ import {
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
+import { getCustomerBalances } from "@/lib/ledger/customer-balances";
+import { getCustomerAdvanceBalance } from "@/lib/ledger/advance-accounts";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import {
   createPayment as createPaymentEngine,
@@ -88,6 +90,17 @@ export async function getOutstandingExpenses(vendorId?: string | null) {
     .orderBy(asc(expenses.expenseDate));
 
   return rows.map((r) => ({ ...r, outstanding: round2(Number(r.amountPayable) - Number(r.amountPaid)) })).filter((r) => r.outstanding > 0.005);
+}
+
+// What could be paid back to a customer: the credit on their account (for example after a sales return) and any
+// advance they have paid us.
+export async function getCustomerRefundable(customerId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  const [balances, advance] = await Promise.all([getCustomerBalances(session.tenantId), getCustomerAdvanceBalance(session.tenantId, customerId)]);
+  const credit = round2(Math.max(-(balances[customerId] ?? 0), 0));
+  const adv = round2(Math.max(advance, 0));
+  return { credit, advance: adv, total: round2(credit + adv) };
 }
 
 // ---------- Create / void ----------

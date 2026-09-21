@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { voidBill } from "./actions";
+import { voidBill, getBillAdvance, applyBillAdvance, removeBillAdvance } from "./actions";
+import { ApplyAdvanceModal } from "@/components/apply-advance-modal";
 
 import { D } from "@/components/calendar/date-text";
 import { todayIso } from "@/lib/calendar";
@@ -36,6 +37,7 @@ export function BillsTable({
   onEdit?: (billId: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [advanceId, setAdvanceId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const today = todayIso();
@@ -156,6 +158,11 @@ export function BillsTable({
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td className={`px-4 py-2 capitalize ${shownStatus(b, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(b, today).replace("_", " ")}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
+                {b.vendorId && (b.status === "open" || b.status === "partially_paid" || b.status === "overdue") && (
+                  <button type="button" onClick={() => setAdvanceId(b.id)} className="text-xs text-gray-600 hover:underline">
+                    Apply advance
+                  </button>
+                )}
                 {b.status !== "void" && onEdit && (
                   <button type="button" onClick={() => onEdit(b.id)} className="text-xs text-gray-600 hover:underline">
                     Edit
@@ -187,6 +194,17 @@ export function BillsTable({
           )}
         </tbody>
       </table>
+      {advanceId && (
+        <ApplyAdvanceModal
+          title="Apply supplier advance"
+          documentWord="bill"
+          partyWord="supplier"
+          load={() => getBillAdvance(advanceId)}
+          onApply={(amount) => applyBillAdvance(advanceId, amount)}
+          onRemove={(id) => removeBillAdvance(id)}
+          onClose={() => setAdvanceId(null)}
+        />
+      )}
     </div>
   );
 }

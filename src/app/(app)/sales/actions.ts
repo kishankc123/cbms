@@ -24,6 +24,7 @@ import { withPaymentNumber } from "@/lib/payment-number";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
+import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
@@ -412,6 +413,11 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
       await discardInvoice(session.tenantId, invoice.id, session.userId);
       throw e;
     }
+  }
+
+  // Any advance these customers have paid goes to their oldest open invoices first.
+  for (const id of new Set(computedRows.map((r) => r.customerId).filter(Boolean))) {
+    await autoApplyAdvance(session.tenantId, session.userId, "customer", id);
   }
 
   revalidatePath("/sales");
@@ -860,10 +866,35 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
     throw e;
   }
 
+  // Any advance this customer has paid goes to their oldest open invoices first.
+  await autoApplyAdvance(session.tenantId, session.userId, "customer", input.customerId);
+
   revalidatePath("/sales");
   revalidatePath("/sales/invoices");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/customers");
   revalidatePath("/inventory/items");
+}
+
+// ---- applying a customer's advance to one invoice by hand (it is also applied automatically when an invoice is created)
+
+export async function getInvoiceAdvance(invoiceId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
+  return getAdvanceInfo(session.tenantId, "customer", invoiceId);
+}
+
+export async function applyInvoiceAdvance(invoiceId: string, amount: number) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+  await applyAdvance(session.tenantId, session.userId, "customer", invoiceId, amount);
+  for (const p of ["/sales", "/customers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
+}
+
+export async function removeInvoiceAdvance(applicationId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+  await unapplyAdvance(session.tenantId, session.userId, "customer", applicationId);
+  for (const p of ["/sales", "/customers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
 }

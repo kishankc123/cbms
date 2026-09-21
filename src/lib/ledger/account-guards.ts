@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
+import { advanceApplications, creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { getCogsSubGroups } from "./control-accounts";
 
@@ -42,6 +42,15 @@ export async function assertNoLaterPayments(tenantId: string, targetType: "purch
         inArray(paymentAllocations.targetId, [targetId])
       )
     );
+  // ...nor under an advance that has been applied to it.
+  const advances = await db
+    .select({ amount: advanceApplications.amount })
+    .from(advanceApplications)
+    .where(and(eq(advanceApplications.tenantId, tenantId), eq(advanceApplications.targetId, targetId), eq(advanceApplications.status, "applied")));
+  if (advances.length > 0) {
+    const total = advances.reduce((s, a) => s + Number(a.amount), 0);
+    throw new Error(`An advance of ${total.toFixed(2)} has been applied to this ${what} — take that back first`);
+  }
   // ...nor under a return's credit that has been applied to it.
   const applied = await db
     .select({ returnId: creditApplications.returnId, kind: creditApplications.kind })

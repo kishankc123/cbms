@@ -32,8 +32,10 @@ import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getOrCreateExpensePayableAccount } from "./expense-accounts";
 import {
-  getOrCreateCustomerAdvanceSubAccountId,
-  getOrCreateSupplierAdvanceSubAccountId,
+  getOrCreateCustomerAdvanceAccountId,
+  getOrCreateSupplierAdvanceAccountId,
+  getCustomerAdvanceBalance,
+  getSupplierAdvanceBalance,
   getOrCreateOwnerDrawingsAccount,
 } from "./advance-accounts";
 
@@ -167,15 +169,13 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
         lines.push({ accountId: arId, creditAmount: a.allocatedAmount, description: label });
       }
       if (unallocated > 0) {
-        const [customer] = await db.select({ name: customers.name }).from(customers).where(eq(customers.id, input.customerId!)).limit(1);
-        const advId = await getOrCreateCustomerAdvanceSubAccountId(tenantId, customer?.name ?? "Customer");
+        const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
         lines.push({ accountId: advId, creditAmount: unallocated, description: `${label} (unallocated → advance)` });
       }
       return lines;
     }
     case "customer_advance": {
-      const [customer] = await db.select({ name: customers.name }).from(customers).where(eq(customers.id, input.customerId!)).limit(1);
-      const advId = await getOrCreateCustomerAdvanceSubAccountId(tenantId, customer?.name ?? "Customer");
+      const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
       return [primaryLine, { accountId: advId, creditAmount: amount, description: label }];
     }
     case "loan_received": {
@@ -210,8 +210,7 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
           remaining = round2(remaining - toPayable);
         }
         if (remaining > 0) {
-          const [vendor] = await db.select({ name: vendors.name }).from(vendors).where(and(eq(vendors.id, input.vendorId), eq(vendors.tenantId, tenantId))).limit(1);
-          const advId = await getOrCreateSupplierAdvanceSubAccountId(tenantId, vendor?.name ?? "Supplier");
+          const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
           lines.push({ accountId: advId, creditAmount: remaining, description: label });
           remaining = 0;
         }
@@ -238,18 +237,29 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
         lines.push({ accountId: apId, debitAmount: a.allocatedAmount, description: label });
       }
       if (unallocated > 0) {
-        const [vendor] = await db.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, input.vendorId!)).limit(1);
-        const advId = await getOrCreateSupplierAdvanceSubAccountId(tenantId, vendor?.name ?? "Supplier");
+        const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
         lines.push({ accountId: advId, debitAmount: unallocated, description: `${label} (unallocated → advance)` });
       }
       lines.push(primaryLine);
       return lines;
     }
     case "customer_refund": {
-      // Money paid back to a customer settles the credit we owe them on their own (receivable) account — for example
-      // after a sales return.
-      const arId = await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!);
-      return [{ accountId: arId, debitAmount: amount, description: label }, primaryLine];
+      // Money paid back to a customer settles, first, the credit we owe them on their own (receivable) account — for
+      // example after a sales return — and then any advance they have paid us.
+      const owedOnAccount = round2(Math.max(-((await getCustomerBalances(tenantId))[input.customerId!] ?? 0), 0));
+      const fromAccount = round2(Math.min(amount, owedOnAccount));
+      const fromAdvance = round2(amount - fromAccount);
+      const lines: PostLineInput[] = [];
+      if (fromAccount > 0) {
+        const arId = await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!);
+        lines.push({ accountId: arId, debitAmount: fromAccount, description: label });
+      }
+      if (fromAdvance > 0) {
+        const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
+        lines.push({ accountId: advId, debitAmount: fromAdvance, description: `${label} (advance refunded)` });
+      }
+      lines.push(primaryLine);
+      return lines;
     }
     case "expense_payment": {
       const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
@@ -287,8 +297,7 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [{ accountId: loans.id, debitAmount: amount, description: label }, primaryLine];
     }
     case "supplier_advance": {
-      const [vendor] = await db.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, input.vendorId!)).limit(1);
-      const advId = await getOrCreateSupplierAdvanceSubAccountId(tenantId, vendor?.name ?? "Supplier");
+      const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
       return [{ accountId: advId, debitAmount: amount, description: label }, primaryLine];
     }
     case "owner_withdrawal": {
@@ -518,14 +527,38 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput) 
   }
 }
 
-// Paying a customer back can't be more than the credit we owe them (for example after a sales return).
+// Paying a customer back can't be more than we owe them: the credit on their account (for example after a sales
+// return) plus any advance they have paid us.
 async function validateRefund(tenantId: string, input: CreatePaymentInput) {
   if (input.paymentType !== "customer_refund") return;
   const balance = (await getCustomerBalances(tenantId))[input.customerId!] ?? 0; // negative = we owe the customer
-  const owed = round2(Math.max(-balance, 0));
-  if (round2(input.amount) > owed + 0.005) {
-    throw new Error(owed > 0 ? `This customer is owed ${owed.toFixed(2)}, so a refund can't be more than that` : "This customer isn't owed anything — there is no credit to refund");
+  const credit = round2(Math.max(-balance, 0));
+  const advance = round2(Math.max(await getCustomerAdvanceBalance(tenantId, input.customerId!), 0));
+  const refundable = round2(credit + advance);
+  if (round2(input.amount) > refundable + 0.005) {
+    throw new Error(
+      refundable > 0
+        ? `This customer is owed ${refundable.toFixed(2)} (credit ${credit.toFixed(2)} + advance ${advance.toFixed(2)}), so a refund can't be more than that`
+        : "This customer isn't owed anything — there is no credit or advance to refund"
+    );
   }
+}
+
+// The money a payment put into an advance account can't be taken away (by voiding the payment) once it has been
+// applied to a document or refunded.
+async function assertAdvanceStillThere(tenantId: string, payment: typeof payments.$inferSelect, allocatedTotal: number) {
+  const amount = Number(payment.amount);
+  const unallocated = round2(Math.max(amount - allocatedTotal, 0));
+  let toAdvance = 0;
+  let side: "customer" | "supplier" | null = null;
+  if (payment.paymentType === "customer_advance") [side, toAdvance] = ["customer", amount];
+  else if (payment.paymentType === "customer_payment") [side, toAdvance] = ["customer", unallocated];
+  else if (payment.paymentType === "supplier_advance") [side, toAdvance] = ["supplier", amount];
+  else if (payment.paymentType === "supplier_payment") [side, toAdvance] = ["supplier", unallocated];
+  const partyId = side === "customer" ? payment.customerId : payment.vendorId;
+  if (!side || !partyId || toAdvance <= 0.005) return;
+  const balance = side === "customer" ? await getCustomerAdvanceBalance(tenantId, partyId) : await getSupplierAdvanceBalance(tenantId, partyId);
+  if (balance + 0.005 < toAdvance) throw new Error("The advance from this payment has already been applied or refunded — take that back before voiding the payment");
 }
 
 // Undoes a payment that was only partly recorded: allocations already applied, the journal entry, and the row.
@@ -672,6 +705,7 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
   }
 
   const allocations = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+  await assertAdvanceStillThere(tenantId, payment, round2(allocations.reduce((s, a) => s + Number(a.allocatedAmount), 0)));
   for (const a of allocations) {
     await revertAllocationOnTarget(tenantId, a);
   }

@@ -140,3 +140,23 @@ export const creditApplications = pgTable(
   },
   (t) => [index("credit_applications_return").on(t.tenantId, t.returnId), index("credit_applications_target").on(t.tenantId, t.targetId)]
 );
+
+// An advance (money received from a customer, or paid to a supplier, ahead of a document) applied to an invoice or
+// bill. Unlike a return's credit this moves money between accounts, so it carries its journal entry: for a customer
+// Dr their Advance account / Cr their receivable account; for a supplier Dr their payable account / Cr their Advance.
+export const advanceApplications = pgTable(
+  "advance_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    side: text("side").$type<"customer" | "supplier">().notNull(),
+    partyId: uuid("party_id").notNull(),
+    targetId: uuid("target_id").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    journalEntryId: uuid("journal_entry_id").notNull(),
+    status: text("status").$type<"applied" | "reversed">().notNull().default("applied"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("advance_applications_target").on(t.tenantId, t.targetId), index("advance_applications_party").on(t.tenantId, t.partyId)]
+);

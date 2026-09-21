@@ -28,6 +28,9 @@ export const customers = pgTable("customers", {
   // receipt, and opening balance posts here instead of the shared AR
   // control account (see subledger-accounts.ts).
   receivableAccountId: uuid("receivable_account_id").references(() => accounts.id),
+  // This customer's own sub-account under Customer Advance: money they paid before (or beyond) an invoice sits here
+  // until it is applied to an invoice or paid back. Linked by id, never by name.
+  advanceAccountId: uuid("advance_account_id").references(() => accounts.id),
 });
 
 export type LineItem = {
