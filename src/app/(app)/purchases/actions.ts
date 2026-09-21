@@ -9,7 +9,7 @@ import { postJournalEntry, reverseJournalEntry, reverseAllActiveEntriesForSource
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { applyStockDelta } from "@/lib/inventory/stock";
-import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
@@ -48,8 +48,8 @@ async function insertEmbeddedSupplierPayment(
   journalEntryId: string,
   referenceNumber: string
 ) {
-  const paymentNumber = await buildNextPaymentNumber(tenantId, "money_out");
-  const [row] = await db
+  const [row] = await withPaymentNumber(tenantId, "money_out", (paymentNumber) =>
+    db
     .insert(payments)
     .values({
       tenantId,
@@ -71,7 +71,8 @@ async function insertEmbeddedSupplierPayment(
       postedBy: userId,
       postedAt: new Date(),
     })
-    .returning();
+    .returning()
+  );
 
   await db.insert(paymentAllocations).values({ paymentId: row.id, targetType: "purchase_bill", targetId: billId, allocatedAmount: amount.toFixed(2) });
 }

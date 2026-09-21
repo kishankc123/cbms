@@ -12,7 +12,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
-import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { withPaymentNumber } from "@/lib/payment-number";
 import { evaluateAmountThresholdRules } from "../compliance/actions";
 
 import { todayIso } from "@/lib/calendar";
@@ -400,8 +400,8 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
     await db.update(expenses).set({ amountPaid: newPaid.toFixed(2), status: newStatus }).where(eq(expenses.id, expense.id));
 
     const primaryLine = input.payments.filter((p) => p.accountId && p.amount > 0)[0];
-    const paymentNumber = await buildNextPaymentNumber(session.tenantId, "money_out");
-    const [paymentRow] = await db
+    const [paymentRow] = await withPaymentNumber(session.tenantId, "money_out", (paymentNumber) =>
+      db
       .insert(payments)
       .values({
         tenantId: session.tenantId,
@@ -424,7 +424,8 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
         postedBy: session.userId,
         postedAt: new Date(),
       })
-      .returning();
+      .returning()
+    );
     await db.insert(paymentAllocations).values({ paymentId: paymentRow.id, targetType: "expense", targetId: expense.id, allocatedAmount: paidNow.toFixed(2) });
   } catch (e) {
     await db.update(expenses).set({ amountPaid: expense.amountPaid, status: expense.status }).where(eq(expenses.id, expense.id));

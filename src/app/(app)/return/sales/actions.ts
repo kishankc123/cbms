@@ -10,6 +10,7 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { ensureSalesReturnsAccount } from "@/lib/ledger/return-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from "@/lib/ledger/credit-applications";
 import { salesVatRate } from "@/lib/sales/vat";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 
@@ -173,8 +174,31 @@ export async function voidSalesReturn(formData: FormData) {
   if (!note) throw new Error("Debit note not found");
   if (note.status === "void") throw new Error("Debit note is already void");
 
+  await assertNoAppliedCredit(session.tenantId, note.id, note.noteNumber);
   await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Void of debit note ${note.noteNumber}`);
   await applyStockDelta(session.tenantId, (note.lineItems ?? []) as LineItem[], -1);
   await db.update(salesReturns).set({ status: "void" }).where(eq(salesReturns.id, id));
+  refresh();
+}
+
+// ---- applying this note's credit to the party's open invoices
+
+export async function getSalesReturnCredit(noteId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
+  return getCreditInfo(session.tenantId, "sales_return", noteId);
+}
+
+export async function applySalesReturnCredit(noteId: string, allocations: { targetId: string; amount: number }[]) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+  await applyCredit(session.tenantId, session.userId, "sales_return", noteId, allocations);
+  refresh();
+}
+
+export async function removeSalesReturnCredit(applicationId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+  await unapplyCredit(session.tenantId, "sales_return", applicationId);
   refresh();
 }

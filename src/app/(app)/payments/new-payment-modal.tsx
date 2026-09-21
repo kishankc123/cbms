@@ -11,6 +11,7 @@ import {
 } from "./actions";
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
 import { ConfirmDialog } from "../sales/confirm-dialog";
+import { useProblem } from "@/components/problem-dialog";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -25,7 +26,7 @@ const inputErrCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 t
 
 function typeConfig(paymentType: string) {
   return {
-    needsCustomer: paymentType === "customer_payment" || paymentType === "customer_advance",
+    needsCustomer: paymentType === "customer_payment" || paymentType === "customer_advance" || paymentType === "customer_refund",
     needsVendor: paymentType === "supplier_payment" || paymentType === "supplier_advance",
     optionalVendor: paymentType === "expense_payment" || paymentType === "refund_received",
     optionalOtherParty: ["loan_received", "capital_introduced", "loan_repayment", "owner_withdrawal", "other_receipt", "other_payment"].includes(paymentType),
@@ -81,7 +82,8 @@ export function NewPaymentModal({
   const [allocated, setAllocated] = useState<Record<string, string>>({});
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
@@ -146,17 +148,21 @@ export function NewPaymentModal({
 
   async function performSave(confirmDup: boolean) {
     const errors: Record<string, string> = {};
-    if (!(amountNum > 0)) errors.amount = "Amount must be greater than zero.";
-    if (!paymentDate) errors.paymentDate = "Please enter the payment date.";
-    if (!accountId) errors.accountId = "Select an account.";
-    if (config.needsCustomer && !customerId) errors.customerId = "Please select a customer.";
-    if (config.needsVendor && !vendorId) errors.vendorId = "Please select a supplier.";
-    if (config.showTransferTo && !transferToAccountId) errors.transferToAccountId = "Select the destination account.";
-    if (paymentMethod === "cheque" && !chequeNumber.trim()) errors.chequeNumber = "Cheque number is required.";
-    if (paymentType === "expense_payment" && allocations.length !== 1) errors.allocation = "Select an expense to settle.";
+    const first: { message: string; target: string }[] = [];
+    const bad = (key: string, message: string, target: string) => {
+      errors[key] = message;
+      first.push({ message, target });
+    };
+    if (!paymentDate) bad("paymentDate", "Please enter the payment date.", "#pay-date");
+    if (!accountId) bad("accountId", "Select the account the money moves through.", '[data-field="account"]');
+    if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
+    if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
+    if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
+    if (!(amountNum > 0)) bad("amount", "Amount must be greater than zero.", '[data-field="amount"]');
+    if (paymentMethod === "cheque" && !chequeNumber.trim()) bad("chequeNumber", "Cheque number is required for a cheque payment.", '[data-field="cheque"]');
+    if (paymentType === "expense_payment" && allocations.length !== 1) bad("allocation", "Select the expense this payment settles.", '[data-field="allocation"]');
     setFieldErrors(errors);
-    setError(null);
-    if (Object.keys(errors).length > 0) return;
+    if (first.length > 0) return report(first[0].message, first[0].target);
 
     setSaving(true);
     try {
@@ -190,7 +196,19 @@ export function NewPaymentModal({
       }
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save payment");
+      const message = e instanceof Error ? e.message : "Failed to save payment";
+      const rules: [RegExp, string][] = [
+        [/closed period|payment date/i, "#pay-date"],
+        [/owed|credit to refund/i, '[data-field="amount"]'],
+        [/classification/i, '[data-field="category"]'],
+        [/Cash or Bank|account/i, '[data-field="account"]'],
+        [/different (customer|supplier)|allocat|invoice|bill|expense/i, '[data-field="allocation"]'],
+        [/customer/i, '[data-field="customer"]'],
+        [/supplier/i, '[data-field="vendor"]'],
+        [/amount/i, '[data-field="amount"]'],
+        [/cheque/i, '[data-field="cheque"]'],
+      ];
+      report(message, rules.find(([re]) => re.test(message))?.[1] ?? null);
     } finally {
       setSaving(false);
     }
@@ -228,8 +246,7 @@ export function NewPaymentModal({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date</label>
-              <DatePicker max={today()} value={paymentDate} onChange={(v) => setPaymentDate(v)} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
-              {fieldErrors.paymentDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.paymentDate}</p>}
+              <DatePicker id="pay-date" max={today()} value={paymentDate} onChange={(v) => setPaymentDate(v)} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Payment Number</label>
@@ -248,7 +265,7 @@ export function NewPaymentModal({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">{config.showTransferTo ? "From Account" : "Account"}</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={fieldErrors.accountId ? inputErrCls : inputCls}>
+              <select data-field="account" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={fieldErrors.accountId ? inputErrCls : inputCls}>
                 <option value="">Select account</option>
                 {flatAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -256,13 +273,12 @@ export function NewPaymentModal({
                   </option>
                 ))}
               </select>
-              {fieldErrors.accountId && <p className="mt-1 text-xs text-red-600">{fieldErrors.accountId}</p>}
             </div>
 
             {config.showTransferTo && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">To Account</label>
-                <select value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className={fieldErrors.transferToAccountId ? inputErrCls : inputCls}>
+                <select data-field="transferTo" value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className={fieldErrors.transferToAccountId ? inputErrCls : inputCls}>
                   <option value="">Select account</option>
                   {flatAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -270,7 +286,6 @@ export function NewPaymentModal({
                     </option>
                   ))}
                 </select>
-                {fieldErrors.transferToAccountId && <p className="mt-1 text-xs text-red-600">{fieldErrors.transferToAccountId}</p>}
               </div>
             )}
 
@@ -289,8 +304,7 @@ export function NewPaymentModal({
               <>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Cheque Number</label>
-                  <input value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className={fieldErrors.chequeNumber ? inputErrCls : inputCls} />
-                  {fieldErrors.chequeNumber && <p className="mt-1 text-xs text-red-600">{fieldErrors.chequeNumber}</p>}
+                  <input data-field="cheque" value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} className={fieldErrors.chequeNumber ? inputErrCls : inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Cheque Date</label>
@@ -312,7 +326,7 @@ export function NewPaymentModal({
             {config.needsCustomer && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Customer</label>
-                <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldErrors.customerId ? inputErrCls : inputCls}>
+                <select data-field="customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldErrors.customerId ? inputErrCls : inputCls}>
                   <option value="">Select customer</option>
                   {formOptions.customers.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -320,13 +334,12 @@ export function NewPaymentModal({
                     </option>
                   ))}
                 </select>
-                {fieldErrors.customerId && <p className="mt-1 text-xs text-red-600">{fieldErrors.customerId}</p>}
               </div>
             )}
             {(config.needsVendor || config.optionalVendor) && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Supplier{config.optionalVendor ? " (optional)" : ""}</label>
-                <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={fieldErrors.vendorId ? inputErrCls : inputCls}>
+                <select data-field="vendor" value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={fieldErrors.vendorId ? inputErrCls : inputCls}>
                   <option value="">{config.optionalVendor ? "No supplier" : "Select supplier"}</option>
                   {formOptions.vendors.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -334,7 +347,6 @@ export function NewPaymentModal({
                     </option>
                   ))}
                 </select>
-                {fieldErrors.vendorId && <p className="mt-1 text-xs text-red-600">{fieldErrors.vendorId}</p>}
               </div>
             )}
             {config.optionalOtherParty && (
@@ -346,7 +358,7 @@ export function NewPaymentModal({
             {config.showCategoryAccount && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Classification Account</label>
-                <select value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)} className={inputCls}>
+                <select data-field="category" value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)} className={inputCls}>
                   <option value="">
                     {paymentType === "tax_payment" ? "Default: Tax Payable" : direction === "money_in" ? "Default: Other Income" : "Default: Miscellaneous Expense"}
                   </option>
@@ -361,8 +373,7 @@ export function NewPaymentModal({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount</label>
-              <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldErrors.amount ? inputErrCls : inputCls} />
-              {fieldErrors.amount && <p className="mt-1 text-xs text-red-600">{fieldErrors.amount}</p>}
+              <input data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldErrors.amount ? inputErrCls : inputCls} />
             </div>
           </div>
 
@@ -383,7 +394,7 @@ export function NewPaymentModal({
         </section>
 
         {config.showAllocation && (
-          <section className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
+          <section data-field="allocation" className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Accounting / Allocation Information</h3>
 
             {((paymentType === "customer_payment" && !customerId) || (paymentType === "supplier_payment" && !vendorId)) && (
@@ -435,7 +446,6 @@ export function NewPaymentModal({
                 </table>
               </div>
             )}
-            {fieldErrors.allocation && <p className="text-xs text-red-600">{fieldErrors.allocation}</p>}
 
             <div className="flex flex-wrap gap-6 text-sm">
               <div>
@@ -455,7 +465,6 @@ export function NewPaymentModal({
         )}
 
         <div className="flex items-center justify-end gap-3">
-          {error && <span className="text-xs text-red-600">{error}</span>}
           <button type="button" onClick={onCancel} disabled={saving} className="rounded text-gray-500 hover:text-gray-700 text-sm px-2 py-1.5 disabled:opacity-50">
             Cancel
           </button>
@@ -469,6 +478,8 @@ export function NewPaymentModal({
           </button>
         </div>
       </div>
+
+      {dialog}
 
       {confirmDuplicate && (
         <ConfirmDialog

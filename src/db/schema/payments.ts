@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, numeric, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 import { customers } from "./sales";
@@ -25,6 +25,7 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "other_receipt",
   // Money out
   "supplier_payment",
+  "customer_refund",
   "expense_payment",
   "tax_payment",
   "loan_repayment",
@@ -106,7 +107,7 @@ export const payments = pgTable("payments_ledger", {
   updatedAt: timestamp("updated_at", { withTimezone: true }),
   voidedBy: uuid("voided_by"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
-});
+}, (t) => [uniqueIndex("payments_tenant_number").on(t.tenantId, t.paymentNumber)]);
 
 // One payment can settle multiple invoices/bills (or a single expense) —
 // see spec section 17 "Multiple Invoice Payment". allocatedAmount for a
@@ -120,3 +121,22 @@ export const paymentAllocations = pgTable("payment_allocations", {
   targetId: uuid("target_id").notNull(),
   allocatedAmount: numeric("allocated_amount", { precision: 18, scale: 2 }).notNull(),
 });
+
+// A sales return (credit due to the customer) or purchase return (credit due from the supplier) applied against
+// an invoice / bill. It changes what is still owed on that document; the ledger already reflects the return itself,
+// so no journal entry is posted here.
+export const creditApplications = pgTable(
+  "credit_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"sales_return" | "purchase_return">().notNull(),
+    returnId: uuid("return_id").notNull(),
+    targetId: uuid("target_id").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    status: text("status").$type<"applied" | "reversed">().notNull().default("applied"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("credit_applications_return").on(t.tenantId, t.returnId), index("credit_applications_target").on(t.tenantId, t.targetId)]
+);

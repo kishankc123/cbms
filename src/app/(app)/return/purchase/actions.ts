@@ -9,6 +9,7 @@ import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput 
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from "@/lib/ledger/credit-applications";
 import { applyStockDelta } from "@/lib/inventory/stock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 
@@ -155,8 +156,31 @@ export async function voidPurchaseReturn(formData: FormData) {
   if (!note) throw new Error("Credit note not found");
   if (note.status === "void") throw new Error("Credit note is already void");
 
+  await assertNoAppliedCredit(session.tenantId, note.id, note.noteNumber);
   await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Void of credit note ${note.noteNumber}`);
   await applyStockDelta(session.tenantId, (note.lineItems ?? []) as PurchaseLineItem[], 1);
   await db.update(purchaseReturns).set({ status: "void" }).where(eq(purchaseReturns.id, id));
+  refresh();
+}
+
+// ---- applying this note's credit to the party's open bills
+
+export async function getPurchaseReturnCredit(noteId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
+  return getCreditInfo(session.tenantId, "purchase_return", noteId);
+}
+
+export async function applyPurchaseReturnCredit(noteId: string, allocations: { targetId: string; amount: number }[]) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await applyCredit(session.tenantId, session.userId, "purchase_return", noteId, allocations);
+  refresh();
+}
+
+export async function removePurchaseReturnCredit(applicationId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await unapplyCredit(session.tenantId, "purchase_return", applicationId);
   refresh();
 }

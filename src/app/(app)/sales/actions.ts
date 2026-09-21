@@ -20,7 +20,7 @@ import { postJournalEntry, reverseJournalEntry, reverseAllActiveEntriesForSource
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
-import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { withPaymentNumber } from "@/lib/payment-number";
 import { applyStockDelta, computeCogsTotal } from "@/lib/inventory/stock";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -184,8 +184,8 @@ async function insertEmbeddedCustomerPayment(
   journalEntryId: string,
   referenceNumber: string
 ) {
-  const paymentNumber = await buildNextPaymentNumber(tenantId, "money_in");
-  const [row] = await db
+  const [row] = await withPaymentNumber(tenantId, "money_in", (paymentNumber) =>
+    db
     .insert(payments)
     .values({
       tenantId,
@@ -207,7 +207,8 @@ async function insertEmbeddedCustomerPayment(
       postedBy: userId,
       postedAt: new Date(),
     })
-    .returning();
+    .returning()
+  );
 
   await db.insert(paymentAllocations).values({ paymentId: row.id, targetType: "sales_invoice", targetId: invoiceId, allocatedAmount: amount.toFixed(2) });
 }

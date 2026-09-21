@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { voidSalesReturn } from "./actions";
+import { voidSalesReturn, getSalesReturnCredit, applySalesReturnCredit, removeSalesReturnCredit } from "./actions";
+import { ApplyCreditModal } from "@/components/apply-credit-modal";
 
 import { D } from "@/components/calendar/date-text";
 type Customer = { id: string; name: string };
@@ -25,6 +26,7 @@ export function SalesReturnsTable({
   customerById: Record<string, Customer>;
 }) {
   const [search, setSearch] = useState("");
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -145,6 +147,11 @@ export function SalesReturnsTable({
               <td className="px-4 py-2 capitalize">{n.status}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 {n.status !== "void" && (
+                  <button type="button" onClick={() => setApplyingId(n.id)} className="text-xs text-gray-600 hover:underline">
+                    Apply credit
+                  </button>
+                )}
+                {n.status !== "void" && (
                   <form
                     action={voidSalesReturn}
                     className="inline"
@@ -171,6 +178,16 @@ export function SalesReturnsTable({
         </tbody>
       </table>
 
+      {applyingId && (
+        <ApplyCreditModal
+          title="Apply credit to invoices"
+          documentWord="invoice"
+          load={() => getSalesReturnCredit(applyingId)}
+          onApply={(allocations) => applySalesReturnCredit(applyingId, allocations)}
+          onRemove={(id) => removeSalesReturnCredit(id)}
+          onClose={() => setApplyingId(null)}
+        />
+      )}
     </>
   );
 }

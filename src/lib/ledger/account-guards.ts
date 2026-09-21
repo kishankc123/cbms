@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { paymentAllocations, payments, vendors } from "@/db/schema";
+import { creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { getCogsSubGroups } from "./control-accounts";
 
@@ -42,6 +42,19 @@ export async function assertNoLaterPayments(tenantId: string, targetType: "purch
         inArray(paymentAllocations.targetId, [targetId])
       )
     );
+  // ...nor under a return's credit that has been applied to it.
+  const applied = await db
+    .select({ returnId: creditApplications.returnId, kind: creditApplications.kind })
+    .from(creditApplications)
+    .where(and(eq(creditApplications.tenantId, tenantId), eq(creditApplications.targetId, targetId), eq(creditApplications.status, "applied")));
+  if (applied.length > 0) {
+    const ids = applied.map((a) => a.returnId);
+    const notes = [
+      ...(await db.select({ n: salesReturns.noteNumber }).from(salesReturns).where(inArray(salesReturns.id, ids))),
+      ...(await db.select({ n: purchaseReturns.noteNumber }).from(purchaseReturns).where(inArray(purchaseReturns.id, ids))),
+    ];
+    throw new Error(`Credit from ${notes.map((r) => r.n).join(", ") || "a return"} has been applied to this ${what} — take that back first`);
+  }
   if (rows.length > 0) {
     throw new Error(`This ${what} has payment ${[...new Set(rows.map((r) => r.n))].join(", ")} recorded in Payments — void ${rows.length > 1 ? "those payments" : "that payment"} first`);
   }

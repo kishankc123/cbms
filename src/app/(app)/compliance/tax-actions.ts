@@ -245,9 +245,9 @@ export async function recordObligationPayment(input: ObligationPaymentInput) {
   // A near-identical payment was just recorded: nothing was posted; ask the user to confirm.
   if ("duplicateWarning" in result) return { duplicateWarning: true as const };
 
-  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "tax_payment_recorded", entityType: "compliance_obligation", entityId: input.obligationId, after: { paymentNumber: number, amount: input.amount, date: input.paymentDate } });
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "tax_payment_recorded", entityType: "compliance_obligation", entityId: input.obligationId, after: { paymentNumber: result.paymentNumber, amount: input.amount, date: input.paymentDate } });
   for (const p of ["/compliance", "/payments", "/dashboard", "/journal"]) revalidatePath(p, "layout");
-  return { duplicateWarning: false as const, paymentNumber: number };
+  return { duplicateWarning: false as const, paymentNumber: result.paymentNumber };
 }
 
 export type TaxChargeInput = {

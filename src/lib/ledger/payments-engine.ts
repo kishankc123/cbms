@@ -11,6 +11,8 @@ import {
   purchaseBills,
   expenses,
   complianceObligations,
+  journalLines,
+  bankReconciliationMatchJournalLines,
   type paymentTypeEnum,
   type paymentDirectionEnum,
   type paymentPartyTypeEnum,
@@ -19,6 +21,12 @@ import {
 } from "@/db/schema";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
 import { findControlAccount } from "./control-accounts";
+import { assertCashBankAccounts } from "./account-guards";
+import { getCustomerBalances } from "./customer-balances";
+import { getSupplierBalances } from "./supplier-balances";
+import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { todayIso } from "@/lib/calendar";
 import { ensureTaxPayableAccount } from "@/lib/compliance/tax-accounts";
 import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/tax-amounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
@@ -48,6 +56,7 @@ export const MONEY_IN_TYPES: PaymentType[] = [
 
 export const MONEY_OUT_TYPES: PaymentType[] = [
   "supplier_payment",
+  "customer_refund",
   "expense_payment",
   "tax_payment",
   "loan_repayment",
@@ -190,10 +199,22 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       const lines: PostLineInput[] = [primaryLine];
       let remaining = amount;
       if (input.vendorId) {
-        const [vendor] = await db.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, input.vendorId)).limit(1);
-        const advId = await getOrCreateSupplierAdvanceSubAccountId(tenantId, vendor?.name ?? "Supplier");
-        lines.push({ accountId: advId, creditAmount: remaining, description: label });
-        remaining = 0;
+        // A refund after a purchase return settles what the supplier owes us on their own (payable) account first;
+        // anything beyond that reduces an advance we paid them.
+        const balance = (await getSupplierBalances(tenantId))[input.vendorId] ?? 0; // negative = the supplier owes us
+        const owedToUs = round2(Math.max(-balance, 0));
+        const toPayable = round2(Math.min(remaining, owedToUs));
+        if (toPayable > 0) {
+          const apId = await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId);
+          lines.push({ accountId: apId, creditAmount: toPayable, description: label });
+          remaining = round2(remaining - toPayable);
+        }
+        if (remaining > 0) {
+          const [vendor] = await db.select({ name: vendors.name }).from(vendors).where(and(eq(vendors.id, input.vendorId), eq(vendors.tenantId, tenantId))).limit(1);
+          const advId = await getOrCreateSupplierAdvanceSubAccountId(tenantId, vendor?.name ?? "Supplier");
+          lines.push({ accountId: advId, creditAmount: remaining, description: label });
+          remaining = 0;
+        }
       } else if (input.categoryAccountId) {
         lines.push({ accountId: input.categoryAccountId, creditAmount: remaining, description: label });
         remaining = 0;
@@ -223,6 +244,12 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       }
       lines.push(primaryLine);
       return lines;
+    }
+    case "customer_refund": {
+      // Money paid back to a customer settles the credit we owe them on their own (receivable) account — for example
+      // after a sales return.
+      const arId = await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!);
+      return [{ accountId: arId, debitAmount: amount, description: label }, primaryLine];
     }
     case "expense_payment": {
       const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
@@ -319,7 +346,7 @@ function validateInput(input: CreatePaymentInput) {
   if (!input.paymentDate) throw new Error("Payment date is required.");
   if (!input.accountId) throw new Error("Select an account.");
 
-  const needsCustomer = input.paymentType === "customer_payment" || input.paymentType === "customer_advance";
+  const needsCustomer = input.paymentType === "customer_payment" || input.paymentType === "customer_advance" || input.paymentType === "customer_refund";
   const needsVendor = input.paymentType === "supplier_payment" || input.paymentType === "supplier_advance";
   if (needsCustomer && !input.customerId) throw new Error("Select a customer.");
   if (needsVendor && !input.vendorId) throw new Error("Select a supplier.");
@@ -409,15 +436,112 @@ async function revertAllocationOnTarget(tenantId: string, allocation: { targetTy
 
 export type CreatePaymentResult = { paymentId: string; paymentNumber: string } | { duplicateWarning: true };
 
+function isUniqueViolation(e: unknown) {
+  const err = e as { code?: string; cause?: { code?: string } };
+  return err?.code === "23505" || err?.cause?.code === "23505";
+}
+
+// The parties and accounts a payment names must be this organization's, and the money must move through its
+// Cash/Bank accounts — ids arrive from the browser, so this is checked here rather than trusted.
+async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
+  if (input.customerId) {
+    const [c] = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.id, input.customerId), eq(customers.tenantId, tenantId))).limit(1);
+    if (!c) throw new Error("Customer not found");
+  }
+  if (input.vendorId) {
+    const [v] = await db.select({ id: vendors.id }).from(vendors).where(and(eq(vendors.id, input.vendorId), eq(vendors.tenantId, tenantId))).limit(1);
+    if (!v) throw new Error("Supplier not found");
+  }
+  if (input.employeeId) {
+    const [e] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, tenantId))).limit(1);
+    if (!e) throw new Error("Employee not found");
+  }
+  await assertCashBankAccounts(tenantId, [input.accountId, ...(input.transferToAccountId ? [input.transferToAccountId] : [])]);
+  if (input.categoryAccountId) {
+    const [a] = await db.select({ code: accounts.code }).from(accounts).where(and(eq(accounts.id, input.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
+    if (!a) throw new Error("Classification account not found");
+    const partyControl = ["1100", "2000"].some((c) => a.code === c || a.code.startsWith(c + "."));
+    if (partyControl) throw new Error("Choose a classification account — customer and supplier accounts are settled through their own payment types");
+  }
+}
+
+const EXPECTED_TARGET: Partial<Record<PaymentType, PaymentAllocationTarget>> = {
+  customer_payment: "sales_invoice",
+  supplier_payment: "purchase_bill",
+  expense_payment: "expense",
+  tax_payment: "tax_obligation",
+};
+
+// Checked before anything is posted: every allocation must point at a live document of the right kind that belongs
+// to the party being paid, and no document may be allocated more than it still owes.
+async function validateAllocations(tenantId: string, input: CreatePaymentInput) {
+  const allocations = input.allocations ?? [];
+  if (allocations.length === 0) return;
+  const expected = EXPECTED_TARGET[input.paymentType];
+  for (const a of allocations) {
+    if (!(a.allocatedAmount > 0)) throw new Error("Each allocated amount must be greater than zero");
+    if (a.targetType !== expected) throw new Error("This payment type can't settle that kind of document");
+  }
+  if (expected === "tax_obligation") return; // checked by validateTaxAllocations
+
+  const wanted = new Map<string, number>();
+  for (const a of allocations) wanted.set(a.targetId, round2((wanted.get(a.targetId) ?? 0) + a.allocatedAmount));
+  const ids = [...wanted.keys()];
+
+  if (expected === "sales_invoice") {
+    const rows = await db.select().from(salesInvoices).where(and(eq(salesInvoices.tenantId, tenantId), inArray(salesInvoices.id, ids)));
+    for (const [id, value] of wanted) {
+      const inv = rows.find((r) => r.id === id);
+      if (!inv) throw new Error("Invoice not found");
+      if (inv.status === "void") throw new Error(`Invoice ${inv.invoiceNumber} is cancelled`);
+      if (inv.customerId !== input.customerId) throw new Error(`Invoice ${inv.invoiceNumber} belongs to a different customer`);
+      if (value > round2(Number(inv.total) - Number(inv.amountPaid)) + 0.005) throw new Error(`The allocation exceeds invoice ${inv.invoiceNumber}'s outstanding balance`);
+    }
+  } else if (expected === "purchase_bill") {
+    const rows = await db.select().from(purchaseBills).where(and(eq(purchaseBills.tenantId, tenantId), inArray(purchaseBills.id, ids)));
+    for (const [id, value] of wanted) {
+      const bill = rows.find((r) => r.id === id);
+      if (!bill) throw new Error("Bill not found");
+      if (bill.status === "void") throw new Error(`Bill ${bill.billNumber} is cancelled`);
+      if (bill.vendorId !== input.vendorId) throw new Error(`Bill ${bill.billNumber} belongs to a different supplier`);
+      if (value > round2(Number(bill.total) - Number(bill.amountPaid)) + 0.005) throw new Error(`The allocation exceeds bill ${bill.billNumber}'s outstanding balance`);
+    }
+  } else if (expected === "expense") {
+    const rows = await db.select().from(expenses).where(and(eq(expenses.tenantId, tenantId), inArray(expenses.id, ids)));
+    for (const [id, value] of wanted) {
+      const ex = rows.find((r) => r.id === id);
+      if (!ex) throw new Error("Expense not found");
+      if (ex.status === "void") throw new Error(`Expense ${ex.expenseNumber} is void`);
+      if (input.vendorId && ex.vendorId && ex.vendorId !== input.vendorId) throw new Error(`Expense ${ex.expenseNumber} belongs to a different supplier`);
+      if (value > round2(Number(ex.amountPayable) - Number(ex.amountPaid)) + 0.005) throw new Error(`The allocation exceeds expense ${ex.expenseNumber}'s outstanding balance`);
+    }
+  }
+}
+
+// Paying a customer back can't be more than the credit we owe them (for example after a sales return).
+async function validateRefund(tenantId: string, input: CreatePaymentInput) {
+  if (input.paymentType !== "customer_refund") return;
+  const balance = (await getCustomerBalances(tenantId))[input.customerId!] ?? 0; // negative = we owe the customer
+  const owed = round2(Math.max(-balance, 0));
+  if (round2(input.amount) > owed + 0.005) {
+    throw new Error(owed > 0 ? `This customer is owed ${owed.toFixed(2)}, so a refund can't be more than that` : "This customer isn't owed anything — there is no credit to refund");
+  }
+}
+
+// Undoes a payment that was only partly recorded: allocations already applied, the journal entry, and the row.
+async function rollbackCreated(tenantId: string, userId: string, paymentId: string, entryId: string | null, applied: AllocationInput[]) {
+  for (const a of applied) {
+    await revertAllocationOnTarget(tenantId, { targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), paymentId }).catch(() => {});
+  }
+  if (entryId) await reverseJournalEntry(tenantId, entryId, userId, "Rolled back — payment could not be recorded").catch(() => {});
+  await db.delete(payments).where(eq(payments.id, paymentId));
+}
+
 /**
- * The single entry point for recording a settlement in the unified Payment
- * module — validates, decides the correct Dr/Cr treatment for the chosen
- * type, posts one balanced journal entry via postJournalEntry, records the
- * payment + its allocations, and updates every allocated invoice/bill/
- * expense's paid amount and status. Never duplicates Purchase/Expense/
- * Payroll recording — it only ever settles an amount already recorded
- * there, or books a genuinely new money movement (advance, loan, capital,
- * transfer, tax, drawings, other).
+ * The single entry point for recording a settlement in the unified Payment module. It checks everything BEFORE
+ * anything is posted (parties, accounts, allocations, period), reserves the payment number, posts one balanced
+ * journal entry, records the allocations and updates each invoice/bill/expense — and if any step fails it takes the
+ * earlier steps back, so a failed payment leaves nothing behind.
  */
 export async function createPayment(
   tenantId: string,
@@ -426,71 +550,104 @@ export async function createPayment(
   input: CreatePaymentInput
 ): Promise<CreatePaymentResult> {
   validateInput(input);
+  await validateOwnership(tenantId, input);
   await validateTaxAllocations(tenantId, input);
+  await validateAllocations(tenantId, input);
+  await validateRefund(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
 
   if (!input.confirmDuplicate && (await checkDuplicate(tenantId, input))) {
     return { duplicateWarning: true };
   }
-
+  await assertPeriodOpen(tenantId, input.paymentDate);
   const lines = await buildLines(tenantId, input);
 
-  const entry = await postJournalEntry({
-    tenantId,
-    entryDate: input.paymentDate,
-    sourceType: input.direction === "money_in" ? "receipt" : "payment",
-    referenceNumber: paymentNumber,
-    memo: `${paymentNumber} — ${input.paymentType.replace(/_/g, " ")}`,
-    createdBy: userId,
-    lines,
-  });
-
-  const [row] = await db
-    .insert(payments)
-    .values({
-      tenantId,
-      paymentNumber,
-      direction: input.direction,
-      paymentType: input.paymentType,
-      paymentDate: input.paymentDate,
-      partyType: input.partyType,
-      customerId: input.customerId || null,
-      vendorId: input.vendorId || null,
-      employeeId: input.employeeId || null,
-      partyOtherName: input.partyOtherName || null,
-      accountId: input.accountId,
-      transferToAccountId: input.transferToAccountId || null,
-      categoryAccountId: input.categoryAccountId || null,
-      paymentMethod: input.paymentMethod,
-      chequeNumber: input.chequeNumber || null,
-      chequeDate: input.chequeDate || null,
-      chequeBank: input.chequeBank || null,
-      referenceNumber: input.referenceNumber || null,
-      amount: input.amount.toFixed(2),
-      description: input.description || null,
-      notes: input.notes || null,
-      attachmentUrl: input.attachmentUrl || null,
-      status: "posted",
-      origin: input.origin ?? "standalone",
-      journalEntryId: entry.id,
-      createdBy: userId,
-      postedBy: userId,
-      postedAt: new Date(),
-    })
-    .returning();
-
-  const allocations = input.allocations ?? [];
-  if (allocations.length > 0) {
-    await db.insert(paymentAllocations).values(
-      allocations.map((a) => ({ paymentId: row.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }))
-    );
-    for (const a of allocations) {
-      await applyAllocationToTarget(tenantId, a);
+  // Reserve the row (and with it the number) first; two payments saved at the same instant can't share a number.
+  let row: typeof payments.$inferSelect | undefined;
+  let number = paymentNumber;
+  for (let attempt = 0; attempt < 6 && !row; attempt++) {
+    try {
+      [row] = await db
+        .insert(payments)
+        .values({
+          tenantId,
+          paymentNumber: number,
+          direction: input.direction,
+          paymentType: input.paymentType,
+          paymentDate: input.paymentDate,
+          partyType: input.partyType,
+          customerId: input.customerId || null,
+          vendorId: input.vendorId || null,
+          employeeId: input.employeeId || null,
+          partyOtherName: input.partyOtherName || null,
+          accountId: input.accountId,
+          transferToAccountId: input.transferToAccountId || null,
+          categoryAccountId: input.categoryAccountId || null,
+          paymentMethod: input.paymentMethod,
+          chequeNumber: input.chequeNumber || null,
+          chequeDate: input.chequeDate || null,
+          chequeBank: input.chequeBank || null,
+          referenceNumber: input.referenceNumber || null,
+          amount: input.amount.toFixed(2),
+          description: input.description || null,
+          notes: input.notes || null,
+          attachmentUrl: input.attachmentUrl || null,
+          status: "draft",
+          origin: input.origin ?? "standalone",
+          createdBy: userId,
+        })
+        .returning();
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      number = await buildNextPaymentNumber(tenantId, input.direction, attempt + 1);
     }
   }
+  if (!row) throw new Error("Could not allocate a payment number — please try again");
+  const paymentRow = row;
 
-  return { paymentId: row.id, paymentNumber };
+  let entryId: string | null = null;
+  const applied: AllocationInput[] = [];
+  try {
+    const entry = await postJournalEntry({
+      tenantId,
+      entryDate: input.paymentDate,
+      sourceType: input.direction === "money_in" ? "receipt" : "payment",
+      referenceNumber: number,
+      memo: `${number} — ${input.paymentType.replace(/_/g, " ")}`,
+      createdBy: userId,
+      lines,
+    });
+    entryId = entry.id;
+
+    await db.update(payments).set({ status: "posted", journalEntryId: entry.id, postedBy: userId, postedAt: new Date() }).where(eq(payments.id, paymentRow.id));
+
+    const allocations = input.allocations ?? [];
+    if (allocations.length > 0) {
+      await db.insert(paymentAllocations).values(
+        allocations.map((a) => ({ paymentId: paymentRow.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }))
+      );
+      for (const a of allocations) {
+        await applyAllocationToTarget(tenantId, a);
+        applied.push(a);
+      }
+    }
+  } catch (e) {
+    await rollbackCreated(tenantId, userId, paymentRow.id, entryId, applied);
+    throw e;
+  }
+
+  return { paymentId: paymentRow.id, paymentNumber: number };
+}
+
+async function isReconciled(journalEntryId: string) {
+  const rows = await db
+    .select({ id: bankReconciliationMatchJournalLines.journalLineId })
+    .from(bankReconciliationMatchJournalLines)
+    .innerJoin(journalLines, eq(journalLines.id, bankReconciliationMatchJournalLines.journalLineId))
+    .where(eq(journalLines.journalEntryId, journalEntryId))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**
@@ -498,6 +655,8 @@ export async function createPayment(
  * every allocation it made on the invoices/bills/expenses it touched.
  * Embedded payments (recorded by Sales/Purchases at invoice/bill creation)
  * are never voided here — void or edit the source invoice/bill instead.
+ * Refused up front (before anything changes) when today falls in a closed period, or the payment has been matched
+ * in a bank reconciliation.
  */
 export async function voidPayment(tenantId: string, paymentId: string, userId: string, reason: string) {
   const [payment] = await db.select().from(payments).where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId))).limit(1);
@@ -505,6 +664,11 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
   if (payment.status === "voided") throw new Error("Payment is already voided");
   if (payment.origin === "embedded") {
     throw new Error("This payment was recorded automatically by Sales/Purchases — void or edit the source invoice/bill instead.");
+  }
+
+  await assertPeriodOpen(tenantId, todayIso());
+  if (payment.journalEntryId && (await isReconciled(payment.journalEntryId))) {
+    throw new Error("This payment has been matched in a bank reconciliation — undo that match before voiding it");
   }
 
   const allocations = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
