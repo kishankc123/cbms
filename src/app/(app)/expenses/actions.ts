@@ -7,7 +7,7 @@ import { expenses, journalEntries, journalLines, tenants, payments, paymentAlloc
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
-import { assertCashBankAccounts, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertCashBankAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -218,7 +218,8 @@ export async function createExpense(input: ExpenseInput) {
   return { warnings };
 }
 
-export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string };
+/** `detailsOnly`: payments have been recorded against this expense in Payments, so its amounts can't change under them. */
+export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly: boolean };
 
 export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditData> {
   const session = await requireTenantSession();
@@ -230,9 +231,8 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     .where(and(eq(expenses.id, expenseId), eq(expenses.tenantId, session.tenantId)))
     .limit(1);
   if (!expense) throw new Error("Expense not found");
-  if (Number(expense.amountPaid) > 0) {
-    throw new Error("Cannot edit an expense that already has recorded payments — void it instead");
-  }
+  if (expense.status === "void") throw new Error("A void expense can't be edited");
+  const detailsOnly = await assertNoLaterPayments(session.tenantId, "expense", expenseId, "expense").then(() => false, () => true);
 
   const [entry] = await db
     .select()
@@ -275,6 +275,7 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     tdsAmount: Number(expense.tdsAmount),
     otherTaxAmount: Number(expense.otherTaxAmount),
     payments,
+    detailsOnly,
   };
 }
 
@@ -291,9 +292,9 @@ export async function updateExpense(input: UpdateExpenseInput) {
     .limit(1);
   if (!existing) throw new Error("Expense not found");
   if (existing.status === "void") throw new Error("Cannot edit a void expense");
-  if (Number(existing.amountPaid) > 0) {
-    throw new Error("Cannot edit an expense that already has recorded payments — void it instead");
-  }
+  // Payments made when the expense was entered are part of it and are edited with it; payments recorded later in
+  // Payments are not — void those first (or change only the details).
+  await assertNoLaterPayments(session.tenantId, "expense", input.expenseId, "expense");
 
   await validateExpenseInput(session.tenantId, input, input.expenseId);
   const totals = computeExpenseTotals(input);
@@ -345,6 +346,49 @@ export async function updateExpense(input: UpdateExpenseInput) {
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
+}
+
+export type ExpenseDetailsInput = { expenseId: string; description: string; invoiceNumber: string; invoiceDate: string; dueDate: string; billAvailable?: boolean };
+
+/**
+ * Changes the parts of an expense that don't touch the books — description, the supplier's invoice number and dates,
+ * whether the bill is in hand — so it works on any expense, including ones that have payments recorded against them.
+ */
+export async function updateExpenseDetails(input: ExpenseDetailsInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "edit")) throw new Error("Not permitted");
+
+  const [existing] = await db
+    .select()
+    .from(expenses)
+    .where(and(eq(expenses.id, input.expenseId), eq(expenses.tenantId, session.tenantId)))
+    .limit(1);
+  if (!existing) throw new Error("Expense not found");
+  if (existing.status === "void") throw new Error("A void expense can't be edited");
+
+  const invoiceNumber = input.invoiceNumber.trim();
+  if (input.dueDate && input.dueDate < (input.invoiceDate || existing.expenseDate)) throw new Error("The due date can't be before the invoice date");
+  if (invoiceNumber && existing.vendorId) {
+    const same = await db
+      .select({ id: expenses.id })
+      .from(expenses)
+      .where(and(eq(expenses.tenantId, session.tenantId), eq(expenses.vendorId, existing.vendorId), eq(expenses.invoiceNumber, invoiceNumber), ne(expenses.status, "void")));
+    if (same.some((e) => e.id !== existing.id)) throw new Error(`Invoice ${invoiceNumber} has already been recorded for this supplier`);
+  }
+
+  await db
+    .update(expenses)
+    .set({
+      description: input.description.trim() || null,
+      invoiceNumber: invoiceNumber || null,
+      invoiceDate: input.invoiceDate || null,
+      dueDate: input.dueDate || null,
+      ...(input.billAvailable !== undefined ? { billAvailable: input.billAvailable } : {}),
+    })
+    .where(eq(expenses.id, input.expenseId));
+
+  revalidatePath("/expenses");
+  revalidatePath("/dashboard");
 }
 
 // Settles some or all of an expense's outstanding Expense Payable balance —

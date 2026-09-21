@@ -15,7 +15,7 @@ vi.mock("@/lib/session", () => ({
   can: () => true,
 }));
 
-const { createExpense, recordExpensePayment } = await import("./actions");
+const { createExpense, recordExpensePayment, updateExpense, updateExpenseDetails, getExpenseForEdit } = await import("./actions");
 
 const acct = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
 async function balance(code: string) {
@@ -114,6 +114,42 @@ describe("expenses", () => {
     await recordExpensePayment({ expenseId: e.id, payments: [{ accountId: cashId, amount: 200 }], paymentDate: "2026-09-03" });
     const [entry] = await db.select().from(journalEntries).where(and(eq(journalEntries.sourceId, e.id), eq(journalEntries.sourceType, "payment")));
     expect(entry.entryDate).toBe("2026-09-03");
+  });
+});
+
+describe("editing an expense", () => {
+  it("any expense can be edited: one paid when it was entered is edited with its payment", async () => {
+    await createExpense({ ...base(), billType: "no_bill", description: "Paid rent", vatAmount: 0, taxableAmount: 300, payments: [{ accountId: cashId, amount: 300 }] });
+    const e = (await rows()).find((r) => r.description === "Paid rent")!;
+    expect(Number(e.amountPaid)).toBe(300);
+
+    const data = await getExpenseForEdit(e.id);
+    expect(data.detailsOnly).toBe(false);
+    expect(data.payments).toEqual([{ accountId: cashId, amount: 300 }]);
+
+    await updateExpense({ ...data, taxableAmount: 400, payments: [{ accountId: cashId, amount: 400 }] });
+    const after = (await rows()).find((r) => r.id === e.id)!;
+    expect(Number(after.total)).toBe(400);
+    expect(Number(after.amountPaid)).toBe(400);
+    expect(after.status).toBe("paid");
+  });
+
+  it("one with payments recorded later can only have its details changed", async () => {
+    await createExpense({ ...base(), billType: "no_bill", description: "Later paid", vatAmount: 0, taxableAmount: 500 });
+    const e = (await rows()).find((r) => r.description === "Later paid")!;
+    await recordExpensePayment({ expenseId: e.id, payments: [{ accountId: cashId, amount: 200 }], paymentDate: "2026-09-04" });
+
+    const data = await getExpenseForEdit(e.id);
+    expect(data.detailsOnly).toBe(true);
+    await expect(updateExpense({ ...data, taxableAmount: 900 })).rejects.toThrow(/recorded in Payments/);
+
+    await updateExpenseDetails({ expenseId: e.id, description: "Later paid (corrected)", invoiceNumber: "INV-EDIT-1", invoiceDate: "2026-09-01", dueDate: "2026-10-01", billAvailable: false });
+    const after = (await rows()).find((r) => r.id === e.id)!;
+    expect(after.description).toBe("Later paid (corrected)");
+    expect(after.invoiceNumber).toBe("INV-EDIT-1");
+    expect(after.billAvailable).toBe(false);
+    expect(Number(after.total)).toBe(500); // the books did not move
+    await expect(updateExpenseDetails({ expenseId: e.id, description: "x", invoiceNumber: "", invoiceDate: "2026-09-05", dueDate: "2026-09-01" })).rejects.toThrow(/due date/);
   });
 });
 

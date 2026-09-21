@@ -1,9 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { voidExpense, getExpenseForEdit, type ExpenseEditData } from "./actions";
 import { ExpenseFormModal, type InitialExpense } from "./expense-form-modal";
 import { RecordExpensePaymentModal } from "./record-expense-payment-modal";
+import { RowMenu } from "@/components/row-menu";
+import { ConfirmDialog } from "../sales/confirm-dialog";
+import { useProblem } from "@/components/problem-dialog";
+import { escapeHtml, printDocument } from "@/lib/print-html";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { formatDate } from "@/lib/calendar";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -69,7 +76,10 @@ export function ExpensesTable({
   const [exportDates, setExportDates] = useDateDisplay();
   const [showNewForm, setShowNewForm] = useState(false);
   const [editData, setEditData] = useState<InitialExpense | null>(null);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [voidingRow, setVoidingRow] = useState<ExpenseRow | null>(null);
+  const router = useRouter();
+  const calendar = useCalendar();
+  const { report, dialog } = useProblem();
   const [payingRow, setPayingRow] = useState<ExpenseRow | null>(null);
   const [viewingRow, setViewingRow] = useState<ExpenseRow | null>(null);
 
@@ -106,13 +116,38 @@ export function ExpensesTable({
   }, [expenses, search, dateFrom, dateTo, categoryFilter, statusFilter]);
 
   async function openEdit(id: string) {
-    setEditError(null);
     try {
       const data = await getExpenseForEdit(id);
       setEditData(toInitial(data));
     } catch (e) {
-      setEditError(e instanceof Error ? e.message : "Failed to load expense");
+      report(e instanceof Error ? e.message : "Could not open the expense for editing", null);
     }
+  }
+
+  async function confirmVoid() {
+    const row = voidingRow;
+    setVoidingRow(null);
+    if (!row) return;
+    const fd = new FormData();
+    fd.set("expenseId", row.id);
+    try {
+      await voidExpense(fd);
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not void the expense", null);
+    }
+  }
+
+  // Prints this one expense (not the page behind it).
+  function printExpense(e: ExpenseRow) {
+    const row = (label: string, value: string) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`;
+    const amount = (label: string, value: number, cls = "") => `<tr class="${cls}"><th>${escapeHtml(label)}</th><td class="num">${escapeHtml(fmt(value))}</td></tr>`;
+    printDocument(
+      `Expense ${e.expenseNumber}`,
+      `<h1>Expense ${escapeHtml(e.expenseNumber)}</h1><div class="sub">${escapeHtml(formatDate(e.expenseDate, calendar))}</div>
+       <table>${row("Supplier", e.payee)}${row("Category", e.category)}${row("Description", e.description || "—")}${row("Status", e.status.replace("_", " "))}</table>
+       <table>${amount("Net amount", e.subtotal)}${amount("Tax", e.tax)}${amount("Total", e.total, "total")}${amount("Amount paid", e.amountPaid)}${amount("Still to pay", Math.max(e.amountPayable - e.amountPaid, 0))}</table>`
+    );
   }
 
   return (
@@ -190,8 +225,6 @@ export function ExpensesTable({
         </select>
       </div>
 
-      {editError && <p className="text-sm text-red-600">{editError}</p>}
-
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
@@ -219,37 +252,16 @@ export function ExpensesTable({
               <td className="px-4 py-2">{fmt(e.tax)}</td>
               <td className="px-4 py-2">{fmt(e.total)}</td>
               <td className={`px-4 py-2 capitalize ${(e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "font-medium text-red-600" : ""}`}>{((e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "overdue" : e.status).replace("_", " ")}</td>
-              <td className="px-4 py-2 text-right space-x-2 whitespace-nowrap">
-                <button type="button" onClick={() => setViewingRow(e)} className="text-xs text-gray-600 hover:underline">
-                  View
-                </button>
-                {e.status !== "void" && e.amountPaid === 0 && (
-                  <button type="button" onClick={() => openEdit(e.id)} className="text-xs text-gray-600 hover:underline">
-                    Edit
-                  </button>
-                )}
-                {(e.status === "unpaid" || e.status === "partially_paid") && (
-                  <button type="button" onClick={() => setPayingRow(e)} className="text-xs text-[var(--color-primary)] hover:underline">
-                    Record Payment
-                  </button>
-                )}
-                {e.status !== "void" && (
-                  <form
-                    action={voidExpense}
-                    className="inline"
-                    onSubmit={(ev) => {
-                      if (!confirm(`Void expense ${e.expenseNumber}?`)) ev.preventDefault();
-                    }}
-                  >
-                    <input type="hidden" name="expenseId" value={e.id} />
-                    <button type="submit" className="text-xs text-red-600 hover:underline">
-                      Void
-                    </button>
-                  </form>
-                )}
-                <button type="button" onClick={() => window.print()} className="text-xs text-gray-600 hover:underline">
-                  Print
-                </button>
+              <td className="px-4 py-2 text-right whitespace-nowrap">
+                <RowMenu
+                  items={[
+                    { label: "View", onClick: () => setViewingRow(e) },
+                    { label: "Edit", onClick: () => openEdit(e.id), hidden: e.status === "void" },
+                    { label: "Record payment", onClick: () => setPayingRow(e), hidden: !(e.status === "unpaid" || e.status === "partially_paid") },
+                    { label: "Print", onClick: () => printExpense(e) },
+                    { label: "Void", onClick: () => setVoidingRow(e), danger: true, hidden: e.status === "void" },
+                  ]}
+                />
               </td>
             </tr>
           ))}
@@ -345,7 +357,7 @@ export function ExpensesTable({
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => window.print()} className="text-sm text-gray-600 hover:underline">
+              <button type="button" onClick={() => printExpense(viewingRow)} className="text-sm text-gray-600 hover:underline">
                 Print
               </button>
               <button
@@ -359,6 +371,8 @@ export function ExpensesTable({
           </div>
         </div>
       )}
+      {voidingRow && <ConfirmDialog message={`Void expense ${voidingRow.expenseNumber}? Its accounting entries will be reversed.`} onYes={confirmVoid} onNo={() => setVoidingRow(null)} />}
+      {dialog}
     </div>
   );
 }

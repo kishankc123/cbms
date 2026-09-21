@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createExpense, updateExpense, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import { createExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
@@ -35,7 +35,7 @@ const BILL_TYPES: { value: ExpenseBillType; label: string }[] = [
 const today = () => todayIso();
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string };
+export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean };
 
 type FieldKey = "expenseDate" | "category" | "supplier" | "billType" | "invoiceNumber" | "invoiceDate" | "dueDate" | "taxable" | "taxTreatment" | "vat" | "tds" | "pay";
 
@@ -102,6 +102,8 @@ export function ExpenseFormModal({
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
+  // Payments recorded later in Payments pin the amounts: then only the details can be edited.
+  const locked = Boolean(initial?.detailsOnly);
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { problem, report, dialog } = useProblem();
 
@@ -156,6 +158,7 @@ export function ExpenseFormModal({
   const remaining = Math.max(round2(amountPayable - paidTotal), 0);
 
   function handleSaveClick() {
+    if (locked) return setConfirmSave(true);
     if (!categoryAccountId) return report("Select an expense category.", at("category"));
     if (subtotal <= 0) return report("Taxable amount must be greater than zero.", at("taxable"));
     if (amountPayable < 0) return report("TDS and other withholdings cannot exceed the total expense amount.", at("tds"));
@@ -187,7 +190,9 @@ export function ExpenseFormModal({
         payments,
       };
 
-      if (initial) {
+      if (initial && locked) {
+        await updateExpenseDetails({ expenseId: initial.expenseId, description, invoiceNumber, invoiceDate, dueDate, billAvailable });
+      } else if (initial) {
         await updateExpense({ ...payload, expenseId: initial.expenseId });
       } else {
         const result = await createExpense(payload);
@@ -217,6 +222,12 @@ export function ExpenseFormModal({
           </button>
         </div>
 
+        {locked && (
+          <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
+          </p>
+        )}
+
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-700">Expense Information</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -230,12 +241,13 @@ export function ExpenseFormModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense date</label>
-              <DatePicker id="exp-expenseDate" max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker id="exp-expenseDate" disabled={locked} max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Expense category</label>
               <select
                 data-field="category"
+                disabled={locked}
                 value={categoryAccountId}
                 onChange={(e) => setCategoryAccountId(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
@@ -268,6 +280,7 @@ export function ExpenseFormModal({
                 options={vendors}
                 onChange={(id) => setVendorId(id)}
                 onAdded={addVendor}
+                disabled={locked}
                 className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
               />
               </div>
@@ -288,7 +301,7 @@ export function ExpenseFormModal({
           <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Bill type</label>
-              <select data-field="billType" value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">
+              <select data-field="billType" disabled={locked} value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">
                 {BILL_TYPES.map((b) => (
                   <option key={b.value} value={b.value}>
                     {b.label}
@@ -317,6 +330,7 @@ export function ExpenseFormModal({
           <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </section>
 
+        <fieldset disabled={locked} className="min-w-0 border-0 p-0 m-0">
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-700">Tax Information</h3>
           <div className="grid grid-cols-3 gap-4">
@@ -393,6 +407,8 @@ export function ExpenseFormModal({
           </div>
         </section>
 
+        </fieldset>
+
         <section className="flex flex-wrap justify-center gap-6">
           <div>
             <h3 className="mb-2 text-sm font-semibold text-gray-700">Amount</h3>
@@ -453,7 +469,7 @@ export function ExpenseFormModal({
             type="button"
             data-field="pay"
             onClick={() => setShowPayment(true)}
-            disabled={amountPayable <= 0}
+            disabled={amountPayable <= 0 || locked}
             className="whitespace-nowrap rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
           >
             {payments.length > 0 ? "EDIT PAY" : "RECORD PAY"}

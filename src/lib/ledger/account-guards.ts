@@ -28,7 +28,7 @@ export async function assertSupplierOwned(tenantId: string, vendorId: string) {
  * voided underneath them — the payment would be left pointing at something that changed. Those payments
  * have to be voided first (payments made when the bill was created belong to the bill and are handled with it).
  */
-export async function assertNoLaterPayments(tenantId: string, targetType: "purchase_bill" | "sales_invoice", targetId: string, what: "bill" | "invoice") {
+export async function assertNoLaterPayments(tenantId: string, targetType: "purchase_bill" | "sales_invoice" | "expense", targetId: string, what: "bill" | "invoice" | "expense") {
   const rows = await db
     .select({ n: payments.paymentNumber })
     .from(paymentAllocations)
