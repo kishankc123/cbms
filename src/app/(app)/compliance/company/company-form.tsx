@@ -6,9 +6,49 @@ import { saveCompanyDetails, type getCompanyDetails } from "../company-actions";
 import { DatePicker } from "@/components/calendar/date-picker";
 
 type Data = Awaited<ReturnType<typeof getCompanyDetails>>;
+type Values = Data["values"];
 
 const input = "w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500";
 const STATUS_LABEL: Record<string, string> = { active: "Active", dormant: "Dormant", closed: "Closed", other: "Other" };
+
+const SAVED_FIELDS = [
+  "companyName",
+  "tradingName",
+  "companyRegistrationNumber",
+  "registrationDate",
+  "panVatNumber",
+  "registeredOffice",
+  "businessAddress",
+  "natureOfBusiness",
+  "companyStatus",
+  "companyStatusNote",
+  "countryCode",
+  "entityType",
+] as const satisfies readonly (keyof Values)[];
+type SavedField = (typeof SAVED_FIELDS)[number];
+
+const FIELD_LABEL: Record<SavedField, string> = {
+  companyName: "Legal name",
+  tradingName: "Trading name",
+  countryCode: "Country",
+  entityType: "Company type",
+  companyRegistrationNumber: "Company registration number",
+  registrationDate: "Registration date",
+  panVatNumber: "PAN / VAT number",
+  natureOfBusiness: "Nature of business",
+  registeredOffice: "Registered office",
+  businessAddress: "Business address",
+  companyStatus: "Status",
+  companyStatusNote: "Status description",
+};
+
+// Changing these decides which compliance requirements apply, or is used everywhere else in the system — worth a
+// plainer warning than "this field changed".
+const CONSEQUENCE: Partial<Record<keyof Values, string>> = {
+  entityType: "Changing the company type changes which statutory requirements apply to you.",
+  countryCode: "Changing the country changes which tax rules and requirements apply to you.",
+  panVatNumber: "This number is used on invoices and as your VAT/PAN registration number — changing it here changes it everywhere.",
+};
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -26,13 +66,21 @@ export function CompanyForm({ data }: { data: Data }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const set = <K extends keyof typeof v>(key: K, value: (typeof v)[K]) => {
     setV((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   };
   const disabled = !data.canEdit;
 
-  async function handleSave() {
+  const changes = SAVED_FIELDS.filter((f) => v[f] !== data.values[f]);
+
+  function handleSaveClick() {
+    if (changes.length === 0) return; // nothing to confirm — Save is effectively a no-op
+    setReviewing(true);
+  }
+
+  async function confirmSave() {
     setSaving(true);
     setError(null);
     try {
@@ -51,6 +99,7 @@ export function CompanyForm({ data }: { data: Data }) {
         entityType: v.entityType,
       });
       setSaved(true);
+      setReviewing(false);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
@@ -142,11 +191,44 @@ export function CompanyForm({ data }: { data: Data }) {
         {error && <span className="text-xs text-red-600">{error}</span>}
         {saved && !error && <span className="text-xs text-green-600">Saved</span>}
         {data.canEdit && (
-          <button type="button" disabled={saving} onClick={handleSave} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+          <button type="button" disabled={saving || changes.length === 0} onClick={handleSaveClick} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
             {saving ? "Saving..." : "Save changes"}
           </button>
         )}
       </div>
+
+      {reviewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setReviewing(false)} />
+          <div className="relative w-full max-w-md space-y-4 rounded-lg bg-white p-5 shadow-lg">
+            <h2 className="text-base font-semibold text-gray-900">Review changes</h2>
+            <table className="w-full text-sm">
+              <tbody>
+                {changes.map((f) => (
+                  <tr key={f} className="border-t border-gray-100 align-top">
+                    <td className="py-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap">{FIELD_LABEL[f]}</td>
+                    <td className="py-1.5">
+                      <span className="text-gray-400 line-through">{data.values[f] || "—"}</span>
+                      {" → "}
+                      <span className="font-medium text-gray-900">{v[f] || "—"}</span>
+                      {CONSEQUENCE[f] && <p className="mt-0.5 text-xs text-amber-700">{CONSEQUENCE[f]}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" disabled={saving} onClick={() => setReviewing(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="button" disabled={saving} onClick={confirmSave} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+                {saving ? "Saving..." : "Confirm & save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

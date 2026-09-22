@@ -152,6 +152,16 @@ export const tenantTaxRegistrations = pgTable(
     deregistrationDate: date("deregistration_date"),
     status: registrationStatusEnum("status").notNull().default("active"),
     authorityKey: text("authority_key"),
+    /**
+     * How often this registration files, when that varies (VAT: "monthly" | "quarterly"; null where it doesn't
+     * apply). Recorded from the effective date given, so a change mid-year doesn't rewrite history.
+     *
+     * NOTE: only "monthly" currently has a confirmed due-date rule in the requirement templates — see
+     * lib/compliance/config/nepal.ts. Storing "quarterly" here does not yet change the generated VAT deadlines;
+     * the field exists so the setting is captured and the schema never needs to change once that rule is added.
+     */
+    filingFrequency: text("filing_frequency"),
+    filingFrequencyEffectiveFrom: date("filing_frequency_effective_from"),
     /** Reference only for now (document storage is not finalised). */
     supportingDocument: text("supporting_document"),
     notes: text("notes"),

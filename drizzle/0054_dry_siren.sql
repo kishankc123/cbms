@@ -1,0 +1,1 @@
+ALTER TABLE "tax_rates" ADD COLUMN "source" text DEFAULT 'manual' NOT NULL;

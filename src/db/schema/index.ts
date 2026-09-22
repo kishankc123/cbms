@@ -11,3 +11,4 @@ export * from "./inventory";
 export * from "./payroll";
 export * from "./compliance";
 export * from "./compliance-framework";
+export * from "./tax-rates";

@@ -31,18 +31,6 @@ export async function updateOtherSettings(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "settings", "edit")) throw new Error("Not permitted");
 
-  const vatRate = String(formData.get("vatRate") ?? "").trim();
-  const vatRateNum = parseFloat(vatRate);
-  if (!vatRate || Number.isNaN(vatRateNum) || vatRateNum < 0 || vatRateNum > 100) {
-    throw new Error("VAT rate must be a number between 0 and 100");
-  }
-
-  const tdsRate = String(formData.get("tdsRate") ?? "").trim();
-  const tdsRateNum = parseFloat(tdsRate);
-  if (!tdsRate || Number.isNaN(tdsRateNum) || tdsRateNum < 0 || tdsRateNum > 100) {
-    throw new Error("TDS rate must be a number between 0 and 100");
-  }
-
   const invoicePrefix = String(formData.get("invoicePrefix") ?? "").trim();
   const invoiceSuffix = String(formData.get("invoiceSuffix") ?? "").trim();
   const invoiceNumberFormat = String(formData.get("invoiceNumberFormat") ?? "prefix-number-suffix").trim();
@@ -53,8 +41,6 @@ export async function updateOtherSettings(formData: FormData) {
   await db
     .update(tenants)
     .set({
-      vatRate: vatRateNum.toFixed(2),
-      tdsRate: tdsRateNum.toFixed(2),
       invoicePrefix: invoicePrefix || null,
       invoiceSuffix: invoiceSuffix || null,
       invoiceNumberFormat,

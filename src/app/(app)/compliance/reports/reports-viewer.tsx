@@ -20,8 +20,9 @@ const REPORT_TYPES: { value: ComplianceReportType; label: string }[] = [
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
-export function ReportsViewer() {
-  const [type, setType] = useState<ComplianceReportType>("sales_register");
+export function ReportsViewer({ allowedTypes }: { allowedTypes?: ComplianceReportType[] } = {}) {
+  const types = allowedTypes ? REPORT_TYPES.filter((r) => allowedTypes.includes(r.value)) : REPORT_TYPES;
+  const [type, setType] = useState<ComplianceReportType>(types[0]?.value ?? "sales_register");
   const calendar = useCalendar();
   const [initial] = useState(() => presetRange("this_month", calendar));
   const [from, setFrom] = useState(initial.from);
@@ -57,7 +58,7 @@ export function ReportsViewer() {
             }}
             className="rounded border border-gray-300 px-2 py-1.5 text-sm"
           >
-            {REPORT_TYPES.map((r) => (
+            {types.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>

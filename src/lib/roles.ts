@@ -16,6 +16,7 @@ export const roleLabel = (role: OrgRole) => ORG_ROLES.find((r) => r.value === ro
 export const isOrgAdmin = (role: OrgRole) => role === "owner" || role === "admin";
 
 const MODULES = [
+  "audit",
   "bank_reconciliation",
   "chart_of_accounts",
   "compliance",

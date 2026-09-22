@@ -276,7 +276,6 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   }
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = await salesVatRate(session.tenantId);
 
   // Refuse up front if any invoice date sits in a locked period, before anything is saved.
   for (const date of new Set(validRows.map((r) => r.invoiceDate))) await assertPeriodOpen(session.tenantId, date);
@@ -285,9 +284,13 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
   if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
 
+  // A row is taxed at the rate that applied on ITS OWN date — rows in one batch can span a rate change.
+  const vatRateByDate = new Map<string, number>();
+  for (const date of new Set(validRows.map((r) => r.invoiceDate))) vatRateByDate.set(date, await salesVatRate(session.tenantId, date));
+
   const computedRows = validRows.map((r) => {
     const subtotal = round2(r.grossAmount - r.discountAmount);
-    const taxAmount = round2(subtotal * (vatRate / 100));
+    const taxAmount = round2(subtotal * (vatRateByDate.get(r.invoiceDate)! / 100));
     const total = round2(subtotal + taxAmount);
     const paid = round2(r.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
     return { ...r, subtotal, taxAmount, total, paid };
@@ -581,7 +584,8 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   await assertNoLaterPayments(session.tenantId, "sales_invoice", input.invoiceId, "invoice");
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
-  const vatRate = await salesVatRate(session.tenantId);
+  // The rate that applied on the invoice's OWN date, not today's.
+  const vatRate = await salesVatRate(session.tenantId, input.invoiceDate);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
@@ -760,7 +764,8 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
-  const vatRate = await salesVatRate(session.tenantId);
+  // The rate that applied on the invoice's OWN date, not today's.
+  const vatRate = await salesVatRate(session.tenantId, input.invoiceDate);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");

@@ -14,6 +14,7 @@ import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from
 import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { inputVatClaimable } from "@/lib/purchases/vat";
+import { getTaxRate } from "@/lib/compliance/tax-rates";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -68,8 +69,8 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
 
   await assertPeriodOpen(session.tenantId, input.noteDate);
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const vatRate = input.withVat ? parseFloat(tenant?.vatRate ?? "0") || 0 : 0;
+  // Taxed at the rate that applied on the return's OWN date, not today's.
+  const vatRate = input.withVat ? await getTaxRate(session.tenantId, "vat", input.noteDate) : 0;
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");

@@ -1,6 +1,7 @@
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, items, purchaseReturns, tenants } from "@/db/schema";
+import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { vendors, items, purchaseReturns } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { PurchaseReturnTabs } from "./purchase-return-tabs";
 
@@ -8,14 +9,12 @@ export default async function PurchaseReturnPage({ searchParams }: { searchParam
   const session = await requireTenantSession();
   const { view } = await searchParams;
 
-  const [vendorList, itemList, noteList, [tenant]] = await Promise.all([
+  const [vendorList, itemList, noteList, vatRate] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
     db.select().from(purchaseReturns).where(eq(purchaseReturns.tenantId, session.tenantId)).orderBy(desc(purchaseReturns.noteDate), desc(purchaseReturns.createdAt)),
-    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
+    getCurrentTaxRate(session.tenantId, "vat"),
   ]);
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
-
   return (
     <div className="space-y-6">
       <div>

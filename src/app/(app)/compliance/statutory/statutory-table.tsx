@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createStatutoryItem, updateStatutoryItem, type listStatutory, type StatutoryPatch, type StatutoryInput } from "../statutory-actions";
+import { createStatutoryItem, updateStatutoryItem, deleteStatutoryItem, type listStatutory, type StatutoryPatch, type StatutoryInput } from "../statutory-actions";
 import { updateCalendarItemStatus } from "../actions";
 import type { ObligationStatus } from "@/lib/compliance/engine/status";
 import { ObligationStatusPill } from "@/components/compliance/status-pill";
@@ -202,6 +202,22 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
   const [error, setError] = useState<string | null>(null);
   const editable = data.canEdit;
   const dueEditable = editable && item.source !== "generated";
+  const deletable = editable && item.source === "manual" && item.status === "pending";
+
+  async function remove() {
+    if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteStatutoryItem(item.id);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -276,7 +292,12 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
         </div>
       </div>
       {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {deletable && (
+          <button type="button" disabled={busy} onClick={remove} className="mr-auto rounded px-4 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
+            Delete
+          </button>
+        )}
         <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
           {editable ? "Cancel" : "Close"}
         </button>

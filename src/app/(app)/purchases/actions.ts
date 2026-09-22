@@ -14,6 +14,7 @@ import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
+import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { todayIso } from "@/lib/calendar";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
@@ -173,13 +174,14 @@ function computeCashLine(line: CashPurchaseLine, vatRate: number) {
 }
 
 // Checks everything about a consumable purchase before anything is saved or reversed, and works out the amounts.
-// VAT applies only when the bill type is VAT; the payments must equal the bill total (VAT included).
-async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput, vatRateIfVat: number) {
+// VAT applies only when the bill type is VAT; the payments must equal the bill total (VAT included). Taxed at the
+// rate that applied on the BILL'S date, not today's — a backdated bill is not re-taxed at the current rate.
+async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput) {
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one line with a rate and quantity");
   for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertCogsCategory(tenantId, categoryId);
 
-  const vatRate = input.billType === "vat" ? vatRateIfVat : 0;
+  const vatRate = input.billType === "vat" ? await getTaxRate(tenantId, "vat", input.billDate) : 0;
   const computed = validLines.map((l) => ({ line: l, ...computeCashLine(l, vatRate) }));
   const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
   const tax = round2(computed.reduce((s, c) => s + c.vat, 0));
@@ -232,8 +234,7 @@ export async function createCashPurchase(input: CashPurchaseInput) {
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
   if (!input.billDate) throw new Error("Bill date is required");
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const prepared = await prepareCashPurchase(session.tenantId, input, parseFloat(tenant?.vatRate ?? "0") || 0);
+  const prepared = await prepareCashPurchase(session.tenantId, input);
   const vendorId = input.vendorId || null;
 
   // Bills without a supplier number get AUTO-n, skipping any already used.
@@ -307,8 +308,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
   if (existing.status === "void") throw new Error("Cannot edit a void bill");
   if (!input.billDate) throw new Error("Bill date is required");
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
-  const prepared = await prepareCashPurchase(session.tenantId, input, parseFloat(tenant?.vatRate ?? "0") || 0);
+  const prepared = await prepareCashPurchase(session.tenantId, input);
   const vendorId = input.vendorId || null;
   const billNumber = input.billNumber.trim() || existing.billNumber;
 
@@ -452,9 +452,9 @@ function computeInvoiceLine(line: PurchaseLineItem, vatRate: number) {
 
 // VAT only applies when the invoice is marked as a VAT bill — a PAN,
 // Estimate, or No bill invoice books the taxable amount with no VAT line.
-async function computeInvoiceTotals(tenantId: string, lines: PurchaseLineItem[], billType: CashBillType) {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  const vatRate = billType === "vat" ? parseFloat(tenant?.vatRate ?? "0") || 0 : 0;
+async function computeInvoiceTotals(tenantId: string, lines: PurchaseLineItem[], billType: CashBillType, invoiceDate: string) {
+  // Taxed at the rate that applied on the invoice's OWN date, not today's.
+  const vatRate = billType === "vat" ? await getTaxRate(tenantId, "vat", invoiceDate) : 0;
 
   const validLines = lines.filter((l) => l.quantity > 0 && l.rate > 0);
   const computed = validLines.map((l) => computeInvoiceLine(l, vatRate));
@@ -533,7 +533,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
-  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
+  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType, input.invoiceDate);
   if (validLines.length === 0) throw new Error("Add at least one item line");
   await assertItemsUsable(session.tenantId, validLines, { requireItem: true });
   await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
@@ -688,7 +688,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
-  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType);
+  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType, input.invoiceDate);
   if (validLines.length === 0) throw new Error("Add at least one item line");
   await assertItemsUsable(session.tenantId, validLines, { requireItem: true, stillAllowed: (existing.lineItems ?? []).map((l) => l.itemId) });
 

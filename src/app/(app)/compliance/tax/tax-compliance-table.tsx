@@ -23,8 +23,8 @@ const STATUS_FILTERS = [
   { key: "not_applicable", label: "Not applicable" },
 ];
 
-export function TaxComplianceTable({ data }: { data: Data }) {
-  const [taxType, setTaxType] = useState("all");
+export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxType?: string }) {
+  const [taxType, setTaxType] = useState(lockTaxType ?? "all");
   const [status, setStatus] = useState("open");
   const [period, setPeriod] = useState("all");
   const [from, setFrom] = useState("");
@@ -55,17 +55,19 @@ export function TaxComplianceTable({ data }: { data: Data }) {
           <label className="block text-xs text-gray-500 mb-1">Search</label>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Return, period, tax…" className={`${sel} w-52`} />
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Tax type</label>
-          <select value={taxType} onChange={(e) => setTaxType(e.target.value)} className={sel}>
-            <option value="all">All taxes</option>
-            {data.taxTypes.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!lockTaxType && (
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Tax type</label>
+            <select value={taxType} onChange={(e) => setTaxType(e.target.value)} className={sel}>
+              <option value="all">All taxes</option>
+              {data.taxTypes.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Period</label>
           <select value={period} onChange={(e) => setPeriod(e.target.value)} className={sel}>

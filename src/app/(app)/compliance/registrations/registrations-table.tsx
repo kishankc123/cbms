@@ -22,6 +22,8 @@ const blank = (taxTypeKey: string, authorityKey: string): RegistrationInput => (
   effectiveDate: "",
   deregistrationDate: "",
   status: "active",
+  filingFrequency: "",
+  filingFrequencyEffectiveFrom: "",
   authorityKey,
   supportingDocument: "",
   notes: "",
@@ -47,6 +49,8 @@ export function RegistrationsTable({ data }: { data: Data }) {
         effectiveDate: r.effectiveDate,
         deregistrationDate: r.deregistrationDate,
         status: r.status,
+        filingFrequency: r.filingFrequency,
+        filingFrequencyEffectiveFrom: r.filingFrequencyEffectiveFrom,
         authorityKey: r.authorityKey,
         supportingDocument: r.supportingDocument,
         notes: r.notes,
@@ -101,6 +105,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
             <th className="px-4 py-2 font-medium">Registration number</th>
             <th className="px-4 py-2 font-medium">Registered</th>
             <th className="px-4 py-2 font-medium">Effective</th>
+            <th className="px-4 py-2 font-medium">Filing basis</th>
             <th className="px-4 py-2 font-medium">Authority</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium"></th>
@@ -120,6 +125,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
                   </span>
                 )}
               </td>
+              <td className="px-4 py-2">{r.filingFrequency ? (r.filingFrequency === "monthly" ? "Monthly" : "Quarterly") : "—"}</td>
               <td className="px-4 py-2">{r.authorityName || "—"}</td>
               <td className="px-4 py-2">
                 <StatusPill tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</StatusPill>
@@ -133,7 +139,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
           ))}
           {data.registrations.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                 No registrations yet. Add the taxes your business is registered for.
               </td>
             </tr>
@@ -209,6 +215,32 @@ export function RegistrationsTable({ data }: { data: Data }) {
                 <label className="block text-xs text-gray-500 mb-1">Deregistration date</label>
                 <DatePicker value={editing.form.deregistrationDate} onChange={(v) => set("deregistrationDate", v)} disabled={!data.canEdit} className={input} />
               </div>
+            )}
+            {data.filingFrequencyTaxTypes.includes(editing.form.taxTypeKey) && (
+              <>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Filing basis</label>
+                  <select className={input} value={editing.form.filingFrequency} onChange={(e) => set("filingFrequency", e.target.value as RegistrationInput["filingFrequency"])} disabled={!data.canEdit}>
+                    <option value="">Not set</option>
+                    {data.filingFrequencies.map((f) => (
+                      <option key={f} value={f}>
+                        {f === "monthly" ? "Monthly" : "Quarterly"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {editing.form.filingFrequency && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Effective from</label>
+                    <DatePicker value={editing.form.filingFrequencyEffectiveFrom} onChange={(v) => set("filingFrequencyEffectiveFrom", v)} disabled={!data.canEdit} className={input} />
+                  </div>
+                )}
+                {editing.form.filingFrequency === "quarterly" && (
+                  <p className="col-span-2 -mt-1 text-xs text-amber-700">
+                    Quarterly filing deadlines aren&apos;t confirmed for your jurisdiction yet — the VAT return is still generated monthly until that rule is added.
+                  </p>
+                )}
+              </>
             )}
             <div className="col-span-2">
               <label className="block text-xs text-gray-500 mb-1">Supporting document (reference)</label>

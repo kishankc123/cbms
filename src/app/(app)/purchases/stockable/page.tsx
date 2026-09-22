@@ -1,6 +1,7 @@
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, items, tenants } from "@/db/schema";
+import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { vendors, purchaseBills, items } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { StockableTabs } from "../stockable-tabs";
@@ -13,7 +14,7 @@ import { StockableTabs } from "../stockable-tabs";
 export default async function StockablePurchasePage() {
   const session = await requireTenantSession();
 
-  const [vendorList, billList, itemList, cashBankAccounts, [tenant]] = await Promise.all([
+  const [vendorList, billList, itemList, cashBankAccounts, vatRate] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     db
       .select()
@@ -22,10 +23,8 @@ export default async function StockablePurchasePage() {
       .orderBy(desc(purchaseBills.billDate)),
     db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
     getCashBankAccounts(session.tenantId),
-    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
+    getCurrentTaxRate(session.tenantId, "vat"),
   ]);
-
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
 
   return (
     <div className="space-y-6">

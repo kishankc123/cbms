@@ -1,6 +1,6 @@
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, items, salesReturns, tenants } from "@/db/schema";
+import { customers, items, salesReturns } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { salesVatRate } from "@/lib/sales/vat";
 import { SalesReturnTabs } from "./sales-return-tabs";
@@ -9,13 +9,12 @@ export default async function SalesReturnPage({ searchParams }: { searchParams: 
   const session = await requireTenantSession();
   const { view } = await searchParams;
 
-  const [customerList, itemList, noteList, [tenant]] = await Promise.all([
+  const [customerList, itemList, noteList, vatRate] = await Promise.all([
     db.select().from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
     db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
     db.select().from(salesReturns).where(eq(salesReturns.tenantId, session.tenantId)).orderBy(desc(salesReturns.noteDate), desc(salesReturns.createdAt)),
-    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
+    salesVatRate(session.tenantId),
   ]);
-  const vatRate = await salesVatRate(session.tenantId);
 
   return (
     <div className="space-y-6">

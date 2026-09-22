@@ -12,6 +12,14 @@ import { generateObligations } from "@/lib/compliance/engine/generate";
 export type RegistrationStatus = "active" | "inactive" | "suspended" | "deregistered";
 const STATUSES: RegistrationStatus[] = ["active", "inactive", "suspended", "deregistered"];
 
+// Only VAT's filing period varies by organization today. NOTE: the requirement templates only have a confirmed
+// due-date rule for "monthly" — choosing "quarterly" here is captured but does not yet change the generated VAT
+// deadlines (see lib/compliance/config/nepal.ts). It's stored regardless so the setting isn't lost once that rule
+// is added, and the schema never has to change for it.
+export type FilingFrequency = "monthly" | "quarterly";
+const FILING_FREQUENCIES: FilingFrequency[] = ["monthly", "quarterly"];
+const FILING_FREQUENCY_TAX_TYPES = ["vat"];
+
 export async function listTaxRegistrations() {
   const session = await requireTenantSession();
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
@@ -42,6 +50,8 @@ export async function listTaxRegistrations() {
         effectiveDate: r.effectiveDate ?? "",
         deregistrationDate: r.deregistrationDate ?? "",
         status: r.status as RegistrationStatus,
+        filingFrequency: (r.filingFrequency ?? "") as FilingFrequency | "",
+        filingFrequencyEffectiveFrom: r.filingFrequencyEffectiveFrom ?? "",
         authorityKey: r.authorityKey ?? type.authorityKey ?? "",
         authorityName: authorityName.get(r.authorityKey ?? type.authorityKey ?? "") ?? "",
         supportingDocument: r.supportingDocument ?? "",
@@ -56,6 +66,8 @@ export async function listTaxRegistrations() {
     addable: taxTypes.filter((t) => !heldKeys.has(t.key)).map((t) => ({ key: t.key, name: t.name, numberIsShared: t.numberSource === "company_pan_vat", authorityKey: t.authorityKey ?? "" })),
     authorities: authorities.map((a) => ({ key: a.key, name: a.name })),
     statuses: STATUSES,
+    filingFrequencies: FILING_FREQUENCIES,
+    filingFrequencyTaxTypes: FILING_FREQUENCY_TAX_TYPES,
     hasPanVatNumber: Boolean(tenant.panVatNumber?.trim()),
   };
 }
@@ -68,6 +80,8 @@ export type RegistrationInput = {
   effectiveDate: string;
   deregistrationDate: string;
   status: RegistrationStatus;
+  filingFrequency: FilingFrequency | "";
+  filingFrequencyEffectiveFrom: string;
   authorityKey: string;
   supportingDocument: string;
   notes: string;
@@ -77,10 +91,12 @@ export async function saveTaxRegistration(input: RegistrationInput) {
   const session = await requireTenantSession();
   if (!can(session, "compliance", input.id ? "edit" : "create")) throw new Error("Not permitted");
   if (!STATUSES.includes(input.status)) throw new Error("Unknown status");
-  for (const [label, v] of [["registration", input.registrationDate], ["effective", input.effectiveDate], ["deregistration", input.deregistrationDate]] as const) {
+  for (const [label, v] of [["registration", input.registrationDate], ["effective", input.effectiveDate], ["deregistration", input.deregistrationDate], ["filing basis effective", input.filingFrequencyEffectiveFrom]] as const) {
     if (v && !validateADDate(v)) throw new Error(`Enter a valid ${label} date`);
   }
   if (input.status === "deregistered" && !input.deregistrationDate) throw new Error("Enter the deregistration date");
+  if (input.filingFrequency && !FILING_FREQUENCIES.includes(input.filingFrequency)) throw new Error("Unknown filing basis");
+  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) throw new Error("Enter when the new filing basis takes effect");
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const [type] = await db
@@ -99,6 +115,8 @@ export async function saveTaxRegistration(input: RegistrationInput) {
     effectiveDate: input.effectiveDate || null,
     deregistrationDate: input.status === "deregistered" ? input.deregistrationDate : null,
     status: input.status,
+    filingFrequency: FILING_FREQUENCY_TAX_TYPES.includes(input.taxTypeKey) ? input.filingFrequency || null : null,
+    filingFrequencyEffectiveFrom: FILING_FREQUENCY_TAX_TYPES.includes(input.taxTypeKey) ? input.filingFrequencyEffectiveFrom || null : null,
     authorityKey: input.authorityKey || null,
     supportingDocument: input.supportingDocument.trim() || null,
     notes: input.notes.trim() || null,

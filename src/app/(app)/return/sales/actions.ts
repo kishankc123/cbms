@@ -63,7 +63,8 @@ export async function createSalesReturn(input: SalesReturnInput) {
 
   await assertPeriodOpen(session.tenantId, input.noteDate);
 
-  const vatRate = await salesVatRate(session.tenantId);
+  // Taxed at the rate that applied on the return's OWN date, not today's.
+  const vatRate = await salesVatRate(session.tenantId, input.noteDate);
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");

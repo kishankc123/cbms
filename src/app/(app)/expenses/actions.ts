@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { expenses, journalEntries, journalLines, tenants, payments, paymentAllocations } from "@/db/schema";
+import { expenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
+import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
@@ -14,7 +15,7 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
 import { withPaymentNumber } from "@/lib/payment-number";
-import { evaluateAmountThresholdRules } from "../compliance/actions";
+import { evaluateAmountThresholdRules } from "../audit/actions";
 
 import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -526,12 +527,10 @@ export async function voidExpense(formData: FormData) {
   revalidatePath("/journal");
 }
 
+// A starting suggestion only, shown before the expense date is finalized — the accountant can always change the
+// VAT/TDS amount by hand, so this is not the source of what actually gets posted.
 export async function getExpenseTaxDefaults() {
   const session = await requireTenantSession();
-  const [tenant] = await db
-    .select({ vatRate: tenants.vatRate, tdsRate: tenants.tdsRate })
-    .from(tenants)
-    .where(eq(tenants.id, session.tenantId))
-    .limit(1);
-  return { vatRate: parseFloat(tenant?.vatRate ?? "0") || 0, tdsRate: parseFloat(tenant?.tdsRate ?? "0") || 0 };
+  const [vatRate, tdsRate] = await Promise.all([getCurrentTaxRate(session.tenantId, "vat"), getCurrentTaxRate(session.tenantId, "tds")]);
+  return { vatRate, tdsRate };
 }

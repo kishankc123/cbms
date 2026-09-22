@@ -1,6 +1,7 @@
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills, tenants } from "@/db/schema";
+import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
@@ -12,7 +13,7 @@ import { ConsumablePurchaseTabs } from "../consumable-purchase-tabs";
 export default async function ConsumablePurchasePage() {
   const session = await requireTenantSession();
 
-  const [vendorList, billList, categoryAccounts, cashBankAccounts, [tenant]] = await Promise.all([
+  const [vendorList, billList, categoryAccounts, cashBankAccounts, vatRate] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     db
       .select()
@@ -21,10 +22,8 @@ export default async function ConsumablePurchasePage() {
       .orderBy(desc(purchaseBills.billDate)),
     getCogsSubGroups(session.tenantId),
     getCashBankAccounts(session.tenantId),
-    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
+    getCurrentTaxRate(session.tenantId, "vat"),
   ]);
-
-  const vatRate = parseFloat(tenant?.vatRate ?? "0") || 0;
 
   return (
     <div className="space-y-6">

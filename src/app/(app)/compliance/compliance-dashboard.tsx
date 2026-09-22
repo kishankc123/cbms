@@ -7,6 +7,8 @@ import { D } from "@/components/calendar/date-text";
 
 type Data = Awaited<ReturnType<typeof getComplianceDashboard>>;
 
+const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
+
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone?: "bad" | "warn" | "good" }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -106,11 +108,33 @@ export function ComplianceDashboard({ data }: { data: Data }) {
       {data.summary.exceptions > 0 && (
         <p className="text-xs text-gray-500">
           {data.summary.exceptions} open exception{data.summary.exceptions === 1 ? "" : "s"} —{" "}
-          <Link href="/compliance/exceptions" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/audit/exceptions" className="text-[var(--color-primary)] hover:underline">
             open the Exception Centre
           </Link>
         </p>
       )}
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-gray-900">This month</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-xs text-gray-500">Sales / Purchases</p>
+            <p className="mt-1 text-sm text-gray-900">
+              {fmt(data.thisMonth.salesTotal)} / {fmt(data.thisMonth.purchasesTotal)}
+            </p>
+          </div>
+          <Link href="/compliance/tax" className="rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50/60">
+            <p className="text-xs text-gray-500">VAT payable this month</p>
+            <p className="mt-1 text-sm text-gray-900">{fmt(data.thisMonth.vatPayable)}</p>
+            <p className="text-xs text-gray-400">Outstanding: {fmt(data.thisMonth.vatOutstanding)}</p>
+          </Link>
+          <Link href="/compliance/tax" className="rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50/60">
+            <p className="text-xs text-gray-500">TDS withheld this month</p>
+            <p className="mt-1 text-sm text-gray-900">{fmt(data.thisMonth.tdsWithheld)}</p>
+            <p className="text-xs text-gray-400">Outstanding: {fmt(data.thisMonth.tdsOutstanding)}</p>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

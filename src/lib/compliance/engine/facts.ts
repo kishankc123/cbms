@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, tenants } from "@/db/schema";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { getCurrentTaxRate } from "../tax-rates";
 import { activeRegisteredTaxTypes } from "../registrations";
 import type { Facts } from "./applicability";
 
@@ -20,13 +21,13 @@ export async function loadFacts(tenant: TenantProfile): Promise<Facts> {
     .limit(1);
 
   // TDS has been withheld or is configured to be: a rate is set, or the TDS payable account exists.
-  const tdsAccount = await findControlAccount(tenant.id, ["2320"], "TDS Payable");
+  const [tdsAccount, tdsRate] = await Promise.all([findControlAccount(tenant.id, ["2320"], "TDS Payable"), getCurrentTaxRate(tenant.id, "tds")]);
 
   return {
     country_code: tenant.countryCode,
     entity_type: tenant.entityType,
     registered_tax_types: await activeRegisteredTaxTypes(tenant.id),
     has_employees: Boolean(employee),
-    withholds_tax: Number(tenant.tdsRate) > 0 || Boolean(tdsAccount),
+    withholds_tax: tdsRate > 0 || Boolean(tdsAccount),
   };
 }

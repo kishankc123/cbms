@@ -22,9 +22,14 @@ export default async function SettingsPage() {
     <div className="space-y-8">
       <div className="flex items-start justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
-        <Link href="/settings/users" className="text-sm text-[var(--color-primary)] hover:underline">
-          Manage users →
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/compliance/company" className="text-sm text-[var(--color-primary)] hover:underline">
+            VAT / TDS rates →
+          </Link>
+          <Link href="/settings/users" className="text-sm text-[var(--color-primary)] hover:underline">
+            Manage users →
+          </Link>
+        </div>
       </div>
 
       <section className="space-y-3">
@@ -175,35 +180,6 @@ export default async function SettingsPage() {
           action={updateOtherSettings}
           className="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-5"
         >
-          <div className="grid grid-cols-2 gap-4 max-w-lg">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">VAT rate (%)</label>
-              <input
-                type="number"
-                name="vatRate"
-                step="0.01"
-                min="0"
-                max="100"
-                required
-                defaultValue={tenant.vatRate}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">TDS rate (%)</label>
-              <input
-                type="number"
-                name="tdsRate"
-                step="0.01"
-                min="0"
-                max="100"
-                required
-                defaultValue={tenant.tdsRate}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Invoice prefix</label>

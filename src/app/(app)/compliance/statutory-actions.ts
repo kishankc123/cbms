@@ -166,3 +166,27 @@ export async function updateStatutoryItem(id: string, patch: StatutoryPatch) {
   });
   revalidatePath("/compliance", "layout");
 }
+
+/**
+ * A requirement the system generated from your country's rules is never deleted — mark it Not applicable instead
+ * (with a reason, via updateCalendarItemStatus), so the record of "this didn't apply and here's why" survives.
+ * Only an untouched item you created by hand can be removed outright.
+ */
+export async function deleteStatutoryItem(id: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "compliance", "delete")) throw new Error("Not permitted");
+
+  const [item] = await db
+    .select()
+    .from(complianceObligations)
+    .where(and(eq(complianceObligations.id, id), eq(complianceObligations.tenantId, session.tenantId), inArray(complianceObligations.categoryKey, STATUTORY_CATEGORIES)))
+    .limit(1);
+  if (!item) throw new Error("Compliance item not found");
+  if (item.source !== "manual" || item.status !== "pending") {
+    throw new Error("Only an untouched manual item can be deleted. Mark this one Not applicable instead.");
+  }
+
+  await db.delete(complianceObligations).where(eq(complianceObligations.id, item.id));
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "compliance_item_deleted", entityType: "compliance_obligation", entityId: item.id, before: { name: item.name, dueDate: item.dueDate } });
+  revalidatePath("/compliance", "layout");
+}
