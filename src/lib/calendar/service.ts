@@ -142,6 +142,24 @@ function formatYmd(calendar: CalendarSystem, { year, month, day }: YMD, style: D
 export const formatAD = (iso: IsoDate | null | undefined, style: DateStyle = "numeric") => formatDate(iso, "AD", style);
 export const formatBS = (iso: IsoDate | null | undefined, style: DateStyle = "numeric") => formatDate(iso, "BS", style);
 
+/**
+ * Shows a period (periodStart..periodEnd, both AD ISO) in the given calendar — never in
+ * whatever calendar it happened to be generated under. A period a whole month in THIS
+ * calendar reads as "Bhadra 2083" / "September 2026"; a statutory period that doesn't
+ * line up with this calendar's months (e.g. a BS month shown to an AD-calendar
+ * organization) reads as its real date range, e.g. "17 Aug – 16 Sep 2026" — so a
+ * Nepal filing deadline is never misrepresented as one of the reader's own calendar months.
+ */
+export function formatPeriodRange(calendar: CalendarSystem, periodStart: IsoDate | null | undefined, periodEnd: IsoDate | null | undefined, fallbackLabel: string): string {
+  if (!periodStart || !periodEnd) return fallbackLabel;
+  const start = ymdOf(calendar, periodStart);
+  const end = ymdOf(calendar, periodEnd);
+  if (!start || !end) return fallbackLabel;
+  const wholeMonth = start.year === end.year && start.month === end.month && start.day === 1 && end.day === (daysInMonth(calendar, end.year, end.month) ?? -1);
+  if (wholeMonth) return `${monthNames(calendar)[start.month - 1]} ${start.year}`;
+  return `${formatYmd(calendar, start, "short")} – ${formatYmd(calendar, end, "short")}`;
+}
+
 export type DateDisplayMode = "AD" | "BS" | "BOTH";
 
 /** Date + time (Nepal time) for system timestamps such as "created at". */

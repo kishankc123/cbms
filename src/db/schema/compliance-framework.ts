@@ -129,6 +129,32 @@ export const complianceRequirementTemplates = pgTable(
   (t) => [uniqueIndex("compliance_requirement_templates_country_key").on(t.countryCode, t.key)]
 );
 
+/**
+ * How late filing/payment is penalised for one tax type in one country — the formulas themselves (a flat fine, a
+ * daily percentage, an interest rate...), never an organization's data. Like a requirement template, a rule is
+ * never edited once law changes: the old row's effectiveTo is closed and a new row opens, so a penalty calculated
+ * for a past period always used the rule that actually applied then, and a preview for today always uses the
+ * current one. `params` is a structured, tax-type-specific shape (see lib/compliance/penalty-engine.ts) — not a
+ * single number, since Nepal's VAT/TDS/Excise formulas each combine several named parameters.
+ */
+export const compliancePenaltyRules = pgTable(
+  "compliance_penalty_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    taxTypeKey: text("tax_type_key").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    /** null = still in force. */
+    effectiveTo: date("effective_to"),
+    params: jsonb("params").notNull(),
+    /** Whether a compliance reviewer has confirmed the rule against current law. */
+    isVerified: boolean("is_verified").notNull().default(false),
+    source: text("source"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("compliance_penalty_rules_country_type_from").on(t.countryCode, t.taxTypeKey, t.effectiveFrom)]
+);
+
 // ---------------------------------------------------------------- records
 
 export const registrationStatusEnum = pgEnum("registration_status", ["active", "inactive", "suspended", "deregistered"]);

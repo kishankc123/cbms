@@ -24,4 +24,7 @@ export function validateCountryConfig(config: CountryConfig) {
   for (const tt of config.taxTypes) {
     if (tt.authorityKey && !authorities.has(tt.authorityKey)) throw new Error(`${config.country.code}/${tt.key}: unknown authority "${tt.authorityKey}"`);
   }
+  for (const p of config.penaltyRules ?? []) {
+    if (!taxTypes.has(p.taxTypeKey)) throw new Error(`${config.country.code}: penalty rule references unknown tax type "${p.taxTypeKey}"`);
+  }
 }

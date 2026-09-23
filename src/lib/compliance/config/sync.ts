@@ -4,6 +4,7 @@ import {
   complianceCategories,
   complianceCountries,
   complianceEntityTypes,
+  compliancePenaltyRules,
   complianceRequirementTemplates,
   complianceTaxTypes,
 } from "@/db/schema";
@@ -73,5 +74,21 @@ export async function syncComplianceConfig(configs: CountryConfig[] = COUNTRY_CO
         }))
       )
       .onConflictDoNothing();
+
+    if (c.penaltyRules?.length) {
+      await db
+        .insert(compliancePenaltyRules)
+        .values(
+          c.penaltyRules.map((p) => ({
+            countryCode,
+            taxTypeKey: p.taxTypeKey,
+            effectiveFrom: p.effectiveFrom,
+            params: p.params,
+            isVerified: p.isVerified,
+            source: "platform" as const,
+          }))
+        )
+        .onConflictDoNothing();
+    }
   }
 }

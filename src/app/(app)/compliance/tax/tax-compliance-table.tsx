@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import type { listTaxCompliance } from "../tax-actions";
 import { ObligationStatusPill } from "@/components/compliance/status-pill";
-import { D } from "@/components/calendar/date-text";
+import { D, PeriodLabel } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useCalendar } from "@/components/calendar/calendar-provider";
+import { formatPeriodRange } from "@/lib/calendar";
 import { TaxObligationDrawer } from "./tax-obligation-drawer";
 
 type Data = Awaited<ReturnType<typeof listTaxCompliance>>;
@@ -32,7 +34,13 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const periods = useMemo(() => [...new Set(data.items.map((i) => i.period))], [data.items]);
+  const calendar = useCalendar();
+  const periods = useMemo(() => {
+    const seen = new Map<string, string>();
+    const scoped = data.items.filter((i) => (taxType === "all" || i.taxTypeKey === taxType) && i.effective !== "not_applicable");
+    for (const i of scoped) if (!seen.has(i.period)) seen.set(i.period, formatPeriodRange(calendar, i.periodStart, i.periodEnd, i.period));
+    return [...seen.entries()];
+  }, [data.items, calendar, taxType]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -72,9 +80,9 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
           <label className="block text-xs text-gray-500 mb-1">Period</label>
           <select value={period} onChange={(e) => setPeriod(e.target.value)} className={sel}>
             <option value="all">All periods</option>
-            {periods.map((p) => (
-              <option key={p} value={p}>
-                {p}
+            {periods.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
               </option>
             ))}
           </select>
@@ -118,7 +126,9 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
                 <span className="font-medium text-gray-900">{i.name}</span>
                 {i.taxTypeName && <span className="ml-2 text-xs text-gray-400">{i.taxTypeName}</span>}
               </td>
-              <td className="px-4 py-2">{i.period}</td>
+              <td className="px-4 py-2">
+                <PeriodLabel start={i.periodStart} end={i.periodEnd} fallback={i.period} />
+              </td>
               <td className="px-4 py-2 whitespace-nowrap">
                 <D value={i.dueDate} />
               </td>

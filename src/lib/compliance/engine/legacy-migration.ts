@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, like } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, like, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { complianceCalendarItems, complianceCountries, complianceObligations, complianceRequirementTemplates, tenants } from "@/db/schema";
 import { isoFromYmd, monthRange, type CalendarSystem } from "@/lib/calendar";
@@ -111,7 +111,13 @@ export async function migrateLegacyCalendarItems(tenantId: string): Promise<{ mi
 // The old "Seed Nepal defaults" button filled every organization with AD-month VAT/TDS
 // items. Where one of those was never worked on and could not be matched to a generated
 // (BS-month) item, it is marked not applicable — with a reason, never deleted — so the
-// calendar does not show the same filing twice. Anything anyone touched is left alone.
+// calendar does not show the same filing twice.
+//
+// "Never worked on" is judged by real signals (a filing date, a payment date, an entered
+// amount), not by status: the old seed script left some of these at "prepared"/"under
+// review" (-> in_progress) by default, with nothing actually filed or paid, so status
+// alone would leave stale duplicates on screen forever. Anything with a real filing
+// date, payment date or amount is left alone, whatever its status says.
 async function supersedeSeededDefaults(tenantId: string) {
   await db
     .update(complianceObligations)
@@ -124,7 +130,10 @@ async function supersedeSeededDefaults(tenantId: string) {
       and(
         eq(complianceObligations.tenantId, tenantId),
         eq(complianceObligations.source, "migrated"),
-        eq(complianceObligations.status, "pending"),
+        ne(complianceObligations.status, "not_applicable"),
+        isNull(complianceObligations.filingDate),
+        isNull(complianceObligations.paymentDate),
+        isNull(complianceObligations.amountDue),
         isNull(complianceObligations.templateId),
         isNotNull(complianceObligations.taxTypeKey),
         like(complianceObligations.notes, "Auto-generated default%")

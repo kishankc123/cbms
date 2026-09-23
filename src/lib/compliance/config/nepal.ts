@@ -158,4 +158,27 @@ export const NEPAL: CountryConfig = {
       isVerified: false,
     },
   ],
+
+  // Late-filing/payment penalty formulas, per the Inland Revenue Department's VAT/TDS/Excise rules. Unverified
+  // until a compliance reviewer confirms these figures — the fines & penalties screen shows that status.
+  penaltyRules: [
+    {
+      taxTypeKey: "vat",
+      effectiveFrom: "2000-01-01",
+      params: { filingDailyRate: 0.0005, filingFloor: 1000, latePaymentFlatRate: 0.1, interestAnnualRate: 0.15 },
+      isVerified: false,
+    },
+    {
+      taxTypeKey: "tds",
+      effectiveFrom: "2000-01-01",
+      params: { filingFlatPerDay: 100, filingAnnualRate: 0.025, interestAnnualRate: 0.15 },
+      isVerified: false,
+    },
+    {
+      taxTypeKey: "excise",
+      effectiveFrom: "2000-01-01",
+      params: { stepUpRatePer30Days: 0.05, stepUpCapRate: 0.25, interestAnnualRate: 0.15, manualOverrideCapRate: 1.0 },
+      isVerified: false,
+    },
+  ],
 };

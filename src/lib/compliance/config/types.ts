@@ -20,6 +20,15 @@ export type TemplateSeed = {
   isVerified: boolean;
 };
 
+export type PenaltyRuleSeed = {
+  taxTypeKey: string;
+  effectiveFrom: string;
+  /** The shape matches one of VatPenaltyParams / TdsPenaltyParams / ExcisePenaltyParams in lib/compliance/penalty-engine — kept as a plain object here so config doesn't depend on that module. */
+  params: Record<string, number>;
+  /** A reviewer has confirmed these figures against current law. New seed data starts unverified. */
+  isVerified: boolean;
+};
+
 /** Everything that defines one country. Adding a country = adding one of these. */
 export type CountryConfig = {
   country: { code: string; name: string; currency: string; statutoryCalendar: "AD" | "BS" };
@@ -27,6 +36,8 @@ export type CountryConfig = {
   authorities: { key: string; name: string }[];
   taxTypes: { key: string; name: string; authorityKey?: string; isRegistrable?: boolean; numberSource?: "company_pan_vat"; amountSource?: "vat_return" | "tds_withheld"; payableAccountName?: string; legacyPayableCode?: string }[];
   templates: TemplateSeed[];
+  /** Late-filing/payment penalty formula parameters, versioned by effective date. Optional: a country can ship without these and add them later. */
+  penaltyRules?: PenaltyRuleSeed[];
 };
 
 // Categories are shared by every country.

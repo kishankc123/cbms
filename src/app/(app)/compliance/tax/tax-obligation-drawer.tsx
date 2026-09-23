@@ -14,7 +14,7 @@ import {
 import { updateCalendarItemStatus } from "../actions";
 import type { ObligationStatus } from "@/lib/compliance/engine/status";
 import { ObligationStatusPill } from "@/components/compliance/status-pill";
-import { D } from "@/components/calendar/date-text";
+import { D, PeriodLabel } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 
@@ -105,7 +105,15 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
       <div className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-lg space-y-5">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{d ? `${d.item.name} — ${d.item.period}` : "Compliance item"}</h2>
+            <h2 className="text-base font-semibold text-gray-900">
+              {d ? (
+                <>
+                  {d.item.name} — <PeriodLabel start={d.item.periodStart} end={d.item.periodEnd} fallback={d.item.period} />
+                </>
+              ) : (
+                "Compliance item"
+              )}
+            </h2>
             {d && (
               <p className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                 <ObligationStatusPill status={d.item.effective} />

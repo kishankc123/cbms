@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDate, formatDateTime, todayIso, type CalendarSystem, type DateStyle } from "@/lib/calendar";
+import { formatDate, formatDateTime, formatPeriodRange, todayIso, type CalendarSystem, type DateStyle, type IsoDate } from "@/lib/calendar";
 import { useCalendar } from "./calendar-provider";
 
 /**
@@ -13,6 +13,17 @@ import { useCalendar } from "./calendar-provider";
 export function D({ value, style = "numeric", calendar }: { value: string | null | undefined; style?: DateStyle; calendar?: CalendarSystem }) {
   const orgCalendar = useCalendar();
   return <>{formatDate(value, calendar ?? orgCalendar, style)}</>;
+}
+
+/**
+ * Shows a compliance period (start..end, AD ISO) in the organization's own calendar —
+ * never in whatever calendar it was generated under (compliance is always computed in
+ * the country's statutory calendar; only the display adapts). `fallback` is the stored
+ * label, used when start/end aren't available.
+ */
+export function PeriodLabel({ start, end, fallback }: { start: IsoDate | null | undefined; end: IsoDate | null | undefined; fallback: string }) {
+  const calendar = useCalendar();
+  return <>{formatPeriodRange(calendar, start, end, fallback)}</>;
 }
 
 /**

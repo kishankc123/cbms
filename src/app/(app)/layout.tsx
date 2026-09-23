@@ -86,6 +86,7 @@ const NAV = [
       { href: "/compliance/company", label: "Company Details" },
       { href: "/compliance/ownership", label: "Ownership & Capital" },
       { href: "/compliance/tax", label: "Tax Compliance" },
+      { href: "/compliance/penalties", label: "Fines & Penalties" },
       { href: "/compliance/statutory", label: "Statutory Compliance" },
       { href: "/compliance/calendar", label: "Compliance Calendar" },
       { href: "/compliance/history", label: "Compliance History" },
