@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
-import { updateItem } from "./actions";
+import { updateItem, type BillingType, type ItemType } from "./actions";
 
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
+type Account = { id: string; code: string; name: string };
 type Item = {
   id: string;
   name: string;
@@ -15,21 +16,39 @@ type Item = {
   categoryId: string | null;
   purchasePrice: string;
   sellingPrice: string;
+  inventoryTracking: boolean;
+  billingType: BillingType;
+  revenueAccountId: string | null;
 };
 
+// Independent of item type — shown the same way for Product, Service, SaaS and Other.
+const BILLING_TYPE_OPTIONS: { value: BillingType; label: string }[] = [
+  { value: "one_time", label: "One-time" },
+  { value: "recurring", label: "Recurring" },
+  { value: "subscription", label: "Subscription" },
+  { value: "usage_based", label: "Usage-based" },
+];
+
 export function EditItemModal({
+  itemType = "product",
+  rateLabel = "Selling price",
   item,
   units,
-  groups,
-  categories,
+  groups = [],
+  categories = [],
+  accounts = [],
   onClose,
 }: {
+  itemType?: ItemType;
+  rateLabel?: string;
   item: Item;
   units: Unit[];
-  groups: Group[];
-  categories: Category[];
+  groups?: Group[];
+  categories?: Category[];
+  accounts?: Account[];
   onClose: () => void;
 }) {
+  const isProduct = itemType === "product";
   const router = useRouter();
   const initialCategory = categories.find((c) => c.id === item.categoryId);
 
@@ -37,11 +56,15 @@ export function EditItemModal({
   const [unitId, setUnitId] = useState(item.unitId ?? "");
   const [groupId, setGroupId] = useState(initialCategory?.groupId ?? "");
   const [categoryId, setCategoryId] = useState(item.categoryId ?? "");
+  const [inventoryTracking, setInventoryTracking] = useState(item.inventoryTracking);
+  const [billingType, setBillingType] = useState<BillingType>(item.billingType);
+  const [revenueAccountId, setRevenueAccountId] = useState(item.revenueAccountId ?? "");
   const [purchasePrice, setPurchasePrice] = useState(item.purchasePrice);
   const [sellingPrice, setSellingPrice] = useState(item.sellingPrice);
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
+  const tracked = isProduct && inventoryTracking;
 
   const categoriesInGroup = useMemo(() => categories.filter((c) => c.groupId === groupId), [categories, groupId]);
 
@@ -75,6 +98,9 @@ export function EditItemModal({
         name,
         unitId,
         categoryId,
+        inventoryTracking,
+        billingType,
+        revenueAccountId: revenueAccountId || null,
         purchasePrice: purchase,
         sellingPrice: selling,
       });
@@ -125,49 +151,95 @@ export function EditItemModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Group</label>
+              <label className="block text-xs text-gray-500 mb-1">Billing type</label>
               <select
-                value={groupId}
-                onChange={(e) => handleGroupChange(e.target.value)}
+                value={billingType}
+                onChange={(e) => setBillingType(e.target.value as BillingType)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               >
-                <option value="">Select group</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
+                {BILLING_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">Category</label>
+              <label className="block text-xs text-gray-500 mb-1">Revenue account</label>
               <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                disabled={!groupId}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                value={revenueAccountId}
+                onChange={(e) => setRevenueAccountId(e.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               >
-                <option value="">Select category</option>
-                {categoriesInGroup.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+                <option value="">Use default (Sales Revenue)</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} — {a.name}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Selling price</label>
+            {isProduct && (
+              <>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Group</label>
+                  <select
+                    value={groupId}
+                    onChange={(e) => handleGroupChange(e.target.value)}
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    <option value="">Select group</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Category</label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    disabled={!groupId}
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                  >
+                    <option value="">Select category</option>
+                    {categoriesInGroup.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Track inventory</label>
+                  <select
+                    value={inventoryTracking ? "yes" : "no"}
+                    onChange={(e) => setInventoryTracking(e.target.value === "yes")}
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    <option value="yes">Yes — moves stock, carries a cost</option>
+                    <option value="no">No — e.g. a digital download</option>
+                  </select>
+                </div>
+                {tracked && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={purchasePrice}
+                      onChange={(e) => setPurchasePrice(e.target.value)}
+                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            <div className={isProduct ? "" : "col-span-2"}>
+              <label className="block text-xs text-gray-500 mb-1">{rateLabel}</label>
               <input
                 type="number"
                 step="0.01"
@@ -177,16 +249,18 @@ export function EditItemModal({
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
               />
             </div>
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">Profit margin</label>
-              <input
-                type="text"
-                readOnly
-                value={margin.toFixed(2)}
-                className="w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
-              />
-              <p className="mt-1 text-xs text-gray-500">Margin: {marginPct.toFixed(2)}%</p>
-            </div>
+            {tracked && (
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">Profit margin</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={margin.toFixed(2)}
+                  className="w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm text-gray-700"
+                />
+                <p className="mt-1 text-xs text-gray-500">Margin: {marginPct.toFixed(2)}%</p>
+              </div>
+            )}
           </div>
         </div>
 

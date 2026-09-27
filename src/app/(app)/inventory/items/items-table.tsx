@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
-import { deleteItem, setItemActive } from "./actions";
+import { deleteItem, setItemActive, type BillingType, type ItemType } from "./actions";
 import { EditItemModal } from "./edit-item-modal";
 
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
+type Account = { id: string; code: string; name: string };
 type Item = {
   id: string;
   name: string;
@@ -17,25 +18,38 @@ type Item = {
   purchasePrice: string;
   sellingPrice: string;
   isActive: boolean;
+  inventoryTracking: boolean;
+  billingType: BillingType;
+  revenueAccountId: string | null;
   stockQuantity: string;
   stockValue: string;
 };
 
+const BILLING_TYPE_LABEL: Record<BillingType, string> = { one_time: "One-time", recurring: "Recurring", subscription: "Subscription", usage_based: "Usage-based" };
+
 type SortKey = "name" | "category";
 
 export function ItemsTable({
+  itemType = "product",
+  rateLabel = "Selling price",
   items,
   units,
-  groups,
-  categories,
+  groups = [],
+  categories = [],
+  accounts = [],
 }: {
+  itemType?: ItemType;
+  rateLabel?: string;
   items: Item[];
   units: Unit[];
-  groups: Group[];
-  categories: Category[];
+  groups?: Group[];
+  categories?: Category[];
+  accounts?: Account[];
 }) {
+  const isProduct = itemType === "product";
   const router = useRouter();
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -111,14 +125,22 @@ export function ItemsTable({
             <th className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700" onClick={() => toggleSort("name")}>
               Items{sortIndicator("name")}
             </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("category")}
-            >
-              Category{sortIndicator("category")}
-            </th>
-            <th className="px-4 py-2 font-medium text-right">On hand</th>
-            <th className="px-4 py-2 font-medium text-right">Stock value</th>
+            {isProduct && (
+              <th
+                className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
+                onClick={() => toggleSort("category")}
+              >
+                Category{sortIndicator("category")}
+              </th>
+            )}
+            {isProduct ? (
+              <>
+                <th className="px-4 py-2 font-medium text-right">On hand</th>
+                <th className="px-4 py-2 font-medium text-right">Stock value</th>
+              </>
+            ) : (
+              <th className="px-4 py-2 font-medium text-right">{rateLabel}</th>
+            )}
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -127,12 +149,23 @@ export function ItemsTable({
             <tr key={it.id} className="border-t border-gray-100">
               <td className="px-4 py-2">{i + 1}</td>
               <td className="px-4 py-2">
-                {it.name}
-                {!it.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
+                <div>
+                  {it.name}
+                  {!it.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
+                  {isProduct && !it.inventoryTracking && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Not tracked</span>}
+                  {it.billingType !== "one_time" && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{BILLING_TYPE_LABEL[it.billingType]}</span>}
+                </div>
+                {it.revenueAccountId && <p className="text-xs text-gray-400">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
               </td>
-              <td className="px-4 py-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>
-              <td className="px-4 py-2 text-right">{Number(it.stockQuantity)}</td>
-              <td className="px-4 py-2 text-right">{Number(it.stockValue).toFixed(2)}</td>
+              {isProduct && <td className="px-4 py-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>}
+              {isProduct ? (
+                <>
+                  <td className="px-4 py-2 text-right">{Number(it.stockQuantity)}</td>
+                  <td className="px-4 py-2 text-right">{Number(it.stockValue).toFixed(2)}</td>
+                </>
+              ) : (
+                <td className="px-4 py-2 text-right">{Number(it.sellingPrice).toFixed(2)}</td>
+              )}
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 <button type="button" onClick={() => setEditingId(it.id)} className="text-xs text-gray-600 hover:underline">
                   Edit
@@ -158,10 +191,13 @@ export function ItemsTable({
 
       {editingId && (
         <EditItemModal
+          itemType={itemType}
+          rateLabel={rateLabel}
           item={items.find((it) => it.id === editingId)!}
           units={units}
           groups={groups}
           categories={categories}
+          accounts={accounts}
           onClose={() => setEditingId(null)}
         />
       )}

@@ -10,10 +10,15 @@ type NavItem = {
   children?: { href: string; label: string }[];
 };
 
+// A group's own page can have sibling routes not literally listed as children (e.g. Product's Items/Stock/Setup
+// switch via their own pill tabs, not the sidebar) — matching by prefix keeps the group open and highlighted for
+// any page under it, not just the ones spelled out below.
+const underGroup = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
 export function AppNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const [openHref, setOpenHref] = useState<string | null>(
-    () => items.find((item) => item.children?.some((c) => pathname === c.href))?.href ?? null
+    () => items.find((item) => item.children?.some((c) => pathname === c.href) || (item.children && underGroup(pathname, item.href)))?.href ?? null
   );
 
   return (
@@ -35,7 +40,7 @@ export function AppNav({ items }: { items: NavItem[] }) {
         }
 
         const isOpen = openHref === item.href;
-        const isSectionActive = pathname === item.href || item.children.some((c) => pathname === c.href);
+        const isSectionActive = item.children.some((c) => pathname === c.href) || underGroup(pathname, item.href);
 
         return (
           <div key={item.href}>

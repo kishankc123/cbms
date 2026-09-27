@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { itemUnits, itemGroups, itemCategories } from "@/db/schema";
 import { getAllowNegativeStock } from "@/lib/inventory/stock";
 import { requireTenantSession } from "@/lib/session";
+import { ProductTabs } from "../product-tabs";
 import { SetupTabs } from "./setup-tabs";
 
 export default async function InventorySetupPage() {
@@ -17,7 +18,8 @@ export default async function InventorySetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Inventory setup</h1>
+      <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
+      <ProductTabs />
       <SetupTabs units={units} groups={groups} categories={categories} allowNegativeStock={allowNegativeStock} />
     </div>
   );

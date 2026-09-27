@@ -1,6 +1,19 @@
-import { pgTable, uuid, text, numeric, boolean, date, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, numeric, boolean, date, timestamp, uniqueIndex, index, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { tenants } from "./tenancy";
+import { accounts } from "./accounts";
+
+// Item Type is classification (what the business calls it) — it is deliberately NOT what decides inventory
+// behavior. That is inventoryTracking, below, kept as its own independent flag: a "Product" can be untracked
+// (a digital download), and nothing outside this table should ever infer tracking from type.
+export const itemTypeEnum = pgEnum("item_type", ["product", "service", "saas", "other"]);
+
+// How an item CAN be billed — independent of itemType too: a Service can be recurring (a monthly retainer), a
+// SaaS item can be one-time (a lifetime license). Nothing should assume "SaaS therefore subscription". Only
+// classification for now — one_time is the only kind that actually generates anything today; recurring/
+// subscription/usage_based are stored so Subscriptions and Recurring Invoices can be built without another
+// migration, per the "design the data model to support it later" principle already used for inventoryTracking.
+export const billingTypeEnum = pgEnum("billing_type", ["one_time", "recurring", "subscription", "usage_based"]);
 
 // Names are unique within the organization, whatever the capitalization.
 export const itemUnits = pgTable("item_units", {
@@ -29,6 +42,19 @@ export const items = pgTable("items", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  itemType: itemTypeEnum("item_type").notNull().default("product"),
+  // Independent of itemType (see the enum's comment above). Only a tracked item ever moves stock, carries a cost,
+  // or affects COGS/Inventory accounting — the engine checks this, never the type. Fixed the same way itemType
+  // is once the item has real history (see updateItem): flipping it on an item with stock movements or postings
+  // would quietly change how its past is accounted for.
+  inventoryTracking: boolean("inventory_tracking").notNull().default(false),
+  // Classification only — see the enum's comment above. Free to change later; unlike itemType/inventoryTracking
+  // it doesn't yet drive any posting or inventory behavior, so an existing item's history is never at risk.
+  billingType: billingTypeEnum("billing_type").notNull().default("one_time"),
+  // Null = use the tenant's default Sales Revenue account (today's only behavior, and every existing item's).
+  // Once a sale posts, the journal line already carries whatever account was resolved at that moment — the
+  // journal itself is the historical record, so changing this later can never rewrite a past invoice's posting.
+  revenueAccountId: uuid("revenue_account_id").references(() => accounts.id),
   unitId: uuid("unit_id").references(() => itemUnits.id),
   categoryId: uuid("category_id").references(() => itemCategories.id),
   // The item's standard prices: what new purchase / sales lines start with. They are NOT the cost of stock — the cost is

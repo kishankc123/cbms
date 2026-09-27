@@ -54,9 +54,10 @@ const NAV = [
     href: "/inventory",
     label: "Inventory",
     children: [
-      { href: "/inventory/items", label: "Items" },
-      { href: "/inventory/stock", label: "Stock" },
-      { href: "/inventory/setup", label: "Setup" },
+      { href: "/inventory/items", label: "Product" },
+      { href: "/inventory/services", label: "Services" },
+      { href: "/inventory/saas", label: "SaaS" },
+      { href: "/inventory/other", label: "Other" },
     ],
   },
   {

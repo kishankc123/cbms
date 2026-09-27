@@ -21,7 +21,9 @@ export default async function StockablePurchasePage() {
       .from(purchaseBills)
       .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.purchaseType, "credit")))
       .orderBy(desc(purchaseBills.billDate)),
-    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
+    // Only inventory-tracked items are offered here — a Stockable purchase receives stock, so an untracked item
+    // (whatever its type) has nothing here to receive.
+    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true), eq(items.inventoryTracking, true))).orderBy(asc(items.name)),
     getCashBankAccounts(session.tenantId),
     getCurrentTaxRate(session.tenantId, "vat"),
   ]);

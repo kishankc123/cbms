@@ -18,9 +18,9 @@ export async function getInventoryLedgerBalance(tenantId: string): Promise<numbe
   return round2(rows.filter((r) => set.has(r.accountId)).reduce((s, r) => s + Number(r.d) - Number(r.c), 0));
 }
 
-/** Every item with what is on hand, its average cost and its value, and the total compared with the Inventory account. */
+/** Every item with what is on hand, its average cost and its value, and the total compared with the Inventory account. Tracked items only — everything else never carries stock. */
 export async function getInventoryValuation(tenantId: string) {
-  const rows = await db.select().from(items).where(eq(items.tenantId, tenantId));
+  const rows = await db.select().from(items).where(and(eq(items.tenantId, tenantId), eq(items.inventoryTracking, true)));
   const list = rows
     .map((i) => {
       const quantity = Number(i.stockQuantity);

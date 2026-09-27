@@ -27,6 +27,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
+import { resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
 
@@ -606,8 +607,9 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
   const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
-  const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
-  if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
+  // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
+  // line, so a Product and a Service with different accounts both land correctly in the same entry.
+  const revenueLines = await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
 
   let taxPayableId: string | null = null;
   if (taxAmount > 0) {
@@ -658,7 +660,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
 
   const lines: PostLineInput[] = [
     { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
-    { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+    ...revenueLines.map((r) => ({ accountId: r.accountId, creditAmount: r.amount, description: `Invoice ${invoiceNumber}` })),
   ];
   if (taxAmount > 0 && taxPayableId) {
     lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });
@@ -786,8 +788,9 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   await assertStockAvailable(session.tenantId, validLines, { date: input.invoiceDate });
 
   const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
-  const revenueAccount = await findControlAccount(session.tenantId, ["4000"], "Sales Revenue");
-  if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
+  // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
+  // line, so a Product and a Service with different accounts both land correctly in the same entry.
+  const revenueLines = await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
 
   let taxPayableId: string | null = null;
   if (taxAmount > 0) {
@@ -826,7 +829,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   try {
     const lines: PostLineInput[] = [
       { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
-      { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+      ...revenueLines.map((r) => ({ accountId: r.accountId, creditAmount: r.amount, description: `Invoice ${invoiceNumber}` })),
     ];
     if (taxAmount > 0 && taxPayableId) {
       lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });

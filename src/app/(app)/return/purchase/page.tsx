@@ -11,7 +11,8 @@ export default async function PurchaseReturnPage({ searchParams }: { searchParam
 
   const [vendorList, itemList, noteList, vatRate] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
-    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true))).orderBy(asc(items.name)),
+    // A purchase return mirrors what could have been purchased — only inventory-tracked items ever can be.
+    db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true), eq(items.inventoryTracking, true))).orderBy(asc(items.name)),
     db.select().from(purchaseReturns).where(eq(purchaseReturns.tenantId, session.tenantId)).orderBy(desc(purchaseReturns.noteDate), desc(purchaseReturns.createdAt)),
     getCurrentTaxRate(session.tenantId, "vat"),
   ]);

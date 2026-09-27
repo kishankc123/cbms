@@ -28,6 +28,20 @@ export type StockLine = { itemId?: string | null; quantity: number; value?: numb
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * Which of these item ids actually track inventory. Callers throughout this file use this to skip a line rather
+ * than relying on `itemId` being set: items are real, persisted, searchable rows for every type now (not just
+ * untyped free-text lines), so `itemId` presence alone doesn't mean "this is stock" — inventoryTracking does,
+ * independent of the item's type (a Product can be untracked; only Product can ever be tracked, but that's
+ * enforced where the flag is set, not read here).
+ */
+async function trackedItemIds(tenantId: string, ids: (string | null | undefined)[]): Promise<Set<string>> {
+  const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (unique.length === 0) return new Set();
+  const rows = await db.select({ id: items.id }).from(items).where(and(eq(items.tenantId, tenantId), inArray(items.id, unique), eq(items.inventoryTracking, true)));
+  return new Set(rows.map((r) => r.id));
+}
+
 // ---------------------------------------------------------------------------------------------------------------- settings
 
 export async function getInventorySettings(tenantId: string) {
@@ -51,7 +65,11 @@ export class InventoryDateError extends Error {}
  * opening date has been set there is no limit. Documents without any item lines don't touch stock, so they are not held to it.
  */
 export async function assertInventoryDate(tenantId: string, date: string, lines: { itemId?: string | null }[] = [{ itemId: "x" }]) {
-  if (!lines.some((l) => l.itemId)) return;
+  const ids = lines.map((l) => l.itemId).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return;
+  // The "x" sentinel default is an internal signal (moveStock uses it after already filtering to real tracked lines),
+  // not a real item — skip the DB round trip for it rather than looking it up.
+  if (!(ids.length === 1 && ids[0] === "x") && (await trackedItemIds(tenantId, ids)).size === 0) return;
   const opening = await getOpeningDate(tenantId);
   if (!opening || date >= opening) return;
   const [t] = await db.select({ calendar: tenants.calendarSystem }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
@@ -92,13 +110,17 @@ async function applyMovement(tx: Tx, tenantId: string, ctx: StockCtx, itemId: st
 }
 
 /**
- * Records the movement of stock for a document and keeps each item's quantity and cost in step. Lines without an item are
- * skipped. Taking out more than is on hand is refused unless the organization allows negative stock, and nothing dated before the
- * Inventory Opening Date is accepted. Returns the total value moved (signed: negative when stock went out) — for a sale, that is
- * the cost of goods sold. Costs here follow the stock as it is now; \`recalculateItems\` puts them right if the document is backdated.
+ * Records the movement of stock for a document and keeps each item's quantity and cost in step. Lines without an item, or
+ * whose item doesn't track inventory, are skipped — whatever quantity is on the line. Taking out more than is on hand is
+ * refused unless the organization allows negative stock, and nothing dated before the Inventory Opening Date is accepted.
+ * Returns the total value moved (signed: negative when stock went out) — for a sale, that is the cost of goods sold.
+ * Costs here follow the stock as it is now; \`recalculateItems\` puts them right if the document is backdated.
  */
 export async function moveStock(tenantId: string, ctx: StockCtx, lines: StockLine[], opts: { allowNegative?: boolean } = {}): Promise<{ value: number }> {
-  const real = lines.filter((l) => l.itemId && round3(l.quantity) !== 0);
+  const candidates = lines.filter((l) => l.itemId && round3(l.quantity) !== 0);
+  if (candidates.length === 0) return { value: 0 };
+  const tracked = await trackedItemIds(tenantId, candidates.map((l) => l.itemId));
+  const real = candidates.filter((l) => tracked.has(l.itemId as string));
   if (real.length === 0) return { value: 0 };
   if (ctx.type !== "opening" && ctx.type !== "recost") await assertInventoryDate(tenantId, ctx.date);
   const allowNegative = opts.allowNegative ?? (await getAllowNegativeStock(tenantId));
@@ -170,7 +192,9 @@ function tooLow(name: string, lowest: number, date: string | null, requested: nu
  */
 export async function assertStockTimeline(tenantId: string, opts: { add?: { itemId?: string | null; date: string; quantity: number }[]; excludeSource?: { sourceType: string; sourceId?: string } }) {
   if (await getAllowNegativeStock(tenantId)) return;
-  const add = (opts.add ?? []).filter((a) => a.itemId && a.quantity !== 0);
+  const candidates = (opts.add ?? []).filter((a) => a.itemId && a.quantity !== 0);
+  const tracked = await trackedItemIds(tenantId, candidates.map((a) => a.itemId));
+  const add = candidates.filter((a) => tracked.has(a.itemId as string));
   const ids = new Set(add.map((a) => a.itemId as string));
   if (opts.excludeSource) {
     const rows = await db.select({ itemId: stockMovements.itemId }).from(stockMovements).where(and(eq(stockMovements.tenantId, tenantId), eq(stockMovements.sourceType, opts.excludeSource.sourceType), ...(opts.excludeSource.sourceId ? [eq(stockMovements.sourceId, opts.excludeSource.sourceId)] : [])));

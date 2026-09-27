@@ -1,0 +1,2 @@
+CREATE TYPE "public"."billing_type" AS ENUM('one_time', 'recurring', 'subscription', 'usage_based');--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN "billing_type" "billing_type" DEFAULT 'one_time' NOT NULL;

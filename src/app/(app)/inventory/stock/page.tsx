@@ -5,6 +5,7 @@ import { itemUnits } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getInventoryValuation } from "@/lib/inventory/valuation";
 import { StatusPill } from "@/components/ui/status-pill";
+import { ProductTabs } from "../product-tabs";
 import { StockTabs } from "./stock-tabs";
 import { StockMaintenance } from "./maintenance";
 import { getInventoryHistory, getOpeningRows } from "@/lib/inventory/opening";
@@ -31,9 +32,10 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Stock</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
         <p className="text-sm text-gray-500">What is on hand, what it cost, and how it ties to the Inventory account.</p>
       </div>
+      <ProductTabs />
 
       <StockTabs
         items={valuation.items.map((i) => ({ id: i.id, name: i.name, unitId: i.unitId, quantity: i.quantity, averageCost: i.averageCost }))}
