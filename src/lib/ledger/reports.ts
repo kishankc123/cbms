@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, lte, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, lt, lte, gte, inArray, or, like } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, users } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
@@ -461,4 +461,90 @@ export async function transactionRegister(
   }));
 
   return { entries, truncated: entryRows.length >= MAX_REGISTER_ENTRIES };
+}
+
+export type CashBookLine = {
+  entryDate: string;
+  referenceNumber: string | null;
+  memo: string | null;
+  description: string | null;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  sourceType: string | null;
+  sourceId: string | null;
+};
+
+/**
+ * The "1000 Cash" account and any registers under it (a tenant could split cash into petty-cash
+ * sub-accounts via dotted codes, same convention chart.ts uses for any parent/child pair), merged into
+ * one chronological running balance — one physical cash-on-hand position, not a per-account ledger.
+ */
+export async function cashBook(tenantId: string, periodStart: Date, periodEnd: Date) {
+  const cashAccounts = await db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), or(eq(accounts.code, "1000"), like(accounts.code, "1000.%"))));
+  if (cashAccounts.length === 0) return { accountLabels: [] as string[], openingBalance: 0, lines: [] as CashBookLine[] };
+
+  const accountIds = cashAccounts.map((a) => a.id);
+  const accountById = new Map(cashAccounts.map((a) => [a.id, a]));
+
+  const rows = await db
+    .select({
+      accountId: journalLines.accountId,
+      entryDate: journalEntries.entryDate,
+      referenceNumber: journalEntries.referenceNumber,
+      memo: journalEntries.memo,
+      description: journalLines.description,
+      debitAmount: journalLines.debitAmount,
+      creditAmount: journalLines.creditAmount,
+      sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
+    })
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        inArray(journalLines.accountId, accountIds),
+        gte(journalEntries.entryDate, toDateStr(periodStart)),
+        lte(journalEntries.entryDate, toDateStr(periodEnd))
+      )
+    )
+    .orderBy(journalEntries.entryDate, journalEntries.createdAt);
+
+  const priorLines = await db
+    .select({ debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+    .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), lt(journalEntries.entryDate, toDateStr(periodStart))));
+  let openingBalance = 0;
+  for (const l of priorLines) openingBalance += Number(l.debitAmount) - Number(l.creditAmount);
+  openingBalance = Math.round(openingBalance * 100) / 100;
+
+  let running = openingBalance;
+  const lines: CashBookLine[] = rows.map((r) => {
+    const debit = Number(r.debitAmount);
+    const credit = Number(r.creditAmount);
+    running = Math.round((running + debit - credit) * 100) / 100;
+    const acc = accountById.get(r.accountId);
+    return {
+      entryDate: r.entryDate,
+      referenceNumber: r.referenceNumber,
+      memo: r.memo,
+      description: r.description,
+      accountCode: acc?.code ?? "",
+      accountName: acc?.name ?? "",
+      debit,
+      credit,
+      runningBalance: running,
+      sourceType: r.sourceType,
+      sourceId: r.sourceId,
+    };
+  });
+
+  return { accountLabels: cashAccounts.map((a) => `${a.code} — ${a.name}`), openingBalance, lines };
 }
