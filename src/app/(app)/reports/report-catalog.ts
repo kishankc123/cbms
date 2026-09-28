@@ -55,8 +55,8 @@ export const REPORT_CATALOG: ReportCategory[] = [
     reports: [
       { title: "Cash Book", href: "/reports/cash-book", built: true },
       { title: "Bank Book", href: "/reports/bank-book", built: true },
-      { title: "Bank Reconciliation Report", href: "/bank-reconciliation", built: false, note: "The reconciliation workflow exists — not packaged as a report yet" },
-      { title: "Cash/Bank Movement", href: "", built: false },
+      { title: "Bank Reconciliation Report", href: "/reports/bank-reconciliation-report", built: true },
+      { title: "Cash/Bank Movement", href: "/reports/cash-bank-movement", built: true },
     ],
   },
   {

@@ -548,3 +548,91 @@ export async function cashBook(tenantId: string, periodStart: Date, periodEnd: D
 
   return { accountLabels: cashAccounts.map((a) => `${a.code} — ${a.name}`), openingBalance, lines };
 }
+
+export type CashBankMovementAccount = {
+  accountId: string;
+  code: string;
+  name: string;
+  openingBalance: number;
+  totalIn: number;
+  totalOut: number;
+  closingBalance: number;
+};
+
+export type CashBankMovementBySource = { sourceType: string; totalIn: number; totalOut: number };
+
+/**
+ * Where cash and bank balances actually moved this period — every "1000 Cash" / "1010 Bank" account's
+ * opening/closing position side by side (unlike Cash Book and Bank Book, which are each one account's
+ * own chronological detail), plus the combined total in/out by transaction type, so a reader can see at
+ * a glance whether movement was mostly sales receipts, supplier payments, transfers, and so on.
+ */
+export async function cashBankMovement(tenantId: string, periodStart: Date, periodEnd: Date) {
+  const cashBankAccounts = await db
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.tenantId, tenantId),
+        eq(accounts.isActive, true),
+        or(eq(accounts.code, "1000"), like(accounts.code, "1000.%"), eq(accounts.code, "1010"), like(accounts.code, "1010.%"))
+      )
+    );
+  if (cashBankAccounts.length === 0) return { accounts: [] as CashBankMovementAccount[], bySourceType: [] as CashBankMovementBySource[] };
+
+  const accountIds = cashBankAccounts.map((a) => a.id);
+
+  const [priorLines, periodLines] = await Promise.all([
+    db
+      .select({ accountId: journalLines.accountId, debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+      .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), lt(journalEntries.entryDate, toDateStr(periodStart)))),
+    db
+      .select({ accountId: journalLines.accountId, debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount, sourceType: journalEntries.sourceType })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+      .where(
+        and(
+          eq(journalEntries.tenantId, tenantId),
+          inArray(journalLines.accountId, accountIds),
+          gte(journalEntries.entryDate, toDateStr(periodStart)),
+          lte(journalEntries.entryDate, toDateStr(periodEnd))
+        )
+      ),
+  ]);
+
+  const openingByAccount = new Map<string, number>();
+  for (const l of priorLines) openingByAccount.set(l.accountId, (openingByAccount.get(l.accountId) ?? 0) + Number(l.debitAmount) - Number(l.creditAmount));
+
+  const movementByAccount = new Map<string, { totalIn: number; totalOut: number }>();
+  const bySourceMap = new Map<string, { totalIn: number; totalOut: number }>();
+  for (const l of periodLines) {
+    const debit = Number(l.debitAmount);
+    const credit = Number(l.creditAmount);
+    const m = movementByAccount.get(l.accountId) ?? { totalIn: 0, totalOut: 0 };
+    m.totalIn += debit;
+    m.totalOut += credit;
+    movementByAccount.set(l.accountId, m);
+
+    const s = bySourceMap.get(l.sourceType) ?? { totalIn: 0, totalOut: 0 };
+    s.totalIn += debit;
+    s.totalOut += credit;
+    bySourceMap.set(l.sourceType, s);
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const accountRows: CashBankMovementAccount[] = cashBankAccounts.map((a) => {
+    const opening = round2(openingByAccount.get(a.id) ?? 0);
+    const m = movementByAccount.get(a.id) ?? { totalIn: 0, totalOut: 0 };
+    const totalIn = round2(m.totalIn);
+    const totalOut = round2(m.totalOut);
+    return { accountId: a.id, code: a.code, name: a.name, openingBalance: opening, totalIn, totalOut, closingBalance: round2(opening + totalIn - totalOut) };
+  });
+
+  const bySourceType: CashBankMovementBySource[] = [...bySourceMap.entries()]
+    .map(([sourceType, s]) => ({ sourceType, totalIn: round2(s.totalIn), totalOut: round2(s.totalOut) }))
+    .sort((a, b) => b.totalIn + b.totalOut - (a.totalIn + a.totalOut));
+
+  return { accounts: accountRows, bySourceType };
+}
