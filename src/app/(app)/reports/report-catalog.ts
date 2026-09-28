@@ -33,9 +33,9 @@ export const REPORT_CATALOG: ReportCategory[] = [
   {
     name: "Sales & Receivables",
     reports: [
-      { title: "Sales Summary", href: "", built: false },
-      { title: "Sales by Customer", href: "", built: false },
-      { title: "Sales by Item/Service", href: "", built: false },
+      { title: "Sales Summary", href: "/reports/sales-summary", built: true },
+      { title: "Sales by Customer", href: "/reports/sales-by-customer", built: true },
+      { title: "Sales by Item/Service", href: "/reports/sales-by-item", built: true },
       { title: "Receivable Ageing", href: "/reports/receivable-ageing", built: true },
       { title: "Customer Statement", href: "/reports/customer-statement", built: true },
     ],
@@ -43,9 +43,9 @@ export const REPORT_CATALOG: ReportCategory[] = [
   {
     name: "Purchases & Payables",
     reports: [
-      { title: "Purchase Summary", href: "", built: false },
-      { title: "Purchase by Supplier", href: "", built: false },
-      { title: "Purchase by Item", href: "", built: false },
+      { title: "Purchase Summary", href: "/reports/purchase-summary", built: true },
+      { title: "Purchase by Supplier", href: "/reports/purchase-by-supplier", built: true },
+      { title: "Purchase by Item", href: "/reports/purchase-by-item", built: true },
       { title: "Payable Ageing", href: "/reports/payable-ageing", built: true },
       { title: "Supplier Statement", href: "/reports/supplier-statement", built: true },
     ],
@@ -62,17 +62,17 @@ export const REPORT_CATALOG: ReportCategory[] = [
   {
     name: "Inventory",
     reports: [
-      { title: "Stock Summary", href: "", built: false },
+      { title: "Stock Summary", href: "/reports/stock-summary", built: true },
       { title: "Stock Valuation", href: "/inventory/stock", built: true },
       { title: "Stock Movement", href: "/inventory/stock", built: true, note: "Open a Stock card from the item list" },
-      { title: "Slow/Non-moving Stock", href: "", built: false },
+      { title: "Slow/Non-moving Stock", href: "/reports/slow-moving-stock", built: true },
     ],
   },
   {
     name: "Payroll",
     reports: [
-      { title: "Payroll Summary", href: "", built: false },
-      { title: "Salary Payable", href: "", built: false },
+      { title: "Payroll Summary", href: "/reports/payroll-summary", built: true },
+      { title: "Salary Payable", href: "/reports/salary-payable", built: true },
       { title: "Employee Salary Statement", href: "/payroll/employees", built: true, note: "Open an employee's profile" },
     ],
   },
