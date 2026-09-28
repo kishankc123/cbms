@@ -17,7 +17,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
     reports: [
       { title: "Profit & Loss", href: "/reports/profit-and-loss", built: true },
       { title: "Balance Sheet", href: "/reports/balance-sheet", built: true },
-      { title: "Cash Flow Statement", href: "", built: false },
+      { title: "Cash Flow Statement", href: "/reports/cash-flow", built: true },
       { title: "Trial Balance", href: "/reports/trial-balance", built: true },
     ],
   },

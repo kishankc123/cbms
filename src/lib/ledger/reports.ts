@@ -20,6 +20,7 @@ type AccountBalance = {
   code: string;
   name: string;
   category: "asset" | "liability" | "equity" | "income" | "expense";
+  subCategory: string | null;
   debitTotal: number;
   creditTotal: number;
   /** Signed per the account's normal balance: positive means "normal" side. */
@@ -56,6 +57,7 @@ async function accountBalancesAsOf(tenantId: string, asOf: Date): Promise<Accoun
       code: a.code,
       name: a.name,
       category: a.category,
+      subCategory: a.subCategory,
       debitTotal: t.debit,
       creditTotal: t.credit,
       balance,
@@ -165,6 +167,74 @@ export async function balanceSheet(tenantId: string, asOf: Date) {
     totalLiabilities,
     totalEquity,
     isBalanced: totalAssets === Math.round((totalLiabilities + totalEquity) * 100) / 100,
+  };
+}
+
+// Same set cash-bank-accounts.ts uses for "where can a payment land" — the "1000 Cash" account plus
+// everything under "1010 Bank" (individual bank accounts included via their dotted sub-codes).
+const isCashOrBankCode = (code: string) => code === "1000" || code.startsWith("1010");
+
+export type CashFlowLine = { accountId: string; code: string; name: string; amount: number };
+
+/**
+ * Indirect method: start from net profit, then walk every non-cash balance-sheet account's movement
+ * over the period and classify it — asset movement under "Fixed assets" is investing, everything else
+ * asset/current-liability is a working-capital operating adjustment, non-current liabilities and equity
+ * are financing. Because that classification covers every balance-sheet account with no gaps, the three
+ * activities always sum to the period's actual cash movement (checked below as `isBalanced`, the same
+ * self-verifying pattern Trial Balance and the Balance Sheet use) rather than needing a separate ledger.
+ */
+export async function cashFlowStatement(tenantId: string, periodStart: Date, periodEnd: Date) {
+  const periodStartExclusive = new Date(periodStart.getTime() - 24 * 60 * 60 * 1000);
+  const [opening, closing, pnl] = await Promise.all([
+    accountBalancesAsOf(tenantId, periodStartExclusive),
+    accountBalancesAsOf(tenantId, periodEnd),
+    profitAndLoss(tenantId, periodStart, periodEnd),
+  ]);
+
+  const openingByAccount = new Map(opening.map((b) => [b.accountId, b.balance]));
+
+  const operating: CashFlowLine[] = [];
+  const investing: CashFlowLine[] = [];
+  const financing: CashFlowLine[] = [];
+  let cashDelta = 0;
+
+  for (const c of closing) {
+    if (c.category === "income" || c.category === "expense") continue; // already captured in netProfit
+    const delta = Math.round((c.balance - (openingByAccount.get(c.accountId) ?? 0)) * 100) / 100;
+    if (delta === 0) continue;
+
+    if (isCashOrBankCode(c.code)) {
+      cashDelta += delta;
+      continue;
+    }
+
+    const line: CashFlowLine = { accountId: c.accountId, code: c.code, name: c.name, amount: c.category === "asset" ? -delta : delta };
+    if (c.category === "asset") (c.subCategory === "Fixed assets" ? investing : operating).push(line);
+    else if (c.category === "liability") (c.subCategory === "Non current liabilities" ? financing : operating).push(line);
+    else financing.push(line); // equity
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const netCashFromOperating = round2(pnl.netProfit + operating.reduce((s, r) => s + r.amount, 0));
+  const netCashFromInvesting = round2(investing.reduce((s, r) => s + r.amount, 0));
+  const netCashFromFinancing = round2(financing.reduce((s, r) => s + r.amount, 0));
+  const netChangeInCash = round2(netCashFromOperating + netCashFromInvesting + netCashFromFinancing);
+  const actualCashMovement = round2(cashDelta);
+
+  return {
+    periodStart,
+    periodEnd,
+    netProfit: pnl.netProfit,
+    operating,
+    investing,
+    financing,
+    netCashFromOperating,
+    netCashFromInvesting,
+    netCashFromFinancing,
+    netChangeInCash,
+    actualCashMovement,
+    isBalanced: netChangeInCash === actualCashMovement,
   };
 }
 
