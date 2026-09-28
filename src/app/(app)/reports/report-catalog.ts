@@ -36,7 +36,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Sales Summary", href: "", built: false },
       { title: "Sales by Customer", href: "", built: false },
       { title: "Sales by Item/Service", href: "", built: false },
-      { title: "Receivable Ageing", href: "", built: false },
+      { title: "Receivable Ageing", href: "/reports/receivable-ageing", built: true },
       { title: "Customer Statement", href: "", built: false },
     ],
   },
