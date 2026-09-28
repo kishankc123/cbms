@@ -37,7 +37,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Sales by Customer", href: "", built: false },
       { title: "Sales by Item/Service", href: "", built: false },
       { title: "Receivable Ageing", href: "/reports/receivable-ageing", built: true },
-      { title: "Customer Statement", href: "", built: false },
+      { title: "Customer Statement", href: "/reports/customer-statement", built: true },
     ],
   },
   {
@@ -46,8 +46,8 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Purchase Summary", href: "", built: false },
       { title: "Purchase by Supplier", href: "", built: false },
       { title: "Purchase by Item", href: "", built: false },
-      { title: "Payable Ageing", href: "", built: false },
-      { title: "Supplier Statement", href: "", built: false },
+      { title: "Payable Ageing", href: "/reports/payable-ageing", built: true },
+      { title: "Supplier Statement", href: "/reports/supplier-statement", built: true },
     ],
   },
   {
