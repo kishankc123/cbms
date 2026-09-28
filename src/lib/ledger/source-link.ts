@@ -20,7 +20,6 @@ const SOURCE_LINKS: Record<string, { label: string; href: string }> = {
   bank_adjustment: { label: "Open in Bank Reconciliation", href: "/bank-reconciliation" },
   stock_adjustment: { label: "Open in Stock", href: "/inventory/stock" },
   adjustment: { label: "Open in Stock", href: "/inventory/stock" },
-  opening_balance: { label: "Open in Stock", href: "/inventory/stock" },
 };
 
 /** Where to send someone to see the record behind a journal entry, if this source type has a known screen. */

@@ -26,8 +26,8 @@ export const REPORT_CATALOG: ReportCategory[] = [
     reports: [
       { title: "General Ledger", href: "/reports/ledger", built: true },
       { title: "Account Ledger", href: "/reports/ledger", built: true },
-      { title: "Journal Report", href: "/journal?history=1", built: true, note: "Partial — no filters or drill-down yet" },
-      { title: "Transaction Register", href: "", built: false },
+      { title: "Journal Report", href: "/reports/journal-report", built: true },
+      { title: "Transaction Register", href: "/reports/transaction-register", built: true },
     ],
   },
   {

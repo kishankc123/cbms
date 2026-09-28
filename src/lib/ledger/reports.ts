@@ -1,6 +1,6 @@
-import { and, eq, lt, lte, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, lt, lte, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, journalEntries, journalLines } from "@/db/schema";
+import { accounts, journalEntries, journalLines, users } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
 
 /**
@@ -222,4 +222,173 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
   });
 
   return { account, openingBalance, lines: withRunningBalance };
+}
+
+export type JournalReportLine = {
+  accountId: string;
+  code: string;
+  name: string;
+  debit: number;
+  credit: number;
+  description: string | null;
+};
+
+export type JournalReportEntry = {
+  id: string;
+  entryDate: string;
+  referenceNumber: string | null;
+  memo: string | null;
+  sourceType: string;
+  sourceId: string | null;
+  createdBy: string;
+  isReversed: boolean;
+  reversalOfId: string | null;
+  lines: JournalReportLine[];
+};
+
+const MAX_JOURNAL_ENTRIES = 500;
+
+/**
+ * Every posted journal entry in the period, each with its own lines (one row per account, matching how a
+ * voucher actually reads: "Dr Customer Receivable 100,000 / Cr Sales Revenue 88,495 / Cr VAT Payable
+ * 11,505"). Capped so a very wide date range can't turn this into an unbounded scan — narrow the filter
+ * instead of raising the cap.
+ */
+export async function journalReport(
+  tenantId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  opts: { sourceType?: string; search?: string } = {}
+) {
+  const entryRows = await db
+    .select()
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        gte(journalEntries.entryDate, toDateStr(periodStart)),
+        lte(journalEntries.entryDate, toDateStr(periodEnd)),
+        ...(opts.sourceType ? [eq(journalEntries.sourceType, opts.sourceType as (typeof journalEntries.sourceType.enumValues)[number])] : [])
+      )
+    )
+    .orderBy(desc(journalEntries.entryDate), desc(journalEntries.createdAt))
+    .limit(MAX_JOURNAL_ENTRIES);
+
+  const q = opts.search?.trim().toLowerCase();
+  const filtered = q
+    ? entryRows.filter((e) => (e.referenceNumber ?? "").toLowerCase().includes(q) || (e.memo ?? "").toLowerCase().includes(q))
+    : entryRows;
+  if (filtered.length === 0) return { entries: [], truncated: entryRows.length >= MAX_JOURNAL_ENTRIES };
+
+  const ids = filtered.map((e) => e.id);
+  const [lineRows, accountRows, userRows] = await Promise.all([
+    db.select().from(journalLines).where(inArray(journalLines.journalEntryId, ids)),
+    db.select().from(accounts).where(eq(accounts.tenantId, tenantId)),
+    db.select({ id: users.id, name: users.name }).from(users),
+  ]);
+
+  const accountById = new Map(accountRows.map((a) => [a.id, a]));
+  const userNameById = new Map(userRows.map((u) => [u.id, u.name]));
+  const linesByEntry = new Map<string, JournalReportLine[]>();
+  for (const l of lineRows) {
+    const acc = accountById.get(l.accountId);
+    const line: JournalReportLine = {
+      accountId: l.accountId,
+      code: acc?.code ?? "",
+      name: acc?.name ?? "Unknown account",
+      debit: Number(l.debitAmount),
+      credit: Number(l.creditAmount),
+      description: l.description,
+    };
+    linesByEntry.set(l.journalEntryId, [...(linesByEntry.get(l.journalEntryId) ?? []), line]);
+  }
+
+  const entries: JournalReportEntry[] = filtered.map((e) => ({
+    id: e.id,
+    entryDate: e.entryDate,
+    referenceNumber: e.referenceNumber,
+    memo: e.memo,
+    sourceType: e.sourceType,
+    sourceId: e.sourceId,
+    createdBy: userNameById.get(e.createdBy) ?? "—",
+    isReversed: e.isReversed,
+    reversalOfId: e.reversalOfId,
+    lines: linesByEntry.get(e.id) ?? [],
+  }));
+
+  return { entries, truncated: entryRows.length >= MAX_JOURNAL_ENTRIES };
+}
+
+export type TransactionRegisterEntry = {
+  id: string;
+  entryDate: string;
+  referenceNumber: string | null;
+  memo: string | null;
+  sourceType: string;
+  sourceId: string | null;
+  createdBy: string;
+  isReversed: boolean;
+  reversalOfId: string | null;
+  amount: number;
+};
+
+const MAX_REGISTER_ENTRIES = 1000;
+
+/**
+ * One row per transaction (not per debit/credit line) — the flat chronological view Journal Report's
+ * per-line detail complements. Amount is the entry's total debit (== total credit, since every posted
+ * entry balances), so it reads as "how much did this transaction move," not an account-specific figure.
+ */
+export async function transactionRegister(
+  tenantId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  opts: { sourceType?: string; search?: string } = {}
+) {
+  const entryRows = await db
+    .select()
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        gte(journalEntries.entryDate, toDateStr(periodStart)),
+        lte(journalEntries.entryDate, toDateStr(periodEnd)),
+        ...(opts.sourceType ? [eq(journalEntries.sourceType, opts.sourceType as (typeof journalEntries.sourceType.enumValues)[number])] : [])
+      )
+    )
+    .orderBy(desc(journalEntries.entryDate), desc(journalEntries.createdAt))
+    .limit(MAX_REGISTER_ENTRIES);
+
+  const q = opts.search?.trim().toLowerCase();
+  const filtered = q
+    ? entryRows.filter((e) => (e.referenceNumber ?? "").toLowerCase().includes(q) || (e.memo ?? "").toLowerCase().includes(q))
+    : entryRows;
+  if (filtered.length === 0) return { entries: [], truncated: entryRows.length >= MAX_REGISTER_ENTRIES };
+
+  const ids = filtered.map((e) => e.id);
+  const [lineRows, userRows] = await Promise.all([
+    db.select({ journalEntryId: journalLines.journalEntryId, debitAmount: journalLines.debitAmount }).from(journalLines).where(inArray(journalLines.journalEntryId, ids)),
+    db.select({ id: users.id, name: users.name }).from(users),
+  ]);
+
+  const userNameById = new Map(userRows.map((u) => [u.id, u.name]));
+  const debitTotalByEntry = new Map<string, number>();
+  for (const l of lineRows) {
+    debitTotalByEntry.set(l.journalEntryId, (debitTotalByEntry.get(l.journalEntryId) ?? 0) + Number(l.debitAmount));
+  }
+
+  const entries: TransactionRegisterEntry[] = filtered.map((e) => ({
+    id: e.id,
+    entryDate: e.entryDate,
+    referenceNumber: e.referenceNumber,
+    memo: e.memo,
+    sourceType: e.sourceType,
+    sourceId: e.sourceId,
+    createdBy: userNameById.get(e.createdBy) ?? "—",
+    isReversed: e.isReversed,
+    reversalOfId: e.reversalOfId,
+    amount: Math.round((debitTotalByEntry.get(e.id) ?? 0) * 100) / 100,
+  }));
+
+  return { entries, truncated: entryRows.length >= MAX_REGISTER_ENTRIES };
 }
