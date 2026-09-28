@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { salesSummary } from "@/lib/ledger/sales-summary";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
@@ -11,6 +11,7 @@ const fmt = (n: number) => n.toFixed(2);
 
 export default async function SalesSummaryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);

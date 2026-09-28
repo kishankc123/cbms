@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { purchaseByItem } from "@/lib/ledger/purchase-by-item";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
@@ -11,6 +11,7 @@ const asIso = (v: string | string[] | undefined) => (typeof v === "string" && va
 
 export default async function PurchaseByItemPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);

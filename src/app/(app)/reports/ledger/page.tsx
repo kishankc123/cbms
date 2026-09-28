@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { generalLedger } from "@/lib/ledger/reports";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
@@ -12,6 +12,7 @@ const asIso = (v: string | string[] | undefined) => (typeof v === "string" && va
 
 export default async function LedgerPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const dflt = presetRange("this_fiscal_year", session.calendar, todayIso(), fiscal);

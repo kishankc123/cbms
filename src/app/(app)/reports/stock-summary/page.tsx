@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { getInventoryValuation } from "@/lib/inventory/valuation";
 import { StatusPill } from "@/components/ui/status-pill";
 
@@ -8,6 +8,7 @@ const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
 
 export default async function StockSummaryPage() {
   const session = await requireTenantSession();
+  if (!can(session, "inventory", "view")) throw new Error("Not permitted");
   const { items, stockValue, ledger, difference } = await getInventoryValuation(session.tenantId);
   const active = items.filter((i) => i.isActive);
 

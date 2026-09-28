@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { slowMovingStock } from "@/lib/inventory/slow-moving";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
@@ -10,6 +10,7 @@ const THRESHOLDS = [30, 60, 90, 180];
 
 export default async function SlowMovingStockPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "inventory", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const asOf = asIso(sp.to) ?? presetRange("this_month", session.calendar, todayIso(), fiscal).to;

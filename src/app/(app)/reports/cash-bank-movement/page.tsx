@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { cashBankMovement } from "@/lib/ledger/reports";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
@@ -32,6 +32,7 @@ const fmt = (n: number) => n.toFixed(2);
 
 export default async function CashBankMovementPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);

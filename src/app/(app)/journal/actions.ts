@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { assertEntryNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
@@ -24,6 +24,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function createManualJournalEntry(input: ManualEntryInput): Promise<ManualEntryResult> {
   const session = await requireTenantSession();
+  if (!can(session, "chart_of_accounts", "create")) return { ok: false, error: "Not permitted" };
 
   // Everything that can be checked up front is, BEFORE a voucher number is issued,
   // so a rejected entry does not use one up.
@@ -65,6 +66,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
 
 export async function reverseEntry(formData: FormData) {
   const session = await requireTenantSession();
+  if (!can(session, "chart_of_accounts", "delete")) throw new Error("Not permitted");
   const journalEntryId = String(formData.get("journalEntryId"));
   await assertEntryNotReconciled(session.tenantId, journalEntryId, "entry");
   await reverseJournalEntry(session.tenantId, journalEntryId, session.userId);

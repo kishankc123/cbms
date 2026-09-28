@@ -2,7 +2,7 @@ import Link from "next/link";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { getCustomerLines } from "@/lib/ledger/customer-balances";
 import { buildStatement } from "@/lib/ledger/party-ledger";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
@@ -13,6 +13,7 @@ const asIso = (v: string | string[] | undefined) => (typeof v === "string" && va
 
 export default async function CustomerStatementPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const dflt = presetRange("this_fiscal_year", session.calendar, todayIso(), fiscal);
