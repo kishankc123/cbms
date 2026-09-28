@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertFiscalYearOpen } from "@/lib/fiscal";
+import { assertFiscalYearOpen, resolveFiscalYearId } from "@/lib/fiscal";
 import { assertBankPeriodOpen } from "./reconciliation-guards";
 
 import { todayIso } from "@/lib/calendar";
@@ -97,6 +97,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
 
   await assertAccountsUsable(input.tenantId, input.lines.map((l) => l.accountId));
   await assertBankPeriodOpen(input.tenantId, input.entryDate, input.lines.map((l) => l.accountId));
+  const fiscalYearId = await resolveFiscalYearId(input.tenantId, input.entryDate);
 
   const posted = await db.transaction(async (tx) => {
     const [entry] = await tx
@@ -104,6 +105,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
       .values({
         tenantId: input.tenantId,
         entryDate: input.entryDate,
+        fiscalYearId,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         referenceNumber: input.referenceNumber,
@@ -143,6 +145,7 @@ export async function reverseJournalEntry(
   const reversalDate = todayIso();
   await assertPeriodOpen(tenantId, reversalDate);
   await assertFiscalYearOpen(tenantId, reversalDate);
+  const fiscalYearId = await resolveFiscalYearId(tenantId, reversalDate);
 
   const reversed = await db.transaction(async (tx) => {
     const [original] = await tx
@@ -164,6 +167,7 @@ export async function reverseJournalEntry(
       .values({
         tenantId,
         entryDate: reversalDate,
+        fiscalYearId,
         sourceType: original.sourceType,
         sourceId: original.sourceId,
         referenceNumber: original.referenceNumber,

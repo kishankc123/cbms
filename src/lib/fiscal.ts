@@ -113,6 +113,20 @@ export async function assertFiscalYearOpen(tenantId: string, dateIso: string) {
   }
 }
 
+/**
+ * The fiscal_year_id to stamp on a journal entry being posted for `dateIso`. Auto-creates the current
+ * fiscal year when the date is today and none exists yet (same self-healing behavior as
+ * getCurrentFiscalYear), so an ordinary same-day transaction on a fresh tenant still gets one. Never
+ * auto-creates a year for a backdated or future date on the fly — that stays null (unknown), the same
+ * "don't invent a year nobody configured" rule assertFiscalYearOpen already follows.
+ */
+export async function resolveFiscalYearId(tenantId: string, dateIso: string): Promise<string | null> {
+  const fy = await getFiscalYearByDate(tenantId, dateIso);
+  if (fy) return fy.id;
+  if (dateIso === todayIso()) return (await getCurrentFiscalYear(tenantId)).id;
+  return null;
+}
+
 const round = (n: number) => Math.round(n);
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart <= bEnd && bStart <= aEnd;
 

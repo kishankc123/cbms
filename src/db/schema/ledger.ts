@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
+import { fiscalYears } from "./fiscal";
 
 export const journalSourceTypeEnum = pgEnum("journal_source_type", [
   "sale",
@@ -38,6 +39,12 @@ export const journalEntries = pgTable("journal_entries", {
     .notNull()
     .references(() => tenants.id, { onDelete: "cascade" }),
   entryDate: date("entry_date").notNull(),
+  // Nullable: null for an entry dated before this tenant had any fiscal_years row on record (an
+  // ungenerated past/future year — see resolveFiscalYearId in lib/fiscal.ts), never force-created
+  // just because a transaction happened to land there. Recorded once at posting time rather than
+  // always recomputed from entryDate, so a later edit to a fiscal year's boundaries can't silently
+  // reassign which year an already-posted transaction belongs to.
+  fiscalYearId: uuid("fiscal_year_id").references(() => fiscalYears.id),
   referenceNumber: text("reference_number"),
   sourceType: journalSourceTypeEnum("source_type").notNull(),
   sourceId: uuid("source_id"),
