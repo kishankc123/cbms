@@ -50,6 +50,14 @@ export default async function SelectOrganizationPage() {
           </Link>
           <SignOutLink />
         </div>
+
+        {user.isPlatformAdmin && (
+          <div className="border-t border-gray-100 pt-4">
+            <Link href="/admin" className="block rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 hover:bg-red-100">
+              Platform Administration →
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

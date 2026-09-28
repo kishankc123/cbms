@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { isSessionExpired } from "@/lib/session-expiry";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/signed-out"];
-// Reachable while signed in but before an organization is chosen.
-const NO_ORG_PATHS = ["/select-organization", "/create-organization", "/accept-invite", "/verify-email"];
+// Reachable while signed in but before an organization is chosen. /admin is here too: a platform admin
+// doesn't need (or often have) any organization membership at all — see src/app/admin/layout.tsx, which
+// does its own isPlatformAdmin check regardless of this list.
+const NO_ORG_PATHS = ["/select-organization", "/create-organization", "/accept-invite", "/verify-email", "/admin"];
 
 const startsWithAny = (path: string, list: string[]) => list.some((p) => path.startsWith(p));
 

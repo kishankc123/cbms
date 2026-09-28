@@ -108,10 +108,11 @@ const NAV = [
   {
     href: "/reports",
     label: "Reports",
-    children: [
-      { href: "/reports", label: "Financial Reports" },
-      { href: "/reports/ledger", label: "Ledger" },
-    ],
+    // One child today — Financial Reports, covering everything actually built (P&L, Balance Sheet, Trial
+    // Balance, Ledger) via the /reports landing page. As the other categories in the spec get built
+    // (Sales & Receivables, Inventory, Payroll, ...), add one child per category here the same way
+    // Inventory and Compliance already do — this dropdown is where that growth happens.
+    children: [{ href: "/reports", label: "Financial Reports" }],
   },
   { href: "/settings", label: "Settings" },
 ];

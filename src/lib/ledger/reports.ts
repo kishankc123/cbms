@@ -68,6 +68,7 @@ export async function trialBalance(tenantId: string, asOf: Date) {
   const rows = balances
     .filter((b) => b.debitTotal !== 0 || b.creditTotal !== 0)
     .map((b) => ({
+      accountId: b.accountId,
       code: b.code,
       name: b.name,
       debit: NORMAL_BALANCE[b.category] === "debit" ? Math.max(b.balance, 0) : Math.max(-b.balance, 0),
@@ -117,7 +118,7 @@ export async function profitAndLoss(tenantId: string, periodStart: Date, periodE
     .filter((a) => a.category === "income")
     .map((a) => {
       const t = totals.get(a.id) ?? { debit: 0, credit: 0 };
-      return { code: a.code, name: a.name, amount: t.credit - t.debit };
+      return { accountId: a.id, code: a.code, name: a.name, amount: t.credit - t.debit };
     })
     .filter((r) => r.amount !== 0);
 
@@ -125,7 +126,7 @@ export async function profitAndLoss(tenantId: string, periodStart: Date, periodE
     .filter((a) => a.category === "expense")
     .map((a) => {
       const t = totals.get(a.id) ?? { debit: 0, credit: 0 };
-      return { code: a.code, name: a.name, amount: t.debit - t.credit };
+      return { accountId: a.id, code: a.code, name: a.name, amount: t.debit - t.credit };
     })
     .filter((r) => r.amount !== 0);
 
@@ -156,9 +157,9 @@ export async function balanceSheet(tenantId: string, asOf: Date) {
 
   return {
     asOf,
-    assets: assets.map((a) => ({ code: a.code, name: a.name, amount: a.balance })),
-    liabilities: liabilities.map((a) => ({ code: a.code, name: a.name, amount: a.balance })),
-    equity: equityAccounts.map((a) => ({ code: a.code, name: a.name, amount: a.balance })),
+    assets: assets.map((a) => ({ accountId: a.accountId, code: a.code, name: a.name, amount: a.balance })),
+    liabilities: liabilities.map((a) => ({ accountId: a.accountId, code: a.code, name: a.name, amount: a.balance })),
+    equity: equityAccounts.map((a) => ({ accountId: a.accountId, code: a.code, name: a.name, amount: a.balance })),
     retainedEarnings,
     totalAssets,
     totalLiabilities,
@@ -183,6 +184,8 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
       description: journalLines.description,
       debitAmount: journalLines.debitAmount,
       creditAmount: journalLines.creditAmount,
+      sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
     })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))

@@ -5,9 +5,21 @@ import { ReportFilter } from "@/components/calendar/report-filter";
 import { DateCells, DateDisplayControl, DateHead, dateColumnCount, useDateDisplay } from "@/components/calendar/report-dates";
 import { exportDateColumns, exportDateHeaders, type DateRange } from "@/lib/calendar";
 import { D } from "@/components/calendar/date-text";
+import Link from "next/link";
+import { resolveSourceLink } from "@/lib/ledger/source-link";
 
 type Account = { id: string; code: string; name: string; subCategory: string | null };
-type Line = { entryDate: string; referenceNumber: string | null; memo: string | null; description: string | null; debit: number; credit: number; runningBalance: number };
+type Line = {
+  entryDate: string;
+  referenceNumber: string | null;
+  memo: string | null;
+  description: string | null;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  sourceType: string | null;
+  sourceId: string | null;
+};
 
 const isCashOrBank = (a: Account) => /cash|bank/i.test(`${a.subCategory ?? ""} ${a.name}`);
 const fmt = (n: number) => n.toFixed(2);
@@ -117,26 +129,39 @@ export function LedgerView({
                 <th className="px-4 py-2 font-medium text-right">Debit</th>
                 <th className="px-4 py-2 font-medium text-right">Credit</th>
                 <th className="px-4 py-2 font-medium text-right">Balance</th>
+                <th className="px-4 py-2 font-medium">Source</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-t border-gray-100 bg-gray-50/50">
-                <td className="px-4 py-2 text-gray-500" colSpan={cols + 4}>Opening balance</td>
+                <td className="px-4 py-2 text-gray-500" colSpan={cols + 5}>Opening balance</td>
                 <td className="px-4 py-2 text-right">{fmt(ledger.openingBalance)}</td>
               </tr>
-              {ledger.lines.map((l, i) => (
-                <tr key={i} className="border-t border-gray-100">
-                  <DateCells mode={mode} value={l.entryDate} />
-                  <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
-                  <td className="px-4 py-2">{l.description ?? l.memo ?? ""}</td>
-                  <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
-                  <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
-                  <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
-                </tr>
-              ))}
+              {ledger.lines.map((l, i) => {
+                const source = resolveSourceLink(l.sourceType);
+                return (
+                  <tr key={i} className="border-t border-gray-100">
+                    <DateCells mode={mode} value={l.entryDate} />
+                    <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
+                    <td className="px-4 py-2">{l.description ?? l.memo ?? ""}</td>
+                    <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
+                    <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
+                    <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
+                    <td className="px-4 py-2">
+                      {source ? (
+                        <Link href={source.href} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
+                          {source.label}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {ledger.lines.length === 0 && (
                 <tr>
-                  <td colSpan={cols + 5} className="px-4 py-6 text-center text-gray-400">
+                  <td colSpan={cols + 6} className="px-4 py-6 text-center text-gray-400">
                     No transactions in this period
                   </td>
                 </tr>
@@ -146,6 +171,7 @@ export function LedgerView({
                 <td className="px-4 py-2 text-right">{fmt(totalDebit)}</td>
                 <td className="px-4 py-2 text-right">{fmt(totalCredit)}</td>
                 <td className="px-4 py-2 text-right">{fmt(ledger.lines.at(-1)?.runningBalance ?? ledger.openingBalance)}</td>
+                <td className="px-4 py-2"></td>
               </tr>
             </tbody>
           </table>

@@ -35,7 +35,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Ledger</h1>
         <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Financial reports
+          ← Reports
         </Link>
       </div>
       <LedgerView
@@ -56,6 +56,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
               debit: l.debit,
               credit: l.credit,
               runningBalance: l.runningBalance,
+              sourceType: l.sourceType,
+              sourceId: l.sourceId,
             })),
           }
         }

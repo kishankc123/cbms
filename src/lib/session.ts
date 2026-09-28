@@ -89,3 +89,14 @@ export function can(session: AppSession, module: string, action: "view" | "creat
   if (session.role === "owner" || session.role === "admin") return true;
   return Boolean(session.permissions[module]?.[action]);
 }
+
+/**
+ * Platform administrator — a flag on the user, never an organization role (see orgRoleEnum's comment).
+ * Every super-admin page/action gates on this, not on any tenant membership: a platform admin doesn't need
+ * to belong to an organization to manage the platform, and this check works whether or not one is active.
+ */
+export async function requirePlatformAdmin() {
+  const user = await requireUserSession();
+  if (!user.isPlatformAdmin) throw new UnauthorizedError();
+  return user;
+}
