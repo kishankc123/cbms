@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { assertFiscalYearOpen } from "@/lib/fiscal";
 import { assertBankPeriodOpen } from "./reconciliation-guards";
 
 import { todayIso } from "@/lib/calendar";
@@ -72,6 +73,7 @@ export async function assertAccountsUsable(tenantId: string, accountIds: string[
 
 export async function postJournalEntry(input: PostJournalEntryInput) {
   await assertPeriodOpen(input.tenantId, input.entryDate);
+  await assertFiscalYearOpen(input.tenantId, input.entryDate);
 
   if (input.lines.length < 2) {
     throw new Error("A journal entry needs at least two lines");
@@ -140,6 +142,7 @@ export async function reverseJournalEntry(
 ) {
   const reversalDate = todayIso();
   await assertPeriodOpen(tenantId, reversalDate);
+  await assertFiscalYearOpen(tenantId, reversalDate);
 
   const reversed = await db.transaction(async (tx) => {
     const [original] = await tx

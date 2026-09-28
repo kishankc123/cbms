@@ -5,6 +5,8 @@ import { roleLabel } from "@/lib/roles";
 import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
 import { OrgSwitcher } from "./org-switcher";
+import { FiscalYearSwitcher } from "./fiscal-year-switcher";
+import { getActiveFiscalYear, listFiscalYears } from "@/lib/fiscal";
 import { VerifyBanner } from "./verify-banner";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
 import { InventoryProvider } from "@/components/inventory/opening-date";
@@ -132,6 +134,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUserSession();
   const orgs = await listActiveMemberships(user.id);
   const inventoryOpeningDate = await getOpeningDate(session.tenantId);
+  const [fiscalYearsList, activeFiscalYear] = await Promise.all([listFiscalYears(session.tenantId), getActiveFiscalYear(session.tenantId)]);
 
   return (
     <CalendarProvider calendar={session.calendar}>
@@ -143,6 +146,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: roleLabel(o.role) }))}
             activeId={session.tenantId}
           />
+          <FiscalYearSwitcher years={fiscalYearsList} activeId={"allTime" in activeFiscalYear ? null : activeFiscalYear.id} isAllTime={"allTime" in activeFiscalYear} />
         </div>
         <AppNav items={NAV} />
         <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">

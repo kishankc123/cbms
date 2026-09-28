@@ -26,6 +26,9 @@ export default async function SettingsPage() {
           <Link href="/compliance/company" className="text-sm text-[var(--color-primary)] hover:underline">
             VAT / TDS rates →
           </Link>
+          <Link href="/settings/fiscal-years" className="text-sm text-[var(--color-primary)] hover:underline">
+            Fiscal years →
+          </Link>
           <Link href="/settings/users" className="text-sm text-[var(--color-primary)] hover:underline">
             Manage users →
           </Link>

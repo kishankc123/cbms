@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { transactionRegister } from "@/lib/ledger/reports";
 import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { getFiscalRange, getActiveFiscalYear, listFiscalYears } from "@/lib/fiscal";
 import { TransactionRegisterView } from "./transaction-register-view";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -13,7 +13,12 @@ export default async function TransactionRegisterPage({ searchParams }: { search
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);
+  const [activeFiscalYear, allFiscalYears] = await Promise.all([getActiveFiscalYear(session.tenantId), listFiscalYears(session.tenantId)]);
+  const isAllTime = "allTime" in activeFiscalYear;
+  // The sidebar's fiscal-year context sets the default range — pick a fiscal year there and every
+  // report that reads it (this one, so far) opens already scoped to it, per the spec's "selecting a
+  // fiscal year changes the default reporting context." An explicit ?from=/&to= in the URL still wins.
+  const dflt = isAllTime ? presetRange("all_time", session.calendar, todayIso()) : { from: activeFiscalYear.startDate, to: activeFiscalYear.endDate };
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
@@ -25,6 +30,10 @@ export default async function TransactionRegisterPage({ searchParams }: { search
     search: search || undefined,
   });
 
+  // Matched in memory against the tenant's (short) fiscal-year list — no per-row query.
+  const fiscalYearCodeOf = (dateIso: string) => allFiscalYears.find((fy) => fy.startDate <= dateIso && dateIso <= fy.endDate)?.code ?? null;
+  const entriesWithFy = entries.map((e) => ({ ...e, fiscalYearCode: fiscalYearCodeOf(e.entryDate) }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -33,7 +42,7 @@ export default async function TransactionRegisterPage({ searchParams }: { search
           ← Reports
         </Link>
       </div>
-      <TransactionRegisterView entries={entries} truncated={truncated} from={from} to={to} fiscal={fiscal} sourceType={sourceType} search={search} />
+      <TransactionRegisterView entries={entriesWithFy} truncated={truncated} from={from} to={to} fiscal={fiscal} sourceType={sourceType} search={search} showFiscalYearColumn={isAllTime} />
     </div>
   );
 }

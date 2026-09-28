@@ -470,7 +470,7 @@ export function filingDueDate(calendar: CalendarSystem, monthAnchor: IsoDate, da
   return isoFromYmd(cal, { ...next, day: Math.min(dayOfNextMonth, daysInMonth(cal, next.year, next.month) ?? dayOfNextMonth) }) ?? monthAnchor;
 }
 
-export type RangePreset = "today" | "this_week" | "this_month" | "last_month" | "this_fiscal_year";
+export type RangePreset = "today" | "this_week" | "this_month" | "last_month" | "this_fiscal_year" | "all_time";
 
 /**
  * Period presets computed in the ORGANIZATION'S calendar — "this month" for a
@@ -496,6 +496,12 @@ export function presetRange(preset: RangePreset, calendar: CalendarSystem, today
         if (fy) return { from: fy.from, to: today };
       }
       return { from: yearRange("AD", today).from, to: today };
+    }
+    case "all_time": {
+      // The earliest AD date the calendar engine's BS data table can represent — a real, engine-backed
+      // floor rather than an arbitrary invented date, so a BS org's "All Time" ledger still converts cleanly.
+      const floor = convertBStoAD({ year: BS_MIN_YEAR, month: 1, day: 1 });
+      return { from: floor ?? "1900-01-01", to: today };
     }
   }
 }

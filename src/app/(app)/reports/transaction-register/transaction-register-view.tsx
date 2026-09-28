@@ -31,6 +31,8 @@ const SOURCE_TYPES = Object.keys(SOURCE_TYPE_LABEL);
 const fmt = (n: number) => n.toFixed(2);
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
+type Entry = TransactionRegisterEntry & { fiscalYearCode: string | null };
+
 export function TransactionRegisterView({
   entries,
   truncated,
@@ -39,14 +41,16 @@ export function TransactionRegisterView({
   fiscal,
   sourceType,
   search,
+  showFiscalYearColumn,
 }: {
-  entries: TransactionRegisterEntry[];
+  entries: Entry[];
   truncated: boolean;
   from: string;
   to: string;
   fiscal: DateRange | null;
   sourceType: string;
   search: string;
+  showFiscalYearColumn: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -62,10 +66,11 @@ export function TransactionRegisterView({
   }
 
   function exportCsv() {
-    const header = ["Date", "Type", "Reference", "Description", "Amount", "Created By", "Status"];
+    const header = [...(showFiscalYearColumn ? ["FY"] : []), "Date", "Type", "Reference", "Description", "Amount", "Created By", "Status"];
     const rows = entries.map((e) => {
       const status = e.isReversed ? "Reversed" : e.reversalOfId ? "Reversal" : "Posted";
       return [
+        ...(showFiscalYearColumn ? [e.fiscalYearCode ?? ""] : []),
         e.entryDate,
         SOURCE_TYPE_LABEL[e.sourceType] ?? e.sourceType,
         e.referenceNumber ?? "",
@@ -125,6 +130,7 @@ export function TransactionRegisterView({
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
+            {showFiscalYearColumn && <th className="px-4 py-2 font-medium">FY</th>}
             <th className="px-4 py-2 font-medium">Date</th>
             <th className="px-4 py-2 font-medium">Type</th>
             <th className="px-4 py-2 font-medium">Reference</th>
@@ -141,6 +147,7 @@ export function TransactionRegisterView({
             const source = resolveSourceLink(e.sourceType);
             return (
               <tr key={e.id} className={`border-t border-gray-100 ${e.isReversed ? "opacity-60" : ""}`}>
+                {showFiscalYearColumn && <td className="px-4 py-2 whitespace-nowrap text-gray-500">{e.fiscalYearCode ?? "—"}</td>}
                 <td className="px-4 py-2 whitespace-nowrap">
                   <D value={e.entryDate} />
                 </td>
@@ -166,7 +173,7 @@ export function TransactionRegisterView({
           })}
           {entries.length === 0 && (
             <tr>
-              <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={showFiscalYearColumn ? 9 : 8} className="px-4 py-6 text-center text-gray-400">
                 No transactions in this period
               </td>
             </tr>
@@ -175,7 +182,7 @@ export function TransactionRegisterView({
         {entries.length > 0 && (
           <tfoot>
             <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-              <td className="px-4 py-2" colSpan={4}>
+              <td className="px-4 py-2" colSpan={showFiscalYearColumn ? 5 : 4}>
                 Total
               </td>
               <td className="px-4 py-2 text-right">{fmt(total)}</td>

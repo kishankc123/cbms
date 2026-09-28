@@ -1,0 +1,57 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { fiscalYears } from "@/db/schema";
+import { requireTenantSession, can } from "@/lib/session";
+import { isOrgAdmin } from "@/lib/roles";
+import { listFiscalYears, createFiscalYear, suggestNextFiscalYear } from "@/lib/fiscal";
+import { logAuditEvent } from "@/lib/audit";
+
+export async function getFiscalYearsPageData() {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "view")) throw new Error("Not permitted");
+  const years = await listFiscalYears(session.tenantId);
+  const suggestedNext = suggestNextFiscalYear(years[0]?.startDate ?? null);
+  return { years, suggestedNext };
+}
+
+export async function addFiscalYear(input: { code: string; startDate: string; endDate: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
+  const created = await createFiscalYear(session.tenantId, input);
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_created", entityType: "fiscal_year", entityId: created.id, after: { code: created.code, startDate: created.startDate, endDate: created.endDate } });
+  revalidatePath("/settings/fiscal-years");
+}
+
+// Closing is the routine year-end action, available to anyone with settings-edit rights — same split
+// as accounting-period locking (audit/actions.ts): closing is routine, reopening is admin-only.
+export async function closeFiscalYear(fiscalYearId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
+
+  const [fy] = await db.select().from(fiscalYears).where(and(eq(fiscalYears.id, fiscalYearId), eq(fiscalYears.tenantId, session.tenantId))).limit(1);
+  if (!fy) throw new Error("Fiscal year not found");
+  if (fy.status === "closed") throw new Error("This fiscal year is already closed");
+
+  await db.update(fiscalYears).set({ status: "closed", closedBy: session.userId, closedAt: new Date() }).where(eq(fiscalYears.id, fiscalYearId));
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_closed", entityType: "fiscal_year", entityId: fiscalYearId, before: { status: fy.status }, after: { status: "closed" } });
+  revalidatePath("/settings/fiscal-years");
+}
+
+// Admin-only, reason required — matching reopenPeriod (audit/actions.ts) and reopenReconciliation
+// (bank-reconciliation/actions.ts): no separate approval step, but always an audited reason.
+export async function reopenFiscalYear(input: { fiscalYearId: string; reason: string }) {
+  const session = await requireTenantSession();
+  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can reopen a closed fiscal year");
+  if (!input.reason.trim()) throw new Error("A reason is required to reopen a fiscal year");
+
+  const [fy] = await db.select().from(fiscalYears).where(and(eq(fiscalYears.id, input.fiscalYearId), eq(fiscalYears.tenantId, session.tenantId))).limit(1);
+  if (!fy) throw new Error("Fiscal year not found");
+  if (fy.status !== "closed") throw new Error("Only a closed fiscal year can be reopened");
+
+  await db.update(fiscalYears).set({ status: "reopened", reopenedBy: session.userId, reopenedAt: new Date(), reopenReason: input.reason.trim() }).where(eq(fiscalYears.id, input.fiscalYearId));
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_reopened", entityType: "fiscal_year", entityId: input.fiscalYearId, before: { status: "closed" }, after: { status: "reopened", reason: input.reason.trim() } });
+  revalidatePath("/settings/fiscal-years");
+}

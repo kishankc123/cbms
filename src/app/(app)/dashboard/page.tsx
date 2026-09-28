@@ -1,9 +1,8 @@
 import { requireTenantSession } from "@/lib/session";
 import { profitAndLoss, trialBalance } from "@/lib/ledger/reports";
-import { db } from "@/db";
-import { tenants } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getCurrentFiscalYear, isFiscalYearOpen } from "@/lib/fiscal";
 import { formatAD, formatBS, presetRange, todayIso } from "@/lib/calendar";
+import { StatusPill } from "@/components/ui/status-pill";
 
 export default async function DashboardPage() {
   const session = await requireTenantSession();
@@ -13,8 +12,8 @@ export default async function DashboardPage() {
   const now = new Date(today + "T00:00:00Z");
   const monthStart = new Date(range.from + "T00:00:00Z");
 
-  const [[tenant], pnl, tb] = await Promise.all([
-    db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
+  const [fiscalYear, pnl, tb] = await Promise.all([
+    getCurrentFiscalYear(session.tenantId),
     profitAndLoss(session.tenantId, monthStart, now),
     trialBalance(session.tenantId, now),
   ]);
@@ -33,9 +32,10 @@ export default async function DashboardPage() {
       <div className="flex items-start justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">KPIs</h1>
         <div className="text-right">
-          {tenant?.fiscalYearLabel && (
-            <p className="text-sm font-medium text-gray-900">FY {tenant.fiscalYearLabel}</p>
-          )}
+          <p className="flex items-center justify-end gap-2 text-sm font-medium text-gray-900">
+            FY {fiscalYear.code}
+            <StatusPill tone={isFiscalYearOpen(fiscalYear) ? "success" : "pending"}>{fiscalYear.status === "open" ? "Open" : fiscalYear.status === "reopened" ? "Reopened" : "Closed"}</StatusPill>
+          </p>
           <p className="text-xs text-gray-500">
             {adDateLabel} ({bsDateLabel} BS)
           </p>
