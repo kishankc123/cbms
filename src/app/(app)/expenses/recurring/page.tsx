@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors, accounts } from "@/db/schema";
@@ -7,6 +6,7 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { listRecurringExpenses, getRecurringExpenseSummary } from "@/lib/recurring-expenses";
 import { todayIso } from "@/lib/calendar";
+import { BackButton } from "@/components/ui/back-button";
 import { RecurringExpensesTable, type RecurringExpenseRow } from "./recurring-expenses-table";
 import { RecurringEngineRunner } from "./recurring-engine-runner";
 
@@ -65,14 +65,12 @@ export default async function RecurringExpensesPage() {
   return (
     <div className="space-y-6">
       <RecurringEngineRunner />
-      <div className="flex items-center justify-between">
+      <div className="flex items-start gap-3">
+        <BackButton href="/expenses" label="Back to One-off Expenses" />
         <div>
           <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Recurring Expenses</h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">Rent, subscriptions, and other expenses that repeat on a schedule.</p>
         </div>
-        <Link href="/expenses" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← One-off Expenses
-        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">

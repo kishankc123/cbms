@@ -7,6 +7,7 @@ import { vendors } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { D } from "@/components/calendar/date-text";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { BackButton } from "@/components/ui/back-button";
 
 const currency = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
@@ -37,14 +38,12 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start gap-3">
+        <BackButton href="/expenses/recurring" label="Back to Recurring Expenses" />
         <div>
           <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{recurring.expenseName}</h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">Recurring expense history</p>
         </div>
-        <Link href="/expenses/recurring" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Recurring Expenses
-        </Link>
       </div>
 
       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
