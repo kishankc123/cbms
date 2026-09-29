@@ -45,7 +45,14 @@ const NAV = [
     ],
   },
   { href: "/suppliers", label: "Suppliers" },
-  { href: "/expenses", label: "Expenses" },
+  {
+    href: "/expenses",
+    label: "Expenses",
+    children: [
+      { href: "/expenses", label: "One-off Expenses" },
+      { href: "/expenses/recurring", label: "Recurring Expenses" },
+    ],
+  },
   {
     href: "/payments",
     label: "Payments",

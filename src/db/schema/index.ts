@@ -4,6 +4,7 @@ export * from "./ledger";
 export * from "./sales";
 export * from "./purchases";
 export * from "./expenses";
+export * from "./recurring-expenses";
 export * from "./banking";
 export * from "./payments";
 export * from "./transfers";
