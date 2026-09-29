@@ -1,0 +1,2 @@
+CREATE TYPE "public"."invoice_tax_treatment" AS ENUM('taxable', 'zero_rated');--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD COLUMN "tax_treatment" "invoice_tax_treatment" DEFAULT 'taxable' NOT NULL;

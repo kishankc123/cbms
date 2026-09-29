@@ -5,7 +5,7 @@ import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
-import { createSingleInvoice, updateSingleInvoice } from "./actions";
+import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -53,6 +53,7 @@ export type InitialSingleInvoice = {
   invoiceDate: string;
   dueDate?: string | null;
   customerId: string;
+  billType: SalesBillType;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
 };
@@ -98,6 +99,7 @@ export function SingleInvoiceForm({
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
+  const [billType, setBillType] = useState<SalesBillType>(initial?.billType ?? "taxable");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({
@@ -164,7 +166,9 @@ export function SingleInvoiceForm({
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  const computedLines = lines.map((l) => computeLine(l, vatRate));
+  // Zero-rated bills never carry VAT, regardless of the tenant's registered rate.
+  const effectiveVatRate = billType === "taxable" ? vatRate : 0;
+  const computedLines = lines.map((l) => computeLine(l, effectiveVatRate));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
   const grandTaxable = computedLines.reduce((s, c) => s + c.taxable, 0);
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
@@ -196,6 +200,7 @@ export function SingleInvoiceForm({
         invoiceDate,
         dueDate: dueDate || null,
         customerId,
+        billType,
         lines: lines.filter(isLineComplete).map((l) => ({
           itemId: l.itemId || null,
           description: l.description.trim(),
@@ -237,7 +242,7 @@ export function SingleInvoiceForm({
     <div className="space-y-4">
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Details</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
             <DatePicker max={today()} value={invoiceDate} onChange={(v) => {
@@ -285,6 +290,13 @@ export function SingleInvoiceForm({
               className={fieldErrors.dueDate ? inputErrCls : inputCls}
             />
             {fieldErrors.dueDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.dueDate}</p>}
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
+            <select value={billType} onChange={(e) => setBillType(e.target.value as SalesBillType)} className={inputCls}>
+              <option value="taxable">Taxable</option>
+              <option value="zero_rated">Zero-rated</option>
+            </select>
           </div>
         </div>
       </section>

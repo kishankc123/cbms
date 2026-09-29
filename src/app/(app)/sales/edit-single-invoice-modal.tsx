@@ -70,6 +70,7 @@ export function EditSingleInvoiceModal({
               invoiceDate: data.invoiceDate,
               dueDate: data.dueDate,
               customerId: data.customerId,
+              billType: data.billType,
               lines: data.lines,
               payments: data.payments,
             }}

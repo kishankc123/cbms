@@ -11,6 +11,12 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "void",
 ]);
 
+// Whether VAT applies to this invoice at all — mirrors expenses.taxTreatment
+// (src/db/schema/expenses.ts) but 2-way, since a sales invoice's "Bill Type" is
+// the user-facing name for this: Taxable calculates VAT at the tenant's
+// registered rate, Zero-rated always posts zero VAT regardless of that rate.
+export const invoiceTaxTreatmentEnum = pgEnum("invoice_tax_treatment", ["taxable", "zero_rated"]);
+
 export type ContactInfo = {
   email?: string;
   phone?: string;
@@ -55,6 +61,9 @@ export const salesInvoices = pgTable("sales_invoices", {
   // Taxable amount (gross - discount); kept as "subtotal" since it's the same
   // pre-tax figure the ledger posting and reports already key off of.
   subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
+  // "Bill Type" in the UI. Taxable -> VAT computed at the tenant's registered rate;
+  // Zero-rated -> taxAmount is always 0 regardless of that rate.
+  taxTreatment: invoiceTaxTreatmentEnum("tax_treatment").notNull().default("taxable"),
   taxAmount: numeric("tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 18, scale: 2 }).notNull(),
   status: invoiceStatusEnum("status").notNull().default("draft"),

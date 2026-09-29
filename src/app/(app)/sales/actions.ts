@@ -482,6 +482,7 @@ export type SingleInvoiceEditData = {
   invoiceDate: string;
   dueDate: string | null;
   customerId: string;
+  billType: SalesBillType;
   lines: SingleInvoiceEditLine[];
   payments: BatchPaymentLine[];
 };
@@ -551,6 +552,7 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     invoiceDate: invoice.invoiceDate,
     dueDate: invoice.dueDate,
     customerId: invoice.customerId,
+    billType: invoice.taxTreatment,
     lines,
     payments,
   };
@@ -585,8 +587,9 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   await assertNoLaterPayments(session.tenantId, "sales_invoice", input.invoiceId, "invoice");
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
-  // The rate that applied on the invoice's OWN date, not today's.
-  const vatRate = await salesVatRate(session.tenantId, input.invoiceDate);
+  const billType: SalesBillType = input.billType ?? "taxable";
+  // The rate that applied on the invoice's OWN date, not today's — zero for a Zero-rated bill regardless.
+  const vatRate = billType === "taxable" ? await salesVatRate(session.tenantId, input.invoiceDate) : 0;
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
@@ -651,6 +654,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       grossAmount: grossAmount.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
+      taxTreatment: billType,
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
       amountPaid: paid.toFixed(2),
@@ -732,11 +736,14 @@ export type SingleInvoiceLine = {
 
 export type SingleInvoicePayment = { accountId: string; amount: number };
 
+export type SalesBillType = "taxable" | "zero_rated";
+
 export type SingleInvoiceInput = {
   invoiceNumber: string;
   invoiceDate: string;
   dueDate?: string | null;
   customerId: string;
+  billType?: SalesBillType;
   lines: SingleInvoiceLine[];
   payments: SingleInvoicePayment[];
 };
@@ -766,8 +773,9 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
-  // The rate that applied on the invoice's OWN date, not today's.
-  const vatRate = await salesVatRate(session.tenantId, input.invoiceDate);
+  const billType: SalesBillType = input.billType ?? "taxable";
+  // The rate that applied on the invoice's OWN date, not today's — zero for a Zero-rated bill regardless.
+  const vatRate = billType === "taxable" ? await salesVatRate(session.tenantId, input.invoiceDate) : 0;
 
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one item line");
@@ -818,6 +826,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       grossAmount: grossAmount.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
       subtotal: subtotal.toFixed(2),
+      taxTreatment: billType,
       taxAmount: taxAmount.toFixed(2),
       total: total.toFixed(2),
       amountPaid: paid.toFixed(2),
