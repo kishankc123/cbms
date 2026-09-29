@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { and, desc, eq, lte, gte } from "drizzle-orm";
 import { db } from "@/db";
-import { tenants, fiscalYears, type FiscalYearStatus } from "@/db/schema";
+import { tenants, fiscalYears, journalEntries, type FiscalYearStatus } from "@/db/schema";
 import { bsFiscalYearOf, bsFiscalYearRange, yearRange, todayIso, presetRange } from "@/lib/calendar";
 import type { DateRange, CalendarSystem } from "@/lib/calendar";
 
@@ -178,6 +178,29 @@ export async function createFiscalYear(tenantId: string, input: { startYear: num
   const today = todayIso();
   if (created.startDate <= today && today <= created.endDate) await syncTenantFiscalYearCache(tenantId, created);
   return created;
+}
+
+/**
+ * Removes a fiscal year that was added wrong (e.g. auto-created before this app locked fiscal-year
+ * boundaries to Nepal's Shrawan-Ashadh rule) — never if anything has actually been posted into it,
+ * which would silently orphan real financial data. Once nothing references it, deleting is exactly
+ * as safe as it never having existed: the next lookup just computes a fresh suggestion in its place.
+ */
+export async function deleteFiscalYear(tenantId: string, fiscalYearId: string) {
+  const fy = await getFiscalYearById(tenantId, fiscalYearId);
+  if (!fy) throw new Error("Fiscal year not found");
+
+  const [entry] = await db.select({ id: journalEntries.id }).from(journalEntries).where(eq(journalEntries.fiscalYearId, fiscalYearId)).limit(1);
+  if (entry) throw new Error(`Cannot delete fiscal year ${fy.code} — journal entries have already been posted against it`);
+
+  await db.delete(fiscalYears).where(and(eq(fiscalYears.tenantId, tenantId), eq(fiscalYears.id, fiscalYearId)));
+
+  // If the tenant's cached "current" pointer was this fiscal year, clear it so the next lookup
+  // computes a fresh suggestion instead of pointing at a fiscal year that no longer exists.
+  const [tenant] = await db.select({ fiscalYearStartDate: tenants.fiscalYearStartDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  if (tenant?.fiscalYearStartDate === fy.startDate) {
+    await db.update(tenants).set({ fiscalYearLabel: null, fiscalYearStartDate: null, fiscalYearEndDate: null }).where(eq(tenants.id, tenantId));
+  }
 }
 
 // ---------- Global fiscal-year context (the sidebar switcher) ----------

@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { fiscalYears } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
-import { listFiscalYears, createFiscalYear, earliestSelectableFiscalYearStartYear } from "@/lib/fiscal";
+import { listFiscalYears, createFiscalYear, deleteFiscalYear as deleteFiscalYearRow, earliestSelectableFiscalYearStartYear } from "@/lib/fiscal";
 import { getYearEndReadiness, getOpeningBalanceReconciliation } from "@/lib/fiscal-closing";
 import { logAuditEvent } from "@/lib/audit";
 import { bsFiscalYearOf, todayIso } from "@/lib/calendar";
@@ -85,5 +85,22 @@ export async function reopenFiscalYear(input: { fiscalYearId: string; reason: st
 
   await db.update(fiscalYears).set({ status: "reopened", reopenedBy: session.userId, reopenedAt: new Date(), reopenReason: input.reason.trim() }).where(eq(fiscalYears.id, input.fiscalYearId));
   await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_reopened", entityType: "fiscal_year", entityId: input.fiscalYearId, before: { status: "closed" }, after: { status: "reopened", reason: input.reason.trim() } });
+  revalidatePath("/settings/fiscal-years");
+}
+
+// Admin-only, same footing as reopening — deleting a fiscal year (even an empty one) changes the
+// organization's accounting configuration, not routine data entry. The library function itself
+// refuses if anything has actually been posted into it, so this can never silently orphan real
+// financial data; it exists to correct a wrong fiscal year (e.g. one auto-created under an older
+// rule) that nothing has touched yet.
+export async function deleteFiscalYear(fiscalYearId: string) {
+  const session = await requireTenantSession();
+  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can delete a fiscal year");
+
+  const [fy] = await db.select().from(fiscalYears).where(and(eq(fiscalYears.id, fiscalYearId), eq(fiscalYears.tenantId, session.tenantId))).limit(1);
+  if (!fy) throw new Error("Fiscal year not found");
+
+  await deleteFiscalYearRow(session.tenantId, fiscalYearId);
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_deleted", entityType: "fiscal_year", entityId: fiscalYearId, before: { code: fy.code, startDate: fy.startDate, endDate: fy.endDate, status: fy.status } });
   revalidatePath("/settings/fiscal-years");
 }

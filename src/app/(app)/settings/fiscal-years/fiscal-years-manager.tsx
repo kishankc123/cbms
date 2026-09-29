@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addFiscalYear, closeFiscalYear, reopenFiscalYear, getYearEndReviewData, getReconciliationData, type getFiscalYearsPageData } from "./actions";
+import { addFiscalYear, closeFiscalYear, reopenFiscalYear, deleteFiscalYear, getYearEndReviewData, getReconciliationData, type getFiscalYearsPageData } from "./actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { bsFiscalYearRange } from "@/lib/calendar";
@@ -47,6 +47,7 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [reopenTarget, setReopenTarget] = useState<string | null>(null);
   const [reopenReason, setReopenReason] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; code: string } | null>(null);
 
   const [reviewTarget, setReviewTarget] = useState<string | null>(null);
   const [reviewData, setReviewData] = useState<Readiness | null>(null);
@@ -136,6 +137,18 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
     );
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const code = deleteTarget.code;
+    await run(
+      () => deleteFiscalYear(deleteTarget.id),
+      () => {
+        setDeleteTarget(null);
+        setMessage({ tone: "ok", text: `Fiscal year ${code} deleted.` });
+      }
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
@@ -177,6 +190,11 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
                   {fy.status === "closed" && isAdmin && (
                     <button type="button" disabled={busy} onClick={() => setReopenTarget(fy.id)} className="text-xs text-red-600 hover:underline disabled:opacity-50">
                       Reopen
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button type="button" disabled={busy} onClick={() => setDeleteTarget({ id: fy.id, code: fy.code })} className="text-xs text-red-600 hover:underline disabled:opacity-50">
+                      Delete
                     </button>
                   )}
                 </td>
@@ -321,6 +339,23 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
             </button>
           </div>
         </form>
+      )}
+
+      {deleteTarget && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">Delete fiscal year {deleteTarget.code}?</h3>
+          <p className="text-sm text-gray-600">
+            This can&apos;t be undone. Only allowed when nothing has been posted into this fiscal year yet — if anything has, deleting will be refused rather than orphan real financial data.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={confirmDelete} className="rounded bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-1.5 disabled:opacity-50">
+              {busy ? "Deleting..." : "Delete Fiscal Year"}
+            </button>
+            <button type="button" onClick={() => setDeleteTarget(null)} className="text-sm text-gray-600 hover:underline">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       <form onSubmit={add} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
