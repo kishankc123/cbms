@@ -59,17 +59,17 @@ export function ReportFilter({
   const invalid = !draftTo || (!asOfOnly && (!draftFrom || draftFrom > draftTo));
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
+    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-3">
       {children}
       {!asOfOnly && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">From</label>
-          <DatePicker value={draftFrom} onChange={setDraftFrom} max={draftTo || undefined} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <label className="block text-xs text-[var(--text-secondary)] mb-1">From</label>
+          <DatePicker value={draftFrom} onChange={setDraftFrom} max={draftTo || undefined} className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]" />
         </div>
       )}
       <div>
-        <label className="block text-xs text-gray-500 mb-1">{asOfOnly ? "As of" : "To"}</label>
-        <DatePicker value={draftTo} onChange={setDraftTo} min={!asOfOnly ? draftFrom || undefined : undefined} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        <label className="block text-xs text-[var(--text-secondary)] mb-1">{asOfOnly ? "As of" : "To"}</label>
+        <DatePicker value={draftTo} onChange={setDraftTo} min={!asOfOnly ? draftFrom || undefined : undefined} className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]" />
       </div>
       <button
         type="button"
@@ -81,7 +81,7 @@ export function ReportFilter({
       </button>
       <div className="flex flex-wrap gap-1.5">
         {PRESETS.map((p) => (
-          <button key={p.key} type="button" onClick={() => applyPreset(p.key)} className="rounded-full border border-gray-300 px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
+          <button key={p.key} type="button" onClick={() => applyPreset(p.key)} className="rounded-full border border-[var(--card-border)] px-2.5 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
             {p.label}
           </button>
         ))}

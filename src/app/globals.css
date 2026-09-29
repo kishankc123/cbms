@@ -7,12 +7,24 @@
   --color-primary-hover: #3151b0;
 
   /* Sidebar — dark charcoal/slate workspace rail, distinct from the light
-     app background so the two panes read as separate surfaces. */
+     app background so the two panes read as separate surfaces. Stays the
+     same in both light and dark app themes: it's a fixed workspace rail,
+     not part of the page surface that flips. */
   --sidebar-bg: #0f172a;
   --sidebar-bg-hover: #1e293b;
   --sidebar-border: #1e293b;
   --sidebar-text: #cbd5e1;
   --sidebar-text-active: #ffffff;
+
+  /* General surface/text tokens for cards and page chrome — use these
+     (not hardcoded bg-white/text-gray-900) in any new or retheme'd
+     component so it picks up dark mode for free. */
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --text-primary: #0f172a;
+  --text-secondary: #6b7280;
+  --surface-muted-bg: #f3f4f6;
+  --surface-muted-text: #6b7280;
 
   /* Status pill system — soft background tint + high-contrast dark text,
      never a bright saturated fill. Reuse via the StatusPill component
@@ -45,12 +57,74 @@
 }
 
 /*
-  This UI is intentionally light-themed only (explicit gray-900 text on
-  explicit white/gray-50 cards throughout). We deliberately do NOT flip to a
-  dark palette on prefers-color-scheme: dark, because none of the components
-  have a dark-mode text/background pairing — letting the background invert
-  while text stayed dark-on-dark made content unreadable.
+  Dark mode. Historically this UI was light-only (explicit gray-900 text on
+  explicit white/gray-50 cards, with no dark pairing) — that's why every
+  color here is a CSS variable rather than a hardcoded Tailwind class.
+  Components already built on these tokens (sidebar, StatusPill, RowCard)
+  get dark mode for free; components still using hardcoded bg-white/
+  text-gray-* classes directly do not yet, and are retheme'd incrementally.
+  Two ways in: prefers-color-scheme (the "system" default, no explicit
+  choice saved) and an explicit [data-theme] attribute on <html> set by the
+  theme toggle, which always wins over the OS preference.
 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0b1220;
+    --foreground: #e2e8f0;
+    --card-bg: #1e293b;
+    --card-border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --surface-muted-bg: #334155;
+    --surface-muted-text: #cbd5e1;
+
+    --status-success-bg: #0f2b1e;
+    --status-success-text: #4ade80;
+    --status-success-border: #14532d;
+
+    --status-pending-bg: #0f1f3d;
+    --status-pending-text: #60a5fa;
+    --status-pending-border: #1e3a5f;
+
+    --status-action-bg: #2c2008;
+    --status-action-text: #fbbf24;
+    --status-action-border: #4a3510;
+
+    --status-critical-bg: #2c1212;
+    --status-critical-text: #f87171;
+    --status-critical-border: #4a1d1d;
+    --status-critical-dot: #f87171;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #0b1220;
+  --foreground: #e2e8f0;
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --surface-muted-bg: #334155;
+  --surface-muted-text: #cbd5e1;
+
+  --status-success-bg: #0f2b1e;
+  --status-success-text: #4ade80;
+  --status-success-border: #14532d;
+
+  --status-pending-bg: #0f1f3d;
+  --status-pending-text: #60a5fa;
+  --status-pending-border: #1e3a5f;
+
+  --status-action-bg: #2c2008;
+  --status-action-text: #fbbf24;
+  --status-action-border: #4a3510;
+
+  --status-critical-bg: #2c1212;
+  --status-critical-text: #f87171;
+  --status-critical-border: #4a1d1d;
+  --status-critical-dot: #f87171;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

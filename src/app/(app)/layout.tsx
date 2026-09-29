@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
 import { listActiveMemberships } from "@/lib/memberships";
 import { roleLabel } from "@/lib/roles";
@@ -11,6 +12,8 @@ import { VerifyBanner } from "./verify-banner";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
 import { InventoryProvider } from "@/components/inventory/opening-date";
 import { getOpeningDate } from "@/lib/inventory/stock";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { themeCookieName, parseTheme } from "@/lib/theme";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -135,6 +138,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const orgs = await listActiveMemberships(user.id);
   const inventoryOpeningDate = await getOpeningDate(session.tenantId);
   const [fiscalYearsList, activeFiscalYear] = await Promise.all([listFiscalYears(session.tenantId), getActiveFiscalYear(session.tenantId)]);
+  const cookieStore = await cookies();
+  const activeTheme = parseTheme(cookieStore.get(themeCookieName)?.value);
 
   return (
     <CalendarProvider calendar={session.calendar}>
@@ -149,8 +154,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <FiscalYearSwitcher years={fiscalYearsList} activeId={"allTime" in activeFiscalYear ? null : activeFiscalYear.id} isAllTime={"allTime" in activeFiscalYear} />
         </div>
         <AppNav items={NAV} />
-        <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">
+        <div className="px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between gap-2">
           <SignOutButton />
+          <ThemeToggle initial={activeTheme} />
         </div>
       </aside>
       <main className="flex-1 p-8">

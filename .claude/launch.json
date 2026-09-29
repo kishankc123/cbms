@@ -4,8 +4,9 @@
     {
       "name": "cbms-dev",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "set PATH=C:\\Program Files\\nodejs;%PATH% && npm run dev -- -p 3100"],
-      "port": 3100
+      "runtimeArgs": ["/c", "set PATH=C:\\Program Files\\nodejs;%PATH% && npm run dev"],
+      "port": 3100,
+      "autoPort": true
     }
   ]
 }

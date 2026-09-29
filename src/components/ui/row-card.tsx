@@ -13,8 +13,8 @@ export function RowCard({ children, onClick }: { children: React.ReactNode; onCl
   return (
     <div
       onClick={onClick}
-      className={`flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 ${
-        onClick ? "cursor-pointer hover:border-gray-300 hover:shadow-sm" : ""
+      className={`flex items-center justify-between gap-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3 ${
+        onClick ? "cursor-pointer hover:shadow-sm" : ""
       }`}
     >
       {children}
@@ -35,13 +35,13 @@ export function RowMeta({
   return (
     <div className="flex min-w-0 items-center gap-3">
       {icon && (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted-bg)] text-[var(--surface-muted-text)]">
           {icon}
         </span>
       )}
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-gray-900">{title}</p>
-        {subtitle && <p className="truncate text-xs text-gray-500">{subtitle}</p>}
+        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{title}</p>
+        {subtitle && <p className="truncate text-xs text-[var(--text-secondary)]">{subtitle}</p>}
       </div>
     </div>
   );
@@ -61,8 +61,8 @@ export function RowValue({
   return (
     <div className="flex shrink-0 items-center gap-4">
       <div className="text-right">
-        <p className="text-sm font-bold text-gray-900">{primary}</p>
-        {secondary && <p className="text-xs text-gray-500">{secondary}</p>}
+        <p className="text-sm font-bold text-[var(--text-primary)]">{primary}</p>
+        {secondary && <p className="text-xs text-[var(--text-secondary)]">{secondary}</p>}
       </div>
       {children}
     </div>
