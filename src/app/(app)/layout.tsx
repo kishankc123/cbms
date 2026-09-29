@@ -144,7 +144,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUserSession();
   const orgs = await listActiveMemberships(user.id);
   const inventoryOpeningDate = await getOpeningDate(session.tenantId);
-  const [fiscalYearsList, activeFiscalYear] = await Promise.all([listFiscalYears(session.tenantId), getActiveFiscalYear(session.tenantId)]);
+  // Sequential, not Promise.all: a brand-new organization has no fiscal_years row yet, and
+  // getActiveFiscalYear -> getCurrentFiscalYear auto-creates the first one on demand. Running
+  // listFiscalYears in parallel could read the table before that insert lands, showing the
+  // switcher's dropdown as empty even though a fiscal year (and activeId) genuinely exists.
+  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
+  const fiscalYearsList = await listFiscalYears(session.tenantId);
   const cookieStore = await cookies();
   const activeTheme = parseTheme(cookieStore.get(themeCookieName)?.value);
 
