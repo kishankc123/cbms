@@ -2,16 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addFiscalYear, closeFiscalYear, reopenFiscalYear, type getFiscalYearsPageData } from "./actions";
+import { addFiscalYear, closeFiscalYear, reopenFiscalYear, getYearEndReviewData, getReconciliationData, type getFiscalYearsPageData } from "./actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
 
 type Data = Awaited<ReturnType<typeof getFiscalYearsPageData>>;
+type Readiness = Awaited<ReturnType<typeof getYearEndReviewData>>;
+type Reconciliation = Awaited<ReturnType<typeof getReconciliationData>>;
 const inputCls = "rounded border border-gray-300 px-2 py-1.5 text-sm";
+const fmt = (n: number) => n.toFixed(2);
 
 const STATUS_TONE = { open: "success", closed: "pending", reopened: "critical" } as const;
 const STATUS_LABEL = { open: "Open", closed: "Closed", reopened: "Reopened" } as const;
+
+const CHECKLIST_LABELS = ["Draft sales invoices not yet posted", "Draft purchase bills not yet posted", "Trial balance is not balanced", "Balance sheet does not balance (assets ≠ liabilities + equity)", "Items with negative stock on hand"];
 
 export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boolean }) {
   const router = useRouter();
@@ -22,6 +27,12 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [reopenTarget, setReopenTarget] = useState<string | null>(null);
   const [reopenReason, setReopenReason] = useState("");
+
+  const [reviewTarget, setReviewTarget] = useState<string | null>(null);
+  const [reviewData, setReviewData] = useState<Readiness | null>(null);
+  // null = not currently showing a reconciliation panel; "pending" = loading; "none" = loaded, but no
+  // later fiscal year exists yet to reconcile against; otherwise the loaded row data.
+  const [reconciliation, setReconciliation] = useState<Exclude<Reconciliation, null> | "pending" | "none" | null>(null);
 
   async function run(fn: () => Promise<unknown>, onOk?: () => void) {
     setBusy(true);
@@ -48,6 +59,49 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
         setEndDate("");
       }
     );
+  }
+
+  async function openReview(fiscalYearId: string) {
+    setReviewTarget(fiscalYearId);
+    setReviewData(null);
+    setReconciliation(null);
+    setMessage(null);
+    try {
+      setReviewData(await getYearEndReviewData(fiscalYearId));
+    } catch (e) {
+      setMessage({ tone: "error", text: e instanceof Error ? e.message : "Could not load year-end review" });
+      setReviewTarget(null);
+    }
+  }
+
+  async function confirmClose() {
+    if (!reviewTarget) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await closeFiscalYear(reviewTarget);
+      setReconciliation(result.reconciliation ?? "none");
+      router.refresh();
+    } catch (e) {
+      setMessage({ tone: "error", text: e instanceof Error ? e.message : "Could not close fiscal year" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function viewReconciliation(fiscalYearId: string) {
+    setReviewTarget(fiscalYearId);
+    setReviewData(null);
+    setReconciliation("pending");
+    setMessage(null);
+    const result = await getReconciliationData(fiscalYearId);
+    setReconciliation(result ?? "none");
+  }
+
+  function closeReviewPanel() {
+    setReviewTarget(null);
+    setReviewData(null);
+    setReconciliation(null);
   }
 
   async function submitReopen(e: React.FormEvent) {
@@ -89,10 +143,15 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
                   <StatusPill tone={STATUS_TONE[fy.status]}>{STATUS_LABEL[fy.status]}</StatusPill>
                   {fy.status === "reopened" && fy.reopenReason && <div className="mt-1 text-xs text-gray-500">{fy.reopenReason}</div>}
                 </td>
-                <td className="px-4 py-2 text-right whitespace-nowrap">
+                <td className="px-4 py-2 text-right whitespace-nowrap space-x-3">
                   {fy.status !== "closed" && (
-                    <button type="button" disabled={busy} onClick={() => run(() => closeFiscalYear(fy.id))} className="text-xs text-gray-600 hover:underline disabled:opacity-50">
+                    <button type="button" disabled={busy} onClick={() => openReview(fy.id)} className="text-xs text-gray-600 hover:underline disabled:opacity-50">
                       Close
+                    </button>
+                  )}
+                  {fy.status === "closed" && (
+                    <button type="button" disabled={busy} onClick={() => viewReconciliation(fy.id)} className="text-xs text-gray-600 hover:underline disabled:opacity-50">
+                      Opening Balance Check
                     </button>
                   )}
                   {fy.status === "closed" && isAdmin && (
@@ -113,6 +172,118 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
           </tbody>
         </table>
       </div>
+
+      {reviewTarget && reviewData && !reconciliation && (
+        <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-900">Year-End Closing — {reviewData.fiscalYear.code}</h3>
+
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Closing checklist</p>
+            <ul className="space-y-1 text-sm">
+              {CHECKLIST_LABELS.map((label) => {
+                const issue = reviewData.issues.find((i) => i.label === label);
+                return (
+                  <li key={label} className={issue ? "text-red-600" : "text-green-700"}>
+                    {issue ? `⚠ ${issue.label} (${issue.count})` : `✓ ${label.replace("not yet posted", "posted").replace("is not balanced", "balanced").replace("does not balance (assets ≠ liabilities + equity)", "balances").replace("on hand", "— none on hand")}`}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Financial review</p>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-t border-gray-100">
+                  <td className="py-1 text-gray-600">Total Income</td>
+                  <td className="py-1 text-right">{fmt(reviewData.profitAndLoss.totalIncome)}</td>
+                </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="py-1 text-gray-600">Total Expenses</td>
+                  <td className="py-1 text-right">{fmt(reviewData.profitAndLoss.totalExpenses)}</td>
+                </tr>
+                <tr className="border-t border-gray-100 font-medium">
+                  <td className="py-1">Net Profit</td>
+                  <td className="py-1 text-right">{fmt(reviewData.profitAndLoss.netProfit)}</td>
+                </tr>
+                <tr className="border-t border-gray-200">
+                  <td className="py-1 text-gray-600">Total Assets</td>
+                  <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalAssets)}</td>
+                </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="py-1 text-gray-600">Total Liabilities</td>
+                  <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalLiabilities)}</td>
+                </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="py-1 text-gray-600">Total Equity</td>
+                  <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalEquity)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {!reviewData.canClose ? (
+            <p className="text-sm text-red-600">Cannot close fiscal year. {reviewData.issues.length} issue{reviewData.issues.length === 1 ? "" : "s"} require attention above.</p>
+          ) : (
+            <p className="text-sm text-gray-500">Closing this fiscal year will prevent normal posting into it and it will remain closed until an administrator reopens it.</p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy || !reviewData.canClose}
+              onClick={confirmClose}
+              className="rounded bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-1.5 disabled:opacity-50"
+            >
+              {busy ? "Closing..." : "Close Fiscal Year"}
+            </button>
+            <button type="button" onClick={closeReviewPanel} className="text-sm text-gray-600 hover:underline">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {reconciliation === "pending" && <p className="text-sm text-gray-500">Loading…</p>}
+
+      {reconciliation === "none" && (
+        <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-2">
+          <p className="text-sm text-gray-500">No later fiscal year has been created yet — nothing to reconcile against.</p>
+          <button type="button" onClick={closeReviewPanel} className="text-sm text-gray-600 hover:underline">
+            Close
+          </button>
+        </div>
+      )}
+
+      {reconciliation && reconciliation !== "pending" && reconciliation !== "none" && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">Opening Balance Verification</h3>
+          <table className="w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr>
+                <th className="py-1 font-medium">Account</th>
+                <th className="py-1 font-medium text-right">Previous Closing</th>
+                <th className="py-1 font-medium text-right">Current Opening</th>
+                <th className="py-1 font-medium text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reconciliation.map((row) => (
+                <tr key={row.label} className="border-t border-green-100">
+                  <td className="py-1">{row.label}</td>
+                  <td className="py-1 text-right">{fmt(row.closingBalance)}</td>
+                  <td className="py-1 text-right">{fmt(row.openingBalance)}</td>
+                  <td className={`py-1 text-right ${row.matched ? "text-green-700" : "text-red-600"}`}>{row.matched ? "✓ Matched" : "⚠ Mismatch"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button type="button" onClick={closeReviewPanel} className="text-sm text-gray-600 hover:underline">
+            Close
+          </button>
+        </div>
+      )}
 
       {reopenTarget && (
         <form onSubmit={submitReopen} className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">

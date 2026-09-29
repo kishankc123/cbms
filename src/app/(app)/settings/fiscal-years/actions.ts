@@ -7,7 +7,20 @@ import { fiscalYears } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import { listFiscalYears, createFiscalYear, suggestNextFiscalYear } from "@/lib/fiscal";
+import { getYearEndReadiness, getOpeningBalanceReconciliation } from "@/lib/fiscal-closing";
 import { logAuditEvent } from "@/lib/audit";
+
+export async function getYearEndReviewData(fiscalYearId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "view")) throw new Error("Not permitted");
+  return getYearEndReadiness(session.tenantId, fiscalYearId);
+}
+
+export async function getReconciliationData(fiscalYearId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "view")) throw new Error("Not permitted");
+  return getOpeningBalanceReconciliation(session.tenantId, fiscalYearId);
+}
 
 export async function getFiscalYearsPageData() {
   const session = await requireTenantSession();
@@ -35,9 +48,26 @@ export async function closeFiscalYear(fiscalYearId: string) {
   if (!fy) throw new Error("Fiscal year not found");
   if (fy.status === "closed") throw new Error("This fiscal year is already closed");
 
+  // The wizard's Step 1 checklist is re-verified here, not just in the UI — a stale page (or a direct
+  // call) can't skip past unresolved drafts, an unbalanced trial balance, or negative stock.
+  const readiness = await getYearEndReadiness(session.tenantId, fiscalYearId);
+  if (!readiness.canClose) {
+    throw new Error(`Cannot close — ${readiness.issues.map((i) => `${i.label} (${i.count})`).join("; ")}`);
+  }
+
   await db.update(fiscalYears).set({ status: "closed", closedBy: session.userId, closedAt: new Date() }).where(eq(fiscalYears.id, fiscalYearId));
-  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "fiscal_year_closed", entityType: "fiscal_year", entityId: fiscalYearId, before: { status: fy.status }, after: { status: "closed" } });
+  await logAuditEvent({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    action: "fiscal_year_closed",
+    entityType: "fiscal_year",
+    entityId: fiscalYearId,
+    before: { status: fy.status },
+    after: { status: "closed", netProfit: readiness.profitAndLoss.netProfit, totalAssets: readiness.balanceSheet.totalAssets },
+  });
   revalidatePath("/settings/fiscal-years");
+
+  return { reconciliation: await getOpeningBalanceReconciliation(session.tenantId, fiscalYearId) };
 }
 
 // Admin-only, reason required — matching reopenPeriod (audit/actions.ts) and reopenReconciliation
