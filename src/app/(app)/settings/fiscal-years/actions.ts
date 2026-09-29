@@ -6,9 +6,10 @@ import { db } from "@/db";
 import { fiscalYears } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
-import { listFiscalYears, createFiscalYear, suggestNextFiscalYear } from "@/lib/fiscal";
+import { listFiscalYears, createFiscalYear, earliestSelectableFiscalYearStartYear } from "@/lib/fiscal";
 import { getYearEndReadiness, getOpeningBalanceReconciliation } from "@/lib/fiscal-closing";
 import { logAuditEvent } from "@/lib/audit";
+import { bsFiscalYearOf, todayIso } from "@/lib/calendar";
 
 export async function getYearEndReviewData(fiscalYearId: string) {
   const session = await requireTenantSession();
@@ -25,12 +26,13 @@ export async function getReconciliationData(fiscalYearId: string) {
 export async function getFiscalYearsPageData() {
   const session = await requireTenantSession();
   if (!can(session, "settings", "view")) throw new Error("Not permitted");
-  const years = await listFiscalYears(session.tenantId);
-  const suggestedNext = suggestNextFiscalYear(years[0]?.startDate ?? null);
-  return { years, suggestedNext };
+  const [years, floorStartYear] = await Promise.all([listFiscalYears(session.tenantId), earliestSelectableFiscalYearStartYear(session.tenantId)]);
+  // The BS year containing today — the natural default selection in the "add fiscal year" picker.
+  const currentStartYear = bsFiscalYearOf(todayIso())?.startYear ?? null;
+  return { years, floorStartYear, currentStartYear };
 }
 
-export async function addFiscalYear(input: { code: string; startDate: string; endDate: string }) {
+export async function addFiscalYear(input: { startYear: number }) {
   const session = await requireTenantSession();
   if (!can(session, "settings", "edit")) throw new Error("Not permitted");
   const created = await createFiscalYear(session.tenantId, input);

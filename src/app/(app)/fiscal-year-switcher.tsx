@@ -2,11 +2,24 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { setActiveFiscalYear } from "./fiscal-year-actions";
 
 type FY = { id: string; code: string; status: "open" | "closed" | "reopened" };
 
-export function FiscalYearSwitcher({ years, activeId, isAllTime }: { years: FY[]; activeId: string | null; isAllTime: boolean }) {
+export function FiscalYearSwitcher({
+  years,
+  activeId,
+  isAllTime,
+  suggestedCode,
+}: {
+  years: FY[];
+  activeId: string | null;
+  isAllTime: boolean;
+  /** The current fiscal year's code, computed but not yet added as a real row — set only when
+   * `activeId` is null and `isAllTime` is false (see (app)/layout.tsx). */
+  suggestedCode?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -29,7 +42,7 @@ export function FiscalYearSwitcher({ years, activeId, isAllTime }: { years: FY[]
     });
   }
 
-  const label = isAllTime ? "All Time" : (active?.code ?? "Fiscal Year");
+  const label = isAllTime ? "All Time" : (active?.code ?? suggestedCode ?? "Fiscal Year");
 
   return (
     <div ref={ref} className="relative">
@@ -48,6 +61,14 @@ export function FiscalYearSwitcher({ years, activeId, isAllTime }: { years: FY[]
       {open && (
         <div className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
           <p className="px-3 py-1 text-xs font-medium text-gray-500">Fiscal Year</p>
+          {years.length === 0 && suggestedCode && (
+            <div className="px-3 py-1.5">
+              <p className="text-sm text-gray-900">{suggestedCode} — not yet added</p>
+              <Link href="/settings/fiscal-years" className="text-xs text-[var(--color-primary)] hover:underline" onClick={() => setOpen(false)}>
+                Add it in Settings →
+              </Link>
+            </div>
+          )}
           {years.map((y) => (
             <button key={y.id} type="button" onClick={() => choose(y.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-50">
               <span className="w-3 text-sm text-[var(--color-primary)]">{y.id === activeId && !isAllTime ? "✓" : ""}</span>

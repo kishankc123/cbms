@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addFiscalYear, closeFiscalYear, reopenFiscalYear, getYearEndReviewData, getReconciliationData, type getFiscalYearsPageData } from "./actions";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
-import { DatePicker } from "@/components/calendar/date-picker";
+import { bsFiscalYearRange } from "@/lib/calendar";
 
 type Data = Awaited<ReturnType<typeof getFiscalYearsPageData>>;
 type Readiness = Awaited<ReturnType<typeof getYearEndReviewData>>;
@@ -20,9 +20,29 @@ const CHECKLIST_LABELS = ["Draft sales invoices not yet posted", "Draft purchase
 
 export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boolean }) {
   const router = useRouter();
-  const [code, setCode] = useState(data.suggestedNext?.code ?? "");
-  const [startDate, setStartDate] = useState(data.suggestedNext?.from ?? "");
-  const [endDate, setEndDate] = useState(data.suggestedNext?.to ?? "");
+
+  // Every selectable BS start year: from the registration-date floor (or 5 years back if none is on
+  // file yet) through one year ahead of today's fiscal year, minus whichever ones are already added.
+  // Dates are never typed — only which year, with its Shrawan 1 - Ashadh end boundaries computed here
+  // for preview and computed again (the only figures that are ever trusted) on the server.
+  const addedCodes = useMemo(() => new Set(data.years.map((fy) => fy.code)), [data.years]);
+  const yearOptions = useMemo(() => {
+    if (data.currentStartYear === null) return [];
+    const from = data.floorStartYear ?? data.currentStartYear - 5;
+    const to = data.currentStartYear + 1;
+    const opts: { startYear: number; code: string; from: string; to: string }[] = [];
+    for (let y = from; y <= to; y++) {
+      const fy = bsFiscalYearRange(y);
+      if (fy && !addedCodes.has(fy.label)) opts.push({ startYear: y, code: fy.label, from: fy.from, to: fy.to });
+    }
+    return opts;
+  }, [data.currentStartYear, data.floorStartYear, addedCodes]);
+
+  const [startYear, setStartYear] = useState<number | "">(() => {
+    // Default to the earliest not-yet-added year (fills in gaps first), else the soonest one.
+    return yearOptions[0]?.startYear ?? "";
+  });
+  const selected = yearOptions.find((o) => o.startYear === startYear) ?? null;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [reopenTarget, setReopenTarget] = useState<string | null>(null);
@@ -50,13 +70,13 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
+    if (startYear === "") return;
+    const addedCode = selected?.code ?? "";
     await run(
-      () => addFiscalYear({ code, startDate, endDate }),
+      () => addFiscalYear({ startYear }),
       () => {
-        setMessage({ tone: "ok", text: `Fiscal year ${code} added.` });
-        setCode("");
-        setStartDate("");
-        setEndDate("");
+        setMessage({ tone: "ok", text: `Fiscal year ${addedCode} added.` });
+        setStartYear("");
       }
     );
   }
@@ -305,24 +325,36 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
 
       <form onSubmit={add} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Add fiscal year</h3>
+        <p className="text-xs text-gray-500">
+          Nepal&apos;s fiscal year always runs Shrawan 1 – Ashadh end — pick which year; its dates are set automatically and can&apos;t be changed.
+        </p>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Code</label>
-            <input required value={code} onChange={(e) => setCode(e.target.value)} className={`${inputCls} w-28`} placeholder="2084/85" />
+            <label className="block text-xs text-gray-500 mb-1">Fiscal Year</label>
+            <select
+              required
+              value={startYear}
+              onChange={(e) => setStartYear(e.target.value ? Number(e.target.value) : "")}
+              className={`${inputCls} w-32`}
+            >
+              <option value="">Select…</option>
+              {yearOptions.map((o) => (
+                <option key={o.startYear} value={o.startYear}>
+                  {o.code}
+                </option>
+              ))}
+            </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Start date</label>
-            <DatePicker value={startDate} onChange={setStartDate} required />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">End date</label>
-            <DatePicker value={endDate} onChange={setEndDate} required />
-          </div>
-          <button type="submit" disabled={busy} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5 disabled:opacity-50">
+          {selected && (
+            <div className="text-xs text-gray-500">
+              <D value={selected.from} /> – <D value={selected.to} />
+            </div>
+          )}
+          <button type="submit" disabled={busy || !selected} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5 disabled:opacity-50">
             {busy ? "Adding..." : "Add"}
           </button>
         </div>
-        {data.suggestedNext && <p className="text-xs text-gray-500">Suggested next: {data.suggestedNext.code}, pre-filled above.</p>}
+        {yearOptions.length === 0 && <p className="text-xs text-gray-500">Every selectable fiscal year has already been added.</p>}
       </form>
 
       {message && <p className={`text-sm ${message.tone === "ok" ? "text-green-700" : "text-red-600"}`}>{message.text}</p>}

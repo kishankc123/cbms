@@ -49,51 +49,69 @@ export async function getFiscalYearById(tenantId: string, fiscalYearId: string):
   return row ?? null;
 }
 
+type TenantFiscalFields = {
+  countryCode: string;
+  calendarSystem: string;
+  fiscalYearStartDate: string | null;
+  fiscalYearEndDate: string | null;
+  fiscalYearLabel: string | null;
+};
+
 /**
- * The fiscal year containing today, auto-creating it if none is on record yet — the "automatic fiscal
- * year detection" the spec calls for. First tries the org's already-configured fiscal year (the legacy
- * single start/end pair on `tenants`, kept as a denormalized cache of "current" — see syncTenantFiscalYearCache),
- * then falls back to the calendar engine's own BS fiscal-year rule (Shrawan 1 – Ashadh end) for a BS
- * organization, or the plain AD calendar year otherwise. Never invents a year that doesn't contain today.
+ * What the current fiscal year WOULD be for this tenant, on `today` — a pure computation, never a
+ * database write. Nepal's statutory fiscal year is always Shrawan 1 – Ashadh end (in real AD dates,
+ * via the calendar engine's own BS<->AD table), regardless of whether the organization's own display
+ * calendar is set to AD or BS — `calendarSystem` only changes how dates are shown, never what period
+ * the fiscal year actually covers. Non-Nepal tenants (a country other than "NP") keep the older
+ * calendar-year-or-BS-if-set fallback, since nothing else in this app supports another country's
+ * fiscal-year rule yet.
  */
-export async function getCurrentFiscalYear(tenantId: string): Promise<FiscalYear> {
+export function computeFiscalYearRangeFor(tenant: TenantFiscalFields, today: string): DateRange & { code: string } {
+  // The cached start/end pair, when it's still current, is honored first — this reflects a fiscal
+  // year that was just added or changed immediately, without a second lookup.
+  if (tenant.fiscalYearStartDate && tenant.fiscalYearEndDate && tenant.fiscalYearStartDate <= today && today <= tenant.fiscalYearEndDate) {
+    return { from: tenant.fiscalYearStartDate, to: tenant.fiscalYearEndDate, code: tenant.fiscalYearLabel || tenant.fiscalYearStartDate.slice(0, 4) };
+  }
+  if (tenant.countryCode === "NP" || tenant.calendarSystem === "BS") {
+    const fy = bsFiscalYearOf(today);
+    if (fy) return { from: fy.from, to: fy.to, code: fy.label };
+  }
+  const y = yearRange("AD", today);
+  return { from: y.from, to: y.to, code: y.from.slice(0, 4) };
+}
+
+export type SuggestedFiscalYear = { suggested: true; code: string; startDate: string; endDate: string };
+
+/**
+ * The current fiscal year: a REAL row if one is already on record for today, else a computed
+ * SUGGESTION only. This never writes to the database — fiscal years are never auto-created; the
+ * user always explicitly adds one via Settings → Fiscal Years. Callers that need to tell the two
+ * apart check `"suggested" in fy`.
+ */
+export async function getCurrentFiscalYear(tenantId: string): Promise<FiscalYear | SuggestedFiscalYear> {
   const today = todayIso();
   const existing = await getFiscalYearByDate(tenantId, today);
   if (existing) return existing;
 
-  const [tenant] = await db.select({ calendarSystem: tenants.calendarSystem, startDate: tenants.fiscalYearStartDate, endDate: tenants.fiscalYearEndDate, label: tenants.fiscalYearLabel }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-
-  let range: (DateRange & { code: string }) | null = null;
-  if (tenant?.startDate && tenant.endDate && tenant.startDate <= today && today <= tenant.endDate) {
-    range = { from: tenant.startDate, to: tenant.endDate, code: tenant.label || `${tenant.startDate.slice(0, 4)}` };
-  } else if (tenant?.calendarSystem === "BS") {
-    const fy = bsFiscalYearOf(today);
-    if (fy) range = { from: fy.from, to: fy.to, code: fy.label };
-  }
-  if (!range) {
-    const y = yearRange("AD", today);
-    range = { from: y.from, to: y.to, code: y.from.slice(0, 4) };
-  }
-
-  const [created] = await db
-    .insert(fiscalYears)
-    .values({ tenantId, code: range.code, startDate: range.from, endDate: range.to, status: "open" })
-    .onConflictDoNothing()
-    .returning();
-  const fy = created ?? (await getFiscalYearByDate(tenantId, today));
-  if (!fy) throw new Error("Could not determine the current fiscal year");
-  await syncTenantFiscalYearCache(tenantId, fy);
-  return fy;
+  const [tenant] = await db
+    .select({ countryCode: tenants.countryCode, calendarSystem: tenants.calendarSystem, fiscalYearStartDate: tenants.fiscalYearStartDate, fiscalYearEndDate: tenants.fiscalYearEndDate, fiscalYearLabel: tenants.fiscalYearLabel })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  const range = computeFiscalYearRangeFor(tenant ?? { countryCode: "NP", calendarSystem: "AD", fiscalYearStartDate: null, fiscalYearEndDate: null, fiscalYearLabel: null }, today);
+  return { suggested: true, code: range.code, startDate: range.from, endDate: range.to };
 }
 
-/** Keeps `tenants.fiscalYearLabel/StartDate/EndDate` — read by older display call sites — in step with
- * whichever fiscal year is actually current, so nothing needs to be migrated off them individually. */
+/** Keeps `tenants.fiscalYearLabel/StartDate/EndDate` — read by older display call sites and by the
+ * compliance engine's own fiscal-year lookup — in step with whichever fiscal year is actually
+ * current, so nothing needs to be migrated off them individually. */
 async function syncTenantFiscalYearCache(tenantId: string, fy: Pick<FiscalYear, "code" | "startDate" | "endDate">) {
   await db.update(tenants).set({ fiscalYearLabel: fy.code, fiscalYearStartDate: fy.startDate, fiscalYearEndDate: fy.endDate }).where(eq(tenants.id, tenantId));
 }
 
-/** The organization's current fiscal year as real AD boundaries (independent of AD/BS display). */
-export async function getFiscalRange(tenantId: string): Promise<DateRange | null> {
+/** The organization's current fiscal year as real AD boundaries (independent of AD/BS display) — a
+ * real fiscal year's boundaries if one is on record, else the computed suggestion. Never null. */
+export async function getFiscalRange(tenantId: string): Promise<DateRange> {
   const fy = await getCurrentFiscalYear(tenantId);
   return { from: fy.startDate, to: fy.endDate };
 }
@@ -104,8 +122,8 @@ export function isFiscalYearOpen(fy: Pick<FiscalYear, "status">): boolean {
 
 /** Blocks posting/reversing into a closed fiscal year — the fiscal-year-level counterpart to
  * assertPeriodOpen (an arbitrary admin-defined period lock). A date with no fiscal year on record
- * yet is allowed through undecided rather than blocked, since getCurrentFiscalYear only auto-creates
- * a row for TODAY — a backdated date into an ungenerated past year isn't "closed," it's just unknown. */
+ * yet is allowed through undecided rather than blocked — fiscal years are never auto-created, so an
+ * ungenerated year isn't "closed," it's just not on record yet. */
 export async function assertFiscalYearOpen(tenantId: string, dateIso: string) {
   const fy = await getFiscalYearByDate(tenantId, dateIso);
   if (fy && fy.status === "closed") {
@@ -114,59 +132,66 @@ export async function assertFiscalYearOpen(tenantId: string, dateIso: string) {
 }
 
 /**
- * The fiscal_year_id to stamp on a journal entry being posted for `dateIso`. Auto-creates the current
- * fiscal year when the date is today and none exists yet (same self-healing behavior as
- * getCurrentFiscalYear), so an ordinary same-day transaction on a fresh tenant still gets one. Never
- * auto-creates a year for a backdated or future date on the fly — that stays null (unknown), the same
- * "don't invent a year nobody configured" rule assertFiscalYearOpen already follows.
+ * The fiscal_year_id to stamp on a journal entry being posted for `dateIso` — a REAL fiscal year
+ * already on record, or null. Never creates one on the fly, even for today's date: fiscal years are
+ * only ever created explicitly, via Settings → Fiscal Years. A transaction posted before the
+ * organization has added its current fiscal year simply carries no fiscal_year_id until it does.
  */
 export async function resolveFiscalYearId(tenantId: string, dateIso: string): Promise<string | null> {
   const fy = await getFiscalYearByDate(tenantId, dateIso);
-  if (fy) return fy.id;
-  if (dateIso === todayIso()) return (await getCurrentFiscalYear(tenantId)).id;
-  return null;
+  return fy ? fy.id : null;
 }
 
-const round = (n: number) => Math.round(n);
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart <= bEnd && bStart <= aEnd;
 
-/** Adds a new fiscal year row — the org's next year, or a past one being backfilled. Rejects a date
- * range that overlaps one already on record, so a date always maps to exactly one fiscal year. */
-export async function createFiscalYear(tenantId: string, input: { code: string; startDate: string; endDate: string }) {
-  if (!input.code.trim()) throw new Error("Fiscal year code is required");
-  if (input.startDate > input.endDate) throw new Error("Start date must be before end date");
+/** The earliest BS fiscal-year start year this tenant may add — the year the company's registration
+ * date (Compliance → Company Details) falls into, or null if no registration date is on file yet
+ * (no floor until then, so a brand-new organization isn't blocked from adding its current year). */
+export async function earliestSelectableFiscalYearStartYear(tenantId: string): Promise<number | null> {
+  const [tenant] = await db.select({ registrationDate: tenants.registrationDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  if (!tenant?.registrationDate) return null;
+  return bsFiscalYearOf(tenant.registrationDate)?.startYear ?? null;
+}
 
-  const existing = await listFiscalYears(tenantId);
-  if (existing.some((fy) => overlaps(fy.startDate, fy.endDate, input.startDate, input.endDate))) {
-    throw new Error("This date range overlaps a fiscal year already on record");
+/**
+ * Adds a Nepal fiscal year (Shrawan 1 – Ashadh end) by its BS start year — dates and code are always
+ * COMPUTED, never supplied by the caller, so every fiscal year in the system has exactly the same
+ * boundaries as everyone else's; there is no way to type an arbitrary date range. Rejects a year
+ * before the company's registration date, or one that overlaps a fiscal year already on record.
+ */
+export async function createFiscalYear(tenantId: string, input: { startYear: number }) {
+  const fy = bsFiscalYearRange(input.startYear);
+  if (!fy) throw new Error("Enter a valid fiscal year");
+
+  const floor = await earliestSelectableFiscalYearStartYear(tenantId);
+  if (floor !== null && input.startYear < floor) {
+    const floorLabel = bsFiscalYearRange(floor)?.label ?? floor;
+    throw new Error(`This organization's registration date falls in fiscal year ${floorLabel} — an earlier fiscal year can't be added`);
   }
 
-  const [created] = await db.insert(fiscalYears).values({ tenantId, code: input.code.trim(), startDate: input.startDate, endDate: input.endDate, status: "open" }).returning();
+  const existing = await listFiscalYears(tenantId);
+  if (existing.some((e) => overlaps(e.startDate, e.endDate, fy.from, fy.to))) {
+    throw new Error(`Fiscal year ${fy.label} has already been added`);
+  }
+
+  const [created] = await db.insert(fiscalYears).values({ tenantId, code: fy.label, startDate: fy.from, endDate: fy.to, status: "open" }).returning();
   const today = todayIso();
   if (created.startDate <= today && today <= created.endDate) await syncTenantFiscalYearCache(tenantId, created);
   return created;
-}
-
-/** The next Nepal BS fiscal year after the most recent one on record (or after today, if none exist) —
- * a suggested starting point for "add the next fiscal year," not something the user has to compute by hand. */
-export function suggestNextFiscalYear(lastStartDate: string | null): (DateRange & { code: string }) | null {
-  const startYear = lastStartDate ? Number(bsFiscalYearOf(lastStartDate)?.startYear ?? NaN) + 1 : bsFiscalYearOf(todayIso())?.startYear;
-  if (startYear === undefined || Number.isNaN(startYear)) return null;
-  const fy = bsFiscalYearRange(round(startYear));
-  return fy ? { from: fy.from, to: fy.to, code: fy.label } : null;
 }
 
 // ---------- Global fiscal-year context (the sidebar switcher) ----------
 
 export const activeFiscalYearCookieName = (tenantId: string) => `activeFY_${tenantId}`;
 
-export type ActiveFiscalYear = FiscalYear | { allTime: true };
+export type ActiveFiscalYear = FiscalYear | SuggestedFiscalYear | { allTime: true };
 
 /**
  * The fiscal year the user has explicitly picked in the sidebar switcher for THIS organization, if any
- * and still valid, else "All Time," else the tenant's current fiscal year — the default accounting
- * context every page can read instead of assuming "today's fiscal year." Scoped per tenant (not one
- * global cookie) since a user can be active in a different organization with a different fiscal year.
+ * and still valid, else "All Time," else the tenant's current fiscal year (real if on record, else a
+ * computed suggestion — see getCurrentFiscalYear) — the default accounting context every page can read
+ * instead of assuming "today's fiscal year." Scoped per tenant (not one global cookie) since a user can
+ * be active in a different organization with a different fiscal year.
  */
 export async function getActiveFiscalYear(tenantId: string): Promise<ActiveFiscalYear> {
   const store = await cookies();

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { complianceCountries, complianceObligations, complianceRequirementTemplates, tenants } from "@/db/schema";
 import { todayIso, type CalendarSystem, type DateRange, type IsoDate } from "@/lib/calendar";
+import { computeFiscalYearRangeFor } from "@/lib/fiscal";
 import { isApplicable } from "./applicability";
 import { eventPeriod } from "./events";
 import { assertValidDueRule, computeDueDate, periodsFor, type DueRule } from "./due-rules";
@@ -59,7 +60,14 @@ export async function generateObligations(
 
   const orgCalendar: CalendarSystem = tenant.calendarSystem === "BS" ? "BS" : "AD";
   const statutory: CalendarSystem = country.statutoryCalendar === "BS" ? "BS" : "AD";
-  const fiscal: DateRange | null = tenant.fiscalYearStartDate && tenant.fiscalYearEndDate ? { from: tenant.fiscalYearStartDate, to: tenant.fiscalYearEndDate } : null;
+  // Always a real range — Nepal's own statutory fiscal year (Shrawan-Ashadh) when the cached
+  // start/end pair isn't current, the same computation src/lib/fiscal.ts uses for the dashboard and
+  // reports, so a quarter's or fiscal year's due date never drifts from what the rest of the app
+  // considers "the current fiscal year."
+  const fiscal: DateRange = computeFiscalYearRangeFor(
+    { countryCode: tenant.countryCode, calendarSystem: tenant.calendarSystem, fiscalYearStartDate: tenant.fiscalYearStartDate, fiscalYearEndDate: tenant.fiscalYearEndDate, fiscalYearLabel: tenant.fiscalYearLabel },
+    today
+  );
 
   const facts = await loadFacts(tenant);
   const templates = (await db.select().from(complianceRequirementTemplates).where(eq(complianceRequirementTemplates.countryCode, country.code))).filter(

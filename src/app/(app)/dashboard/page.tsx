@@ -96,15 +96,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <D value={from} /> – <D value={to} />
           </p>
         </div>
-        {"code" in activeFiscalYear ? (
+        {"allTime" in activeFiscalYear ? (
+          <StatusPill tone="pending">All Time</StatusPill>
+        ) : "suggested" in activeFiscalYear ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+            FY {activeFiscalYear.code}
+            <StatusPill tone="action">Not yet added</StatusPill>
+            <Link href="/settings/fiscal-years" className="text-xs text-[var(--color-primary)] hover:underline">
+              Add it →
+            </Link>
+          </p>
+        ) : (
           <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
             FY {activeFiscalYear.code}
             <StatusPill tone={isFiscalYearOpen(activeFiscalYear) ? "success" : "pending"}>
               {activeFiscalYear.status === "open" ? "Open" : activeFiscalYear.status === "reopened" ? "Reopened" : "Closed"}
             </StatusPill>
           </p>
-        ) : (
-          <StatusPill tone="pending">All Time</StatusPill>
         )}
       </div>
 

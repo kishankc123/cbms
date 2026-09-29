@@ -163,7 +163,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: roleLabel(o.role) }))}
             activeId={session.tenantId}
           />
-          <FiscalYearSwitcher years={fiscalYearsList} activeId={"allTime" in activeFiscalYear ? null : activeFiscalYear.id} isAllTime={"allTime" in activeFiscalYear} />
+          <FiscalYearSwitcher
+            years={fiscalYearsList}
+            activeId={"id" in activeFiscalYear ? activeFiscalYear.id : null}
+            isAllTime={"allTime" in activeFiscalYear}
+            suggestedCode={"suggested" in activeFiscalYear ? activeFiscalYear.code : null}
+          />
         </div>
         <AppNav items={NAV} />
         <div className="px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between gap-2">
