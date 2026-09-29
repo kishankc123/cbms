@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { slowMovingStock } from "@/lib/inventory/slow-moving";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getReportDefaultAsOf } from "@/lib/fiscal";
 import { SlowMovingStockView } from "./slow-moving-stock-view";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -13,7 +13,7 @@ export default async function SlowMovingStockPage({ searchParams }: { searchPara
   if (!can(session, "inventory", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const asOf = asIso(sp.to) ?? presetRange("this_month", session.calendar, todayIso(), fiscal).to;
+  const asOf = asIso(sp.to) ?? (await getReportDefaultAsOf(session.tenantId));
   const days = typeof sp.days === "string" ? Number(sp.days) : NaN;
   const thresholdDays = THRESHOLDS.includes(days) ? days : 90;
 

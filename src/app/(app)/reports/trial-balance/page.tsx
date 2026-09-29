@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { trialBalance } from "@/lib/ledger/reports";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getReportDefaultAsOf } from "@/lib/fiscal";
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -15,7 +15,7 @@ export default async function TrialBalancePage({ searchParams }: { searchParams:
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const to = asIso(sp.to) ?? presetRange("this_month", session.calendar, todayIso(), fiscal).to;
+  const to = asIso(sp.to) ?? (await getReportDefaultAsOf(session.tenantId));
   const tb = await trialBalance(session.tenantId, new Date(to + "T00:00:00Z"));
 
   return (

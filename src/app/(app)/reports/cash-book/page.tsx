@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { cashBook } from "@/lib/ledger/reports";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { CashBookView } from "./cash-book-view";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -12,7 +12,8 @@ export default async function CashBookPage({ searchParams }: { searchParams: Pro
   if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const dflt = presetRange("this_month", session.calendar, todayIso(), fiscal);
+  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
+  const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;

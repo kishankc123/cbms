@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { transactionRegister } from "@/lib/ledger/reports";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange, getActiveFiscalYear, listFiscalYears } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getActiveFiscalYear, listFiscalYears, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { TransactionRegisterView } from "./transaction-register-view";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -18,7 +18,7 @@ export default async function TransactionRegisterPage({ searchParams }: { search
   // The sidebar's fiscal-year context sets the default range — pick a fiscal year there and every
   // report that reads it (this one, so far) opens already scoped to it, per the spec's "selecting a
   // fiscal year changes the default reporting context." An explicit ?from=/&to= in the URL still wins.
-  const dflt = isAllTime ? presetRange("all_time", session.calendar, todayIso()) : { from: activeFiscalYear.startDate, to: activeFiscalYear.endDate };
+  const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;

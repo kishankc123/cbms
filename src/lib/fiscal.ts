@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { and, desc, eq, lte, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants, fiscalYears, type FiscalYearStatus } from "@/db/schema";
-import { bsFiscalYearOf, bsFiscalYearRange, yearRange, todayIso } from "@/lib/calendar";
-import type { DateRange } from "@/lib/calendar";
+import { bsFiscalYearOf, bsFiscalYearRange, yearRange, todayIso, presetRange } from "@/lib/calendar";
+import type { DateRange, CalendarSystem } from "@/lib/calendar";
 
 const FISCAL_YEAR_COLUMNS = {
   id: fiscalYears.id,
@@ -177,4 +177,30 @@ export async function getActiveFiscalYear(tenantId: string): Promise<ActiveFisca
     if (fy) return fy;
   }
   return getCurrentFiscalYear(tenantId);
+}
+
+/** A period report's default range for the sidebar's active fiscal-year context — that fiscal year's
+ * own boundaries, or the calendar engine's All Time floor..today when "All Time" is picked. */
+export function fiscalYearDefaultRange(activeFiscalYear: ActiveFiscalYear, calendar: CalendarSystem): DateRange {
+  if ("allTime" in activeFiscalYear) return presetRange("all_time", calendar, todayIso());
+  return { from: activeFiscalYear.startDate, to: activeFiscalYear.endDate };
+}
+
+/** A point-in-time ("as of") report's default date for the active fiscal-year context — today, if today
+ * actually falls in the selected fiscal year (or All Time is selected), else that year's own end date,
+ * so picking a past, already-closed fiscal year shows its final position rather than a mismatched "today." */
+export function fiscalYearDefaultAsOf(activeFiscalYear: ActiveFiscalYear): string {
+  const today = todayIso();
+  if ("allTime" in activeFiscalYear) return today;
+  return activeFiscalYear.startDate <= today && today <= activeFiscalYear.endDate ? today : activeFiscalYear.endDate;
+}
+
+/** Convenience wrapper combining getActiveFiscalYear + fiscalYearDefaultRange for a report page's default. */
+export async function getReportDefaultRange(tenantId: string, calendar: CalendarSystem): Promise<DateRange> {
+  return fiscalYearDefaultRange(await getActiveFiscalYear(tenantId), calendar);
+}
+
+/** Convenience wrapper combining getActiveFiscalYear + fiscalYearDefaultAsOf for a report page's default. */
+export async function getReportDefaultAsOf(tenantId: string): Promise<string> {
+  return fiscalYearDefaultAsOf(await getActiveFiscalYear(tenantId));
 }

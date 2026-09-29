@@ -5,8 +5,8 @@ import { vendors } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { getSupplierLines } from "@/lib/ledger/supplier-balances";
 import { buildStatement } from "@/lib/ledger/party-ledger";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { SupplierStatementView } from "./supplier-statement-view";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -16,7 +16,8 @@ export default async function SupplierStatementPage({ searchParams }: { searchPa
   if (!can(session, "purchases", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const dflt = presetRange("this_fiscal_year", session.calendar, todayIso(), fiscal);
+  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
+  const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;

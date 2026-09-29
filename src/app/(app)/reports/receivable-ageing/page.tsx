@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { receivableAgeing } from "@/lib/ledger/receivable-ageing";
-import { presetRange, todayIso, validateADDate } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { validateADDate } from "@/lib/calendar";
+import { getFiscalRange, getReportDefaultAsOf } from "@/lib/fiscal";
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { ReceivableAgeingView } from "./receivable-ageing-view";
@@ -14,7 +14,7 @@ export default async function ReceivableAgeingPage({ searchParams }: { searchPar
   if (!can(session, "sales", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
-  const to = asIso(sp.to) ?? presetRange("this_month", session.calendar, todayIso(), fiscal).to;
+  const to = asIso(sp.to) ?? (await getReportDefaultAsOf(session.tenantId));
 
   const { rows, totals, asOf } = await receivableAgeing(session.tenantId, new Date(to + "T00:00:00Z"));
 
