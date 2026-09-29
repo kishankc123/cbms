@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
@@ -8,6 +7,7 @@ import { buildStatement } from "@/lib/ledger/party-ledger";
 import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { SupplierStatementView } from "./supplier-statement-view";
+import { BackButton } from "@/components/ui/back-button";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -41,11 +41,9 @@ export default async function SupplierStatementPage({ searchParams }: { searchPa
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Supplier Statement</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Supplier Statement</h1>
       </div>
       <SupplierStatementView vendors={list} vendorId={vendorId} from={from} to={to} fiscal={fiscal} statement={statement} />
     </div>

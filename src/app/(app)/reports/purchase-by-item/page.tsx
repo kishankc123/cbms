@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { purchaseByItem } from "@/lib/ledger/purchase-by-item";
 import { validateADDate } from "@/lib/calendar";
@@ -6,6 +5,7 @@ import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/l
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { PurchaseByItemView } from "./purchase-by-item-view";
+import { BackButton } from "@/components/ui/back-button";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -24,11 +24,9 @@ export default async function PurchaseByItemPage({ searchParams }: { searchParam
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Purchase by Item</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Purchase by Item</h1>
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
       <p className="text-sm text-gray-500">

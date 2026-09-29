@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { transactionRegister } from "@/lib/ledger/reports";
 import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, listFiscalYears, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { TransactionRegisterView } from "./transaction-register-view";
+import { BackButton } from "@/components/ui/back-button";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const asStr = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
@@ -36,11 +36,9 @@ export default async function TransactionRegisterPage({ searchParams }: { search
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Transaction Register</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Transaction Register</h1>
       </div>
       <TransactionRegisterView entries={entriesWithFy} truncated={truncated} from={from} to={to} fiscal={fiscal} sourceType={sourceType} search={search} showFiscalYearColumn={isAllTime} />
     </div>

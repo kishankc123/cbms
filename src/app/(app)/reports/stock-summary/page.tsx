@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { getInventoryValuation } from "@/lib/inventory/valuation";
 import { StatusPill } from "@/components/ui/status-pill";
+import { BackButton } from "@/components/ui/back-button";
 
 const fmt = (n: number) => n.toFixed(2);
 const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -14,11 +14,9 @@ export default async function StockSummaryPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Stock Summary</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Stock Summary</h1>
       </div>
       <p className="text-sm text-gray-500">{active.length} active tracked item{active.length === 1 ? "" : "s"}, as of today</p>
 

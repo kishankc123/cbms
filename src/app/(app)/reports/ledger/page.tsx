@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
@@ -7,6 +6,7 @@ import { generalLedger } from "@/lib/ledger/reports";
 import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { LedgerView } from "./ledger-view";
+import { BackButton } from "@/components/ui/back-button";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -34,11 +34,9 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Ledger</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Ledger</h1>
       </div>
       <LedgerView
         accounts={list}

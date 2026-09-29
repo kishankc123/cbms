@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { salesSummary } from "@/lib/ledger/sales-summary";
 import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
+import { BackButton } from "@/components/ui/back-button";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const fmt = (n: number) => n.toFixed(2);
@@ -24,11 +24,9 @@ export default async function SalesSummaryPage({ searchParams }: { searchParams:
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Sales Summary</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Sales Summary</h1>
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
 

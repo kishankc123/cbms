@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { requireTenantSession, can } from "@/lib/session";
 import { bankReconciliationReport } from "@/lib/banking/reconciliation-report";
 import { BankReconciliationReportView } from "./bank-reconciliation-report-view";
+import { BackButton } from "@/components/ui/back-button";
 
 export default async function BankReconciliationReportPage() {
   const session = await requireTenantSession();
@@ -10,11 +10,9 @@ export default async function BankReconciliationReportPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Bank Reconciliation Report</h1>
-        <Link href="/reports" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Reports
-        </Link>
+      <div className="flex items-center gap-3">
+        <BackButton href="/reports" label="Back to Reports" />
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Bank Reconciliation Report</h1>
       </div>
       <BankReconciliationReportView rows={rows} />
     </div>
