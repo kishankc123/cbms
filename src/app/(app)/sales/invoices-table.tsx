@@ -1,9 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { voidInvoice, getInvoiceAdvance, applyInvoiceAdvance, removeInvoiceAdvance } from "./actions";
 import { ApplyAdvanceModal } from "@/components/apply-advance-modal";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
+import { RowMenu } from "@/components/row-menu";
+import { ConfirmDialog } from "./confirm-dialog";
+import { useProblem } from "@/components/problem-dialog";
 
 import { D } from "@/components/calendar/date-text";
 import { todayIso } from "@/lib/calendar";
@@ -51,7 +55,24 @@ export function InvoicesTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [advanceId, setAdvanceId] = useState<string | null>(null);
+  const [voidingInvoice, setVoidingInvoice] = useState<Invoice | null>(null);
+  const router = useRouter();
+  const { report, dialog } = useProblem();
   const today = todayIso();
+
+  async function confirmVoid() {
+    const invoice = voidingInvoice;
+    setVoidingInvoice(null);
+    if (!invoice) return;
+    const fd = new FormData();
+    fd.set("invoiceId", invoice.id);
+    try {
+      await voidInvoice(fd);
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not void the invoice", null);
+    }
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -168,31 +189,18 @@ export function InvoicesTable({
                 {Number(inv.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
               <td className={`px-4 py-2 capitalize ${shownStatus(inv, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(inv, today).replace("_", " ")}</td>
-              <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
-                {(inv.status === "sent" || inv.status === "partially_paid" || inv.status === "overdue") && (
-                  <button type="button" onClick={() => setAdvanceId(inv.id)} className="text-xs text-gray-600 hover:underline">
-                    Apply advance
-                  </button>
-                )}
-                {inv.status !== "void" && (
-                  <button type="button" onClick={() => setEditingId(inv.id)} className="text-xs text-gray-600 hover:underline">
-                    Edit
-                  </button>
-                )}
-                {inv.status !== "void" && (
-                  <form
-                    action={voidInvoice}
-                    className="inline"
-                    onSubmit={(e) => {
-                      if (!confirm(`Void invoice ${inv.invoiceNumber}?`)) e.preventDefault();
-                    }}
-                  >
-                    <input type="hidden" name="invoiceId" value={inv.id} />
-                    <button type="submit" className="text-red-600 hover:underline text-xs">
-                      Void
-                    </button>
-                  </form>
-                )}
+              <td className="px-4 py-2 text-right whitespace-nowrap">
+                <RowMenu
+                  items={[
+                    {
+                      label: "Apply advance",
+                      onClick: () => setAdvanceId(inv.id),
+                      hidden: !(inv.status === "sent" || inv.status === "partially_paid" || inv.status === "overdue"),
+                    },
+                    { label: "Edit", onClick: () => setEditingId(inv.id), hidden: inv.status === "void" },
+                    { label: "Void", onClick: () => setVoidingInvoice(inv), danger: true, hidden: inv.status === "void" },
+                  ]}
+                />
               </td>
             </tr>
           ))}
@@ -228,6 +236,14 @@ export function InvoicesTable({
           onClose={() => setAdvanceId(null)}
         />
       )}
+      {voidingInvoice && (
+        <ConfirmDialog
+          message={`Void invoice ${voidingInvoice.invoiceNumber}?`}
+          onYes={confirmVoid}
+          onNo={() => setVoidingInvoice(null)}
+        />
+      )}
+      {dialog}
     </>
   );
 }

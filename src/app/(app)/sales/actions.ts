@@ -225,6 +225,7 @@ export type BatchInvoiceRow = {
   customerId: string;
   grossAmount: number;
   discountAmount: number;
+  billType?: SalesBillType;
   payments: BatchPaymentLine[];
 };
 
@@ -290,11 +291,14 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   for (const date of new Set(validRows.map((r) => r.invoiceDate))) vatRateByDate.set(date, await salesVatRate(session.tenantId, date));
 
   const computedRows = validRows.map((r) => {
+    const billType: SalesBillType = r.billType ?? "taxable";
     const subtotal = round2(r.grossAmount - r.discountAmount);
-    const taxAmount = round2(subtotal * (vatRateByDate.get(r.invoiceDate)! / 100));
+    // Zero-rated bills never carry VAT, regardless of the rate that applied on the row's own date.
+    const vatRate = billType === "taxable" ? vatRateByDate.get(r.invoiceDate)! : 0;
+    const taxAmount = round2(subtotal * (vatRate / 100));
     const total = round2(subtotal + taxAmount);
     const paid = round2(r.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
-    return { ...r, subtotal, taxAmount, total, paid };
+    return { ...r, billType, subtotal, taxAmount, total, paid };
   });
 
   // A customer only has to be picked when a row's own recorded payment
@@ -353,6 +357,7 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
         grossAmount: row.grossAmount.toFixed(2),
         discountAmount: row.discountAmount.toFixed(2),
         subtotal: subtotal.toFixed(2),
+        taxTreatment: row.billType,
         taxAmount: taxAmount.toFixed(2),
         total: total.toFixed(2),
         amountPaid: paid.toFixed(2),

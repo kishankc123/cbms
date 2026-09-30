@@ -25,6 +25,7 @@ export function SalesEntryTabs({
   cashBankAccounts,
   customerBalances,
   invoiceNumbering,
+  nextInvoiceNumber,
 }: {
   customers: Customer[];
   items: Item[];
@@ -32,6 +33,7 @@ export function SalesEntryTabs({
   cashBankAccounts: CashBankGroup[];
   customerBalances: Record<string, number>;
   invoiceNumbering: InvoiceNumbering;
+  nextInvoiceNumber: string;
 }) {
   const [tab, setTab] = useState<TabId>("single");
   const [dirty, setDirty] = useState(false);
@@ -78,6 +80,7 @@ export function SalesEntryTabs({
           cashBankAccounts={cashBankAccounts}
           customerBalances={customerBalances}
           vatRate={vatRate}
+          nextInvoiceNumber={nextInvoiceNumber}
           onDirtyChange={setDirty}
         />
       )}

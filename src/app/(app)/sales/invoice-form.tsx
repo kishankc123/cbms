@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect } from "@/components/quick-add/pickers";
-import { recordSalesBatch } from "./actions";
+import { recordSalesBatch, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
@@ -21,6 +21,7 @@ type Row = {
   customerId: string;
   grossAmount: string;
   discountAmount: string;
+  billType: SalesBillType;
   payments: PaymentLine[];
 };
 
@@ -28,13 +29,15 @@ const MIN_ROWS = 7;
 const DATE_FILL_AHEAD = 5;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
-const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", payments: [] });
+const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", billType: "taxable", payments: [] });
 
 function computeRow(row: Row, vatRate: number) {
   const gross = parseFloat(row.grossAmount) || 0;
   const discount = parseFloat(row.discountAmount) || 0;
   const taxable = Math.max(gross - discount, 0);
-  const vat = taxable * (vatRate / 100);
+  // Zero-rated bills never carry VAT, regardless of the tenant's registered rate.
+  const effectiveVatRate = row.billType === "taxable" ? vatRate : 0;
+  const vat = taxable * (effectiveVatRate / 100);
   const total = taxable + vat;
   return { gross, discount, taxable, vat, total };
 }
@@ -112,6 +115,10 @@ export function InvoiceForm({
     });
   }
 
+  function updateRowBillType(i: number, value: SalesBillType) {
+    setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, billType: value } : row)));
+  }
+
   function handleDeleteRow(i: number) {
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
     setContextMenu(null);
@@ -163,6 +170,7 @@ export function InvoiceForm({
           customerId: r.customerId,
           grossAmount: parseFloat(r.grossAmount) || 0,
           discountAmount: parseFloat(r.discountAmount) || 0,
+          billType: r.billType,
           payments: r.payments,
         })),
       });
@@ -204,6 +212,7 @@ export function InvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Invoice No.</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Date</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Customer</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Bill Type</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross Amount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
@@ -245,6 +254,16 @@ export function InvoiceForm({
                         onAdded={addCustomer}
                         className={`w-40 ${cellInputCls}`}
                       />
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <select
+                        value={row.billType}
+                        onChange={(e) => updateRowBillType(i, e.target.value as SalesBillType)}
+                        className={`mx-auto block w-28 ${cellInputCls}`}
+                      >
+                        <option value="taxable">Taxable</option>
+                        <option value="zero_rated">Zero-rated</option>
+                      </select>
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input

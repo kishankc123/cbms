@@ -79,6 +79,7 @@ export function SingleInvoiceForm({
   customerBalances,
   vatRate,
   initial,
+  nextInvoiceNumber,
   onDone,
   onDirtyChange,
 }: {
@@ -88,6 +89,7 @@ export function SingleInvoiceForm({
   customerBalances: Record<string, number>;
   vatRate: number;
   initial?: InitialSingleInvoice;
+  nextInvoiceNumber?: string;
   onDone?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
@@ -97,7 +99,10 @@ export function SingleInvoiceForm({
   const [items, addItem] = useWithAdded(itemsProp);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? today());
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
-  const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
+  // Holds only a hand-typed override; while empty and untouched, the field displays (and submits)
+  // nextInvoiceNumber directly, so a fresh value from router.refresh() after a save is picked up for free.
+  const [invoiceNumberOverride, setInvoiceNumberOverride] = useState<string | null>(null);
+  const invoiceNumber = initial ? (invoiceNumberOverride ?? initial.invoiceNumber) : (invoiceNumberOverride ?? nextInvoiceNumber ?? "");
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
   const [billType, setBillType] = useState<SalesBillType>(initial?.billType ?? "taxable");
   const [lines, setLines] = useState<LineRow[]>(() =>
@@ -129,8 +134,9 @@ export function SingleInvoiceForm({
 
   useEffect(() => {
     if (!onDirtyChange) return;
+    // The auto-filled invoice number alone shouldn't count as "touched" — only a hand-typed override does.
     const dirty = Boolean(
-      invoiceNumber.trim() ||
+      invoiceNumberOverride ||
         customerId ||
         payments.length > 0 ||
         lines.some(isLineTouched) ||
@@ -138,7 +144,7 @@ export function SingleInvoiceForm({
     );
     onDirtyChange(dirty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceNumber, customerId, payments, lines]);
+  }, [invoiceNumberOverride, customerId, payments, lines]);
 
   function updateLine(i: number, field: keyof LineRow, value: string, known?: Item) {
     setLines((prev) =>
@@ -221,7 +227,7 @@ export function SingleInvoiceForm({
         onDone();
       } else {
         setInvoiceDate(today());
-        setInvoiceNumber("");
+        setInvoiceNumberOverride(null);
         setDueDate("");
         setCustomerId("");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
@@ -257,7 +263,7 @@ export function SingleInvoiceForm({
             <input
               value={invoiceNumber}
               onChange={(e) => {
-                setInvoiceNumber(e.target.value);
+                setInvoiceNumberOverride(e.target.value);
                 if (fieldErrors.invoiceNumber) setFieldErrors((p) => ({ ...p, invoiceNumber: undefined }));
               }}
               className={fieldErrors.invoiceNumber ? inputErrCls : inputCls}
