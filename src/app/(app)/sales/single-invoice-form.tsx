@@ -341,7 +341,7 @@ export function SingleInvoiceForm({
                           addItem(item);
                           updateLine(i, "itemId", it.id, item);
                         }}
-                        className="w-48 rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
+                        className="w-[250px] rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
