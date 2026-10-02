@@ -18,6 +18,7 @@ import {
 } from "@/lib/dashboard/aggregates";
 import { LazyRevenueExpenseChart } from "./revenue-expense-chart-lazy";
 import { ExpenseTracker } from "./expense-tracker";
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const currency = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
