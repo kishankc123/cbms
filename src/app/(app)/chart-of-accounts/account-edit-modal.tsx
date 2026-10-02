@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { updateAccount } from "./actions";
+import { useProblem } from "@/components/problem-dialog";
 import { ACCOUNT_SUB_CATEGORIES, guessSubCategory } from "@/lib/ledger/account-sub-categories";
 
 type Initial = {
@@ -40,7 +41,8 @@ export function AccountEditModal({
         ? guessSubCategory(initial.category, initial.subCategory)
         : "";
   const [subCategory, setSubCategory] = useState(matched);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
 
   function close() {
@@ -60,11 +62,10 @@ export function AccountEditModal({
 
   async function save() {
     setBusy(true);
-    setError(null);
     try {
       const r = await updateAccount({ id: initial.id, name, isActive, ...(showSubCategory ? { subCategory } : {}) });
       if (!r.ok) {
-        setError(r.error);
+        report(r.error, /categor|type/i.test(r.error) ? '[data-field="editCategory"]' : '[data-field="editName"]');
         return;
       }
       close();
@@ -95,13 +96,13 @@ export function AccountEditModal({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input data-field="editName" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
 
               {showSubCategory && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Category</label>
-                  <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                  <select data-field="editCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
                     <option value="" disabled>
                       Select category
                     </option>
@@ -120,7 +121,7 @@ export function AccountEditModal({
               </label>
             </div>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {dialog}
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => close()} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">

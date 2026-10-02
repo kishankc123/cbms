@@ -16,6 +16,7 @@ import type { ObligationStatus } from "@/lib/compliance/engine/status";
 import { ObligationStatusPill } from "@/components/compliance/status-pill";
 import { D, PeriodLabel } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
 
 type Detail = Awaited<ReturnType<typeof getTaxObligationDetail>>;
@@ -35,7 +36,8 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
   const [form, setForm] = useState<ObligationPatch | null>(null);
   const [panel, setPanel] = useState<"none" | "payment" | "charge">("none");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
 
   const load = useCallback(async () => {
     try {
@@ -198,7 +200,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                 )}
               </div>
             )}
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {dialog}
 
             {panel === "payment" && options && (
               <PaymentPanel

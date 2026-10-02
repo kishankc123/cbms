@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { voidInterTransfer } from "../actions";
 
@@ -9,7 +10,8 @@ export function VoidButton({ transferId, transferNumber }: { transferId: string;
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
 
   async function handleVoid() {
     if (!reason.trim()) return setError("A void reason is required.");
@@ -38,7 +40,7 @@ export function VoidButton({ transferId, transferNumber }: { transferId: string;
             <h3 className="text-sm font-semibold text-gray-900">Void transfer {transferNumber}</h3>
             <p className="text-xs text-gray-500">The money is moved back and the accounting entry is reversed.</p>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {dialog}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} disabled={busy} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
               <button type="button" onClick={handleVoid} disabled={busy} className="rounded bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 disabled:opacity-50">

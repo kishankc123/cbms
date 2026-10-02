@@ -24,7 +24,7 @@ export const recurringExpenses = pgTable("recurring_expenses", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   expenseName: text("expense_name").notNull(),
-  // Same Fixed/Variable expense account rule as one-off expenses — never Cost
+  // Same Direct/Indirect expense account rule as one-off expenses — never Cost
   // of Goods Sold (Purchases) or Salaries (Payroll).
   expenseAccountId: uuid("expense_account_id").notNull().references(() => accounts.id),
   vendorId: uuid("vendor_id").references(() => vendors.id),

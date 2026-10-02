@@ -7,6 +7,7 @@ import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { createPurchaseReturn } from "./actions";
 
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
@@ -44,6 +45,14 @@ function isLineTouched(line: LineRow) {
   return Boolean(line.itemId || line.description.trim() || line.rate || (parseFloat(line.quantity) || 0) > 0);
 }
 
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/closed period|date|inventory opening date/i, "#rt-date"],
+  [/note number|already used/i, '[data-field="noteNumber"]'],
+  [/supplier/i, '[data-field="party"]'],
+  [/item|line|stock|rate|quantity|invoice/i, '[data-field="firstRate"]'],
+];
+
 type FieldErrors = { noteNumber?: string; date?: string; vendorId?: string; items?: string };
 
 const inputCls =
@@ -76,7 +85,8 @@ export function PurchaseReturnForm({
   const [lines, setLines] = useState<LineRow[]>(() => Array.from({ length: MIN_LINES }, emptyLine));
   const [withVat, setWithVat] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, reportError, dialog } = useProblem();
   const [savedMessage, setSavedMessage] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -131,8 +141,16 @@ export function PurchaseReturnForm({
     if (!vendorId) errors.vendorId = "Please select a supplier.";
     if (!lines.some(isLineComplete)) errors.items = "Add at least one item line with a valid rate and quantity.";
     setFieldErrors(errors);
-    setSaveError(null);
-    if (Object.keys(errors).length > 0) return;
+    // The first problem, in the order it appears on the page.
+    const first: [keyof FieldErrors, string][] = [
+      ["date", "#rt-date"],
+      ["noteNumber", '[data-field="noteNumber"]'],
+      ["vendorId", '[data-field="party"]'],
+      ["items", '[data-field="firstRate"]'],
+    ];
+    for (const [key, target] of first) {
+      if (errors[key]) return report(errors[key]!, target);
+    }
 
     setSaving(true);
     try {
@@ -159,7 +177,7 @@ export function PurchaseReturnForm({
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      reportError(e, SERVER_RULES);
     } finally {
       setSaving(false);
     }
@@ -172,16 +190,16 @@ export function PurchaseReturnForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <DatePicker max={today()} value={noteDate} onChange={(v) => {
+            <DatePicker id="rt-date" max={today()} value={noteDate} onChange={(v) => {
                 setNoteDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
             {openingDateNotice}
-            {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Debit Note Number</label>
             <input
+              data-field="noteNumber"
               value={noteNumber}
               onChange={(e) => {
                 setNoteNumber(e.target.value);
@@ -189,10 +207,10 @@ export function PurchaseReturnForm({
               }}
               className={fieldErrors.noteNumber ? inputErrCls : inputCls}
             />
-            {fieldErrors.noteNumber && <p className="mt-1 text-xs text-red-600">{fieldErrors.noteNumber}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Supplier</label>
+            <div data-field="party" data-opens>
             <SupplierSelect
               value={vendorId}
               options={vendors}
@@ -203,7 +221,7 @@ export function PurchaseReturnForm({
               onAdded={addVendor}
               className={fieldErrors.vendorId ? inputErrCls : inputCls}
             />
-            {fieldErrors.vendorId && <p className="mt-1 text-xs text-red-600">{fieldErrors.vendorId}</p>}
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Original bill</label>
@@ -254,6 +272,7 @@ export function PurchaseReturnForm({
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input
+                        data-field={i === 0 ? "firstRate" : undefined}
                         type="number"
                         step="0.01"
                         min="0"
@@ -315,7 +334,6 @@ export function PurchaseReturnForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Item
         </button>
-        {fieldErrors.items && <p className="mt-1 text-xs text-red-600">{fieldErrors.items}</p>}
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -345,12 +363,11 @@ export function PurchaseReturnForm({
           </div>
         </section>
         <p className="max-w-md self-end text-xs text-gray-500">
-          Posts to the Chart of Accounts: the supplier's payable account (debit), Inventory 1200 and Tax Receivable 1300 (credit). Stock is reduced.
+          Posts to the Chart of Accounts: the supplier&apos;s payable account (debit), Inventory 1200 and Tax Receivable 1300 (credit). Stock is reduced.
         </p>
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
@@ -362,6 +379,8 @@ export function PurchaseReturnForm({
         </button>
       </div>
 
+
+      {dialog}
     </div>
   );
 }

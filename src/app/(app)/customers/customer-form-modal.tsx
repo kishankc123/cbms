@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { panError } from "@/lib/pan";
 
 type Initial = {
@@ -10,6 +11,14 @@ type Initial = {
   details: string;
   openingBalance: number;
 };
+
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const FIELD_RULES: FieldRules = [
+  [/PAN|VAT number/i, '[name="panNumber"]'],
+  [/opening balance/i, '[name="openingBalance"]'],
+  [/phone|contact/i, '[name="phone"]'],
+  [/customer|name/i, '[name="name"]'],
+];
 
 export function CustomerFormModal({
   title,
@@ -36,21 +45,20 @@ export function CustomerFormModal({
   const open = openProp ?? innerOpen;
   const setOpen = (v: boolean) => (openProp === undefined ? setInnerOpen(v) : onOpenChange?.(v));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { report, reportError, dialog } = useProblem();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     const panProblem = panError(data.get("panNumber"), "PAN / VAT number");
-    if (panProblem) return setError(panProblem);
+    if (panProblem) return report(panProblem, '[name="panNumber"]');
     setSaving(true);
-    setError(null);
     try {
       const result = await action(data);
       setOpen(false);
       if (onCreated && result && typeof result === "object" && "id" in result && "name" in result) onCreated(result as { id: string; name: string });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
+      reportError(err, FIELD_RULES, '[name="name"]');
     } finally {
       setSaving(false);
     }
@@ -161,7 +169,7 @@ export function CustomerFormModal({
                 </div>
               </div>
 
-              {error && <p className="text-xs text-red-600">{error}</p>}
+              {dialog}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

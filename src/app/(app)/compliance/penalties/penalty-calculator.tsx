@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useErrorDialog } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { StatusPill } from "@/components/ui/status-pill";
 import { calculatePenalty, type ExcisePenaltyParams, type FilingBasis, type TaxTypeKey, type TdsPenaltyParams, type VatPenaltyParams } from "@/lib/compliance/penalty-engine";
@@ -58,7 +59,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
   const [rule, setRule] = useState<{ params: Record<string, number>; isVerified: boolean; source: string | null } | null | undefined>(undefined);
   const [recording, setRecording] = useState(false);
   const [recorded, setRecorded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { setError, dialog } = useErrorDialog();
 
   useEffect(() => {
     let cancelled = false;
@@ -295,7 +296,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                     {recording ? "Recording…" : "Record this charge"}
                   </button>
                 )}
-                {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+                {dialog}
               </div>
             )}
           </>

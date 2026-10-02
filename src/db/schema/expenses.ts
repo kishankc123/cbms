@@ -17,7 +17,7 @@ export const expenses = pgTable("expenses", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   expenseNumber: text("expense_number").notNull(),
   expenseDate: date("expense_date").notNull(),
-  // Must be a Fixed/Variable expense account from the Chart of Accounts —
+  // Must be a Direct/Indirect expense account from the Chart of Accounts —
   // never Cost of Goods Sold (Purchases) or Salaries (Payroll).
   categoryAccountId: uuid("category_account_id").notNull().references(() => accounts.id),
   vendorId: uuid("vendor_id").references(() => vendors.id),

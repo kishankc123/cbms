@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createManualJournalEntry } from "./actions";
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 
@@ -11,13 +12,21 @@ type Account = { id: string; code: string; name: string };
 const EMPTY_ROW = { accountId: "", debitAmount: "", creditAmount: "" };
 const cents = (n: number) => Math.round(n * 100);
 
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/period|entry date|date/i, "#je-date"],
+  [/account/i, '[data-field="acct0"]'],
+  [/debit|credit|balance|amount/i, '[data-field="debit0"]'],
+];
+
 export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[]; nextVoucher: string }) {
   const router = useRouter();
   const [entryDate, setEntryDate] = useState(todayIso());
   const [description, setDescription] = useState("");
   const [rows, setRows] = useState([{ ...EMPTY_ROW }, { ...EMPTY_ROW }]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { reportError, report, dialog } = useProblem();
   const [recorded, setRecorded] = useState<string | null>(null);
 
   const totalDebit = rows.reduce((s, r) => s + (parseFloat(r.debitAmount) || 0), 0);
@@ -30,19 +39,20 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
 
   async function post() {
     setBusy(true);
-    setError(null);
     try {
       const result = await createManualJournalEntry({
         entryDate,
         description,
         lines: rows.map((r) => ({ accountId: r.accountId, debitAmount: parseFloat(r.debitAmount) || 0, creditAmount: parseFloat(r.creditAmount) || 0 })),
       });
-      if (!result.ok) return setError(result.error);
+      if (!result.ok) return report(result.error, SERVER_RULES.find(([re]) => re.test(result.error))?.[1] ?? '[data-field="description"]');
       setRecorded(result.voucherNumber);
       // Ready for the next entry.
       setDescription("");
       setRows([{ ...EMPTY_ROW }, { ...EMPTY_ROW }]);
       router.refresh();
+    } catch (e) {
+      reportError(e, SERVER_RULES, '[data-field="description"]');
     } finally {
       setBusy(false);
     }
@@ -57,11 +67,11 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Entry date</label>
-          <DatePicker value={entryDate} onChange={setEntryDate} required className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker id="je-date" value={entryDate} onChange={setEntryDate} required className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs text-gray-500 mb-1">Description</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input data-field="description" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
       </div>
 
@@ -77,7 +87,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
           {rows.map((row, i) => (
             <tr key={i}>
               <td className="py-1 pr-2">
-                <select value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select data-field={`acct${i}`} value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
                   <option value="">Select account</option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -87,7 +97,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
                 </select>
               </td>
               <td className="py-1 pr-2">
-                <input type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </td>
               <td className="py-1">
                 <input type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
@@ -110,11 +120,11 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
         </div>
       </div>
 
-      {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
       <button type="button" onClick={post} disabled={!balanced || busy} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40">
         {busy ? "Posting..." : "Post entry"}
       </button>
+
+      {dialog}
 
       {recorded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

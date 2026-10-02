@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveCompanyDetails, type getCompanyDetails } from "../company-actions";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, type FieldRules } from "@/components/problem-dialog";
 
 type Data = Awaited<ReturnType<typeof getCompanyDetails>>;
 type Values = Data["values"];
@@ -60,11 +61,19 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/PAN|VAT/i, '[data-field="panVat"]'],
+  [/registration/i, '[data-field="companyReg"]'],
+  [/name/i, '[data-field="companyName"]'],
+];
+
 export function CompanyForm({ data }: { data: Data }) {
   const router = useRouter();
   const [v, setV] = useState(data.values);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(SERVER_RULES, '[data-field="companyName"]');
   const [saved, setSaved] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const set = <K extends keyof typeof v>(key: K, value: (typeof v)[K]) => {
@@ -114,7 +123,7 @@ export function CompanyForm({ data }: { data: Data }) {
         <h2 className="text-sm font-semibold text-gray-900">Basic information</h2>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Legal name">
-            <input className={input} value={v.companyName} onChange={(e) => set("companyName", e.target.value)} disabled={disabled} />
+            <input data-field="companyName" className={input} value={v.companyName} onChange={(e) => set("companyName", e.target.value)} disabled={disabled} />
           </Field>
           <Field label="Trading name">
             <input className={input} value={v.tradingName} onChange={(e) => set("tradingName", e.target.value)} disabled={disabled} />
@@ -139,13 +148,13 @@ export function CompanyForm({ data }: { data: Data }) {
             </select>
           </Field>
           <Field label="Company registration number">
-            <input className={input} value={v.companyRegistrationNumber} onChange={(e) => set("companyRegistrationNumber", e.target.value)} disabled={disabled} />
+            <input data-field="companyReg" className={input} value={v.companyRegistrationNumber} onChange={(e) => set("companyRegistrationNumber", e.target.value)} disabled={disabled} />
           </Field>
           <Field label="Registration date">
             <DatePicker value={v.registrationDate} onChange={(d) => set("registrationDate", d)} disabled={disabled} className={input} />
           </Field>
           <Field label="PAN / VAT number *" hint="Exactly 9 digits. One number, used everywhere — invoices, VAT and tax registrations.">
-            <input className={input} value={v.panVatNumber} onChange={(e) => set("panVatNumber", e.target.value)} disabled={disabled} inputMode="numeric" maxLength={9} placeholder="9 digits" />
+            <input data-field="panVat" className={input} value={v.panVatNumber} onChange={(e) => set("panVatNumber", e.target.value)} disabled={disabled} inputMode="numeric" maxLength={9} placeholder="9 digits" />
           </Field>
           <Field label="Nature of business">
             <input className={input} value={v.natureOfBusiness} onChange={(e) => set("natureOfBusiness", e.target.value)} disabled={disabled} />
@@ -188,8 +197,8 @@ export function CompanyForm({ data }: { data: Data }) {
       </section>
 
       <div className="flex items-center justify-end gap-3">
-        {error && <span className="text-xs text-red-600">{error}</span>}
-        {saved && !error && <span className="text-xs text-green-600">Saved</span>}
+        {dialog}
+        {saved && <span className="text-xs text-green-600">Saved</span>}
         {data.canEdit && (
           <button type="button" disabled={saving || changes.length === 0} onClick={handleSaveClick} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
             {saving ? "Saving..." : "Save changes"}
@@ -217,7 +226,6 @@ export function CompanyForm({ data }: { data: Data }) {
                 ))}
               </tbody>
             </table>
-            {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <button type="button" disabled={saving} onClick={() => setReviewing(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50">
                 Cancel

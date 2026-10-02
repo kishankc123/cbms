@@ -30,7 +30,7 @@ export async function getOrCreateExpensePayableAccount(tenantId: string) {
   return created;
 }
 
-// Accounts eligible as an expense's "category": Fixed/Variable expense accounts only, and only the LOWEST level —
+// Accounts eligible as an expense's "category": Direct/Indirect expense accounts only, and only the LOWEST level —
 // a category that has sub-categories can't be chosen itself, only its sub-categories can. Cost of Goods Sold
 // (Purchases' territory) is excluded by sub-category, and so are the Salaries account the Payroll module owns
 // (code 5200) and everything under it.

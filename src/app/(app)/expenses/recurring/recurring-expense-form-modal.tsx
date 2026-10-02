@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
@@ -66,6 +67,18 @@ const PRIORITIES: { value: RecurringPriority; label: string }[] = [
 const inputClass = "w-full rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]";
 const labelClass = "block text-xs text-[var(--text-secondary)] mb-1";
 
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/expense name/i, '[data-field="name"]'],
+  [/expense account|category/i, '[data-field="account"]'],
+  [/amount/i, '[data-field="amount"]'],
+  [/custom-frequency|months/i, '[data-field="interval"]'],
+  [/recognition day/i, '[data-field="recognitionDay"]'],
+  [/due|days after/i, '[data-field="dueValue"]'],
+  [/end date/i, "#re-end"],
+  [/start date/i, "#re-start"],
+];
+
 export function RecurringExpenseFormModal({
   vendors: vendorsProp,
   categoryAccounts,
@@ -107,7 +120,8 @@ export function RecurringExpenseFormModal({
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { reportError, dialog } = useProblem();
 
   const preview = useMemo(() => {
     if (!startDate) return null;
@@ -127,7 +141,6 @@ export function RecurringExpenseFormModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setSaving(true);
     try {
       const input = {
@@ -153,7 +166,7 @@ export function RecurringExpenseFormModal({
       router.refresh();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      reportError(err, SERVER_RULES, '[data-field="name"]');
     } finally {
       setSaving(false);
     }
@@ -171,18 +184,18 @@ export function RecurringExpenseFormModal({
           </button>
         </div>
 
-        {error && <p className="rounded border border-[var(--status-critical-border)] bg-[var(--status-critical-bg)] px-3 py-2 text-xs text-[var(--status-critical-text)]">{error}</p>}
+        {dialog}
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-[var(--text-secondary)]">Basic Information</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className={labelClass}>Expense Name</label>
-              <input required value={expenseName} onChange={(e) => setExpenseName(e.target.value)} placeholder="e.g. Office Rent" className={inputClass} />
+              <input data-field="name" required value={expenseName} onChange={(e) => setExpenseName(e.target.value)} placeholder="e.g. Office Rent" className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Expense Account</label>
-              <select required value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)} className={inputClass}>
+              <select data-field="account" required value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)} className={inputClass}>
                 <option value="">Select account</option>
                 {categoryAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -193,7 +206,7 @@ export function RecurringExpenseFormModal({
             </div>
             <div>
               <label className={labelClass}>Amount</label>
-              <input required type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
+              <input data-field="amount" required type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Payable To (supplier)</label>
@@ -222,7 +235,7 @@ export function RecurringExpenseFormModal({
             {frequency === "custom" && (
               <div>
                 <label className={labelClass}>Repeats every (months)</label>
-                <input type="number" min="1" value={customIntervalMonths} onChange={(e) => setCustomIntervalMonths(e.target.value)} className={inputClass} />
+                <input data-field="interval" type="number" min="1" value={customIntervalMonths} onChange={(e) => setCustomIntervalMonths(e.target.value)} className={inputClass} />
               </div>
             )}
 
@@ -239,7 +252,7 @@ export function RecurringExpenseFormModal({
             {recognitionRule === "specific_day" && (
               <div>
                 <label className={labelClass}>Day of month</label>
-                <input type="number" min="1" max="31" value={recognitionDay} onChange={(e) => setRecognitionDay(e.target.value)} className={inputClass} />
+                <input data-field="recognitionDay" type="number" min="1" max="31" value={recognitionDay} onChange={(e) => setRecognitionDay(e.target.value)} className={inputClass} />
               </div>
             )}
 
@@ -256,7 +269,7 @@ export function RecurringExpenseFormModal({
             {dueRule !== "same_day" && (
               <div>
                 <label className={labelClass}>{dueRule === "days_after_recognition" ? "Days after recognition" : "Day of month"}</label>
-                <input type="number" min="0" max={dueRule === "days_after_recognition" ? undefined : 31} value={dueRuleValue} onChange={(e) => setDueRuleValue(e.target.value)} className={inputClass} />
+                <input data-field="dueValue" type="number" min="0" max={dueRule === "days_after_recognition" ? undefined : 31} value={dueRuleValue} onChange={(e) => setDueRuleValue(e.target.value)} className={inputClass} />
               </div>
             )}
           </div>
@@ -267,11 +280,11 @@ export function RecurringExpenseFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Start Date</label>
-              <DatePicker value={startDate} onChange={setStartDate} className={inputClass} />
+              <DatePicker id="re-start" value={startDate} onChange={setStartDate} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>End Date</label>
-              <DatePicker value={endDate} onChange={setEndDate} min={startDate} disabled={noEndDate} className={inputClass} />
+              <DatePicker id="re-end" value={endDate} onChange={setEndDate} min={startDate} disabled={noEndDate} className={inputClass} />
               <label className="mt-1.5 flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                 <input type="checkbox" checked={noEndDate} onChange={(e) => setNoEndDate(e.target.checked)} />
                 Continue until manually stopped

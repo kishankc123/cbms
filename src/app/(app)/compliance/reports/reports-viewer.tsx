@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useErrorDialog } from "@/components/problem-dialog";
 import { generateReport } from "../actions";
 import type { ComplianceReportType } from "@/lib/compliance/reports";
 
@@ -29,7 +30,7 @@ export function ReportsViewer({ allowedTypes }: { allowedTypes?: ComplianceRepor
   const [to, setTo] = useState(initial.to);
   const [mode, setMode] = useDateDisplay();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { setError, dialog } = useErrorDialog();
   const [result, setResult] = useState<Awaited<ReturnType<typeof generateReport>> | null>(null);
 
   async function handleGenerate() {
@@ -83,7 +84,7 @@ export function ReportsViewer({ allowedTypes }: { allowedTypes?: ComplianceRepor
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {dialog}
 
       {result && <ReportOutput type={type} result={result} mode={mode} />}
     </div>

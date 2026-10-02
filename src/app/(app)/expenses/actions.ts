@@ -56,7 +56,7 @@ async function validateExpenseInput(tenantId: string, input: ExpenseInput, exclu
 
   const categoryAccounts = await getExpenseCategoryAccounts(tenantId);
   const category = categoryAccounts.find((a) => a.id === input.categoryAccountId);
-  if (!category) throw new Error("Select a valid expense category — it must be an active Fixed/Variable expense account, and a category that has sub-categories can't be used itself: choose one of its sub-categories");
+  if (!category) throw new Error("Select a valid expense category — it must be an active Direct/Indirect expense account, and a category that has sub-categories can't be used itself: choose one of its sub-categories");
 
   if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
   await assertCashBankAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));

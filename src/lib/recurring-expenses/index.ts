@@ -53,7 +53,7 @@ async function validateRecurringExpenseInput(tenantId: string, input: RecurringE
 
   const categoryAccounts = await getExpenseCategoryAccounts(tenantId);
   if (!categoryAccounts.some((a) => a.id === input.expenseAccountId)) {
-    throw new Error("Select a valid expense account — it must be an active Fixed/Variable expense account, and a category that has sub-categories can't be used itself");
+    throw new Error("Select a valid expense account — it must be an active Direct/Indirect expense account, and a category that has sub-categories can't be used itself");
   }
   if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
   if (input.expectedPaymentAccountId) await assertCashBankAccounts(tenantId, [input.expectedPaymentAccountId]);

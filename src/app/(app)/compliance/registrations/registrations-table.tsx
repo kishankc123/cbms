@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { saveTaxRegistration, type listTaxRegistrations, type RegistrationInput, type RegistrationStatus } from "../registration-actions";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
 
 type Data = Awaited<ReturnType<typeof listTaxRegistrations>>;
@@ -14,6 +15,16 @@ type Row = Data["registrations"][number];
 const input = "w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500";
 const STATUS_TONE: Record<RegistrationStatus, StatusTone> = { active: "success", inactive: "action", suspended: "critical", deregistered: "critical" };
 const STATUS_LABEL: Record<RegistrationStatus, string> = { active: "Active", inactive: "Inactive", suspended: "Suspended", deregistered: "Deregistered" };
+
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/filing basis|effective from/i, "#rg-filing-from"],
+  [/deregistration/i, "#rg-dereg"],
+  [/effective/i, "#rg-effective"],
+  [/registration date|valid registration/i, "#rg-regdate"],
+  [/status/i, '[data-field="rgStatus"]'],
+  [/number/i, '[data-field="rgNumber"]'],
+];
 
 const blank = (taxTypeKey: string, authorityKey: string): RegistrationInput => ({
   taxTypeKey,
@@ -33,11 +44,11 @@ export function RegistrationsTable({ data }: { data: Data }) {
   const router = useRouter();
   const [editing, setEditing] = useState<{ form: RegistrationInput; label: string; numberIsShared: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { reportError, report, dialog } = useProblem();
   const [adding, setAdding] = useState(false);
 
   function edit(r: Row) {
-    setError(null);
     setEditing({
       label: r.taxTypeName,
       numberIsShared: r.numberIsShared,
@@ -61,17 +72,16 @@ export function RegistrationsTable({ data }: { data: Data }) {
   async function save() {
     if (!editing) return;
     setBusy(true);
-    setError(null);
     try {
       const result = await saveTaxRegistration(editing.form);
       if (!result.ok) {
-        setError(result.error);
+        report(result.error, SERVER_RULES.find(([re]) => re.test(result.error))?.[1] ?? null);
         return;
       }
       setEditing(null);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      reportError(e, SERVER_RULES);
     } finally {
       setBusy(false);
     }
@@ -91,10 +101,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
           <button
             type="button"
             disabled={data.addable.length === 0}
-            onClick={() => {
-              setError(null);
-              setAdding(true);
-            }}
+            onClick={() => setAdding(true)}
             className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40"
           >
             + Add Registration
@@ -187,7 +194,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Status</label>
-              <select className={input} value={editing.form.status} onChange={(e) => set("status", e.target.value as RegistrationStatus)} disabled={!data.canEdit}>
+              <select data-field="rgStatus" className={input} value={editing.form.status} onChange={(e) => set("status", e.target.value as RegistrationStatus)} disabled={!data.canEdit}>
                 {data.statuses.map((s) => (
                   <option key={s} value={s}>
                     {STATUS_LABEL[s]}
@@ -208,16 +215,16 @@ export function RegistrationsTable({ data }: { data: Data }) {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Registration date</label>
-              <DatePicker value={editing.form.registrationDate} onChange={(v) => set("registrationDate", v)} disabled={!data.canEdit} className={input} />
+              <DatePicker id="rg-regdate" value={editing.form.registrationDate} onChange={(v) => set("registrationDate", v)} disabled={!data.canEdit} className={input} />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Effective date</label>
-              <DatePicker value={editing.form.effectiveDate} onChange={(v) => set("effectiveDate", v)} disabled={!data.canEdit} className={input} />
+              <DatePicker id="rg-effective" value={editing.form.effectiveDate} onChange={(v) => set("effectiveDate", v)} disabled={!data.canEdit} className={input} />
             </div>
             {editing.form.status === "deregistered" && (
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Deregistration date</label>
-                <DatePicker value={editing.form.deregistrationDate} onChange={(v) => set("deregistrationDate", v)} disabled={!data.canEdit} className={input} />
+                <DatePicker id="rg-dereg" value={editing.form.deregistrationDate} onChange={(v) => set("deregistrationDate", v)} disabled={!data.canEdit} className={input} />
               </div>
             )}
             {data.filingFrequencyTaxTypes.includes(editing.form.taxTypeKey) && (
@@ -236,7 +243,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
                 {editing.form.filingFrequency && (
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Effective from</label>
-                    <DatePicker value={editing.form.filingFrequencyEffectiveFrom} onChange={(v) => set("filingFrequencyEffectiveFrom", v)} disabled={!data.canEdit} className={input} />
+                    <DatePicker id="rg-filing-from" value={editing.form.filingFrequencyEffectiveFrom} onChange={(v) => set("filingFrequencyEffectiveFrom", v)} disabled={!data.canEdit} className={input} />
                   </div>
                 )}
                 {editing.form.filingFrequency === "quarterly" && (
@@ -255,7 +262,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
               <textarea className={input} rows={2} value={editing.form.notes} onChange={(e) => set("notes", e.target.value)} disabled={!data.canEdit} />
             </div>
           </div>
-          {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+          {dialog}
           <div className="mt-4 flex justify-end gap-2">
             <button type="button" onClick={() => setEditing(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
               {data.canEdit ? "Cancel" : "Close"}
