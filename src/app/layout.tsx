@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 import { themeCookieName, parseTheme } from "@/lib/theme";
+import { ErrorMessageBridge } from "@/components/error-message-bridge";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <ErrorMessageBridge />
         <Providers>{children}</Providers>
       </body>
     </html>
