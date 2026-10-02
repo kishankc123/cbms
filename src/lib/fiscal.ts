@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { and, desc, eq, lte, gte } from "drizzle-orm";
 import { db } from "@/db";
@@ -88,7 +89,7 @@ export type SuggestedFiscalYear = { suggested: true; code: string; startDate: st
  * user always explicitly adds one via Settings → Fiscal Years. Callers that need to tell the two
  * apart check `"suggested" in fy`.
  */
-export async function getCurrentFiscalYear(tenantId: string): Promise<FiscalYear | SuggestedFiscalYear> {
+export const getCurrentFiscalYear = cache(async (tenantId: string): Promise<FiscalYear | SuggestedFiscalYear> => {
   const today = todayIso();
   const existing = await getFiscalYearByDate(tenantId, today);
   if (existing) return existing;
@@ -100,7 +101,7 @@ export async function getCurrentFiscalYear(tenantId: string): Promise<FiscalYear
     .limit(1);
   const range = computeFiscalYearRangeFor(tenant ?? { countryCode: "NP", calendarSystem: "AD", fiscalYearStartDate: null, fiscalYearEndDate: null, fiscalYearLabel: null }, today);
   return { suggested: true, code: range.code, startDate: range.from, endDate: range.to };
-}
+});
 
 /** Keeps `tenants.fiscalYearLabel/StartDate/EndDate` — read by older display call sites and by the
  * compliance engine's own fiscal-year lookup — in step with whichever fiscal year is actually
@@ -216,7 +217,7 @@ export type ActiveFiscalYear = FiscalYear | SuggestedFiscalYear | { allTime: tru
  * instead of assuming "today's fiscal year." Scoped per tenant (not one global cookie) since a user can
  * be active in a different organization with a different fiscal year.
  */
-export async function getActiveFiscalYear(tenantId: string): Promise<ActiveFiscalYear> {
+export const getActiveFiscalYear = cache(async (tenantId: string): Promise<ActiveFiscalYear> => {
   const store = await cookies();
   const picked = store.get(activeFiscalYearCookieName(tenantId))?.value;
   if (picked === "all_time") return { allTime: true };
@@ -225,7 +226,7 @@ export async function getActiveFiscalYear(tenantId: string): Promise<ActiveFisca
     if (fy) return fy;
   }
   return getCurrentFiscalYear(tenantId);
-}
+});
 
 /** A period report's default range for the sidebar's active fiscal-year context — that fiscal year's
  * own boundaries, or the calendar engine's All Time floor..today when "All Time" is picked. */

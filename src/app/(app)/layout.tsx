@@ -142,15 +142,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/signed-out");
 
   const user = await requireUserSession();
-  const orgs = await listActiveMemberships(user.id);
-  const inventoryOpeningDate = await getOpeningDate(session.tenantId);
-  // Sequential, not Promise.all: a brand-new organization has no fiscal_years row yet, and
-  // getActiveFiscalYear -> getCurrentFiscalYear auto-creates the first one on demand. Running
-  // listFiscalYears in parallel could read the table before that insert lands, showing the
-  // switcher's dropdown as empty even though a fiscal year (and activeId) genuinely exists.
-  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
-  const fiscalYearsList = await listFiscalYears(session.tenantId);
-  const cookieStore = await cookies();
+  // Independent reads, so run them together. (getActiveFiscalYear never writes — fiscal years are
+  // only created explicitly in Settings — so listFiscalYears can't race an auto-create.)
+  const [orgs, inventoryOpeningDate, activeFiscalYear, fiscalYearsList, cookieStore] = await Promise.all([
+    listActiveMemberships(user.id),
+    getOpeningDate(session.tenantId),
+    getActiveFiscalYear(session.tenantId),
+    listFiscalYears(session.tenantId),
+    cookies(),
+  ]);
   const activeTheme = parseTheme(cookieStore.get(themeCookieName)?.value);
 
   return (

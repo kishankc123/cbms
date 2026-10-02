@@ -53,8 +53,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const session = await requireTenantSession();
   const sp = await searchParams;
 
-  const fiscal = await getFiscalRange(session.tenantId);
-  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
+  const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;

@@ -12,8 +12,7 @@ export default async function JournalReportPage({ searchParams }: { searchParams
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
-  const fiscal = await getFiscalRange(session.tenantId);
-  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
+  const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
