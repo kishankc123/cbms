@@ -138,10 +138,31 @@ describe("consumable purchases", () => {
     ...over,
   });
 
-  it("refuses payments that don't add up to the bill, and saves nothing", async () => {
+  it("refuses a payment larger than the bill, and saves nothing", async () => {
     const before = (await bills()).length;
-    await expect(createCashPurchase(purchase({ payments: [{ accountId: cashId, amount: 90 }] }))).rejects.toThrow(/must equal the bill total/);
+    await expect(createCashPurchase(purchase({ vendorId: vendorA, payments: [{ accountId: cashId, amount: 150 }] }))).rejects.toThrow(/cannot exceed the bill total/);
     expect((await bills()).length).toBe(before);
+  });
+
+  it("does not assume the bill is paid: a part-paid or unpaid bill is owed to the supplier, who is then required", async () => {
+    const before = (await bills()).length;
+    await expect(createCashPurchase(purchase({ payments: [{ accountId: cashId, amount: 90 }] }))).rejects.toThrow(/Select a supplier/);
+    await expect(createCashPurchase(purchase({ payments: [] }))).rejects.toThrow(/Select a supplier/);
+    expect((await bills()).length).toBe(before);
+
+    await createCashPurchase(purchase({ billNumber: "CP-PART", vendorId: vendorA, payments: [{ accountId: cashId, amount: 90 }] }));
+    await createCashPurchase(purchase({ billNumber: "CP-NONE", vendorId: vendorA, payments: [] }));
+    const part = (await bills()).find((b) => b.billNumber === "CP-PART")!;
+    const none = (await bills()).find((b) => b.billNumber === "CP-NONE")!;
+    expect(part.status).toBe("partially_paid");
+    expect(Number(part.amountPaid)).toBe(90);
+    expect(none.status).toBe("open");
+    expect(Number(none.amountPaid)).toBe(0);
+
+    // The supplier's unpaid balance is not mistaken for a payment when the bill is opened for editing.
+    const edit = await getCashPurchaseForEdit(part.id);
+    expect(edit.payments).toEqual([{ accountId: cashId, amount: 90 }]);
+    expect((await getCashPurchaseForEdit(none.id)).payments).toEqual([]);
   });
 
   it("refuses a category that isn't one of this organization's purchase categories", async () => {

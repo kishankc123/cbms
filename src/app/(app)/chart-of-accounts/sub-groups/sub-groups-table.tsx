@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSubGroupAccount } from "../actions";
-import { AccountEditModal } from "../account-edit-modal";
-import { Balance, DeleteAccountButton, SystemBadge } from "../shared";
+import { AccountRowActions, Balance, SystemBadge } from "../shared";
 
 type Group = { id: string; code: string; name: string };
 type SubGroup = {
@@ -90,18 +89,7 @@ export function SubGroupsTable({ groups, subGroups, groupById }: { groups: Group
               </td>
               <td className="px-4 py-2">{sg.isActive ? "Active" : "Inactive"}</td>
               <td className="px-4 py-2 text-right">
-                <div className="flex items-center justify-end gap-3">
-                  <AccountEditModal
-                    initial={{ id: sg.id, name: sg.name, isActive: sg.isActive, system: sg.system }}
-                    showSubCategory={false}
-                    trigger={(open) => (
-                      <button type="button" onClick={open} className="text-xs text-[var(--color-primary)] hover:underline">
-                        Edit
-                      </button>
-                    )}
-                  />
-                  {!sg.system && <DeleteAccountButton id={sg.id} name={sg.name} onError={setError} />}
-                </div>
+                <AccountRowActions account={sg} showSubCategory={false} onError={setError} />
               </td>
             </tr>
           ))}

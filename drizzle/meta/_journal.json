@@ -463,6 +463,13 @@
       "when": 1790937430201,
       "tag": "0065_quarterly_vat_filing",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790942738772,
+      "tag": "0066_indirect_direct_expenses",
+      "breakpoints": true
     }
   ]
 }

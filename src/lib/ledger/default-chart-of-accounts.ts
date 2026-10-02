@@ -36,9 +36,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
 
   // Expenses
   { code: "5000", name: "Cost of Goods Sold", category: "expense", subCategory: "Cost of goods sold" },
-  { code: "5100", name: "Rent", category: "expense", subCategory: "Fixed expenses" },
-  { code: "5200", name: "Salaries", category: "expense", subCategory: "Variable expenses" },
-  { code: "5300", name: "Utilities", category: "expense", subCategory: "Fixed expenses" },
-  { code: "5400", name: "Office Supplies", category: "expense", subCategory: "Variable expenses" },
-  { code: "5900", name: "Miscellaneous Expense", category: "expense", subCategory: "Variable expenses" },
+  { code: "5100", name: "Rent", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5200", name: "Salaries", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5300", name: "Utilities", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5400", name: "Office Supplies", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5900", name: "Miscellaneous Expense", category: "expense", subCategory: "Indirect expenses" },
 ];

@@ -4,14 +4,14 @@ import { accounts } from "@/db/schema";
 import { findControlAccount, createSubAccount } from "./control-accounts";
 
 // The shared expense account all payroll runs debit — a top-level account
-// under the "Variable expenses" sub-category, per the tenant's chart layout.
+// under the "Indirect expenses" sub-category, per the tenant's chart layout.
 export async function getOrCreateSalaryExpenseAccount(tenantId: string) {
   const existing = await findControlAccount(tenantId, ["5200"], "Salaries");
   if (existing) {
-    if (existing.subCategory !== "Variable expenses") {
+    if (existing.subCategory !== "Indirect expenses") {
       const [updated] = await db
         .update(accounts)
-        .set({ subCategory: "Variable expenses" })
+        .set({ subCategory: "Indirect expenses" })
         .where(eq(accounts.id, existing.id))
         .returning();
       return updated;
@@ -21,7 +21,7 @@ export async function getOrCreateSalaryExpenseAccount(tenantId: string) {
 
   const [created] = await db
     .insert(accounts)
-    .values({ tenantId, code: "5200", name: "Salaries", category: "expense", subCategory: "Variable expenses" })
+    .values({ tenantId, code: "5200", name: "Salaries", category: "expense", subCategory: "Indirect expenses" })
     .returning();
   return created;
 }

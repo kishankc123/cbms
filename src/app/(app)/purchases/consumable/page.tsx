@@ -5,15 +5,15 @@ import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
+import { getSupplierBalances } from "@/lib/ledger/supplier-balances";
 import { ConsumablePurchaseTabs } from "../consumable-purchase-tabs";
 
-// "Consumable purchase" reuses the same immediate-settlement (no Accounts
-// Payable) mechanics previously labeled "Cash purchase" — purchaseType
-// stays "cash" internally; only the user-facing name changed.
+// "Consumable purchase" was previously labeled "Cash purchase" — purchaseType stays "cash" internally; only the
+// user-facing name changed. A bill can be paid in full, in part or not at all; any balance is owed to the supplier.
 export default async function ConsumablePurchasePage() {
   const session = await requireTenantSession();
 
-  const [vendorList, billList, categoryAccounts, cashBankAccounts, vatRate] = await Promise.all([
+  const [vendorList, billList, categoryAccounts, cashBankAccounts, vatRate, vendorBalances] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     db
       .select()
@@ -23,6 +23,7 @@ export default async function ConsumablePurchasePage() {
     getCogsSubGroups(session.tenantId),
     getCashBankAccounts(session.tenantId),
     getCurrentTaxRate(session.tenantId, "vat"),
+    getSupplierBalances(session.tenantId),
   ]);
 
   return (
@@ -39,6 +40,7 @@ export default async function ConsumablePurchasePage() {
         bills={billList}
         categoryAccounts={categoryAccounts}
         cashBankAccounts={cashBankAccounts}
+        vendorBalances={vendorBalances}
         vatRate={vatRate}
       />
     </div>

@@ -119,7 +119,7 @@ export async function getOrCreateTaxPenaltyExpenseAccount(tenantId: string): Pro
     (
       await db
         .insert(accounts)
-        .values({ tenantId, code: "5910", name: "Tax Fines & Penalties", category: "expense", subCategory: "Fixed expenses" })
+        .values({ tenantId, code: "5910", name: "Tax Fines & Penalties", category: "expense", subCategory: "Indirect expenses" })
         .returning()
     )[0];
   await setAccountRole(tenantId, PENALTY_EXPENSE_ROLE, account.id);

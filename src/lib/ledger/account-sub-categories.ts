@@ -14,8 +14,8 @@ export const ACCOUNT_SUB_CATEGORIES: { label: string; category: Category }[] = [
   { label: "Current liabilities", category: "liability" },
   { label: "Revenue", category: "income" },
   { label: "Cost of goods sold", category: "expense" },
-  { label: "Fixed expenses", category: "expense" },
-  { label: "Variable expenses", category: "expense" },
+  { label: "Direct expenses", category: "expense" },
+  { label: "Indirect expenses", category: "expense" },
 ];
 
 export function categoryForSubCategory(subCategory: string): Category | undefined {
@@ -42,6 +42,6 @@ export function guessSubCategory(category: Category, legacySubCategory?: string 
     case "income":
       return "Revenue";
     case "expense":
-      return raw.includes("cost of goods") || raw.includes("cogs") ? "Cost of goods sold" : "Fixed expenses";
+      return raw.includes("cost of goods") || raw.includes("cogs") ? "Cost of goods sold" : "Indirect expenses";
   }
 }

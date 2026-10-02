@@ -46,7 +46,7 @@ export async function getExpenseCategoryAccounts(tenantId: string) {
         eq(accounts.tenantId, tenantId),
         eq(accounts.isActive, true),
         eq(accounts.category, "expense"),
-        inArray(accounts.subCategory, ["Fixed expenses", "Variable expenses"]),
+        inArray(accounts.subCategory, ["Direct expenses", "Indirect expenses"]),
         ne(accounts.code, "5200"),
         notLike(accounts.code, "5200.%"),
         notExists(db.select({ one: child.id }).from(child).where(and(eq(child.parentAccountId, accounts.id), eq(child.isActive, true))))

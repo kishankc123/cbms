@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
+type Vendor = { id: string; name: string };
 type PaymentLine = { accountId: string; amount: string };
 
 // A group with sub-groups is shown as a locked (unselectable) heading — only
@@ -16,9 +17,14 @@ function firstSelectableId(groups: CashBankGroup[]): string {
   return "";
 }
 
+// Payment for a Consumable purchase. Nothing is assumed paid: the amount starts empty, and whatever isn't covered
+// is owed to the supplier — so a supplier can be chosen here, and is required once the payments fall short.
 export function RecordPayModal({
   total,
   cashBankAccounts,
+  allVendors,
+  vendorBalances,
+  initialVendorId,
   initialLines,
   saving,
   onCancel,
@@ -26,16 +32,20 @@ export function RecordPayModal({
 }: {
   total: number;
   cashBankAccounts: CashBankGroup[];
+  allVendors: Vendor[];
+  vendorBalances: Record<string, number>;
+  initialVendorId: string;
   initialLines?: { accountId: string; amount: number }[];
   saving: boolean;
   onCancel: () => void;
-  onConfirm: (payments: { accountId: string; amount: number }[]) => void;
+  onConfirm: (payments: { accountId: string; amount: number }[], vendorId: string) => void;
 }) {
   const [lines, setLines] = useState<PaymentLine[]>(() =>
     initialLines && initialLines.length > 0
       ? initialLines.map((l) => ({ accountId: l.accountId, amount: String(l.amount) }))
-      : [{ accountId: firstSelectableId(cashBankAccounts), amount: total > 0 ? String(total) : "" }]
+      : [{ accountId: firstSelectableId(cashBankAccounts), amount: "" }]
   );
+  const [vendorId, setVendorId] = useState(initialVendorId);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -51,14 +61,17 @@ export function RecordPayModal({
 
   const totalEntered = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const difference = total - totalEntered;
-  const mismatch = Math.abs(difference) > 0.004;
+  const overpaid = difference < -0.004;
+  const partial = difference > 0.004;
+  const vendorRequired = partial && !vendorId;
+  const selectedVendor = allVendors.find((v) => v.id === vendorId);
 
   function handleConfirm() {
-    if (mismatch) return;
+    if (overpaid || vendorRequired) return;
     const payments = lines
       .filter((l) => l.accountId && (parseFloat(l.amount) || 0) > 0)
       .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0 }));
-    onConfirm(payments);
+    onConfirm(payments, vendorId);
   }
 
   return (
@@ -129,26 +142,42 @@ export function RecordPayModal({
             <span className="font-medium text-gray-900">{totalEntered.toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">{difference > 0 ? "Remaining" : difference < 0 ? "Overpaid" : "Difference"}</span>
-            <span className={`font-medium ${difference > 0 ? "text-amber-600" : difference < 0 ? "text-blue-600" : "text-green-600"}`}>
-              {Math.abs(difference).toFixed(2)}
-            </span>
+            <span className="text-gray-600">{partial ? "Balance due (credit)" : overpaid ? "Overpaid" : "Difference"}</span>
+            <span className={`font-medium ${partial ? "text-amber-600" : overpaid ? "text-red-600" : "text-green-600"}`}>{Math.abs(difference).toFixed(2)}</span>
           </div>
         </div>
 
-        {mismatch && <p className="text-xs text-red-600">Amount entered must match the bill total.</p>}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">
+            Supplier{" "}
+            {partial ? <span className="text-red-600">(required — the balance is owed to the supplier)</span> : <span className="text-gray-400">(optional when paid in full)</span>}
+          </label>
+          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <option value="">Select supplier</option>
+            {allVendors.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedVendor && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-700">{selectedVendor.name}</span>
+            <span className="text-gray-900">{(vendorBalances[selectedVendor.id] ?? 0).toFixed(2)}</span>
+          </div>
+        )}
+
+        {overpaid && <p className="text-xs text-red-600">The amount entered can&apos;t be more than the bill total.</p>}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-          >
+          <button type="button" onClick={onCancel} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
             Cancel
           </button>
           <button
             type="button"
-            disabled={saving || mismatch}
+            disabled={saving || overpaid || vendorRequired}
             onClick={handleConfirm}
             className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
           >

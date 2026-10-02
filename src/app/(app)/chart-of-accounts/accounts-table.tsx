@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccount } from "./actions";
-import { AccountEditModal } from "./account-edit-modal";
-import { Balance, DeleteAccountButton, SystemBadge, TYPE_LABEL } from "./shared";
+import { AccountRowActions, Balance, SystemBadge, TYPE_LABEL } from "./shared";
 import { ACCOUNT_SUB_CATEGORIES } from "@/lib/ledger/account-sub-categories";
 
 type Account = {
@@ -185,19 +184,8 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
                 <Balance value={a.total} />
               </td>
               <td className="px-4 py-2">{a.isActive ? "Active" : "Inactive"}</td>
-              <td className="px-4 py-2 text-right">
-                <div className="flex items-center justify-end gap-3">
-                  <AccountEditModal
-                    initial={{ id: a.id, name: a.name, isActive: a.isActive, category: a.category, subCategory: a.subCategory, system: a.system }}
-                    showSubCategory
-                    trigger={(open) => (
-                      <button type="button" onClick={open} className="text-xs text-[var(--color-primary)] hover:underline">
-                        Edit
-                      </button>
-                    )}
-                  />
-                  {!a.system && <DeleteAccountButton id={a.id} name={a.name} onError={setError} />}
-                </div>
+              <td className="px-4 py-2 text-right whitespace-nowrap">
+                <AccountRowActions account={a} showSubCategory onError={setError} />
               </td>
             </tr>
           ))}

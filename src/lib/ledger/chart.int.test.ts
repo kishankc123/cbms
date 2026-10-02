@@ -49,24 +49,24 @@ describe("chart of accounts (database)", () => {
     await rejects(createAccountEntry(org.tenantId, org.userId, { code: "1000", name: "Again", subCategory: "Current assets" }), /already exists/);
     await rejects(createAccountEntry(org.tenantId, org.userId, { code: "1010.09", name: "Sneaky", subCategory: "Current assets" }), /dot/);
     await rejects(createAccountEntry(org.tenantId, org.userId, { code: "6000", name: "Bad", subCategory: "Nonsense" }), /category/);
-    const ok = await createAccountEntry(org.tenantId, org.userId, { code: "6000", name: "Marketing", subCategory: "Variable expenses" });
+    const ok = await createAccountEntry(org.tenantId, org.userId, { code: "6000", name: "Marketing", subCategory: "Indirect expenses" });
     expect(ok.category).toBe("expense");
   });
 
   it("blocks changing the type of an account that has transactions, and allows it before", async () => {
-    const acct = await createAccountEntry(org.tenantId, org.userId, { code: "7000", name: "Movable", subCategory: "Variable expenses" });
+    const acct = await createAccountEntry(org.tenantId, org.userId, { code: "7000", name: "Movable", subCategory: "Indirect expenses" });
     const cash = await byCode("1000");
     await updateAccountEntry(org.tenantId, org.userId, { id: acct.id, name: "Movable", isActive: true, subCategory: "Revenue" });
     expect((await byCode("7000")).category).toBe("income");
 
     await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-01", sourceType: "manual", createdBy: org.userId, lines: [{ accountId: cash.id, debitAmount: 100 }, { accountId: acct.id, creditAmount: 100 }] });
-    await rejects(updateAccountEntry(org.tenantId, org.userId, { id: acct.id, name: "Movable", isActive: true, subCategory: "Variable expenses" }), /transactions/);
+    await rejects(updateAccountEntry(org.tenantId, org.userId, { id: acct.id, name: "Movable", isActive: true, subCategory: "Indirect expenses" }), /transactions/);
     // a presentation-only change within the same type is still fine
     await updateAccountEntry(org.tenantId, org.userId, { id: acct.id, name: "Movable", isActive: true, subCategory: "Revenue" });
   });
 
   it("cascades a category change to sub-groups", async () => {
-    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7100", name: "Group", subCategory: "Fixed expenses" });
+    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7100", name: "Group", subCategory: "Indirect expenses" });
     const child = await createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: group.id, name: "Child" });
     await updateAccountEntry(org.tenantId, org.userId, { id: group.id, name: "Group", isActive: true, subCategory: "Revenue" });
     const after = (await db.select().from(accounts).where(eq(accounts.id, child.id)))[0];
@@ -91,18 +91,18 @@ describe("chart of accounts (database)", () => {
     await rejects(deleteAccountEntry(org.tenantId, org.userId, sub.id), /in use/);
     await rejects(deleteAccountEntry(org.tenantId, org.userId, ar.id), /system account/);
 
-    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7200", name: "HasKids", subCategory: "Fixed expenses" });
+    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7200", name: "HasKids", subCategory: "Indirect expenses" });
     await createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: group.id, name: "Kid" });
     await rejects(deleteAccountEntry(org.tenantId, org.userId, group.id), /sub-groups/);
 
     const cash = await byCode("1000");
-    const used = await createAccountEntry(org.tenantId, org.userId, { code: "7300", name: "Used", subCategory: "Fixed expenses" });
+    const used = await createAccountEntry(org.tenantId, org.userId, { code: "7300", name: "Used", subCategory: "Indirect expenses" });
     await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-01", sourceType: "manual", createdBy: org.userId, lines: [{ accountId: used.id, debitAmount: 5 }, { accountId: cash.id, creditAmount: 5 }] });
     await rejects(deleteAccountEntry(org.tenantId, org.userId, used.id), /transaction history/);
   });
 
   it("only deactivates accounts that are settled, and keeps the hierarchy consistent", async () => {
-    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7400", name: "Grp", subCategory: "Fixed expenses" });
+    const group = await createAccountEntry(org.tenantId, org.userId, { code: "7400", name: "Grp", subCategory: "Indirect expenses" });
     const child = await createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: group.id, name: "Kid" });
     await rejects(updateAccountEntry(org.tenantId, org.userId, { id: group.id, name: "Grp", isActive: false }), /sub-groups first/);
     await updateAccountEntry(org.tenantId, org.userId, { id: child.id, name: "Kid", isActive: false });
@@ -110,7 +110,7 @@ describe("chart of accounts (database)", () => {
     await rejects(updateAccountEntry(org.tenantId, org.userId, { id: child.id, name: "Kid", isActive: true }), /group above/);
 
     const cash = await byCode("1000");
-    const owing = await createAccountEntry(org.tenantId, org.userId, { code: "7500", name: "Owing", subCategory: "Fixed expenses" });
+    const owing = await createAccountEntry(org.tenantId, org.userId, { code: "7500", name: "Owing", subCategory: "Indirect expenses" });
     await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-01", sourceType: "manual", createdBy: org.userId, lines: [{ accountId: owing.id, debitAmount: 40 }, { accountId: cash.id, creditAmount: 40 }] });
     await rejects(updateAccountEntry(org.tenantId, org.userId, { id: owing.id, name: "Owing", isActive: false }), /balance/);
   });
@@ -131,7 +131,7 @@ describe("chart of accounts (database)", () => {
   });
 
   it("records who changed the chart and what", async () => {
-    const acct = await createAccountEntry(org.tenantId, org.userId, { code: "8100", name: "Audited", subCategory: "Fixed expenses" });
+    const acct = await createAccountEntry(org.tenantId, org.userId, { code: "8100", name: "Audited", subCategory: "Indirect expenses" });
     await updateAccountEntry(org.tenantId, org.userId, { id: acct.id, name: "Audited (renamed)", isActive: true });
     await deleteAccountEntry(org.tenantId, org.userId, acct.id);
     const rows = await db.select().from(auditLog).where(and(eq(auditLog.tenantId, org.tenantId), eq(auditLog.entityId, acct.id)));

@@ -18,13 +18,18 @@ export function AccountEditModal({
   initial,
   showSubCategory,
   trigger,
+  defaultOpen = false,
+  onClose,
 }: {
   initial: Initial;
   showSubCategory: boolean;
-  trigger: (open: () => void) => ReactNode;
+  /** A button that opens the modal. Omit it when the modal is mounted by something else (a row menu) with `defaultOpen`. */
+  trigger?: (open: () => void) => ReactNode;
+  defaultOpen?: boolean;
+  onClose?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState(initial.name);
   const [isActive, setIsActive] = useState(initial.isActive);
   // A legacy value that isn't one of the fixed options falls back to a same-type option instead of the first one.
@@ -38,13 +43,19 @@ export function AccountEditModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  function close() {
+    setOpen(false);
+    onClose?.();
+  }
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   async function save() {
@@ -56,7 +67,7 @@ export function AccountEditModal({
         setError(r.error);
         return;
       }
-      setOpen(false);
+      close();
       router.refresh();
     } finally {
       setBusy(false);
@@ -65,16 +76,16 @@ export function AccountEditModal({
 
   return (
     <>
-      {trigger(() => setOpen(true))}
+      {trigger?.(() => setOpen(true))}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-black/30" onClick={() => close()} />
 
           <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Edit account</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={() => close()} aria-label="Close" className="text-gray-400 hover:text-gray-600">
                 ✕
               </button>
             </div>
@@ -112,7 +123,7 @@ export function AccountEditModal({
             {error && <p className="text-xs text-red-600">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+              <button type="button" onClick={() => close()} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
               <button type="button" disabled={busy || !name.trim()} onClick={save} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
