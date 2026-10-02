@@ -16,7 +16,7 @@ import {
   complianceSummary,
   upcomingComplianceDeadlines,
 } from "@/lib/dashboard/aggregates";
-import { RevenueExpenseChart } from "./revenue-expense-chart";
+import { LazyRevenueExpenseChart } from "./revenue-expense-chart-lazy";
 import { ExpenseTracker } from "./expense-tracker";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
@@ -162,7 +162,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   View P&amp;L →
                 </Link>
               </div>
-              <RevenueExpenseChart data={trendData} />
+              <LazyRevenueExpenseChart data={trendData} />
             </div>
           )}
           {expenses && (
