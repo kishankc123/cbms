@@ -15,7 +15,11 @@ export type VatPenaltyParams = {
   latePaymentFlatRate: number;
   /** Simple annual interest rate on the unpaid tax. */
   interestAnnualRate: number;
+  /** A quarterly VAT filer's non-filing fine is this flat amount instead of the daily calculation above. Absent = the monthly formula applies. */
+  quarterlyFilingFine?: number;
 };
+
+export type FilingBasis = "monthly" | "quarterly";
 
 export type TdsPenaltyParams = {
   /** Flat administrative fine per day the E-TDS filing is late. */
@@ -67,18 +71,29 @@ const zero = (principal: number): PenaltyBreakdown => ({ daysDelayed: 0, princip
  * calculated fine of 0, so the floor always wins — no special case needed). Late payment is a flat 10% once,
  * regardless of how many days late. Interest is simple, daily, on the principal.
  */
-function calculateVat(principal: number, d: number, params: VatPenaltyParams): PenaltyBreakdown {
+function calculateVat(principal: number, d: number, params: VatPenaltyParams, basis: FilingBasis): PenaltyBreakdown {
   if (d <= 0) return zero(principal);
-  const calculatedFine = round2(principal * params.filingDailyRate * d);
-  const filingPenalty = Math.max(calculatedFine, params.filingFloor);
   const paymentPenalty = round2(principal * params.latePaymentFlatRate);
   const interest = round2((principal * params.interestAnnualRate * d) / 365);
+  const tail: PenaltyLine[] = [
+    { label: "Late payment penalty (flat)", amount: paymentPenalty, note: `${(params.latePaymentFlatRate * 100).toFixed(0)}% of principal` },
+    { label: "Interest overdue", amount: interest, note: `${(params.interestAnnualRate * 100).toFixed(0)}% p.a.` },
+  ];
+
+  // A quarterly filer's non-filing fine is one flat amount, however many days late — no daily calculation or floor.
+  if (basis === "quarterly" && params.quarterlyFilingFine !== undefined) {
+    const filingPenalty = params.quarterlyFilingFine;
+    const lines: PenaltyLine[] = [{ label: "Applied filing penalty", amount: filingPenalty, note: "Quarterly non-filer fine (flat)" }, ...tail];
+    return { daysDelayed: d, principal: round2(principal), filingPenalty, paymentPenalty, interest, totalPayable: round2(principal + filingPenalty + paymentPenalty + interest), lines };
+  }
+
+  const calculatedFine = round2(principal * params.filingDailyRate * d);
+  const filingPenalty = Math.max(calculatedFine, params.filingFloor);
   const lines: PenaltyLine[] = [
     { label: "Calculated daily fine", amount: calculatedFine, note: `${(params.filingDailyRate * 100).toFixed(2)}%/day × ${d} days` },
     { label: "Minimum statutory floor", amount: params.filingFloor },
     { label: "Applied filing penalty", amount: filingPenalty, note: filingPenalty === params.filingFloor && calculatedFine < params.filingFloor ? "Minimum floor rate applied" : "Calculated daily fine applied" },
-    { label: "Late payment penalty (flat)", amount: paymentPenalty, note: `${(params.latePaymentFlatRate * 100).toFixed(0)}% of principal` },
-    { label: "Interest overdue", amount: interest, note: `${(params.interestAnnualRate * 100).toFixed(0)}% p.a.` },
+    ...tail,
   ];
   return { daysDelayed: d, principal: round2(principal), filingPenalty, paymentPenalty, interest, totalPayable: round2(principal + filingPenalty + paymentPenalty + interest), lines };
 }
@@ -123,10 +138,10 @@ function calculateExcise(principal: number, d: number, params: ExcisePenaltyPara
   return { daysDelayed: d, principal: round2(principal), filingPenalty, paymentPenalty, interest, totalPayable: round2(principal + filingPenalty + paymentPenalty + interest), lines };
 }
 
-export function calculatePenalty(taxTypeKey: TaxTypeKey, principal: number, dueDate: IsoDate, actualDate: IsoDate, params: VatPenaltyParams | TdsPenaltyParams | ExcisePenaltyParams, manualExciseOverride: number | null = null): PenaltyBreakdown {
+export function calculatePenalty(taxTypeKey: TaxTypeKey, principal: number, dueDate: IsoDate, actualDate: IsoDate, params: VatPenaltyParams | TdsPenaltyParams | ExcisePenaltyParams, manualExciseOverride: number | null = null, filingBasis: FilingBasis = "monthly"): PenaltyBreakdown {
   const p = Math.max(0, round2(principal));
   const d = daysDelayed(dueDate, actualDate);
-  if (taxTypeKey === "vat") return calculateVat(p, d, params as VatPenaltyParams);
+  if (taxTypeKey === "vat") return calculateVat(p, d, params as VatPenaltyParams, filingBasis);
   if (taxTypeKey === "tds") return calculateTds(p, d, params as TdsPenaltyParams);
   return calculateExcise(p, d, params as ExcisePenaltyParams, manualExciseOverride);
 }

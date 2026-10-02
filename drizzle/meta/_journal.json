@@ -456,6 +456,13 @@
       "when": 1790679211596,
       "tag": "0064_easy_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790937430201,
+      "tag": "0065_quarterly_vat_filing",
+      "breakpoints": true
     }
   ]
 }

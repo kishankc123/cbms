@@ -63,7 +63,11 @@ export function RegistrationsTable({ data }: { data: Data }) {
     setBusy(true);
     setError(null);
     try {
-      await saveTaxRegistration(editing.form);
+      const result = await saveTaxRegistration(editing.form);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       setEditing(null);
       router.refresh();
     } catch (e) {
@@ -236,8 +240,8 @@ export function RegistrationsTable({ data }: { data: Data }) {
                   </div>
                 )}
                 {editing.form.filingFrequency === "quarterly" && (
-                  <p className="col-span-2 -mt-1 text-xs text-amber-700">
-                    Quarterly filing deadlines aren&apos;t confirmed for your jurisdiction yet — the VAT return is still generated monthly until that rule is added.
+                  <p className="col-span-2 -mt-1 text-xs text-gray-500">
+                    Terms: Shrawan–Kartik (T1), Mangsir–Falgun (T2), Chaitra–Ashad (T3). Each return is due by the 25th of the first month after its term ends, and a late quarterly filing carries a flat non-filer fine.
                   </p>
                 )}
               </>

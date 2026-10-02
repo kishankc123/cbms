@@ -13,6 +13,28 @@ describe("daysDelayed", () => {
   });
 });
 
+describe("VAT penalty — quarterly filers", () => {
+  const QUARTERLY: VatPenaltyParams = { ...VAT, quarterlyFilingFine: 1000 };
+
+  it("the non-filer fine is a flat 1,000 however late, with no daily calculation or floor", () => {
+    const short = calculatePenalty("vat", 500000, "2026-12-10", "2026-12-15", QUARTERLY, null, "quarterly");
+    const long = calculatePenalty("vat", 500000, "2026-12-10", "2027-03-10", QUARTERLY, null, "quarterly");
+    expect(short.filingPenalty).toBe(1000);
+    expect(long.filingPenalty).toBe(1000);
+    expect(short.lines.some((l) => l.label === "Calculated daily fine")).toBe(false);
+  });
+
+  it("is 0 when filed on time", () => {
+    expect(calculatePenalty("vat", 500000, "2026-12-10", "2026-12-10", QUARTERLY, null, "quarterly").filingPenalty).toBe(0);
+  });
+
+  it("monthly filers are unchanged, and a rule without the quarterly fine falls back to the monthly formula", () => {
+    // 500,000 × 0.05%/day × 5 days = 1,250: above the 1,000 floor, so it tells the monthly formula from the flat quarterly fine.
+    expect(calculatePenalty("vat", 500000, "2026-12-10", "2026-12-15", QUARTERLY).filingPenalty).toBe(1250);
+    expect(calculatePenalty("vat", 500000, "2026-12-10", "2026-12-15", VAT, null, "quarterly").filingPenalty).toBe(1250);
+  });
+});
+
 describe("VAT penalty — the three worked scenarios", () => {
   it("Scenario A: Nil return, 10 days late — the floor applies because the calculated fine is 0", () => {
     const r = calculatePenalty("vat", 0, "2026-08-25", "2026-09-04", VAT);
