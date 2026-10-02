@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { updateAccount } from "./actions";
+import { useProblem } from "@/components/problem-dialog";
 import { ACCOUNT_SUB_CATEGORIES, guessSubCategory } from "@/lib/ledger/account-sub-categories";
 
 type Initial = {
@@ -18,13 +19,18 @@ export function AccountEditModal({
   initial,
   showSubCategory,
   trigger,
+  defaultOpen = false,
+  onClose,
 }: {
   initial: Initial;
   showSubCategory: boolean;
-  trigger: (open: () => void) => ReactNode;
+  /** A button that opens the modal. Omit it when the modal is mounted by something else (a row menu) with `defaultOpen`. */
+  trigger?: (open: () => void) => ReactNode;
+  defaultOpen?: boolean;
+  onClose?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState(initial.name);
   const [isActive, setIsActive] = useState(initial.isActive);
   // A legacy value that isn't one of the fixed options falls back to a same-type option instead of the first one.
@@ -35,28 +41,34 @@ export function AccountEditModal({
         ? guessSubCategory(initial.category, initial.subCategory)
         : "";
   const [subCategory, setSubCategory] = useState(matched);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
+
+  function close() {
+    setOpen(false);
+    onClose?.();
+  }
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   async function save() {
     setBusy(true);
-    setError(null);
     try {
       const r = await updateAccount({ id: initial.id, name, isActive, ...(showSubCategory ? { subCategory } : {}) });
       if (!r.ok) {
-        setError(r.error);
+        report(r.error, /categor|type/i.test(r.error) ? '[data-field="editCategory"]' : '[data-field="editName"]');
         return;
       }
-      setOpen(false);
+      close();
       router.refresh();
     } finally {
       setBusy(false);
@@ -65,16 +77,16 @@ export function AccountEditModal({
 
   return (
     <>
-      {trigger(() => setOpen(true))}
+      {trigger?.(() => setOpen(true))}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-black/30" onClick={() => close()} />
 
           <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Edit account</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={() => close()} aria-label="Close" className="text-gray-400 hover:text-gray-600">
                 ✕
               </button>
             </div>
@@ -84,13 +96,13 @@ export function AccountEditModal({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input data-field="editName" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
               </div>
 
               {showSubCategory && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Category</label>
-                  <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                  <select data-field="editCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
                     <option value="" disabled>
                       Select category
                     </option>
@@ -109,10 +121,10 @@ export function AccountEditModal({
               </label>
             </div>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {dialog}
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+              <button type="button" onClick={() => close()} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
               <button type="button" disabled={busy || !name.trim()} onClick={save} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">

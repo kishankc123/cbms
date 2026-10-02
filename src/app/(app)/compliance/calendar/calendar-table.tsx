@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createCalendarItem, updateCalendarItemStatus, deleteCalendarItem, generateComplianceItems, type listCalendarItems, type listAssignableUsers } from "../actions";
 
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { WEEKDAYS_SHORT, monthCells, todayIso, ymdOf } from "@/lib/calendar";
@@ -24,7 +25,8 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
   const [notice, setNotice] = useState<string | null>(null);
   const [view, setView] = useState<"list" | "month">("list");
 
@@ -133,7 +135,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
         </button>
       </div>
 
-      {error && !showNew && <p className="text-sm text-red-600">{error}</p>}
+      {!showNew && dialog}
 
       {view === "month" && <MonthView items={items} />}
 
@@ -249,7 +251,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
               </div>
             </div>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {dialog}
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowNew(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">

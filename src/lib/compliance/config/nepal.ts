@@ -20,6 +20,8 @@ const WITHHOLDS_TAX: Condition = {
 
 const COMPANY_ENTITY: Condition = { fact: "entity_type", op: "in", value: ["private_limited"] };
 
+const VAT_REGISTERED: Condition = { fact: "registered_tax_types", op: "includes", value: "vat" };
+
 export const NEPAL: CountryConfig = {
   country: { code: "NP", name: "Nepal", currency: "NPR", statutoryCalendar: "BS" },
 
@@ -53,8 +55,21 @@ export const NEPAL: CountryConfig = {
       taxTypeKey: "vat",
       authorityKey: "ird",
       frequency: "monthly",
-      applicability: { fact: "registered_tax_types", op: "includes", value: "vat" },
+      applicability: { all: [VAT_REGISTERED, { fact: "vat_filing_frequency", op: "neq", value: "quarterly" }] },
       dueRule: { period: "month", monthsAfterEnd: 1, dayOfMonth: 25 },
+      isActive: true,
+      isVerified: false,
+    },
+    {
+      key: "vat_return_quarterly",
+      name: "VAT Return (Quarterly)",
+      description: "Quarterly VAT return. Terms: Shrawan–Kartik (T1), Mangsir–Falgun (T2), Chaitra–Ashad (T3). Due by the 25th of the first month after the term ends (BS).",
+      categoryKey: "tax",
+      taxTypeKey: "vat",
+      authorityKey: "ird",
+      frequency: "quarterly",
+      applicability: { all: [VAT_REGISTERED, { fact: "vat_filing_frequency", op: "eq", value: "quarterly" }] },
+      dueRule: { period: "term", monthsAfterEnd: 1, dayOfMonth: 25 },
       isActive: true,
       isVerified: false,
     },
@@ -165,7 +180,7 @@ export const NEPAL: CountryConfig = {
     {
       taxTypeKey: "vat",
       effectiveFrom: "2000-01-01",
-      params: { filingDailyRate: 0.0005, filingFloor: 1000, latePaymentFlatRate: 0.1, interestAnnualRate: 0.15 },
+      params: { filingDailyRate: 0.0005, filingFloor: 1000, latePaymentFlatRate: 0.1, interestAnnualRate: 0.15, quarterlyFilingFine: 1000 },
       isVerified: false,
     },
     {

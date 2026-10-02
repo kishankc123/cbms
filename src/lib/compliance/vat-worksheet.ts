@@ -65,7 +65,7 @@ export async function getVatWorksheet(tenantId: string): Promise<{ rows: VatWork
           const rule = await getPenaltyRule(tenant.countryCode, "vat", o.dueDate);
           if (rule) {
             const principal = Math.max(0, netPay);
-            const breakdown = calculatePenalty("vat", principal, o.dueDate, actualDate, rule.params as VatPenaltyParams);
+            const breakdown = calculatePenalty("vat", principal, o.dueDate, actualDate, rule.params as VatPenaltyParams, null, o.frequency === "quarterly" ? "quarterly" : "monthly");
             daysDelayed = breakdown.daysDelayed;
             finesAndPenalties = round2(breakdown.filingPenalty + breakdown.paymentPenalty + breakdown.interest);
             const floorLine = breakdown.lines.find((l) => l.label === "Applied filing penalty");

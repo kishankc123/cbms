@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { useProblem } from "@/components/problem-dialog";
 import { pauseRecurringExpense, resumeRecurringExpense, stopRecurringExpense } from "./actions";
 import type { RecurringStatus } from "@/lib/recurring-expenses/schedule";
 
@@ -24,7 +25,7 @@ function MiniModal({ title, onClose, children }: { title: string; onClose: () =>
 export function LifecycleActions({ id, status }: { id: string; status: RecurringStatus }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { reportError, dialog } = useProblem();
   const [resuming, setResuming] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [resumeFrom, setResumeFrom] = useState(todayIso());
@@ -32,14 +33,13 @@ export function LifecycleActions({ id, status }: { id: string; status: Recurring
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
-    setError(null);
     try {
       await fn();
       router.refresh();
       setResuming(false);
       setStopping(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      reportError(err);
     } finally {
       setBusy(false);
     }
@@ -47,7 +47,7 @@ export function LifecycleActions({ id, status }: { id: string; status: Recurring
 
   return (
     <div className="flex items-center justify-end gap-3 text-xs">
-      {error && <span className="text-[var(--status-critical-text)]">{error}</span>}
+      {dialog}
       {status === "active" && (
         <button type="button" disabled={busy} onClick={() => run(() => pauseRecurringExpense(id))} className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
           Pause

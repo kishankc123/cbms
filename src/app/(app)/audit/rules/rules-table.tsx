@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createRule, setRuleActive, deleteRule, type listRules, type RuleInput } from "../actions";
 
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 type Rule = Awaited<ReturnType<typeof listRules>>[number];
 
 const MODULES: { value: RuleInput["applicableModule"]; label: string }[] = [
@@ -33,7 +34,8 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -233,7 +235,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </div>
             </div>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {dialog}
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowNew(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">

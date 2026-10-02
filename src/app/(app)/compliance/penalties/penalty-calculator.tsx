@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useErrorDialog } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { StatusPill } from "@/components/ui/status-pill";
-import { calculatePenalty, type ExcisePenaltyParams, type TaxTypeKey, type TdsPenaltyParams, type VatPenaltyParams } from "@/lib/compliance/penalty-engine";
+import { calculatePenalty, type ExcisePenaltyParams, type FilingBasis, type TaxTypeKey, type TdsPenaltyParams, type VatPenaltyParams } from "@/lib/compliance/penalty-engine";
 import { filingDueDate, formatDate, isoFromYmd, monthNames, todayIso, ymdOf, type CalendarSystem, type IsoDate } from "@/lib/calendar";
 import { getPenaltyRuleForPreview, recordPenaltyCharge } from "./actions";
 
@@ -30,16 +31,35 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
   const [principalText, setPrincipalText] = useState("");
   const [manualOverrideText, setManualOverrideText] = useState("");
 
-  const periodAnchor = isoFromYmd(calendar, { year: periodYear, month: periodMonth, day: 1 }) ?? today;
-  const periodLabel = `${monthNames(calendar)[periodMonth - 1]} ${periodYear}`;
-  const dueDate = filingDueDate(calendar, periodAnchor);
+  // A quarterly VAT filer files per 4-month term of the Nepali (BS) fiscal year: T1 Shrawan–Kartik, T2 Mangsir–Falgun,
+  // T3 Chaitra–Ashad; each is due by the 25th of the month after the term's last month.
+  const [filingBasis, setFilingBasis] = useState<FilingBasis>("monthly");
+  const [term, setTerm] = useState(1);
+  const todayBs = ymdOf("BS", today);
+  const [fyYear, setFyYear] = useState(todayBs ? (todayBs.month >= 4 ? todayBs.year : todayBs.year - 1) : 2082);
+  const isQuarterly = taxTypeKey === "vat" && filingBasis === "quarterly";
+  const bsMonths = monthNames("BS");
+  const TERMS = [
+    { n: 1, name: "T1", first: 4, last: 7, lastYearOffset: 0 },
+    { n: 2, name: "T2", first: 8, last: 11, lastYearOffset: 0 },
+    { n: 3, name: "T3", first: 12, last: 3, lastYearOffset: 1 },
+  ];
+  const activeTerm = TERMS[term - 1];
+
+  const periodAnchor = isQuarterly
+    ? (isoFromYmd("BS", { year: fyYear + activeTerm.lastYearOffset, month: activeTerm.last, day: 1 }) ?? today)
+    : (isoFromYmd(calendar, { year: periodYear, month: periodMonth, day: 1 }) ?? today);
+  const periodLabel = isQuarterly
+    ? `${activeTerm.name} (${bsMonths[activeTerm.first - 1]}–${bsMonths[activeTerm.last - 1]}) FY ${fyYear}/${String((fyYear + 1) % 100).padStart(2, "0")}`
+    : `${monthNames(calendar)[periodMonth - 1]} ${periodYear}`;
+  const dueDate = filingDueDate(isQuarterly ? "BS" : calendar, periodAnchor);
   const principal = Number(principalText.replace(/,/g, "")) || 0;
   const manualOverride = taxTypeKey === "excise" && manualOverrideText.trim() !== "" ? Number(manualOverrideText.replace(/,/g, "")) || 0 : null;
 
   const [rule, setRule] = useState<{ params: Record<string, number>; isVerified: boolean; source: string | null } | null | undefined>(undefined);
   const [recording, setRecording] = useState(false);
   const [recorded, setRecorded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { setError, dialog } = useErrorDialog();
 
   useEffect(() => {
     let cancelled = false;
@@ -55,8 +75,8 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
 
   const breakdown = useMemo(() => {
     if (!rule) return null;
-    return calculatePenalty(taxTypeKey, principal, dueDate, actualDate, rule.params as VatPenaltyParams | TdsPenaltyParams | ExcisePenaltyParams, manualOverride);
-  }, [rule, taxTypeKey, principal, dueDate, actualDate, manualOverride]);
+    return calculatePenalty(taxTypeKey, principal, dueDate, actualDate, rule.params as VatPenaltyParams | TdsPenaltyParams | ExcisePenaltyParams, manualOverride, isQuarterly ? "quarterly" : "monthly");
+  }, [rule, taxTypeKey, principal, dueDate, actualDate, manualOverride, isQuarterly]);
 
   async function handleRecord() {
     if (!breakdown) return;
@@ -79,7 +99,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
     }
   }
 
-  const [minYear, maxYear] = calendar === "BS" ? [2075, 2090] : [2020, 2035];
+  const [minYear, maxYear] = isQuarterly || calendar === "BS" ? [2075, 2090] : [2020, 2035];
   const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
   const floorApplied = taxTypeKey === "vat" && breakdown && breakdown.lines.some((l) => l.label === "Applied filing penalty" && l.note === "Minimum floor rate applied");
 
@@ -104,9 +124,42 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
           ))}
         </div>
 
+        {taxTypeKey === "vat" && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Filing basis</label>
+            <select
+              value={filingBasis}
+              onChange={(e) => {
+                setFilingBasis(e.target.value as FilingBasis);
+                setRecorded(false);
+              }}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+            >
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+            </select>
+          </div>
+        )}
+
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Period ({calendar})</label>
+          <label className="mb-1 block text-xs font-medium text-gray-500">{isQuarterly ? "Term (fiscal year starting in BS year)" : `Period (${calendar})`}</label>
           <div className="flex gap-2">
+            {isQuarterly ? (
+              <select
+                value={term}
+                onChange={(e) => {
+                  setTerm(+e.target.value);
+                  setRecorded(false);
+                }}
+                className="flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              >
+                {TERMS.map((t) => (
+                  <option key={t.n} value={t.n}>
+                    {t.name} — {bsMonths[t.first - 1]} to {bsMonths[t.last - 1]}
+                  </option>
+                ))}
+              </select>
+            ) : (
             <select
               value={periodMonth}
               onChange={(e) => {
@@ -121,10 +174,12 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 </option>
               ))}
             </select>
+            )}
             <select
-              value={periodYear}
+              value={isQuarterly ? fyYear : periodYear}
               onChange={(e) => {
-                setPeriodYear(+e.target.value);
+                if (isQuarterly) setFyYear(+e.target.value);
+                else setPeriodYear(+e.target.value);
                 setRecorded(false);
               }}
               className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
@@ -241,7 +296,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                     {recording ? "Recording…" : "Record this charge"}
                   </button>
                 )}
-                {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+                {dialog}
               </div>
             )}
           </>

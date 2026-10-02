@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as actions from "../ownership-actions";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
 
 type Data = Awaited<ReturnType<typeof actions.getOwnership>>;
@@ -69,7 +70,8 @@ function MetaFields({ meta, set, dateLabel = "Effective date", noReason }: { met
 /** Shared shell: runs an action, shows its error, closes on success. */
 function Form({ title, onClose, onDone, submitLabel, disabled, run, children, wide }: { title: string; onClose: () => void; onDone: () => void; submitLabel: string; disabled?: boolean; run: () => Promise<unknown>; children: React.ReactNode; wide?: boolean }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
   async function submit() {
     setBusy(true);
     setError(null);
@@ -85,7 +87,7 @@ function Form({ title, onClose, onDone, submitLabel, disabled, run, children, wi
   return (
     <Modal title={title} onClose={onClose} wide={wide}>
       <div className="grid grid-cols-2 gap-3">{children}</div>
-      {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+      {dialog}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
           Cancel

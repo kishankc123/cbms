@@ -21,7 +21,9 @@ import {
 
 // "event": not a recurring period — one obligation raised when something happens (a shareholder
 // change), due `daysAfterEnd` days after the event date. Periods for it are built by the caller.
-export type PeriodKind = "month" | "quarter" | "fiscal_year" | "event";
+// "quarter" = 3-month blocks; "term" = 4-month blocks (three per fiscal year — Nepal's VAT "quarterly" filing terms:
+// Shrawan–Kartik, Mangsir–Falgun, Chaitra–Ashad). Both count from the fiscal year's first month.
+export type PeriodKind = "month" | "quarter" | "term" | "fiscal_year" | "event";
 
 export type DueRule = {
   period: PeriodKind;
@@ -45,7 +47,7 @@ export type PeriodContext = {
 export function assertValidDueRule(r: unknown): asserts r is DueRule {
   if (typeof r !== "object" || r === null) throw new Error("dueRule: expected an object");
   const o = r as Record<string, unknown>;
-  if (o.period !== "month" && o.period !== "quarter" && o.period !== "fiscal_year" && o.period !== "event") throw new Error(`dueRule: unknown period "${String(o.period)}"`);
+  if (o.period !== "month" && o.period !== "quarter" && o.period !== "term" && o.period !== "fiscal_year" && o.period !== "event") throw new Error(`dueRule: unknown period "${String(o.period)}"`);
   for (const k of ["monthsAfterEnd", "daysAfterEnd"]) {
     if (o[k] !== undefined && (typeof o[k] !== "number" || !Number.isInteger(o[k]) || (o[k] as number) < 0)) throw new Error(`dueRule: "${k}" must be a non-negative integer`);
   }
@@ -107,22 +109,23 @@ export function periodsFor(kind: PeriodKind, ctx: PeriodContext, back: number, a
   const base = fiscalBase(ctx);
   const baseStart = ymdOf(cal, base.from) ?? ymdOf("AD", base.from)!;
 
-  if (kind === "quarter") {
-    // Quarters are 3-month blocks counted from the fiscal year's first month.
+  if (kind === "quarter" || kind === "term") {
+    // Blocks of 3 (quarter) or 4 (term) months, counted from the fiscal year's first month.
+    const size = kind === "term" ? 4 : 3;
     const startMonth = baseStart.month;
     const now = ymdOf(cal, ctx.today)!;
     const idx = (((now.month - startMonth) % 12) + 12) % 12;
-    const qFirstMonth = ((startMonth - 1 + Math.floor(idx / 3) * 3) % 12) + 1;
+    const qFirstMonth = ((startMonth - 1 + Math.floor(idx / size) * size) % 12) + 1;
     const qFirstYear = qFirstMonth > now.month ? now.year - 1 : now.year;
     const qStart = isoFromYmd(cal, { year: qFirstYear, month: qFirstMonth, day: 1 })!;
     for (let d = -back; d <= ahead; d++) {
-      const s = addMonths(cal, qStart, 3 * d);
-      const nextS = addMonths(cal, qStart, 3 * (d + 1));
+      const s = addMonths(cal, qStart, size * d);
+      const nextS = addMonths(cal, qStart, size * (d + 1));
       const sy = ymdOf(cal, s)!;
       const e = addDays(nextS, -1);
       const ey = ymdOf(cal, e)!;
       const names = monthNames(cal);
-      out.push({ key: `Q:${cal}:${sy.year}-${pad2(sy.month)}`, label: `${names[sy.month - 1]}–${names[ey.month - 1]} ${ey.year}`, start: s, end: e });
+      out.push({ key: `${kind === "term" ? "T" : "Q"}:${cal}:${sy.year}-${pad2(sy.month)}`, label: `${names[sy.month - 1]}–${names[ey.month - 1]} ${ey.year}`, start: s, end: e });
     }
     return out;
   }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect } from "@/components/quick-add/pickers";
+import { useProblem } from "@/components/problem-dialog";
 import { recordSalesBatch, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -80,11 +81,11 @@ export function InvoiceForm({
   const [customers, addCustomer] = useWithAdded(customersProp);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
   const [addCount, setAddCount] = useState("1");
-  const [errorRow, setErrorRow] = useState<number | null>(null);
   const [paymentRow, setPaymentRow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the row and field that need attention.
+  const { report, dialog } = useProblem();
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -131,13 +132,14 @@ export function InvoiceForm({
 
   function performReset() {
     setRows(Array.from({ length: MIN_ROWS }, emptyRow));
-    setSaveError(null);
     setConfirmReset(false);
   }
 
   function handleRecordPayClick(i: number) {
-    setErrorRow(isRowComplete(rows[i]) ? null : i);
-    if (!isRowComplete(rows[i])) return;
+    if (!isRowComplete(rows[i])) {
+      const target = rows[i].invoiceDate ? `[data-field="gross${i}"]` : `#mi-date${i}`;
+      return report(`Enter the date and gross amount for row ${i + 1} before recording its payment.`, target);
+    }
     setPaymentRow(i);
   }
 
@@ -150,17 +152,13 @@ export function InvoiceForm({
   }
 
   async function performSave() {
-    setSaveError(null);
-    const hasIncompleteRow = rows.some((r) => isRowTouched(r) && !isRowComplete(r));
-    if (hasIncompleteRow) {
-      setSaveError("Some rows are missing a date or gross amount — finish or clear them before saving.");
-      return;
+    const incomplete = rows.findIndex((r) => isRowTouched(r) && !isRowComplete(r));
+    if (incomplete >= 0) {
+      const target = rows[incomplete].invoiceDate ? `[data-field="gross${incomplete}"]` : `#mi-date${incomplete}`;
+      return report(`Row ${incomplete + 1} is missing a date or gross amount — finish or clear it before saving.`, target);
     }
     const validRows = rows.filter(isRowComplete);
-    if (validRows.length === 0) {
-      setSaveError("Add at least one invoice row before saving.");
-      return;
-    }
+    if (validRows.length === 0) return report("Add at least one invoice row before saving.", "#mi-date0");
 
     setSaving(true);
     try {
@@ -180,7 +178,17 @@ export function InvoiceForm({
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      const message = e instanceof Error ? e.message : "Failed to save";
+      // "Row 3: ..." counts the rows being saved; map it back to the row on screen.
+      const n = Number(/Row (\d+)/i.exec(message)?.[1]);
+      const shownIndex = n ? rows.map((r, i) => (isRowComplete(r) ? i : -1)).filter((i) => i >= 0)[n - 1] : undefined;
+      const target =
+        shownIndex === undefined
+          ? "#mi-date0"
+          : /customer/i.test(message)
+            ? `[data-field="cust${shownIndex}"]`
+            : `[data-field="gross${shownIndex}"]`;
+      report(message, target);
     } finally {
       setSaving(false);
     }
@@ -244,16 +252,18 @@ export function InvoiceForm({
                   >
                     <td className="px-1 py-1 text-center text-gray-500 text-sm whitespace-nowrap">{previewNumber}</td>
                     <td className="px-1 py-1 text-center">
-                      <DatePicker max={today()} value={row.invoiceDate} onChange={(v) => updateRow(i, "invoiceDate", v)} className={`w-32 ${cellInputCls}`} />
+                      <DatePicker id={`mi-date${i}`} max={today()} value={row.invoiceDate} onChange={(v) => updateRow(i, "invoiceDate", v)} className={`w-32 ${cellInputCls}`} />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <CustomerSelect
-                        value={row.customerId}
-                        options={customers}
-                        onChange={(id) => updateRow(i, "customerId", id)}
-                        onAdded={addCustomer}
-                        className={`w-40 ${cellInputCls}`}
-                      />
+                      <div className="flex justify-center" data-field={`cust${i}`} data-opens>
+                        <CustomerSelect
+                          value={row.customerId}
+                          options={customers}
+                          onChange={(id) => updateRow(i, "customerId", id)}
+                          onAdded={addCustomer}
+                          className={`w-40 ${cellInputCls}`}
+                        />
+                      </div>
                     </td>
                     <td className="px-1 py-1 text-center">
                       <select
@@ -267,6 +277,7 @@ export function InvoiceForm({
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input
+                        data-field={`gross${i}`}
                         type="number"
                         step="0.01"
                         min="0"
@@ -304,9 +315,6 @@ export function InvoiceForm({
                       >
                         {row.payments.length > 0 ? "Edit Payment" : "Record Payment"}
                       </button>
-                      {errorRow === i && (
-                        <p className="mt-1 w-40 text-xs text-red-600">Date and gross amount are required.</p>
-                      )}
                     </td>
                   </tr>
                 );
@@ -378,7 +386,6 @@ export function InvoiceForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
@@ -434,6 +441,8 @@ export function InvoiceForm({
           onConfirm={handleConfirmPayment}
         />
       )}
+
+      {dialog}
     </div>
   );
 }

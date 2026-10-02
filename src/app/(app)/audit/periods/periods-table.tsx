@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPeriod, closePeriod, reopenPeriod, type listPeriods } from "../actions";
 
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { monthChoices, todayIso } from "@/lib/calendar";
@@ -22,7 +23,8 @@ export function PeriodsTable({ periods }: { periods: Period[] }) {
   const [reopeningId, setReopeningId] = useState<string | null>(null);
   const [reopenReason, setReopenReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
 
   async function handleCreate() {
     setError(null);
@@ -83,7 +85,7 @@ export function PeriodsTable({ periods }: { periods: Period[] }) {
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {dialog}
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">

@@ -10,6 +10,7 @@ import { ObligationStatusPill } from "@/components/compliance/status-pill";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
+import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 
 type Data = Awaited<ReturnType<typeof listStatutory>>;
 type Item = Data["items"][number];
@@ -199,7 +200,8 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
   const [form, setForm] = useState<StatutoryPatch>({ completedDate: item.completedDate, referenceNumber: item.referenceNumber, supportingDocument: item.supportingDocument, notes: item.notes, responsibleUserId: item.responsibleUserId, dueDate: item.dueDate });
   const [status, setStatus] = useState<ObligationStatus>(item.status);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
   const editable = data.canEdit;
   const dueEditable = editable && item.source !== "generated";
   const deletable = editable && item.source === "manual" && item.status === "pending";
@@ -291,7 +293,7 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
           <textarea rows={2} className={input} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} disabled={!editable} />
         </div>
       </div>
-      {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+      {dialog}
       <div className="mt-4 flex items-center justify-end gap-2">
         {deletable && (
           <button type="button" disabled={busy} onClick={remove} className="mr-auto rounded px-4 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
@@ -314,7 +316,8 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
 function AddModal({ data, onClose, onSaved }: { data: Data; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState({ name: "", categoryKey: "statutory", frequency: "one_time", period: "", dueDate: "", responsibleUserId: "", notes: "" });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { setError, dialog } = useErrorDialog(undefined, FIRST_FIELD_IN_MODAL);
 
   async function save() {
     setBusy(true);
@@ -380,7 +383,7 @@ function AddModal({ data, onClose, onSaved }: { data: Data; onClose: () => void;
           <textarea rows={2} className={input} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
         </div>
       </div>
-      {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+      {dialog}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
           Cancel

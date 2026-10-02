@@ -30,7 +30,7 @@ export async function getOrCreateExpensePayableAccount(tenantId: string) {
   return created;
 }
 
-// Accounts eligible as an expense's "category": Fixed/Variable expense accounts only, and only the LOWEST level —
+// Accounts eligible as an expense's "category": Direct/Indirect expense accounts only, and only the LOWEST level —
 // a category that has sub-categories can't be chosen itself, only its sub-categories can. Cost of Goods Sold
 // (Purchases' territory) is excluded by sub-category, and so are the Salaries account the Payroll module owns
 // (code 5200) and everything under it.
@@ -46,7 +46,7 @@ export async function getExpenseCategoryAccounts(tenantId: string) {
         eq(accounts.tenantId, tenantId),
         eq(accounts.isActive, true),
         eq(accounts.category, "expense"),
-        inArray(accounts.subCategory, ["Fixed expenses", "Variable expenses"]),
+        inArray(accounts.subCategory, ["Direct expenses", "Indirect expenses"]),
         ne(accounts.code, "5200"),
         notLike(accounts.code, "5200.%"),
         notExists(db.select({ one: child.id }).from(child).where(and(eq(child.parentAccountId, accounts.id), eq(child.isActive, true))))

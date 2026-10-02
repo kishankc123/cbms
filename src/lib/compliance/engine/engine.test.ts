@@ -99,6 +99,18 @@ describe("periods and due dates (BS-counted)", () => {
     expect(convertADtoBS(q.start)).toMatchObject({ month: 4, day: 1 });
   });
 
+  it("quarterly VAT terms: Shrawan–Kartik, Mangsir–Falgun, Chaitra–Ashad, each due the 25th of the month after it ends", () => {
+    const rule = { period: "term" as const, monthsAfterEnd: 1, dayOfMonth: 25 };
+    const [t1, t2, t3] = periodsFor("term", ctx, 0, 2);
+    expect(t1.label).toBe("Shrawan–Kartik 2083");
+    expect(t2.label).toBe("Mangsir–Falgun 2083");
+    expect(t3.label).toBe("Chaitra–Ashadh 2084");
+    const dueBs = (p: typeof t1) => convertADtoBS(computeDueDate(rule, p, "BS"))!;
+    expect(dueBs(t1)).toMatchObject({ year: 2083, month: 8, day: 25 }); // 25 Mangsir — first month of T2
+    expect(dueBs(t2)).toMatchObject({ year: 2083, month: 12, day: 25 }); // 25 Chaitra — first month of T3
+    expect(dueBs(t3)).toMatchObject({ year: 2084, month: 4, day: 25 }); // 25 Shrawan — first month of the next T1
+  });
+
   it("counts Gregorian months when the requirement is AD-based, and supports day offsets", () => {
     const [sep] = periodsFor("month", { calendar: "AD", today: TODAY, fiscal: null }, 0, 0);
     expect(sep.label).toBe("September 2026");

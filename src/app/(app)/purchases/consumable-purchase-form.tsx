@@ -75,11 +75,13 @@ const calculatedCellCls = "rounded bg-gray-50 px-1.5 py-1 text-sm text-center te
 
 // Same shape as the Stockable purchase invoice form (header, lines, summary, Record Pay + Save) for one
 // consumable bill: no item picker, the line's description is typed instead, and each line is booked to a
-// purchase category. Consumables are paid for in full when they are bought.
+// purchase category. Nothing is assumed paid: record whatever was paid (all, some or none); any balance is owed to
+// the supplier, who can be chosen here or in Record Pay.
 export function ConsumablePurchaseForm({
   vendors: vendorsProp,
   categoryAccounts,
   cashBankAccounts,
+  vendorBalances,
   vatRate,
   initial,
   onDone,
@@ -88,6 +90,7 @@ export function ConsumablePurchaseForm({
   vendors: Vendor[];
   categoryAccounts: Account[];
   cashBankAccounts: CashBankGroup[];
+  vendorBalances: Record<string, number>;
   vatRate: number;
   initial?: InitialConsumableBill;
   onDone?: () => void;
@@ -158,9 +161,10 @@ export function ConsumablePurchaseForm({
       else if (!(parseFloat(l.rate) > 0)) problem = { message: `Line ${incomplete + 1}: enter the rate. Finish or clear the line before saving.`, target: cell(incomplete, "rate"), field: `rate${incomplete}` };
       else problem = { message: `Line ${incomplete + 1}: enter the quantity. Finish or clear the line before saving.`, target: cell(incomplete, "qty"), field: `qty${incomplete}` };
     } else if (!lines.some(isLineComplete)) problem = { message: "Add at least one line with a category, rate and quantity.", target: cell(0, "category"), field: "cat0" };
-    else if (payments.length === 0) problem = { message: "Record the payment: a consumable purchase is paid for in full when it is bought.", target: '[data-field="pay"]', field: "" };
-    else if (Math.abs(paidTotal - grandTotal) > 0.004) {
-      problem = { message: `The recorded payments (${fmt(paidTotal)}) must equal the bill total (${fmt(grandTotal)}). Edit the payment.`, target: '[data-field="pay"]', field: "" };
+    else if (paidTotal - grandTotal > 0.004) {
+      problem = { message: `The recorded payments (${fmt(paidTotal)}) can't be more than the bill total (${fmt(grandTotal)}). Edit the payment.`, target: '[data-field="pay"]', field: "" };
+    } else if (grandTotal - paidTotal > 0.004 && !vendorId) {
+      problem = { message: `Select a supplier — the unpaid balance of ${fmt(grandTotal - paidTotal)} is owed to them.`, target: '[data-field="supplier"]', field: "" };
     }
     setBadFields(problem?.field ? new Set([problem.field]) : new Set());
     if (problem) return report(problem.message, problem.target);
@@ -238,7 +242,7 @@ export function ConsumablePurchaseForm({
             <input data-field="billNumber" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Supplier (optional)</label>
+            <label className="block text-xs text-gray-500 mb-1">Supplier (required unless paid in full)</label>
             <div data-field="supplier" data-opens>
               <SupplierSelect value={vendorId} options={vendors} onChange={setVendorId} onAdded={addVendor} className={inputCls} />
             </div>
@@ -451,11 +455,15 @@ export function ConsumablePurchaseForm({
         <RecordPayModal
           total={grandTotal}
           cashBankAccounts={cashBankAccounts}
+          allVendors={vendors}
+          vendorBalances={vendorBalances}
+          initialVendorId={vendorId}
           initialLines={payments}
           saving={false}
           onCancel={() => setShowPayment(false)}
-          onConfirm={(p) => {
+          onConfirm={(p, chosenVendorId) => {
             setPayments(p);
+            if (chosenVendorId) setVendorId(chosenVendorId);
             setShowPayment(false);
           }}
         />

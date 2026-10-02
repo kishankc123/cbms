@@ -12,10 +12,8 @@ import { generateObligations } from "@/lib/compliance/engine/generate";
 export type RegistrationStatus = "active" | "inactive" | "suspended" | "deregistered";
 const STATUSES: RegistrationStatus[] = ["active", "inactive", "suspended", "deregistered"];
 
-// Only VAT's filing period varies by organization today. NOTE: the requirement templates only have a confirmed
-// due-date rule for "monthly" — choosing "quarterly" here is captured but does not yet change the generated VAT
-// deadlines (see lib/compliance/config/nepal.ts). It's stored regardless so the setting isn't lost once that rule
-// is added, and the schema never has to change for it.
+// Only VAT's filing period varies by organization today. Monthly and quarterly each have their own requirement
+// template (see lib/compliance/config/nepal.ts); which one applies follows this setting once its effective date arrives.
 export type FilingFrequency = "monthly" | "quarterly";
 const FILING_FREQUENCIES: FilingFrequency[] = ["monthly", "quarterly"];
 const FILING_FREQUENCY_TAX_TYPES = ["vat"];
@@ -87,16 +85,20 @@ export type RegistrationInput = {
   notes: string;
 };
 
-export async function saveTaxRegistration(input: RegistrationInput) {
+// Validation problems are RETURNED, not thrown: in production builds a thrown error's message is replaced by a
+// generic "Minified React error #441", which would hide exactly what the person needs to fix.
+export type SaveRegistrationResult = { ok: true } | { ok: false; error: string };
+
+export async function saveTaxRegistration(input: RegistrationInput): Promise<SaveRegistrationResult> {
   const session = await requireTenantSession();
-  if (!can(session, "compliance", input.id ? "edit" : "create")) throw new Error("Not permitted");
-  if (!STATUSES.includes(input.status)) throw new Error("Unknown status");
+  if (!can(session, "compliance", input.id ? "edit" : "create")) return { ok: false, error: "You don't have permission to change tax registrations." };
+  if (!STATUSES.includes(input.status)) return { ok: false, error: "Unknown status" };
   for (const [label, v] of [["registration", input.registrationDate], ["effective", input.effectiveDate], ["deregistration", input.deregistrationDate], ["filing basis effective", input.filingFrequencyEffectiveFrom]] as const) {
-    if (v && !validateADDate(v)) throw new Error(`Enter a valid ${label} date`);
+    if (v && !validateADDate(v)) return { ok: false, error: `Enter a valid ${label} date` };
   }
-  if (input.status === "deregistered" && !input.deregistrationDate) throw new Error("Enter the deregistration date");
-  if (input.filingFrequency && !FILING_FREQUENCIES.includes(input.filingFrequency)) throw new Error("Unknown filing basis");
-  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) throw new Error("Enter when the new filing basis takes effect");
+  if (input.status === "deregistered" && !input.deregistrationDate) return { ok: false, error: "Enter the deregistration date" };
+  if (input.filingFrequency && !FILING_FREQUENCIES.includes(input.filingFrequency)) return { ok: false, error: "Unknown filing basis" };
+  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) return { ok: false, error: "Enter the date the filing basis takes effect (the \"Effective from\" field)." };
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const [type] = await db
@@ -104,10 +106,10 @@ export async function saveTaxRegistration(input: RegistrationInput) {
     .from(complianceTaxTypes)
     .where(and(eq(complianceTaxTypes.countryCode, tenant.countryCode), eq(complianceTaxTypes.key, input.taxTypeKey), eq(complianceTaxTypes.isRegistrable, true)))
     .limit(1);
-  if (!type) throw new Error("This registration type is not available for your country");
+  if (!type) return { ok: false, error: "This registration type is not available for your country" };
 
   const shared = type.numberSource === "company_pan_vat";
-  if (shared && !tenant.panVatNumber?.trim()) throw new Error("Add your PAN / VAT number in Company Details first");
+  if (shared && !tenant.panVatNumber?.trim()) return { ok: false, error: "Add your PAN / VAT number in the Details tab of Company Details first, then add this registration." };
 
   const values = {
     registrationNumber: shared ? null : input.registrationNumber.trim() || null,
@@ -128,7 +130,7 @@ export async function saveTaxRegistration(input: RegistrationInput) {
       .from(tenantTaxRegistrations)
       .where(and(eq(tenantTaxRegistrations.id, input.id), eq(tenantTaxRegistrations.tenantId, session.tenantId)))
       .limit(1);
-    if (!before) throw new Error("Registration not found");
+    if (!before) return { ok: false, error: "Registration not found" };
     await db.update(tenantTaxRegistrations).set({ ...values, updatedAt: new Date() }).where(eq(tenantTaxRegistrations.id, before.id));
     // The history of a registration is its audit trail: nothing is overwritten without a before/after record.
     await logAuditEvent({
@@ -146,7 +148,7 @@ export async function saveTaxRegistration(input: RegistrationInput) {
       .from(tenantTaxRegistrations)
       .where(and(eq(tenantTaxRegistrations.tenantId, session.tenantId), eq(tenantTaxRegistrations.taxTypeKey, input.taxTypeKey)))
       .limit(1);
-    if (dup) throw new Error("This registration already exists — edit it instead");
+    if (dup) return { ok: false, error: "This registration already exists — edit it instead" };
     const [created] = await db.insert(tenantTaxRegistrations).values({ tenantId: session.tenantId, taxTypeKey: input.taxTypeKey, ...values }).returning();
     await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "tax_registration_added", entityType: "tax_registration", entityId: created.id, after: { taxType: input.taxTypeKey, ...values } });
   }
@@ -158,4 +160,5 @@ export async function saveTaxRegistration(input: RegistrationInput) {
     console.error("compliance generation failed", e);
   }
   revalidatePath("/compliance", "layout");
+  return { ok: true };
 }

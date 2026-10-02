@@ -14,6 +14,7 @@ export function EditCashBillModal({
   vendors,
   categoryAccounts,
   cashBankAccounts,
+  vendorBalances,
   vatRate,
   onClose,
 }: {
@@ -21,6 +22,7 @@ export function EditCashBillModal({
   vendors: Vendor[];
   categoryAccounts: Account[];
   cashBankAccounts: CashBankGroup[];
+  vendorBalances: Record<string, number>;
   vatRate: number;
   onClose: () => void;
 }) {
@@ -61,6 +63,7 @@ export function EditCashBillModal({
             vendors={vendors}
             categoryAccounts={categoryAccounts}
             cashBankAccounts={cashBankAccounts}
+            vendorBalances={vendorBalances}
             vatRate={vatRate}
             initial={{
               billId: data.billId,

@@ -5,6 +5,7 @@ import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
+import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 
@@ -59,6 +60,16 @@ export type InitialSingleInvoice = {
 };
 
 type FieldErrors = { invoiceNumber?: string; date?: string; dueDate?: string; customerId?: string; items?: string };
+
+// Which field a message from the server is about, so the cursor can be put there after the message is read.
+const SERVER_RULES: FieldRules = [
+  [/closed period|invoice date|inventory opening date/i, "#si-date"],
+  [/invoice number/i, '[data-field="invoiceNumber"]'],
+  [/customer/i, '[data-field="customer"]'],
+  [/due date/i, "#si-due"],
+  [/item|line|stock|rate|quantity/i, '[data-field="firstRate"]'],
+  [/payment|cash or bank/i, '[data-field="pay"]'],
+];
 
 const inputCls =
   "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
@@ -119,7 +130,8 @@ export function SingleInvoiceForm({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, reportError, dialog } = useProblem();
   const [savedMessage, setSavedMessage] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -196,8 +208,17 @@ export function SingleInvoiceForm({
     if (dueDate && dueDate < invoiceDate) errors.dueDate = "The due date can't be before the invoice date.";
     if (!lines.some(isLineComplete)) errors.items = "Add at least one item line with a valid rate and quantity.";
     setFieldErrors(errors);
-    setSaveError(null);
-    if (Object.keys(errors).length > 0) return;
+    // The first problem, in the order it appears on the page.
+    const first: [keyof FieldErrors, string][] = [
+      ["date", "#si-date"],
+      ["invoiceNumber", '[data-field="invoiceNumber"]'],
+      ["customerId", '[data-field="customer"]'],
+      ["dueDate", "#si-due"],
+      ["items", '[data-field="firstRate"]'],
+    ];
+    for (const [key, target] of first) {
+      if (errors[key]) return report(errors[key]!, target);
+    }
 
     setSaving(true);
     try {
@@ -238,7 +259,7 @@ export function SingleInvoiceForm({
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed to save");
+      reportError(e, SERVER_RULES);
     } finally {
       setSaving(false);
     }
@@ -251,16 +272,16 @@ export function SingleInvoiceForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <DatePicker max={today()} value={invoiceDate} onChange={(v) => {
+            <DatePicker id="si-date" max={today()} value={invoiceDate} onChange={(v) => {
                 setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
             {openingDateNotice}
-            {fieldErrors.date && <p className="mt-1 text-xs text-red-600">{fieldErrors.date}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Invoice Number</label>
             <input
+              data-field="invoiceNumber"
               value={invoiceNumber}
               onChange={(e) => {
                 setInvoiceNumberOverride(e.target.value);
@@ -268,25 +289,26 @@ export function SingleInvoiceForm({
               }}
               className={fieldErrors.invoiceNumber ? inputErrCls : inputCls}
             />
-            {fieldErrors.invoiceNumber && <p className="mt-1 text-xs text-red-600">{fieldErrors.invoiceNumber}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Customer</label>
-            <CustomerSelect
-              value={customerId}
-              options={customers}
-              onChange={(id) => {
-                setCustomerId(id);
-                if (fieldErrors.customerId) setFieldErrors((p) => ({ ...p, customerId: undefined }));
-              }}
-              onAdded={addCustomer}
-              className={fieldErrors.customerId ? inputErrCls : inputCls}
-            />
-            {fieldErrors.customerId && <p className="mt-1 text-xs text-red-600">{fieldErrors.customerId}</p>}
+            <div data-field="customer" data-opens>
+              <CustomerSelect
+                value={customerId}
+                options={customers}
+                onChange={(id) => {
+                  setCustomerId(id);
+                  if (fieldErrors.customerId) setFieldErrors((p) => ({ ...p, customerId: undefined }));
+                }}
+                onAdded={addCustomer}
+                className={fieldErrors.customerId ? inputErrCls : inputCls}
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Due Date (optional)</label>
             <DatePicker
+              id="si-due"
               min={invoiceDate}
               value={dueDate}
               onChange={(v) => {
@@ -295,7 +317,6 @@ export function SingleInvoiceForm({
               }}
               className={fieldErrors.dueDate ? inputErrCls : inputCls}
             />
-            {fieldErrors.dueDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.dueDate}</p>}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
@@ -346,6 +367,7 @@ export function SingleInvoiceForm({
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input
+                        data-field={i === 0 ? "firstRate" : undefined}
                         type="number"
                         step="0.01"
                         min="0"
@@ -407,7 +429,6 @@ export function SingleInvoiceForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Item
         </button>
-        {fieldErrors.items && <p className="mt-1 text-xs text-red-600">{fieldErrors.items}</p>}
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -467,10 +488,10 @@ export function SingleInvoiceForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
         {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
+          data-field="pay"
           onClick={() => setShowPayment(true)}
           className="whitespace-nowrap rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5"
         >
@@ -512,6 +533,8 @@ export function SingleInvoiceForm({
           }}
         />
       )}
+
+      {dialog}
     </div>
   );
 }

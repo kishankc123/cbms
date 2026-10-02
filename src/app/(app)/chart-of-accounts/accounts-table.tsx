@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccount } from "./actions";
-import { AccountEditModal } from "./account-edit-modal";
-import { Balance, DeleteAccountButton, SystemBadge, TYPE_LABEL } from "./shared";
+import { useProblem } from "@/components/problem-dialog";
+import { AccountRowActions, Balance, SystemBadge, TYPE_LABEL } from "./shared";
 import { ACCOUNT_SUB_CATEGORIES } from "@/lib/ledger/account-sub-categories";
 
 type Account = {
@@ -32,7 +32,8 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [subCategory, setSubCategory] = useState<string>(ACCOUNT_SUB_CATEGORIES[0].label);
-  const [error, setError] = useState<string | null>(null);
+  // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -65,10 +66,9 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       const r = await createAccount({ code, name, subCategory });
-      if (!r.ok) return setError(r.error);
+      if (!r.ok) return report(r.error, /name/i.test(r.error) ? '[data-field="newName"]' : /categor|type/i.test(r.error) ? '[data-field="newCategory"]' : '[data-field="newCode"]');
       setCode("");
       setName("");
       router.refresh();
@@ -83,15 +83,15 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
         <form onSubmit={add} className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Code</label>
-            <input value={code} onChange={(e) => setCode(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24" />
+            <input data-field="newCode" value={code} onChange={(e) => setCode(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
+            <input data-field="newName" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Category</label>
-            <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-[180px]">
+            <select data-field="newCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-[180px]">
               {ACCOUNT_SUB_CATEGORIES.map((sc) => (
                 <option key={sc.label} value={sc.label}>
                   {sc.label}
@@ -157,7 +157,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
         </div>
       </div>
 
-      {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {dialog}
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
@@ -185,19 +185,8 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
                 <Balance value={a.total} />
               </td>
               <td className="px-4 py-2">{a.isActive ? "Active" : "Inactive"}</td>
-              <td className="px-4 py-2 text-right">
-                <div className="flex items-center justify-end gap-3">
-                  <AccountEditModal
-                    initial={{ id: a.id, name: a.name, isActive: a.isActive, category: a.category, subCategory: a.subCategory, system: a.system }}
-                    showSubCategory
-                    trigger={(open) => (
-                      <button type="button" onClick={open} className="text-xs text-[var(--color-primary)] hover:underline">
-                        Edit
-                      </button>
-                    )}
-                  />
-                  {!a.system && <DeleteAccountButton id={a.id} name={a.name} onError={setError} />}
-                </div>
+              <td className="px-4 py-2 text-right whitespace-nowrap">
+                <AccountRowActions account={a} showSubCategory onError={(message) => report(message)} />
               </td>
             </tr>
           ))}

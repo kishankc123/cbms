@@ -31,12 +31,14 @@ export function ConsumablePurchaseTabs({
   bills,
   categoryAccounts,
   cashBankAccounts,
+  vendorBalances,
   vatRate,
 }: {
   vendors: Vendor[];
   bills: Bill[];
   categoryAccounts: Account[];
   cashBankAccounts: CashBankGroup[];
+  vendorBalances: Record<string, number>;
   vatRate: number;
 }) {
   const [tab, setTab] = useState<TabId>("invoices");
@@ -82,6 +84,7 @@ export function ConsumablePurchaseTabs({
           vendors={vendors}
           categoryAccounts={categoryAccounts}
           cashBankAccounts={cashBankAccounts}
+          vendorBalances={vendorBalances}
           vatRate={vatRate}
           onDirtyChange={setDirty}
         />
@@ -101,6 +104,7 @@ export function ConsumablePurchaseTabs({
           vendors={vendors}
           categoryAccounts={categoryAccounts}
           cashBankAccounts={cashBankAccounts}
+          vendorBalances={vendorBalances}
           vatRate={vatRate}
           onClose={() => setEditingBillId(null)}
         />

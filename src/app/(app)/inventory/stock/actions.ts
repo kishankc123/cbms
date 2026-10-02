@@ -22,7 +22,7 @@ async function getOrCreateInventoryAdjustmentAccount(tenantId: string) {
   if (existing) return existing;
   const [created] = await db
     .insert(accounts)
-    .values({ tenantId, code: "5920", name: "Inventory Adjustments", category: "expense", subCategory: "Variable expenses" })
+    .values({ tenantId, code: "5920", name: "Inventory Adjustments", category: "expense", subCategory: "Indirect expenses" })
     .returning();
   return created;
 }
