@@ -11,9 +11,9 @@ import { ConfirmDialog } from "../sales/confirm-dialog";
 export const TYPE_LABEL: Record<string, string> = { asset: "Asset", liability: "Liability", equity: "Equity", income: "Income", expense: "Expense" };
 
 /** A balance signed to the account's normal side; a negative one (the "wrong" side) is shown in red. */
-export function Balance({ value }: { value: number }) {
+export function Balance({ value, contra = false }: { value: number; contra?: boolean }) {
   if (Math.abs(value) < 0.005) return <span className="text-gray-400">0.00</span>;
-  return <span className={value < 0 ? "text-red-600" : ""}>{value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+  return <span className={value < 0 && !contra ? "text-red-600" : ""}>{value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
 }
 
 /** Marks an account that came with the system: other parts of the app rely on it, so it can't be deleted or deactivated. */

@@ -19,6 +19,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
   { code: "1200", name: "Inventory", category: "asset", subCategory: "Current assets" },
   { code: "1300", name: "Tax Receivable (Input VAT)", category: "asset", subCategory: "Current assets" },
   { code: "1500", name: "Fixed Assets", category: "asset", subCategory: "Fixed assets" },
+  { code: "1590", name: "Accumulated Depreciation", category: "asset", subCategory: "Fixed assets" },
 
   // Liabilities
   { code: "2000", name: "Accounts Payable", category: "liability", subCategory: "Current liabilities" },
@@ -33,6 +34,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
   { code: "4000", name: "Sales Revenue", category: "income", subCategory: "Revenue" },
   { code: "4050", name: "Sales Returns", category: "income", subCategory: "Revenue" },
   { code: "4100", name: "Other Income", category: "income", subCategory: "Revenue" },
+  { code: "4150", name: "Gain on Disposal of Assets", category: "income", subCategory: "Revenue" },
 
   // Expenses
   { code: "5000", name: "Cost of Goods Sold", category: "expense", subCategory: "Cost of goods sold" },
@@ -40,5 +42,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
   { code: "5200", name: "Salaries", category: "expense", subCategory: "Indirect expenses" },
   { code: "5300", name: "Utilities", category: "expense", subCategory: "Indirect expenses" },
   { code: "5400", name: "Office Supplies", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5500", name: "Depreciation Expense", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5600", name: "Loss on Disposal of Assets", category: "expense", subCategory: "Indirect expenses" },
   { code: "5900", name: "Miscellaneous Expense", category: "expense", subCategory: "Indirect expenses" },
 ];

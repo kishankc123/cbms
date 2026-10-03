@@ -73,6 +73,16 @@ const NAV = [
     ],
   },
   {
+    href: "/assets",
+    label: "Assets",
+    children: [
+      { href: "/assets", label: "Asset list" },
+      { href: "/assets/depreciation", label: "Depreciation" },
+      { href: "/assets/transactions", label: "Purchase / Sell asset" },
+      { href: "/assets/setup", label: "Setup" },
+    ],
+  },
+  {
     href: "/payroll",
     label: "Payroll",
     children: [

@@ -470,6 +470,13 @@
       "when": 1790942738772,
       "tag": "0066_indirect_direct_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791024953925,
+      "tag": "0067_assets_foundation",
+      "breakpoints": true
     }
   ]
 }

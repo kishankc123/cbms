@@ -34,6 +34,11 @@ async function roleAccountIds(tenantId: string): Promise<Set<string>> {
   return new Set(rows.map((r) => r.id));
 }
 
+async function contraAccountIds(tenantId: string): Promise<Set<string>> {
+  const rows = await db.select({ id: accountRoles.accountId }).from(accountRoles).where(and(eq(accountRoles.tenantId, tenantId), eq(accountRoles.roleKey, "asset_accum_dep")));
+  return new Set(rows.map((r) => r.id));
+}
+
 /** Net debit minus credit per account, over every line ever posted (reversals cancel by construction). */
 async function netDebits(tenantId: string, accountIds?: string[]): Promise<Map<string, number>> {
   const rows = await db
@@ -210,7 +215,7 @@ export async function deleteAccountEntry(tenantId: string, userId: string, id: s
 
 // ---------------------------------------------------------------- balances
 
-export type AccountRow = Account & { own: number; total: number; system: boolean };
+export type AccountRow = Account & { own: number; total: number; system: boolean; /** Holds a balance on the opposite side by design (accumulated depreciation). */ contra: boolean };
 
 /**
  * Every account with its balance, signed to its normal side (assets and expenses
@@ -220,6 +225,7 @@ export async function listAccountsWithBalances(tenantId: string): Promise<Accoun
   const all = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId)).orderBy(asc(accounts.code));
   const net = await netDebits(tenantId);
   const roles = await roleAccountIds(tenantId);
+  const contra = await contraAccountIds(tenantId);
   const rolled = rollUpBalances(all.map((a) => ({ id: a.id, parentAccountId: a.parentAccountId, own: round2(NORMAL_BALANCE[a.category] === "debit" ? net.get(a.id) ?? 0 : -(net.get(a.id) ?? 0)) })));
-  return all.map((a) => ({ ...a, own: rolled.get(a.id)!.own, total: rolled.get(a.id)!.total, system: isSystemAccount(a, roles) }));
+  return all.map((a) => ({ ...a, own: rolled.get(a.id)!.own, total: rolled.get(a.id)!.total, system: isSystemAccount(a, roles), contra: contra.has(a.id) }));
 }

@@ -56,7 +56,7 @@ export default async function ChartStructurePage() {
                       {!a.isActive && <span className="ml-2 text-xs">(inactive)</span>}
                     </td>
                     <td className="px-4 py-1.5 text-right tabular-nums w-40">
-                      <Balance value={depth === 0 ? a.total : a.own} />
+                      <Balance value={depth === 0 ? a.total : a.own} contra={a.contra} />
                     </td>
                   </tr>
                 ))}

@@ -17,6 +17,7 @@ type Account = {
   /** Balance including every account beneath it. */
   total: number;
   system: boolean;
+  contra?: boolean;
 };
 
 type SortField = "code" | "name" | "category" | "total";
@@ -182,7 +183,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
               <td className="px-4 py-2">{TYPE_LABEL[a.category]}</td>
               <td className="px-4 py-2">{a.subCategory ?? "—"}</td>
               <td className="px-4 py-2 text-right tabular-nums">
-                <Balance value={a.total} />
+                <Balance value={a.total} contra={a.contra} />
               </td>
               <td className="px-4 py-2">{a.isActive ? "Active" : "Inactive"}</td>
               <td className="px-4 py-2 text-right whitespace-nowrap">

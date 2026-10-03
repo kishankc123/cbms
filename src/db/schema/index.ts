@@ -14,3 +14,4 @@ export * from "./compliance";
 export * from "./compliance-framework";
 export * from "./tax-rates";
 export * from "./fiscal";
+export * from "./assets";
