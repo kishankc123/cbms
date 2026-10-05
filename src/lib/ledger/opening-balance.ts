@@ -6,7 +6,7 @@ import { getOrCreateBroughtForwardAccount } from "./control-accounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 
 import { todayIso } from "@/lib/calendar";
-async function openingBalanceEntryDate(tenantId: string) {
+export async function openingBalanceEntryDate(tenantId: string) {
   const [tenant] = await db
     .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
     .from(tenants)

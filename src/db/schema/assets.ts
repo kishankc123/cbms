@@ -100,6 +100,8 @@ export const assets = pgTable(
     depreciationMethod: assetDepreciationMethodEnum("depreciation_method").notNull().default("straight_line"),
     /** Months still to be depreciated from depreciationStartDate. For a purchase this is the full useful life. */
     usefulLifeMonths: integer("useful_life_months"),
+    /** Opening assets only: the useful life the asset started with, kept for reference (usefulLifeMonths is what is left). */
+    originalUsefulLifeMonths: integer("original_useful_life_months"),
     residualValue: numeric("residual_value", { precision: 18, scale: 2 }).notNull().default("0"),
     depreciationStartDate: date("depreciation_start_date"),
     depreciationFrequency: text("depreciation_frequency").notNull().default("monthly"),

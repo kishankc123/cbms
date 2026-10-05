@@ -8,7 +8,7 @@ import { useCalendar } from "@/components/calendar/calendar-provider";
 import { useProblem } from "@/components/problem-dialog";
 import { formatDateTime } from "@/lib/calendar";
 import { ConfirmDialog } from "../../sales/confirm-dialog";
-import { updateAsset, voidAssetPurchaseAction, type AssetDetailData } from "../actions";
+import { updateAsset, voidAssetPurchaseAction, voidOpeningAssetAction, type AssetDetailData } from "../actions";
 import { METHOD_LABEL, money } from "../shared";
 
 const TABS = [
@@ -47,11 +47,12 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
   const [editing, setEditing] = useState(false);
   const [confirmingVoid, setConfirmingVoid] = useState(false);
   // A purchase can be voided only while nothing depends on it: bought here, still active, not yet depreciated.
-  const canVoidPurchase = data.canVoid && data.asset.source === "purchase" && data.asset.status === "active" && !data.asset.lastDepreciationDate;
+  const isOpening = data.asset.source === "opening";
+  const canVoidPurchase = data.canVoid && (isOpening ? ["active", "fully_depreciated"].includes(data.asset.status) : data.asset.source === "purchase" && data.asset.status === "active") && !data.asset.lastDepreciationDate;
 
   async function confirmVoid() {
     setConfirmingVoid(false);
-    const r = await voidAssetPurchaseAction(data.asset.id);
+    const r = isOpening ? await voidOpeningAssetAction(data.asset.id) : await voidAssetPurchaseAction(data.asset.id);
     if (!r.ok) return report(r.error);
     router.refresh();
   }
@@ -74,7 +75,7 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
         <div className="flex items-center gap-2">
           {canVoidPurchase && (
             <button type="button" onClick={() => setConfirmingVoid(true)} className="rounded border border-[var(--card-border)] px-4 py-1.5 text-sm text-red-600 hover:bg-[var(--surface-muted-bg)]">
-              Void purchase
+              {isOpening ? "Void opening asset" : "Void purchase"}
             </button>
           )}
           {data.canEdit && (
@@ -93,7 +94,7 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
       {editing && <EditModal data={data} onClose={() => setEditing(false)} />}
       {confirmingVoid && (
         <ConfirmDialog
-          message={`Void the purchase of ${data.asset.assetCode}? Its accounting entries and supplier bill are reversed and the asset is taken off the register.`}
+          message={isOpening ? `Void opening asset ${data.asset.assetCode}? Its opening entry is reversed and the asset is taken off the register.` : `Void the purchase of ${data.asset.assetCode}? Its accounting entries and supplier bill are reversed and the asset is taken off the register.`}
           onYes={confirmVoid}
           onNo={() => setConfirmingVoid(false)}
         />
@@ -171,6 +172,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
     <div className="space-y-4">
       <div className={`${card} grid grid-cols-1 gap-x-8 gap-y-4 p-5 sm:grid-cols-2 lg:grid-cols-3`}>
         <Field label="Method">{METHOD_LABEL[a.depreciationMethod]}</Field>
+        {a.originalUsefulLifeMonths ? <Field label="Original useful life">{lifeText(a.originalUsefulLifeMonths)}</Field> : null}
         <Field label="Useful life (remaining to depreciate)">{lifeText(a.usefulLifeMonths)}</Field>
         <Field label="Residual value">{money(a.residualValue)}</Field>
         <Field label="Depreciation start date">{a.depreciationStartDate ? <D value={a.depreciationStartDate} /> : null}</Field>

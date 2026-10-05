@@ -1,0 +1,1 @@
+ALTER TABLE "assets" ADD COLUMN "original_useful_life_months" integer;

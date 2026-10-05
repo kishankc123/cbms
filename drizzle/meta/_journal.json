@@ -491,6 +491,13 @@
       "when": 1791170207654,
       "tag": "0069_asset_purchase",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791174277072,
+      "tag": "0070_asset_original_life",
+      "breakpoints": true
     }
   ]
 }

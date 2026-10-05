@@ -11,6 +11,9 @@ import { depreciableAmount, depreciationSchedule } from "@/lib/assets/depreciati
 import { ensureAssetSetup, listAssetCategories } from "@/lib/assets/setup";
 import { nextAssetCode } from "@/lib/assets/next-code";
 import { recordAssetPurchase, voidAssetPurchase, type AssetPurchaseInput, type AssetPurchaseResult } from "@/lib/assets/purchase";
+import { assetLedgerReconciliation, listOpeningAssets, recordOpeningAsset, updateOpeningAsset, voidOpeningAsset, type OpeningAssetInput, type OpeningAssetResult } from "@/lib/assets/opening";
+import { openingBalanceEntryDate } from "@/lib/ledger/opening-balance";
+import { assets } from "@/db/schema";
 import { getSupplierBalances } from "@/lib/ledger/supplier-balances";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -96,6 +99,7 @@ export async function getAssetDetailData(assetId: string) {
       residualValue: residual,
       depreciationStartDate: a.depreciationStartDate,
       lastDepreciationDate: a.lastDepreciationDate,
+      originalUsefulLifeMonths: a.originalUsefulLifeMonths,
       remainingDepreciable: depreciableAmount(cost, residual, accumulated),
     },
     schedule,
@@ -165,5 +169,91 @@ export async function voidAssetPurchaseAction(assetId: string) {
   if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to void asset purchases." };
   const result = await voidAssetPurchase(session.tenantId, session.userId, assetId);
   if (result.ok) for (const p of ["/assets", "/suppliers", "/dashboard", "/journal", "/payments"]) revalidatePath(p, p === "/assets" ? "layout" : "page");
+  return result;
+}
+
+// ---------------------------------------------------------------- opening assets
+
+export async function getOpeningAssetsData() {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "view")) throw new Error("Not permitted");
+  const { settings } = await ensureAssetSetup(session.tenantId);
+
+  const [categories, locations, list, rows, reconciliation, openingDate, nextCode] = await Promise.all([
+    listAssetCategories(session.tenantId),
+    db.select({ id: assetLocations.id, name: assetLocations.name }).from(assetLocations).where(and(eq(assetLocations.tenantId, session.tenantId), eq(assetLocations.isActive, true))).orderBy(asc(assetLocations.name)),
+    listOpeningAssets(session.tenantId),
+    db.select().from(assets).where(and(eq(assets.tenantId, session.tenantId), eq(assets.source, "opening"))),
+    assetLedgerReconciliation(session.tenantId),
+    openingBalanceEntryDate(session.tenantId),
+    nextAssetCode(session.tenantId),
+  ]);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return {
+    canCreate: can(session, "assets", "create"),
+    canEdit: can(session, "assets", "edit"),
+    canVoid: can(session, "assets", "delete"),
+    autoGenerateCode: settings.autoGenerateCode,
+    nextCode,
+    openingDate,
+    reconciliation,
+    categories: categories
+      .filter((c) => c.isActive)
+      .map((c) => ({ id: c.id, name: c.name, method: c.defaultMethod, lifeMonths: c.defaultUsefulLifeYears ? c.defaultUsefulLifeYears * 12 : null, residualPercent: Number(c.defaultResidualPercent) })),
+    locations,
+    assets: list.map((r) => {
+      const full = byId.get(r.id)!;
+      const retired = r.status === "voided";
+      return {
+        ...r,
+        // What the edit form starts from.
+        form: {
+          name: full.name,
+          description: full.description ?? "",
+          categoryId: full.categoryId,
+          locationId: full.locationId ?? "",
+          assetCode: full.assetCode,
+          originalPurchaseDate: full.purchaseDate ?? "",
+          supportingDocument: full.supportingDocument ?? "",
+          cost: Number(full.capitalizedCost),
+          accumulatedDepreciation: Number(full.openingAccumulatedDepreciation),
+          method: full.depreciationMethod,
+          originalUsefulLifeMonths: full.originalUsefulLifeMonths,
+          remainingUsefulLifeMonths: full.usefulLifeMonths,
+          residualValue: Number(full.residualValue),
+          depreciationStartDate: full.depreciationStartDate ?? "",
+        },
+        changeable: !retired && !r.locked && r.status !== "disposed" && r.status !== "sold" && r.status !== "written_off",
+      };
+    }),
+  };
+}
+export type OpeningAssetsData = Awaited<ReturnType<typeof getOpeningAssetsData>>;
+
+const refreshAfterOpening = () => {
+  for (const p of ["/assets", "/dashboard", "/journal"]) revalidatePath(p, p === "/assets" ? "layout" : "page");
+};
+
+export async function createOpeningAsset(input: OpeningAssetInput): Promise<OpeningAssetResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "create")) return { ok: false, error: "You don't have permission to add opening assets." };
+  const result = await recordOpeningAsset(session.tenantId, session.userId, input);
+  if (result.ok) refreshAfterOpening();
+  return result;
+}
+
+export async function updateOpeningAssetAction(assetId: string, input: OpeningAssetInput): Promise<OpeningAssetResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "edit")) return { ok: false, error: "You don't have permission to edit assets." };
+  const result = await updateOpeningAsset(session.tenantId, session.userId, assetId, input);
+  if (result.ok) refreshAfterOpening();
+  return result;
+}
+
+export async function voidOpeningAssetAction(assetId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to void opening assets." };
+  const result = await voidOpeningAsset(session.tenantId, session.userId, assetId);
+  if (result.ok) refreshAfterOpening();
   return result;
 }
