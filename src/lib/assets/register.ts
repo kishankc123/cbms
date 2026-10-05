@@ -7,11 +7,11 @@ import { validateADDate } from "@/lib/calendar";
 // Reading and editing the asset register. Everything is scoped to one organization and paginated in the database, so
 // the list stays quick however many assets there are; the summary is a single aggregate query.
 
-export const ASSET_STATUSES = ["draft", "active", "fully_depreciated", "disposed", "sold", "written_off"] as const;
+export const ASSET_STATUSES = ["draft", "active", "fully_depreciated", "disposed", "sold", "written_off", "voided"] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 /** Statuses where the asset is still on the books (counts in cost, accumulated depreciation and net book value). */
 export const LIVE_STATUSES: AssetStatus[] = ["draft", "active", "fully_depreciated"];
-export const RETIRED_STATUSES: AssetStatus[] = ["disposed", "sold", "written_off"];
+export const RETIRED_STATUSES: AssetStatus[] = ["disposed", "sold", "written_off", "voided"];
 
 export type AssetListFilters = { search?: string; status?: string; categoryId?: string; page: number; pageSize: number };
 

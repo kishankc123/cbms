@@ -15,7 +15,7 @@ export const billStatusEnum = pgEnum("bill_status", [
 // involved); "credit" backs Stockable purchase (goes on account and posts to
 // Accounts Payable like a normal bill). Values kept as-is — only the
 // user-facing labels changed.
-export const purchaseTypeEnum = pgEnum("purchase_type", ["cash", "credit"]);
+export const purchaseTypeEnum = pgEnum("purchase_type", ["cash", "credit", "asset"]);
 
 export const billTypeEnum = pgEnum("bill_type", ["vat", "pan", "estimate", "challan", "no_bill"]);
 

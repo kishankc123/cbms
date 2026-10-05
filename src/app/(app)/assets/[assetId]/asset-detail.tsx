@@ -7,7 +7,8 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { useProblem } from "@/components/problem-dialog";
 import { formatDateTime } from "@/lib/calendar";
-import { updateAsset, type AssetDetailData } from "../actions";
+import { ConfirmDialog } from "../../sales/confirm-dialog";
+import { updateAsset, voidAssetPurchaseAction, type AssetDetailData } from "../actions";
 import { METHOD_LABEL, money } from "../shared";
 
 const TABS = [
@@ -40,8 +41,20 @@ const lifeText = (months: number | null) => {
 };
 
 export function AssetDetail({ data }: { data: AssetDetailData }) {
+  const router = useRouter();
+  const { report, dialog } = useProblem();
   const [tab, setTab] = useState<TabId>("overview");
   const [editing, setEditing] = useState(false);
+  const [confirmingVoid, setConfirmingVoid] = useState(false);
+  // A purchase can be voided only while nothing depends on it: bought here, still active, not yet depreciated.
+  const canVoidPurchase = data.canVoid && data.asset.source === "purchase" && data.asset.status === "active" && !data.asset.lastDepreciationDate;
+
+  async function confirmVoid() {
+    setConfirmingVoid(false);
+    const r = await voidAssetPurchaseAction(data.asset.id);
+    if (!r.ok) return report(r.error);
+    router.refresh();
+  }
 
   return (
     <div className="space-y-4">
@@ -58,11 +71,18 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
             </button>
           ))}
         </div>
-        {data.canEdit && (
-          <button type="button" onClick={() => setEditing(true)} className="rounded border border-[var(--card-border)] px-4 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-muted-bg)]">
-            Edit asset
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canVoidPurchase && (
+            <button type="button" onClick={() => setConfirmingVoid(true)} className="rounded border border-[var(--card-border)] px-4 py-1.5 text-sm text-red-600 hover:bg-[var(--surface-muted-bg)]">
+              Void purchase
+            </button>
+          )}
+          {data.canEdit && (
+            <button type="button" onClick={() => setEditing(true)} className="rounded border border-[var(--card-border)] px-4 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-muted-bg)]">
+              Edit asset
+            </button>
+          )}
+        </div>
       </div>
 
       {tab === "overview" && <Overview data={data} />}
@@ -71,6 +91,14 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
       {tab === "transactions" && <Transactions data={data} />}
       {tab === "audit" && <Audit data={data} />}
       {editing && <EditModal data={data} onClose={() => setEditing(false)} />}
+      {confirmingVoid && (
+        <ConfirmDialog
+          message={`Void the purchase of ${data.asset.assetCode}? Its accounting entries and supplier bill are reversed and the asset is taken off the register.`}
+          onYes={confirmVoid}
+          onNo={() => setConfirmingVoid(false)}
+        />
+      )}
+      {dialog}
     </div>
   );
 }

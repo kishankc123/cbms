@@ -29,6 +29,7 @@ export const journalSourceTypeEnum = pgEnum("journal_source_type", [
   "purchase_return",
   "advance_application",
   "stock_adjustment",
+  "asset_purchase",
   "asset_depreciation",
   "asset_disposal",
   "asset_writeoff",

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, boolean, integer, numeric, date, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
-import { vendors } from "./purchases";
+import { vendors, purchaseBills } from "./purchases";
 
 // Fixed assets. Everything here is country-neutral: an asset's ACCOUNTING classification (its category) is kept apart
 // from any country's TAX classification, which lives in its own tables and never in these.
@@ -54,7 +54,7 @@ export const assetLocations = pgTable(
   (t) => [uniqueIndex("asset_locations_tenant_name").on(t.tenantId, t.name)]
 );
 
-export const assetStatusEnum = pgEnum("asset_status", ["draft", "active", "fully_depreciated", "disposed", "sold", "written_off"]);
+export const assetStatusEnum = pgEnum("asset_status", ["draft", "active", "fully_depreciated", "disposed", "sold", "written_off", "voided"]);
 export const assetSourceEnum = pgEnum("asset_source", ["purchase", "opening"]);
 
 /**
@@ -80,6 +80,8 @@ export const assets = pgTable(
     purchaseDate: date("purchase_date"),
     availableForUseDate: date("available_for_use_date"),
     vendorId: uuid("vendor_id").references(() => vendors.id),
+    /** The supplier bill an asset purchase created; null for opening assets. */
+    purchaseBillId: uuid("purchase_bill_id").references(() => purchaseBills.id),
     invoiceNumber: text("invoice_number"),
     purchaseOrderNumber: text("purchase_order_number"),
     purchaseReference: text("purchase_reference"),

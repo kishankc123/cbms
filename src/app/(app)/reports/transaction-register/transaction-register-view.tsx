@@ -25,6 +25,10 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   purchase_return: "Purchase Return",
   advance_application: "Advance Application",
   stock_adjustment: "Stock Adjustment",
+  asset_purchase: "Asset Purchase",
+  asset_depreciation: "Asset Depreciation",
+  asset_disposal: "Asset Disposal",
+  asset_writeoff: "Asset Write-Off",
 };
 const SOURCE_TYPES = Object.keys(SOURCE_TYPE_LABEL);
 

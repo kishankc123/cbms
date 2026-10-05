@@ -21,7 +21,7 @@ export type LineKind = "opening" | "invoice" | "payment" | "other";
 
 export function lineKind(sourceType: string): LineKind {
   if (sourceType === "opening_balance") return "opening";
-  if (sourceType === "sale" || sourceType === "purchase") return "invoice";
+  if (sourceType === "sale" || sourceType === "purchase" || sourceType === "asset_purchase") return "invoice";
   if (sourceType === "payment" || sourceType === "receipt" || sourceType === "advance_application") return "payment";
   return "other";
 }
@@ -38,6 +38,7 @@ export function describeLine(l: PartyLine): string {
   else if (l.sourceType === "sales_return") label = `Debit note (sales return)${l.reference ? ` ${l.reference}` : ""}`;
   else if (l.sourceType === "purchase_return") label = `Credit note (purchase return)${l.reference ? ` ${l.reference}` : ""}`;
   else if (l.sourceType === "purchase") label = `Purchase bill${l.reference ? ` ${l.reference}` : ""}`;
+  else if (l.sourceType === "asset_purchase") label = `Asset purchase bill${l.reference ? ` ${l.reference}` : ""}`;
   else if (l.sourceType === "advance_application") label = `Advance applied${l.reference ? ` to ${l.reference}` : ""}`;
   else if (kind === "payment") label = l.sourceType === "receipt" ? "Payment received" : "Payment made";
   else if (kind === "opening") label = "Opening balance";

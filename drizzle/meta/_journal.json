@@ -484,6 +484,13 @@
       "when": 1791169643444,
       "tag": "0068_assets_register",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791170207654,
+      "tag": "0069_asset_purchase",
+      "breakpoints": true
     }
   ]
 }

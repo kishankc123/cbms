@@ -7,6 +7,7 @@ export const STATUS_LABEL: Record<string, string> = {
   disposed: "Disposed",
   sold: "Sold",
   written_off: "Written off",
+  voided: "Voided",
 };
 
 export const STATUS_TONE: Record<string, StatusTone> = {
@@ -16,6 +17,7 @@ export const STATUS_TONE: Record<string, StatusTone> = {
   disposed: "action",
   sold: "action",
   written_off: "critical",
+  voided: "critical",
 };
 
 export const METHOD_LABEL: Record<string, string> = { straight_line: "Straight line", declining_balance: "Declining balance", none: "No depreciation" };

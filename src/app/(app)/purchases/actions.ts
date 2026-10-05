@@ -1,16 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull, ne, desc, inArray } from "drizzle-orm";
+import { and, eq, isNull, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { purchaseBills, vendors, journalEntries, journalLines, tenants, payments, paymentAllocations, items, type PurchaseLineItem } from "@/db/schema";
+import { purchaseBills, vendors, journalEntries, journalLines, type PurchaseLineItem } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
-import { postJournalEntry, reverseJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
+import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
-import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
@@ -18,88 +17,9 @@ import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { todayIso } from "@/lib/calendar";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
-
-// Deletes the embedded (paid-at-creation) Payment-module row(s) recorded
-// for this bill, cascading to their allocation rows — called before a void
-// or edit re-posts fresh entries.
-async function deleteEmbeddedPaymentsForBill(tenantId: string, billId: string) {
-  const rows = await db
-    .select({ paymentId: paymentAllocations.paymentId })
-    .from(paymentAllocations)
-    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
-    .where(and(eq(payments.tenantId, tenantId), eq(payments.origin, "embedded"), eq(paymentAllocations.targetType, "purchase_bill"), eq(paymentAllocations.targetId, billId)));
-
-  const paymentIds = [...new Set(rows.map((r) => r.paymentId))];
-  for (const id of paymentIds) {
-    await db.delete(payments).where(and(eq(payments.tenantId, tenantId), eq(payments.id, id)));
-  }
-}
-
-// Records the embedded supplier-payment row (+ its allocation to this bill)
-// in the unified Payment module for a payment captured at bill
-// creation/edit time — the accounting entry itself is posted separately by
-// the caller, unchanged; this is purely the Payment module's own record of
-// that same fact so it shows up in the Payments list and reconciliation.
-async function insertEmbeddedSupplierPayment(
-  tenantId: string,
-  userId: string,
-  vendorId: string | null,
-  billId: string,
-  paymentDate: string,
-  amount: number,
-  accountId: string,
-  journalEntryId: string,
-  referenceNumber: string
-) {
-  const [row] = await withPaymentNumber(tenantId, "money_out", (paymentNumber) =>
-    db
-    .insert(payments)
-    .values({
-      tenantId,
-      paymentNumber,
-      direction: "money_out",
-      paymentType: "supplier_payment",
-      paymentDate,
-      partyType: vendorId ? "supplier" : "none",
-      vendorId,
-      accountId,
-      paymentMethod: "cash",
-      referenceNumber,
-      amount: amount.toFixed(2),
-      description: `Payment for ${referenceNumber}`,
-      status: "posted",
-      origin: "embedded",
-      journalEntryId,
-      createdBy: userId,
-      postedBy: userId,
-      postedAt: new Date(),
-    })
-    .returning()
-  );
-
-  await db.insert(paymentAllocations).values({ paymentId: row.id, targetType: "purchase_bill", targetId: billId, allocatedAmount: amount.toFixed(2) });
-}
+import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-// A supplier's bill number is unique per supplier (two suppliers can both have a bill "101"). Void bills
-// don't count, so a bill voided because of a typo can be entered again.
-async function assertBillNumberFree(tenantId: string, vendorId: string | null, billNumber: string, excludeBillId?: string) {
-  const rows = await db
-    .select({ id: purchaseBills.id, vendorId: purchaseBills.vendorId })
-    .from(purchaseBills)
-    .where(and(eq(purchaseBills.tenantId, tenantId), eq(purchaseBills.billNumber, billNumber), ne(purchaseBills.status, "void")));
-  if (rows.some((r) => r.id !== excludeBillId && (r.vendorId ?? null) === (vendorId ?? null))) {
-    throw new Error(`Bill number ${billNumber} is already recorded${vendorId ? " for this supplier" : ""}`);
-  }
-}
-
-// A failed save must not leave half a bill behind: undo whatever posted and drop the row.
-async function discardBill(tenantId: string, billId: string, userId: string) {
-  await reverseAllActiveEntriesForSource(tenantId, billId, userId, "Rolled back — bill could not be saved").catch(() => {});
-  await deleteEmbeddedPaymentsForBill(tenantId, billId).catch(() => {});
-  await db.delete(purchaseBills).where(eq(purchaseBills.id, billId));
-}
 
 // Finds the entry currently in force for a bill (i.e. not superseded by a
 // reversal) and reverses it — used by both void and edit, since editing a
@@ -321,6 +241,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
     .where(and(eq(purchaseBills.id, input.billId), eq(purchaseBills.tenantId, session.tenantId)))
     .limit(1);
   if (!existing) throw new Error("Bill not found");
+  if (existing.purchaseType === "asset") throw new Error("This is an asset purchase and can't be edited here. Void it from the asset's page in Assets and enter it again.");
   if (existing.status === "void") throw new Error("Cannot edit a void bill");
   if (!input.billDate) throw new Error("Bill date is required");
 
@@ -445,6 +366,7 @@ export async function voidBill(formData: FormData) {
     .where(and(eq(purchaseBills.id, billId), eq(purchaseBills.tenantId, session.tenantId)))
     .limit(1);
   if (!bill) throw new Error("Bill not found");
+  if (bill.purchaseType === "asset") throw new Error("This is an asset purchase. Void it from the asset's page in Assets.");
   if (bill.status === "void") throw new Error("Bill is already void");
 
   await assertNoLaterPayments(session.tenantId, "purchase_bill", billId, "bill");

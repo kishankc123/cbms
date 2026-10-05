@@ -21,7 +21,7 @@ export async function activePurchaseSourceIds(tenantId: string, periodStart: Dat
       .where(
         and(
           eq(journalEntries.tenantId, tenantId),
-          eq(journalEntries.sourceType, "purchase"),
+          inArray(journalEntries.sourceType, ["purchase", "asset_purchase"]),
           eq(journalEntries.isReversed, false),
           gte(journalEntries.entryDate, startStr),
           lte(journalEntries.entryDate, endStr)
