@@ -1,6 +1,6 @@
 import { and, eq, ne, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
-import { salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
+import { assetDisposals, salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -24,12 +24,27 @@ export async function getSalesRegister(tenantId: string, from: string, to: strin
     .where(and(eq(salesInvoices.tenantId, tenantId), gte(salesInvoices.invoiceDate, from), lte(salesInvoices.invoiceDate, to)))
     .orderBy(salesInvoices.invoiceDate);
 
+  // An asset sold is a taxable supply too, so it belongs in the sales register (and the VAT return) even though it is not revenue.
+  const assetSales = await db
+    .select({
+      invoiceNumber: assetDisposals.invoiceNumber,
+      reference: assetDisposals.reference,
+      invoiceDate: assetDisposals.disposalDate,
+      customerId: assetDisposals.customerId,
+      subtotal: assetDisposals.saleAmount,
+      taxAmount: assetDisposals.vatAmount,
+      total: assetDisposals.total,
+    })
+    .from(assetDisposals)
+    .where(and(eq(assetDisposals.tenantId, tenantId), eq(assetDisposals.kind, "sale"), eq(assetDisposals.status, "posted"), gte(assetDisposals.disposalDate, from), lte(assetDisposals.disposalDate, to)));
+  const combined = [...rows, ...assetSales.map((a) => ({ invoiceNumber: a.invoiceNumber || a.reference, invoiceDate: a.invoiceDate, customerId: a.customerId, subtotal: a.subtotal, taxAmount: a.taxAmount, total: a.total, status: "paid" as typeof rows[number]["status"] }))].sort((x, y) => x.invoiceDate.localeCompare(y.invoiceDate));
+
   const customerList = await db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId));
   const nameById = Object.fromEntries(customerList.map((c) => [c.id, c.name]));
 
-  const active = rows.filter((r) => r.status !== "void");
+  const active = combined.filter((r) => r.status !== "void");
   return {
-    rows: rows.map((r) => ({ ...r, customerName: nameById[r.customerId] ?? "—" })),
+    rows: combined.map((r) => ({ ...r, customerName: (r.customerId ? nameById[r.customerId] : null) ?? "—" })),
     totalSubtotal: round2(active.reduce((s, r) => s + Number(r.subtotal), 0)),
     totalTax: round2(active.reduce((s, r) => s + Number(r.taxAmount), 0)),
     totalAmount: round2(active.reduce((s, r) => s + Number(r.total), 0)),

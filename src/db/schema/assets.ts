@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, boolean, integer, numeric, date, pgEnum
 import { sql } from "drizzle-orm";
 import { tenants, users } from "./tenancy";
 import { vendors, purchaseBills } from "./purchases";
+import { customers } from "./sales";
 
 // Fixed assets. Everything here is country-neutral: an asset's ACCOUNTING classification (its category) is kept apart
 // from any country's TAX classification, which lives in its own tables and never in these.
@@ -182,4 +183,40 @@ export const assetDepreciationLines = pgTable(
     accumulatedAfter: numeric("accumulated_after", { precision: 18, scale: 2 }).notNull(),
   },
   (t) => [index("asset_dep_lines_run").on(t.runId), index("asset_dep_lines_asset").on(t.assetId)]
+);
+
+/** A sale, disposal or write-off of an asset: what left the books, what came in, and the gain or loss. Reversible while its period is open. */
+export const assetDisposals = pgTable(
+  "asset_disposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+    /** sale | disposal | write_off */
+    kind: text("kind").notNull(),
+    reference: text("reference").notNull(),
+    disposalDate: date("disposal_date").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id),
+    /** The buyer's or our own invoice number for a sale. */
+    invoiceNumber: text("invoice_number"),
+    /** taxable | none (sales only). */
+    taxTreatment: text("tax_treatment").notNull().default("none"),
+    saleAmount: numeric("sale_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+    vatAmount: numeric("vat_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+    total: numeric("total", { precision: 18, scale: 2 }).notNull().default("0"),
+    receivedAccountId: uuid("received_account_id"),
+    cost: numeric("cost", { precision: 18, scale: 2 }).notNull(),
+    accumulatedDepreciation: numeric("accumulated_depreciation", { precision: 18, scale: 2 }).notNull(),
+    netBookValue: numeric("net_book_value", { precision: 18, scale: 2 }).notNull(),
+    /** Proceeds less net book value: positive is a gain, negative a loss. */
+    gainLoss: numeric("gain_loss", { precision: 18, scale: 2 }).notNull(),
+    reason: text("reason"),
+    journalEntryId: uuid("journal_entry_id"),
+    status: text("status").notNull().default("posted"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reversedBy: uuid("reversed_by").references(() => users.id),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("asset_disposals_tenant_reference").on(t.tenantId, t.reference), index("asset_disposals_asset").on(t.assetId), index("asset_disposals_tenant_date").on(t.tenantId, t.disposalDate)]
 );

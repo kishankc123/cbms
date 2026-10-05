@@ -235,6 +235,18 @@ export async function cashFlowStatement(tenantId: string, periodStart: Date, per
     }
   }
 
+  // A gain or loss on selling an asset is in net profit, but the cash it produced is part of the sale proceeds: take it out of
+  // operating and show it with the investing proceeds (the book value is already there through the Fixed Assets movement).
+  const [gainAccount, lossAccount] = await Promise.all([getAccountByRole(tenantId, "asset_disposal_gain"), getAccountByRole(tenantId, "asset_disposal_loss")]);
+  const gain = round2(pnl.income.find((i) => i.accountId === gainAccount?.id)?.amount ?? 0);
+  const loss = round2(pnl.expenses.find((e) => e.accountId === lossAccount?.id)?.amount ?? 0);
+  if (gain !== 0 || loss !== 0) {
+    const net = round2(gain - loss);
+    if (gain !== 0) operating.unshift({ accountId: gainAccount!.id, code: gainAccount!.code, name: "Gain on disposal of assets", amount: -gain });
+    if (loss !== 0) operating.unshift({ accountId: lossAccount!.id, code: lossAccount!.code, name: "Loss on disposal of assets", amount: loss });
+    investing.push({ accountId: (gain !== 0 ? gainAccount : lossAccount)!.id, code: "", name: "Gain or loss on disposal of assets (proceeds above or below book value)", amount: net });
+  }
+
   const netCashFromOperating = round2(pnl.netProfit + operating.reduce((s, r) => s + r.amount, 0));
   const netCashFromInvesting = round2(investing.reduce((s, r) => s + r.amount, 0));
   const netCashFromFinancing = round2(financing.reduce((s, r) => s + r.amount, 0));

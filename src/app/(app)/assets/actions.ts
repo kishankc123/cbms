@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { assetCategories, assetLocations, vendors } from "@/db/schema";
+import { assetCategories, assetLocations, assets, customers, vendors } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { getFiscalRange } from "@/lib/fiscal";
 import { assetSummary, getAsset, listAssetAudit, listAssetEvents, listAssets, updateAssetDetails, type UpdateAssetInput, type UpdateAssetResult } from "@/lib/assets/register";
@@ -13,8 +13,9 @@ import { nextAssetCode } from "@/lib/assets/next-code";
 import { recordAssetPurchase, voidAssetPurchase, type AssetPurchaseInput, type AssetPurchaseResult } from "@/lib/assets/purchase";
 import { assetLedgerReconciliation, listOpeningAssets, recordOpeningAsset, updateOpeningAsset, voidOpeningAsset, type OpeningAssetInput, type OpeningAssetResult } from "@/lib/assets/opening";
 import { openingBalanceEntryDate } from "@/lib/ledger/opening-balance";
-import { assets } from "@/db/schema";
 import { depreciationSummary, listRuns, postDepreciationRun, previewRun, reverseDepreciationRun, runnableMonths } from "@/lib/assets/run";
+import { disposeAsset, listDisposals, reverseAssetDisposal, type AssetDisposalInput } from "@/lib/assets/disposal";
+import { salesVatRate } from "@/lib/sales/vat";
 import { getSupplierBalances } from "@/lib/ledger/supplier-balances";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -295,5 +296,54 @@ export async function reverseDepreciation(runId: string) {
   if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to reverse depreciation." };
   const result = await reverseDepreciationRun(session.tenantId, session.userId, runId);
   if (result.ok) refreshAfterRun();
+  return result;
+}
+
+// ---------------------------------------------------------------- sale, disposal, write-off
+
+export async function getDisposalFormData() {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "view")) throw new Error("Not permitted");
+  const [eligible, customerList, cashBankAccounts, vatRate, disposals] = await Promise.all([
+    db
+      .select({ id: assets.id, assetCode: assets.assetCode, name: assets.name, cost: assets.capitalizedCost, accumulated: assets.accumulatedDepreciation })
+      .from(assets)
+      .where(and(eq(assets.tenantId, session.tenantId), inArray(assets.status, ["active", "fully_depreciated"])))
+      .orderBy(asc(assets.assetCode))
+      .limit(1000),
+    db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
+    getCashBankAccounts(session.tenantId),
+    salesVatRate(session.tenantId),
+    listDisposals(session.tenantId),
+  ]);
+  return {
+    canCreate: can(session, "assets", "edit"),
+    canReverse: can(session, "assets", "delete"),
+    vatRate,
+    assets: eligible.map((e) => ({ id: e.id, assetCode: e.assetCode, name: e.name, cost: Number(e.cost), accumulated: Number(e.accumulated) })),
+    customers: customerList,
+    cashBankAccounts,
+    disposals,
+  };
+}
+export type DisposalFormData = Awaited<ReturnType<typeof getDisposalFormData>>;
+
+const refreshAfterDisposal = () => {
+  for (const p of ["/assets", "/dashboard", "/journal", "/compliance"]) revalidatePath(p, p === "/assets" ? "layout" : "page");
+};
+
+export async function createAssetDisposal(input: AssetDisposalInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "edit")) return { ok: false as const, error: "You don't have permission to sell or dispose of assets." };
+  const result = await disposeAsset(session.tenantId, session.userId, session.calendar, input);
+  if (result.ok) refreshAfterDisposal();
+  return result;
+}
+
+export async function reverseAssetDisposalAction(disposalId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to reverse this." };
+  const result = await reverseAssetDisposal(session.tenantId, session.userId, disposalId);
+  if (result.ok) refreshAfterDisposal();
   return result;
 }

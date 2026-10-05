@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { AssetPurchaseFormData, OpeningAssetsData } from "../actions";
+import type { AssetPurchaseFormData, DisposalFormData, OpeningAssetsData } from "../actions";
+import { DisposalPanel } from "./disposal-panel";
 import { OpeningAssetsPanel } from "./opening-assets-panel";
 import { AssetPurchaseForm } from "./asset-purchase-form";
 
@@ -12,7 +13,7 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-export function TransactionsTabs({ data, opening }: { data: AssetPurchaseFormData; opening: OpeningAssetsData }) {
+export function TransactionsTabs({ data, opening, disposal }: { data: AssetPurchaseFormData; opening: OpeningAssetsData; disposal: DisposalFormData }) {
   const [tab, setTab] = useState<TabId>("purchase");
   return (
     <div className="space-y-4">
@@ -32,12 +33,7 @@ export function TransactionsTabs({ data, opening }: { data: AssetPurchaseFormDat
       {tab === "purchase" &&
         (data.canCreate ? <AssetPurchaseForm data={data} /> : <p className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-6 text-sm text-[var(--text-secondary)]">You don&apos;t have permission to purchase assets.</p>)}
       {tab === "opening" && <OpeningAssetsPanel data={opening} />}
-      {tab === "sell" && (
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-8 text-center">
-          <p className="text-sm font-medium text-[var(--text-primary)]">Selling, disposing of and writing off assets is built in a later step.</p>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Until then an asset stays on the register.</p>
-        </div>
-      )}
+      {tab === "sell" && <DisposalPanel data={disposal} />}
     </div>
   );
 }
