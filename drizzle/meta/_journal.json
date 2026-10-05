@@ -498,6 +498,13 @@
       "when": 1791174277072,
       "tag": "0070_asset_original_life",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791175688348,
+      "tag": "0071_asset_depreciation_runs",
+      "breakpoints": true
     }
   ]
 }

@@ -193,6 +193,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
               <th className="px-4 py-2 font-medium text-right">Opening NBV</th>
               <th className="px-4 py-2 font-medium text-right">Depreciation</th>
               <th className="px-4 py-2 font-medium text-right">Closing NBV</th>
+              <th className="px-4 py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -202,11 +203,12 @@ function Depreciation({ data }: { data: AssetDetailData }) {
                 <td className="px-4 py-2 text-right tabular-nums">{money(r.opening)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(r.depreciation)}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-[var(--text-primary)]">{money(r.closing)}</td>
+                <td className="px-4 py-2 text-xs text-[var(--text-secondary)]">{r.posted ? "Posted" : "Scheduled"}</td>
               </tr>
             ))}
             {data.schedule.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-[var(--text-secondary)]">
+                <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-secondary)]">
                   {a.depreciationMethod === "none" ? "This asset is not depreciated." : "Set a useful life and a depreciation start date to see the schedule."}
                 </td>
               </tr>

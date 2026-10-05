@@ -14,6 +14,7 @@ import { recordAssetPurchase, voidAssetPurchase, type AssetPurchaseInput, type A
 import { assetLedgerReconciliation, listOpeningAssets, recordOpeningAsset, updateOpeningAsset, voidOpeningAsset, type OpeningAssetInput, type OpeningAssetResult } from "@/lib/assets/opening";
 import { openingBalanceEntryDate } from "@/lib/ledger/opening-balance";
 import { assets } from "@/db/schema";
+import { depreciationSummary, listRuns, postDepreciationRun, previewRun, reverseDepreciationRun, runnableMonths } from "@/lib/assets/run";
 import { getSupplierBalances } from "@/lib/ledger/supplier-balances";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -102,7 +103,7 @@ export async function getAssetDetailData(assetId: string) {
       originalUsefulLifeMonths: a.originalUsefulLifeMonths,
       remainingDepreciable: depreciableAmount(cost, residual, accumulated),
     },
-    schedule,
+    schedule: schedule.map((r) => ({ ...r, posted: !!a.lastDepreciationDate && r.periodEnd <= a.lastDepreciationDate })),
     events: events.map((e) => ({ id: e.id, eventType: e.eventType, eventDate: e.eventDate, description: e.description, amount: e.amount === null ? null : Number(e.amount) })),
     audit: audit.map((e) => ({ id: e.id, action: e.action, at: e.at.toISOString(), userName: e.userName, before: e.before, after: e.after })),
     categories,
@@ -255,5 +256,44 @@ export async function voidOpeningAssetAction(assetId: string) {
   if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to void opening assets." };
   const result = await voidOpeningAsset(session.tenantId, session.userId, assetId);
   if (result.ok) refreshAfterOpening();
+  return result;
+}
+
+// ---------------------------------------------------------------- depreciation runs
+
+export async function getDepreciationPageData() {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "view")) throw new Error("Not permitted");
+  await ensureAssetSetup(session.tenantId);
+  const [months, runs, summary] = await Promise.all([runnableMonths(session.tenantId, session.calendar), listRuns(session.tenantId), depreciationSummary(session.tenantId)]);
+  const latestPosted = runs.find((r) => r.status === "posted") ?? null;
+  const preview = months[0] ? await previewRun(session.tenantId, session.calendar, months[0].anchor) : null;
+  return { canRun: can(session, "assets", "edit"), canReverse: can(session, "assets", "delete"), months, runs, latestPostedId: latestPosted?.id ?? null, lastRunLabel: latestPosted?.periodLabel ?? null, summary, preview };
+}
+export type DepreciationPageData = Awaited<ReturnType<typeof getDepreciationPageData>>;
+
+export async function previewDepreciation(anchor: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "view")) throw new Error("Not permitted");
+  return previewRun(session.tenantId, session.calendar, anchor);
+}
+
+const refreshAfterRun = () => {
+  for (const p of ["/assets", "/dashboard", "/journal"]) revalidatePath(p, p === "/assets" ? "layout" : "page");
+};
+
+export async function runDepreciation(anchor: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "edit")) return { ok: false as const, error: "You don't have permission to run depreciation." };
+  const result = await postDepreciationRun(session.tenantId, session.userId, session.calendar, anchor);
+  if (result.ok) refreshAfterRun();
+  return result;
+}
+
+export async function reverseDepreciation(runId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to reverse depreciation." };
+  const result = await reverseDepreciationRun(session.tenantId, session.userId, runId);
+  if (result.ok) refreshAfterRun();
   return result;
 }

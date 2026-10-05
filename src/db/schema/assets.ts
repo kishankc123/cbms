@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, boolean, integer, numeric, date, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { tenants, users } from "./tenancy";
 import { vendors, purchaseBills } from "./purchases";
 
@@ -138,4 +139,47 @@ export const assetEvents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("asset_events_asset").on(t.assetId, t.eventDate)]
+);
+
+/** One monthly depreciation run: a single ledger entry covering every asset depreciated in it. Only the latest posted run can be reversed. */
+export const assetDepreciationRuns = pgTable(
+  "asset_depreciation_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    runNumber: integer("run_number").notNull(),
+    /** The month the run depreciates up to (assets behind on earlier months catch up in the same run). */
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    periodLabel: text("period_label").notNull(),
+    totalAmount: numeric("total_amount", { precision: 18, scale: 2 }).notNull(),
+    assetCount: integer("asset_count").notNull(),
+    journalEntryId: uuid("journal_entry_id"),
+    status: text("status").notNull().default("posted"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reversedBy: uuid("reversed_by").references(() => users.id),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("asset_dep_runs_tenant_number").on(t.tenantId, t.runNumber),
+    // One posted run per month; a reversed run frees its month again.
+    uniqueIndex("asset_dep_runs_tenant_period_posted").on(t.tenantId, t.periodEnd).where(sql`${t.status} = 'posted'`),
+  ]
+);
+
+/** What each asset was depreciated by in a run (the per-asset schedule behind the single ledger entry). */
+export const assetDepreciationLines = pgTable(
+  "asset_depreciation_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => assetDepreciationRuns.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+    /** How many months of depreciation this line covers (more than one when the asset is catching up). */
+    months: integer("months").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    accumulatedAfter: numeric("accumulated_after", { precision: 18, scale: 2 }).notNull(),
+  },
+  (t) => [index("asset_dep_lines_run").on(t.runId), index("asset_dep_lines_asset").on(t.assetId)]
 );

@@ -1,4 +1,5 @@
 import { and, desc, eq, lt, lte, gte, inArray, or, like } from "drizzle-orm";
+import { getAccountByRole } from "@/lib/compliance/tax-accounts";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, users } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
@@ -216,6 +217,24 @@ export async function cashFlowStatement(tenantId: string, periodStart: Date, per
   }
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  // Depreciation reduces profit but moves no cash: add it back under operating, and take it out of the accumulated-depreciation
+  // movement (which would otherwise show it as an investing inflow). What stays there is only what a disposal released.
+  const depreciationExpense = await getAccountByRole(tenantId, "asset_dep_expense");
+  const depreciation = round2(pnl.expenses.find((e) => e.accountId === depreciationExpense?.id)?.amount ?? 0);
+  if (depreciation !== 0) {
+    operating.unshift({ accountId: depreciationExpense!.id, code: depreciationExpense!.code, name: "Depreciation (non-cash)", amount: depreciation });
+    const accumulatedAccount = await getAccountByRole(tenantId, "asset_accum_dep");
+    const at = investing.findIndex((r) => r.accountId === accumulatedAccount?.id);
+    if (at >= 0) {
+      const left = round2(investing[at].amount - depreciation);
+      if (left === 0) investing.splice(at, 1);
+      else investing[at] = { ...investing[at], amount: left };
+    } else if (accumulatedAccount) {
+      investing.push({ accountId: accumulatedAccount.id, code: accumulatedAccount.code, name: accumulatedAccount.name, amount: -depreciation });
+    }
+  }
+
   const netCashFromOperating = round2(pnl.netProfit + operating.reduce((s, r) => s + r.amount, 0));
   const netCashFromInvesting = round2(investing.reduce((s, r) => s + r.amount, 0));
   const netCashFromFinancing = round2(financing.reduce((s, r) => s + r.amount, 0));
