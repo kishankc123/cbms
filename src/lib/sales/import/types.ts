@@ -1,5 +1,5 @@
 import type { CustomerState, RowIssue, RowStatus } from "./checks";
-import type { SalesColumnMapping } from "./fields";
+import type { ImportFieldKey, SalesColumnMapping } from "./fields";
 import type { SalesBillTypeValue } from "./values";
 import type { ImportDateChoice } from "@/lib/banking/import-dates";
 
@@ -14,6 +14,9 @@ export type ImportSettings = {
   /** Used when money was received and the file doesn't name the account. */
   defaultAccountId: string | null;
 };
+
+/** Corrections typed into the review: a row's cell text, by the row's number in the file, that replaces what the file says. */
+export type Overrides = Record<number, Partial<Record<ImportFieldKey, string>>>;
 
 export type DateOptions = { choice: ImportDateChoice; dayFirst: boolean; allowMixed: boolean };
 
@@ -32,6 +35,8 @@ export type ReviewRow = {
   dateRaw: string;
   dateIso: string | null;
   customerText: string;
+  /** The cells of this row as they now stand (the file's own text, or what was typed over it). */
+  raw: Partial<Record<ImportFieldKey, string>>;
   customerName: string | null;
   customerKey: string | null;
   amount: number | null;
@@ -75,6 +80,16 @@ export type RunInput = {
   decisions: Record<string, GroupDecision>;
   skipRows: number[];
   includeDuplicates: boolean;
+  overrides?: Overrides;
+};
+
+/** What an import would do, worked out without posting anything. */
+export type CheckResult = {
+  wouldImport: number;
+  total: number;
+  tax: number;
+  customersToCreate: string[];
+  skipped: { rowNumber: number; reason: string }[];
 };
 
 export type RunResult =

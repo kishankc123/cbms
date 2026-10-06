@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import type { SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { DateOptions, FileAnalysis, GroupDecision, ImportSettings, ReviewResult, RunResult } from "@/lib/sales/import/types";
-import { analyzeFile, getImportSetup, reviewFile, runImport, type ImportSetup } from "./actions";
+import type { CheckResult, DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
+import { analyzeFile, checkImport, getImportSetup, reviewFile, runImport, type ImportSetup } from "./actions";
+import { CheckDialog } from "./check-dialog";
 import { DoneStep } from "./done-step";
 import { HistoryList } from "./history-list";
 import { ReviewStep } from "./review-step";
@@ -40,6 +41,8 @@ export function ImportSales() {
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [decisions, setDecisions] = useState<Record<string, GroupDecision>>({});
   const [skipRows, setSkipRows] = useState<number[]>([]);
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [includeDuplicates, setIncludeDuplicates] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Extract<RunResult, { ok: true }> | null>(null);
@@ -53,10 +56,10 @@ export function ImportSales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: File, m: SalesColumnMapping, d: DateOptions, s: ImportSettings) {
+  async function runReview(f: File, m: SalesColumnMapping, d: DateOptions, s: ImportSettings, o: Overrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewFile({ fileName: f.name, base64: f.base64, mapping: m, dateOptions: d, settings: s });
+      const r = await reviewFile({ fileName: f.name, base64: f.base64, mapping: m, dateOptions: d, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
@@ -81,9 +84,10 @@ export function ImportSales() {
       setDateOptions(DEFAULT_DATES);
       setDecisions({});
       setSkipRows([]);
+      setOverrides({});
       setIncludeDuplicates(false);
       setStep("review");
-      if (a.mappingComplete && !a.dates.blocking) await runReview(f, a.mapping, DEFAULT_DATES, settings);
+      if (a.mappingComplete && !a.dates.blocking) await runReview(f, a.mapping, DEFAULT_DATES, settings, {});
       else setReview(null);
     } catch (e) {
       reportError(e);
@@ -99,6 +103,10 @@ export function ImportSales() {
   const changeDates = (d: DateOptions) => {
     setDateOptions(d);
     if (file) void runReview(file, mapping, d, settings);
+  };
+  const changeOverrides = (o: Overrides) => {
+    setOverrides(o);
+    if (file) void runReview(file, mapping, dateOptions, settings, o);
   };
   const changeSettings = (s: ImportSettings) => {
     setSettings(s);
@@ -121,11 +129,34 @@ export function ImportSales() {
 
   const toImport = effective ? effective.filter((r) => r.status === "ready" || (includeDuplicates && r.status === "duplicate")).length : 0;
 
-  async function doImport() {
-    if (!file || !effective) return;
+  async function doCheck() {
+    if (!file) return;
     setBusy(true);
     try {
-      const r = await runImport({ fileName: file.name, base64: file.base64, mapping, dateOptions, settings, decisions, skipRows, includeDuplicates });
+      setCheckResult(await checkImport({ fileName: file.name, base64: file.base64, mapping, dateOptions, settings, decisions, skipRows, includeDuplicates, overrides }));
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Back to the review with the same file and decisions: what was imported now shows as already in the books, and the
+  // rows that were refused are still there to correct.
+  async function fixRest() {
+    if (!file) return;
+    setResult(null);
+    setStep("review");
+    setIncludeDuplicates(false);
+    await runReview(file, mapping, dateOptions, settings);
+  }
+
+  async function doImport() {
+    if (!file || !effective) return;
+    setCheckResult(null);
+    setBusy(true);
+    try {
+      const r = await runImport({ fileName: file.name, base64: file.base64, mapping, dateOptions, settings, decisions, skipRows, includeDuplicates, overrides });
       if (!r.ok) return reportError(new Error(r.error));
       setResult(r);
       setStep("done");
@@ -145,6 +176,7 @@ export function ImportSales() {
     setResult(null);
     setDecisions({});
     setSkipRows([]);
+    setOverrides({});
   }
 
   const steps: [Step, string][] = [
@@ -187,6 +219,9 @@ export function ImportSales() {
           onDecisions={setDecisions}
           skipRows={skipRows}
           onSkipRows={setSkipRows}
+          overrides={overrides}
+          onOverrides={changeOverrides}
+          onCheck={doCheck}
           includeDuplicates={includeDuplicates}
           onIncludeDuplicates={setIncludeDuplicates}
           toImport={toImport}
@@ -196,7 +231,8 @@ export function ImportSales() {
         />
       )}
 
-      {step === "done" && result && <DoneStep result={result} onAnother={reset} />}
+      {step === "done" && result && <DoneStep result={result} onAnother={reset} onFix={fixRest} />}
+      {checkResult && <CheckDialog result={checkResult} busy={busy} onClose={() => setCheckResult(null)} onImport={doImport} />}
       {dialog}
     </div>
   );

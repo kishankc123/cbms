@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
+import { pastedToCsv } from "@/lib/sales/import/paste";
 import { downloadTemplate } from "./actions";
 
 const card = "rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]";
@@ -10,6 +11,14 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
   const { reportError, dialog } = useProblem();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState("");
+
+  function usePasted() {
+    const csv = pastedToCsv(pasted);
+    if (!csv) return reportError(new Error("Paste the cells including the header row and at least one data row."));
+    onFile(new File([csv], "pasted-sales.csv", { type: "text/csv" }));
+  }
 
   async function template() {
     try {
@@ -63,6 +72,26 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
             e.target.value = "";
           }}
         />
+      </div>
+
+      <div className={`${card} p-4`}>
+        <button type="button" onClick={() => setPasting((v) => !v)} className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+          {pasting ? "Hide paste box" : "Or paste cells from Excel"}
+        </button>
+        {pasting && (
+          <div className="mt-3 space-y-2">
+            <textarea
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              rows={6}
+              placeholder={"Copy the cells in Excel or Google Sheets, header row included, and paste here.\nDate\tCustomer\tAmount\n2083-04-15\tHimal Enterprises\t10000"}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 font-mono text-xs focus:border-[var(--color-primary)] focus:outline-none"
+            />
+            <button type="button" disabled={busy || !pasted.trim()} onClick={usePasted} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              Use pasted data
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={`${card} p-4 text-sm text-[var(--text-secondary)]`}>

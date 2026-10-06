@@ -7,8 +7,8 @@ import { customers } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
-import { analyzeSalesFile, buildSalesTemplate, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
-import type { DateOptions, FileAnalysis, ImportSettings, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
+import { analyzeSalesFile, buildSalesTemplate, checkSalesImport, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
+import type { CheckResult, DateOptions, FileAnalysis, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
 import type { SalesColumnMapping } from "@/lib/sales/import/fields";
 import { voidInvoice } from "../actions";
 
@@ -39,10 +39,17 @@ export async function analyzeFile(input: { fileName: string; base64: string }): 
   return analyzeSalesFile(session.tenantId, input);
 }
 
-export async function reviewFile(input: { fileName: string; base64: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings }): Promise<ReviewResult> {
+export async function reviewFile(input: { fileName: string; base64: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
   return reviewSalesFile(session.tenantId, input);
+}
+
+/** Everything an import would do, with nothing created or posted. */
+export async function checkImport(input: RunInput): Promise<CheckResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "create")) throw new Error("Not permitted");
+  return checkSalesImport(session.tenantId, input);
 }
 
 export async function runImport(input: RunInput): Promise<RunResult> {

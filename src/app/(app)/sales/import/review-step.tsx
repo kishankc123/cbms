@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { IMPORT_FIELDS, type SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { DateOptions, FileAnalysis, GroupDecision, ImportSettings, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
+import type { DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
 import type { ImportSetup } from "./actions";
 import type { File } from "./import-sales";
+import { RowEditor } from "./row-editor";
 
 const card = "rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]";
 const field = "rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none";
@@ -33,6 +34,9 @@ type Props = {
   onDecisions: (d: Record<string, GroupDecision>) => void;
   skipRows: number[];
   onSkipRows: (r: number[]) => void;
+  overrides: Overrides;
+  onOverrides: (o: Overrides) => void;
+  onCheck: () => void;
   includeDuplicates: boolean;
   onIncludeDuplicates: (v: boolean) => void;
   toImport: number;
@@ -203,7 +207,7 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
 
 // ------------------------------------------------------------ the numbers
 
-function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImport, busy, onImport, settings }: Props & { review: ReviewResult }) {
+function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImport, busy, onImport, onCheck, settings }: Props & { review: ReviewResult }) {
   const counts = { ready: 0, attention: 0, duplicate: 0, skipped: 0 };
   let importTotal = 0;
   let importTax = 0;
@@ -242,6 +246,9 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
               Import the duplicates too
             </label>
           )}
+          <button type="button" disabled={busy || toImport === 0} onClick={onCheck} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            Check only
+          </button>
           <button type="button" disabled={busy || toImport === 0} onClick={onImport} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
             {busy ? "Importing..." : `Import ${toImport} invoice${toImport === 1 ? "" : "s"}`}
           </button>
@@ -365,7 +372,8 @@ function Groups({ review, decisions, onDecisions, setup }: Props & { review: Rev
 
 // ------------------------------------------------------------ every row
 
-function Rows({ rows, skipRows, onSkipRows, decisions }: Props & { review: ReviewResult }) {
+function Rows({ rows, skipRows, onSkipRows, decisions, overrides, onOverrides }: Props & { review: ReviewResult }) {
+  const [editing, setEditing] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -453,7 +461,12 @@ function Rows({ rows, skipRows, onSkipRows, decisions }: Props & { review: Revie
                     <StatusPill tone={TONE[r.status]}>{LABEL[r.status]}</StatusPill>
                   </td>
                   <td className="max-w-xs px-3 py-2 text-xs text-[var(--text-secondary)]">{r.status === "skipped" ? "" : r.messages.join(" ")}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {r.status !== "skipped" && (
+                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--color-primary)] hover:underline">
+                        {overrides[r.rowNumber] ? "Fix (edited)" : "Fix"}
+                      </button>
+                    )}
                     {(r.status !== "skipped" || skipRows.includes(r.rowNumber)) && (
                       <button type="button" onClick={() => toggleSkip(r.rowNumber)} className="text-xs text-[var(--text-secondary)] hover:underline">
                         {skipRows.includes(r.rowNumber) ? "Include" : "Skip"}
@@ -473,6 +486,28 @@ function Rows({ rows, skipRows, onSkipRows, decisions }: Props & { review: Revie
           </tbody>
         </table>
       </div>
+      {editing !== null && all.find((x) => x.rowNumber === editing) && (
+        <RowEditor
+          key={editing}
+          row={all.find((x) => x.rowNumber === editing)!}
+          edited={Boolean(overrides[editing])}
+          onClose={() => setEditing(null)}
+          onRevert={() => {
+            const next = { ...overrides };
+            delete next[editing];
+            setEditing(null);
+            onOverrides(next);
+          }}
+          onSave={(values) => {
+            const row = all.find((x) => x.rowNumber === editing)!;
+            // Only what changed is kept, so an untouched cell still follows the file.
+            const changed = Object.fromEntries(Object.entries(values).filter(([k, v]) => (row.raw[k as keyof typeof row.raw] ?? "") !== (v ?? "")));
+            const next = { ...overrides, [editing]: { ...(overrides[editing] ?? {}), ...changed } };
+            setEditing(null);
+            onOverrides(next);
+          }}
+        />
+      )}
       {pages > 1 && (
         <div className="flex items-center justify-end gap-3 text-sm text-[var(--text-secondary)]">
           <button type="button" disabled={current <= 1} onClick={() => setPage(current - 1)} className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40">

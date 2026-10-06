@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, customerAliases, customers, journalEntries, journalLines, salesImports, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { analyzeSalesFile, importInvoiceIds, listSalesImports, reviewSalesFile, runSalesImport } from "./service";
+import { analyzeSalesFile, checkSalesImport, importInvoiceIds, listSalesImports, reviewSalesFile, runSalesImport } from "./service";
 import type { DateOptions, ImportSettings } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -142,5 +142,53 @@ describe("importing", () => {
       await db.delete(customers).where(eq(customers.id, foreign.id));
       await other.remove();
     }
+  });
+});
+
+describe("correcting rows in the review, and checking without importing", () => {
+  const FIX = ["Date,Customer,Amount", "2026-10-01,Himal Enterprises,abc", "not a date,Himal Enterprises,100", "2026-10-03,Himal Enterprises,200"].join("\n");
+  const MAP = { date: "Date", customer: "Customer", amount: "Amount" };
+  const fixBase = { fileName: "fix.csv", base64: b64(FIX), mapping: MAP, dateOptions: DATES, settings: SETTINGS };
+
+  it("typed corrections replace the file's cells, and re-check the row", async () => {
+    const before = await reviewSalesFile(org.tenantId, fixBase);
+    expect(before.rows.map((r) => r.status)).toEqual(["attention", "attention", "ready"]);
+
+    const after = await reviewSalesFile(org.tenantId, { ...fixBase, overrides: { 2: { amount: "750" }, 3: { date: "2026-10-02" } } });
+    expect(after.rows.map((r) => r.status)).toEqual(["ready", "ready", "ready"]);
+    expect(after.rows[0]).toMatchObject({ total: 847.5, raw: { amount: "750" } });
+    expect(after.rows[1].dateIso).toBe("2026-10-02");
+  });
+
+  it("a customer can be typed in for a row even when the file has no customer column", async () => {
+    const noCustomer = { ...fixBase, base64: b64("Date,Amount\n2026-10-04,300"), mapping: { date: "Date", amount: "Amount" } };
+    expect((await reviewSalesFile(org.tenantId, noCustomer)).rows[0]).toMatchObject({ status: "attention", issues: ["customer"] });
+    const typed = await reviewSalesFile(org.tenantId, { ...noCustomer, overrides: { 2: { customer: "Himal Enterprises" } } });
+    expect(typed.rows[0]).toMatchObject({ status: "ready", customerName: "Himal Enterprises" });
+  });
+
+  it("check only says what would happen and changes nothing", async () => {
+    const counts = async () => ({
+      customers: (await db.select().from(customers).where(eq(customers.tenantId, org.tenantId))).length,
+      invoices: (await db.select().from(salesInvoices).where(eq(salesInvoices.tenantId, org.tenantId))).length,
+      imports: (await db.select().from(salesImports).where(eq(salesImports.tenantId, org.tenantId))).length,
+    });
+    const text = ["Date,Customer,Amount", "2026-10-05,Check Only Traders,1000", "2026-10-06,Himal Enterprises,500", "bad,Himal Enterprises,50"].join("\n");
+    const input = { fileName: "check.csv", base64: b64(text), mapping: MAP, dateOptions: DATES, settings: SETTINGS, decisions: { "check only traders": { action: "create" as const, name: "Check Only Traders" } }, skipRows: [], includeDuplicates: false };
+    const before = await counts();
+    const r = await checkSalesImport(org.tenantId, input);
+    expect(r).toMatchObject({ wouldImport: 2, total: 1130 + 565, tax: 130 + 65, customersToCreate: ["Check Only Traders"] });
+    expect(r.skipped).toHaveLength(1);
+    expect(r.skipped[0]).toMatchObject({ rowNumber: 4, reason: expect.stringMatching(/date/i) });
+    expect(await counts()).toEqual(before);
+
+    // and the real import then does exactly what the check said
+    const real = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, input);
+    expect(real).toMatchObject({ ok: true, imported: 2, total: 1695, customersCreated: ["Check Only Traders"] });
+  });
+
+  it("corrections made in the review carry into the import", async () => {
+    const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { ...fixBase, decisions: {}, skipRows: [], includeDuplicates: false, overrides: { 2: { amount: "750" }, 3: { date: "2026-10-02" } } });
+    expect(r).toMatchObject({ ok: true, imported: 3 });
   });
 });

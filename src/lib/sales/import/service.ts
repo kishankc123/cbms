@@ -11,7 +11,7 @@ import { PartialBatchError, postSalesBatch, type BatchInvoiceRow } from "@/lib/s
 import { salesVatRate } from "@/lib/sales/vat";
 import { checkRow, type CustomerState } from "./checks";
 import { headerSignature, IMPORT_FIELDS, mappingComplete, suggestMapping, type SalesColumnMapping } from "./fields";
-import type { CustomerGroup, DateOptions, FileAnalysis, GroupDecision, ImportSettings, ReviewResult, ReviewRow, RunInput, RunResult } from "./types";
+import type { CheckResult, CustomerGroup, DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow, RunInput, RunResult } from "./types";
 import { bestNameMatch, normalizeName, parseAmountCell, parseBillTypeCell } from "./values";
 
 // Import Sales: reading a spreadsheet of sales (one row per invoice), matching it to customers and accounts, checking every
@@ -66,8 +66,38 @@ async function cashBankAccountList(tenantId: string) {
   return groups.flatMap((g) => (g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]));
 }
 
+/**
+ * Puts the corrections typed in the review over the file's own cells. A field the file has no column for gets one of its own
+ * (so a customer can be typed in for a row even when the file never had a customer column).
+ */
+function applyOverrides(parsed: Parsed, mapping: SalesColumnMapping, overrides: Overrides): { parsed: Parsed; mapping: SalesColumnMapping } {
+  const valid = new Set(IMPORT_FIELDS.map((f) => f.key));
+  const keys = new Set<string>();
+  for (const o of Object.values(overrides)) for (const k of Object.keys(o)) if (valid.has(k as never)) keys.add(k);
+  if (keys.size === 0) return { parsed, mapping };
+
+  const headers = [...parsed.headers];
+  const m: SalesColumnMapping = { ...mapping };
+  for (const k of keys as Set<keyof SalesColumnMapping>) {
+    if (!m[k] || colIndex(headers, m[k]) < 0) {
+      m[k] = `__edit_${String(k)}`;
+      headers.push(m[k]!);
+    }
+  }
+  const rows = parsed.rows.map((r, i) => {
+    const o = overrides[i + 2];
+    if (!o) return r;
+    const copy = [...r];
+    while (copy.length < headers.length) copy.push("");
+    for (const [k, v] of Object.entries(o)) if (valid.has(k as never)) copy[colIndex(headers, m[k as keyof SalesColumnMapping])] = String(v ?? "").slice(0, 200);
+    return copy;
+  });
+  return { parsed: { headers, rows }, mapping: m };
+}
+
 /** Everything the review and the import both need, worked out once from the file, the settings and the decisions made so far. */
-async function buildRows(tenantId: string, parsed: Parsed, mapping: SalesColumnMapping, dateOptions: DateOptions, settings: ImportSettings, decisions: Record<string, GroupDecision>, skipRows: Set<number>) {
+async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesColumnMapping, dateOptions: DateOptions, settings: ImportSettings, decisions: Record<string, GroupDecision>, skipRows: Set<number>, overrides: Overrides = {}) {
+  const { parsed, mapping } = applyOverrides(parsedIn, mappingIn, overrides);
   for (const f of IMPORT_FIELDS.filter((x) => x.required)) if (colIndex(parsed.headers, mapping[f.key]) < 0) throw new Error(`Choose the column that holds the ${f.label.toLowerCase()}.`);
   const idx = Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof IMPORT_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
@@ -174,6 +204,7 @@ async function buildRows(tenantId: string, parsed: Parsed, mapping: SalesColumnM
 
     out.push({
       rowNumber,
+      raw: Object.fromEntries(IMPORT_FIELDS.filter((f) => idx[f.key] >= 0).map((f) => [f.key, cell(r, f.key)])),
       dateRaw: cell(r, "date"),
       dateIso: iso,
       customerText,
@@ -197,9 +228,9 @@ async function buildRows(tenantId: string, parsed: Parsed, mapping: SalesColumnM
   return { rows: out, dates, customerList };
 }
 
-export async function reviewSalesFile(tenantId: string, input: { base64: string; fileName: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings }): Promise<ReviewResult> {
+export async function reviewSalesFile(tenantId: string, input: { base64: string; fileName: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, dates, customerList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, new Set());
+  const { rows, dates, customerList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, new Set(), input.overrides);
 
   // Names in the file that match nobody yet, grouped so each is decided once. The closest existing name is suggested.
   const groups = new Map<string, CustomerGroup>();
@@ -229,11 +260,57 @@ export async function reviewSalesFile(tenantId: string, input: { base64: string;
       importTax = round2(importTax + (r.tax ?? 0));
     }
   }
-  const strip = (r: Row): ReviewRow => ({ rowNumber: r.rowNumber, dateRaw: r.dateRaw, dateIso: r.dateIso, customerText: r.customerText, customerName: r.customerName, customerKey: r.customerKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status, issues: r.issues, messages: r.messages, total: r.total, tax: r.tax });
+  const strip = (r: Row): ReviewRow => ({ rowNumber: r.rowNumber, raw: r.raw, dateRaw: r.dateRaw, dateIso: r.dateIso, customerText: r.customerText, customerName: r.customerName, customerKey: r.customerKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status, issues: r.issues, messages: r.messages, total: r.total, tax: r.tax });
   return { rows: rows.map(strip), groups: [...groups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, dates: datesSummary(dates), customersToCreate: groups.size };
 }
 
 // ------------------------------------------------------------------ step 3: import
+
+/** Which rows would be posted, and why each of the others would not. The check and the import use the same answer. */
+function plan(rows: Row[], includeDuplicates: boolean) {
+  const importable = rows.filter((r) => (r.status === "ready" || (r.status === "duplicate" && includeDuplicates)) && r.dateIso && r.gross > 0);
+  const skipped = rows.filter((r) => !importable.includes(r)).map((r) => ({ rowNumber: r.rowNumber, reason: r.status === "skipped" ? "Skipped" : r.messages[0] ?? "Needs attention" }));
+  return { importable, skipped };
+}
+
+/**
+ * Everything an import would do, without doing any of it: nothing is created or posted and nothing is remembered. Ticked
+ * new customers count as existing for the checks, and are listed so the person knows who would be added.
+ */
+export async function checkSalesImport(tenantId: string, input: RunInput): Promise<CheckResult> {
+  const parsed = readFile(input.base64, input.fileName);
+  const own = await db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId));
+  const ownIds = new Set(own.map((c) => c.id));
+  const byNormName = new Map(own.map((c) => [normalizeName(c.name), c]));
+
+  const decisions: Record<string, GroupDecision> = {};
+  const toCreate = new Map<string, string>();
+  for (const [key, d] of Object.entries(input.decisions)) {
+    if (d.action === "existing") {
+      if (ownIds.has(d.customerId)) decisions[key] = d;
+    } else if (d.action === "skip") {
+      decisions[key] = d;
+    } else if (d.action === "create") {
+      const name = d.name.trim().replace(/\s+/g, " ").slice(0, 120);
+      if (!name) continue;
+      const same = byNormName.get(normalizeName(name));
+      if (same) decisions[key] = { action: "existing", customerId: same.id, remember: false };
+      else {
+        decisions[key] = { action: "create", name };
+        toCreate.set(normalizeName(name), name);
+      }
+    }
+  }
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, decisions, new Set(input.skipRows), input.overrides);
+  const { importable, skipped } = plan(rows, input.includeDuplicates);
+  return {
+    wouldImport: importable.length,
+    total: round2(importable.reduce((s, r) => s + (r.total ?? 0), 0)),
+    tax: round2(importable.reduce((s, r) => s + (r.tax ?? 0), 0)),
+    customersToCreate: [...toCreate.values()],
+    skipped,
+  };
+}
 
 export async function runSalesImport(ctx: { tenantId: string; userId: string }, input: RunInput): Promise<RunResult> {
   const { tenantId, userId } = ctx;
@@ -272,9 +349,8 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
     }
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, new Set(input.skipRows));
-  const importable = rows.filter((r) => (r.status === "ready" || (r.status === "duplicate" && input.includeDuplicates)) && r.dateIso && r.gross > 0);
-  const skipped = rows.filter((r) => !importable.includes(r)).map((r) => ({ rowNumber: r.rowNumber, reason: r.status === "skipped" ? "Skipped" : r.messages[0] ?? "Needs attention" }));
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, new Set(input.skipRows), input.overrides);
+  const { importable, skipped } = plan(rows, input.includeDuplicates);
   if (importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
   const [imp] = await db.insert(salesImports).values({ tenantId, fileName: input.fileName.slice(0, 200), rowCount: rows.length, customersCreated: created, createdBy: userId }).returning({ id: salesImports.id });

@@ -5,8 +5,10 @@ import type { RunResult } from "@/lib/sales/import/types";
 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function DoneStep({ result, onAnother }: { result: Extract<RunResult, { ok: true }>; onAnother: () => void }) {
+export function DoneStep({ result, onAnother, onFix }: { result: Extract<RunResult, { ok: true }>; onAnother: () => void; onFix: () => void }) {
   const stopped = result.stopped;
+  // Rows the person chose to skip, and duplicates of invoices already in the books, aren't problems; the others can be corrected.
+  const fixable = result.skipped.filter((s) => s.reason !== "Skipped" && !/already exists/.test(s.reason)).length;
 
   function downloadSkipped() {
     const lines = ["Row,Reason", ...result.skipped.map((s) => `${s.rowNumber},"${s.reason.replace(/"/g, '""')}"`)];
@@ -39,6 +41,11 @@ export function DoneStep({ result, onAnother }: { result: Extract<RunResult, { o
           <Link href="/sales/invoices" className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
             View invoices
           </Link>
+          {fixable > 0 && (
+            <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--surface-muted-bg)]">
+              Fix and import the {fixable} remaining row{fixable === 1 ? "" : "s"}
+            </button>
+          )}
           <button type="button" onClick={onAnother} className="rounded border border-gray-300 bg-white px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
             Import another file
           </button>
