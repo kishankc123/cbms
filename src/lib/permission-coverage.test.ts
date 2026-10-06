@@ -44,6 +44,23 @@ describe("every page checks who may see it", () => {
   }
 });
 
+describe("every platform administration page checks for a platform administrator", () => {
+  // The layout redirects non-admins, but a layout is not a security boundary, so each page checks for itself.
+  const pages = walk(path.join(SRC, "app/admin"), (n) => n === "page.tsx");
+
+  it("finds the pages", () => {
+    expect(pages.length).toBeGreaterThanOrEqual(5);
+  });
+
+  for (const file of pages) {
+    it(rel(file), () => {
+      const s = read(file);
+      if (!/\bdb\b/.test(s) && !/export default async function/.test(s)) return; // a static placeholder with no data
+      expect(s, "no platform administrator check").toMatch(/requirePlatformAdmin\(/);
+    });
+  }
+});
+
 describe("every server action checks who may call it", () => {
   const files = walk(path.join(SRC, "app"), (n) => /\.(ts|tsx)$/.test(n) && !/\.test\./.test(n)).filter((f) => /^\s*["']use server["']/.test(read(f)));
 
@@ -83,11 +100,14 @@ describe("every server action checks who may call it", () => {
     });
   }
 
+  // Platform administration works on any organization by design, and every action there checks requirePlatformAdmin.
+  const PLATFORM_ADMIN_FILE = (name: string) => name.startsWith("app/admin/");
+
   it("none takes a tenantId from the caller (anyone could pass another organization's)", () => {
     const offenders: string[] = [];
     for (const file of files) {
       for (const m of read(file).matchAll(/export async function (\w+)\(([^)]*)\)/g)) {
-        if (/\btenantId\b/.test(m[2]) && !(rel(file) === "app/select-organization/actions.ts" && m[1] === "switchOrganization")) offenders.push(`${rel(file)}#${m[1]}`);
+        if (/\btenantId\b/.test(m[2]) && !PLATFORM_ADMIN_FILE(rel(file)) && !(rel(file) === "app/select-organization/actions.ts" && m[1] === "switchOrganization")) offenders.push(`${rel(file)}#${m[1]}`);
       }
     }
     expect(offenders).toEqual([]);

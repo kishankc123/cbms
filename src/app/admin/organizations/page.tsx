@@ -1,8 +1,18 @@
-export default function AdminOrganizationsPage() {
+import { requirePlatformAdmin } from "@/lib/session";
+import { getAdminOrgs } from "../actions";
+import { AdminHeader } from "../ui";
+import { OrgsTable } from "./orgs-table";
+
+type Search = { q?: string; status?: string; page?: string; size?: string };
+
+export default async function AdminOrganizationsPage({ searchParams }: { searchParams: Promise<Search> }) {
+  await requirePlatformAdmin();
+  const sp = await searchParams;
+  const data = await getAdminOrgs({ search: sp.q, status: sp.status, page: Number(sp.page) || 1, pageSize: Number(sp.size) || 25 });
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-semibold text-gray-900">Organizations</h1>
-      <p className="text-sm text-gray-500">Not built yet. This will list every organization on the platform — company name, client code, status, plan — with the ability to suspend one (which takes effect for every member immediately, the same way suspending a membership already does).</p>
+    <div className="space-y-5 p-8">
+      <AdminHeader title="Organizations" description="Every organization on the platform. Suspending one blocks all its members at once." />
+      <OrgsTable data={data} filters={{ q: sp.q ?? "", status: sp.status ?? "" }} />
     </div>
   );
 }
