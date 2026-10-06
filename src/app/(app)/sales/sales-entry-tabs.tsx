@@ -4,6 +4,7 @@ import { useState } from "react";
 import { InvoiceForm } from "./invoice-form";
 import { SingleInvoiceForm } from "./single-invoice-form";
 import { ConfirmDialog } from "./confirm-dialog";
+import { ImportSales } from "./import/import-sales";
 
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
@@ -96,11 +97,7 @@ export function SalesEntryTabs({
         />
       )}
 
-      {tab === "import" && (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-          Importing sales from a file is coming soon.
-        </div>
-      )}
+      {tab === "import" && <ImportSales />}
 
       {pendingTab && (
         <ConfirmDialog

@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenancy";
+import { pgTable, uuid, text, timestamp, date, numeric, integer, jsonb, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 
 export const invoiceStatusEnum = pgEnum("invoice_status", [
@@ -48,6 +48,55 @@ export type LineItem = {
   taxRate: number;
 };
 
+/** One file imported through Sales > Import Sales: what it brought in, so the whole import can be reviewed or undone together. */
+export const salesImports = pgTable(
+  "sales_imports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    rowCount: integer("row_count").notNull().default(0),
+    invoiceCount: integer("invoice_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    total: numeric("total", { precision: 18, scale: 2 }).notNull().default("0"),
+    /** Customers this import created (ticked in the review), so they can be seen with it. */
+    customersCreated: jsonb("customers_created").$type<{ id: string; name: string }[]>().notNull().default([]),
+    /** completed | stopped (a row failed part-way) | undone | partly_undone */
+    status: text("status").notNull().default("completed"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("sales_imports_tenant").on(t.tenantId, t.createdAt)]
+);
+
+/** A name as it appears in someone's files, remembered against the customer it was matched to, so it matches by itself next time. */
+export const customerAliases = pgTable(
+  "customer_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** Lower-cased, punctuation and spacing normalized. */
+    alias: text("alias").notNull(),
+    customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("customer_aliases_tenant_alias").on(t.tenantId, t.alias)]
+);
+
+/** The column mapping last used for a file with these headers, so the same layout needs no mapping next time. */
+export const importColumnMappings = pgTable(
+  "import_column_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    signature: text("signature").notNull(),
+    mapping: jsonb("mapping").$type<Record<string, string>>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("import_column_mappings_key").on(t.tenantId, t.kind, t.signature)]
+);
+
 export const salesInvoices = pgTable("sales_invoices", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
@@ -68,6 +117,8 @@ export const salesInvoices = pgTable("sales_invoices", {
   total: numeric("total", { precision: 18, scale: 2 }).notNull(),
   status: invoiceStatusEnum("status").notNull().default("draft"),
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
+  /** Set when the invoice came in through Import Sales. */
+  importId: uuid("import_id").references(() => salesImports.id),
 });
 
 // A sales return (issued to the customer as a debit note): goods sent back or a price
