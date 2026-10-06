@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, timestamp, date, numeric, jsonb, pgEnum, uniqueIndex, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenancy";
+import { pgTable, uuid, text, timestamp, date, numeric, integer, jsonb, pgEnum, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
+import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 
 export const billStatusEnum = pgEnum("bill_status", [
@@ -46,6 +46,40 @@ export const vendors = pgTable("vendors", {
   advanceAccountId: uuid("advance_account_id").references(() => accounts.id),
 });
 
+/** One file imported through Purchases > Import Purchases: what it brought in, so the whole import can be reviewed or undone together. */
+export const purchaseImports = pgTable(
+  "purchase_imports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    rowCount: integer("row_count").notNull().default(0),
+    billCount: integer("bill_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    total: numeric("total", { precision: 18, scale: 2 }).notNull().default("0"),
+    /** Suppliers this import created (ticked in the review). */
+    suppliersCreated: jsonb("suppliers_created").$type<{ id: string; name: string }[]>().notNull().default([]),
+    /** importing | completed | stopped (a row failed part-way) | undone | partly_undone */
+    status: text("status").notNull().default("importing"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("purchase_imports_tenant").on(t.tenantId, t.createdAt)]
+);
+
+/** A supplier name as it appears in someone's files, remembered against the supplier it was matched to. */
+export const supplierAliases = pgTable(
+  "supplier_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull(),
+    vendorId: uuid("vendor_id").notNull().references(() => vendors.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("supplier_aliases_tenant_alias").on(t.tenantId, t.alias)]
+);
+
 export const purchaseBills = pgTable("purchase_bills", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
@@ -66,6 +100,8 @@ export const purchaseBills = pgTable("purchase_bills", {
   billType: billTypeEnum("bill_type").notNull().default("no_bill"),
   // Whether the paper bill is physically in hand (an audit-readiness input). Null on bills entered before it was asked.
   billAvailable: boolean("bill_available"),
+  /** Set when the bill came in through Import Purchases. */
+  importId: uuid("import_id").references(() => purchaseImports.id),
 });
 
 // A purchase return (credit note for the supplier): goods sent back to them. Mirrors a stockable

@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { IMPORT_FIELDS, type ImportFieldKey } from "@/lib/sales/import/fields";
-import type { ReviewRow } from "@/lib/sales/import/types";
 
 const field = "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none";
 
 // Corrects one row of the file in place: what is typed replaces that row's cell, and the row is checked again. The file
 // itself is never changed.
-export function RowEditor({ row, edited, onSave, onRevert, onClose }: { row: ReviewRow; edited: boolean; onSave: (values: Partial<Record<ImportFieldKey, string>>) => void; onRevert: () => void; onClose: () => void }) {
-  const [values, setValues] = useState<Partial<Record<ImportFieldKey, string>>>(() => Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, row.raw[f.key] ?? ""])));
+export type EditorField = { key: string; label: string; required: boolean };
+export type EditorRow = { rowNumber: number; status: string; messages: string[]; raw: Partial<Record<string, string>> };
+
+export function RowEditor({ row, fields, edited, onSave, onRevert, onClose }: { row: EditorRow; fields: EditorField[]; edited: boolean; onSave: (values: Record<string, string>) => void; onRevert: () => void; onClose: () => void }) {
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, row.raw[f.key] ?? ""])));
 
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
@@ -18,8 +19,8 @@ export function RowEditor({ row, edited, onSave, onRevert, onClose }: { row: Rev
         {row.messages.length > 0 && row.status !== "ready" && <p className="mt-1 text-sm text-red-600">{row.messages.join(" ")}</p>}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {IMPORT_FIELDS.map((f) => (
-            <div key={f.key} className={f.key === "customer" ? "sm:col-span-2" : ""}>
+          {fields.map((f) => (
+            <div key={f.key} className={f.key === "customer" || f.key === "supplier" || f.key === "description" ? "sm:col-span-2" : ""}>
               <label className="mb-1 block text-xs text-gray-500">
                 {f.label}
                 {f.required ? " *" : ""}

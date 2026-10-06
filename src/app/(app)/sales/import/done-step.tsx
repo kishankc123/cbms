@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { RunResult } from "@/lib/sales/import/types";
 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function DoneStep({ result, onAnother, onFix }: { result: Extract<RunResult, { ok: true }>; onAnother: () => void; onFix: () => void }) {
+export type DoneResult = { imported: number; total: number; skipped: { rowNumber: number; reason: string }[]; stopped: { rowNumber: number; message: string } | null; created: string[] };
+
+export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabel }: { result: DoneResult; onAnother: () => void; onFix: () => void; noun: string; viewHref: string; createdLabel: string }) {
   const stopped = result.stopped;
   // Rows the person chose to skip, and duplicates of invoices already in the books, aren't problems; the others can be corrected.
   const fixable = result.skipped.filter((s) => s.reason !== "Skipped" && !/already exists/.test(s.reason)).length;
@@ -24,22 +25,22 @@ export function DoneStep({ result, onAnother, onFix }: { result: Extract<RunResu
     <div className="space-y-4">
       <section className={`rounded-lg border p-6 ${stopped ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50"}`}>
         <p className={`text-lg font-semibold ${stopped ? "text-amber-900" : "text-green-900"}`}>
-          {result.imported} invoice{result.imported === 1 ? "" : "s"} imported · {money(result.total)}
+          {result.imported} {noun}{result.imported === 1 ? "" : "s"} imported · {money(result.total)}
         </p>
         {stopped && (
           <p className="mt-1 text-sm text-amber-900">
             The import stopped at row {stopped.rowNumber}: {stopped.message}. What was imported before that is in the books; fix the problem and import the remaining rows, or undo this import from Previous imports.
           </p>
         )}
-        {result.customersCreated.length > 0 && (
+        {result.created.length > 0 && (
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            New customers created: {result.customersCreated.slice(0, 6).join(", ")}
-            {result.customersCreated.length > 6 ? ` and ${result.customersCreated.length - 6} more` : ""}.
+            {createdLabel}: {result.created.slice(0, 6).join(", ")}
+            {result.created.length > 6 ? ` and ${result.created.length - 6} more` : ""}.
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Link href="/sales/invoices" className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
-            View invoices
+          <Link href={viewHref} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
+            View {noun}s
           </Link>
           {fixable > 0 && (
             <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--surface-muted-bg)]">

@@ -5,6 +5,7 @@ import { BillsTable } from "./bills-table";
 import { ConsumablePurchaseForm } from "./consumable-purchase-form";
 import { EditCashBillModal } from "./edit-cash-bill-modal";
 import { ConfirmDialog } from "../sales/confirm-dialog";
+import { ImportPurchases } from "./import/import-purchases";
 
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
@@ -22,6 +23,7 @@ type Bill = {
 const TABS = [
   { id: "invoices", label: "Invoices" },
   { id: "add", label: "Add New" },
+  { id: "import", label: "Import Purchases" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -79,6 +81,7 @@ export function ConsumablePurchaseTabs({
       </div>
 
       {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} onEdit={setEditingBillId} />}
+      {tab === "import" && <ImportPurchases />}
       {tab === "add" && (
         <ConsumablePurchaseForm
           vendors={vendors}

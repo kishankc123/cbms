@@ -1,11 +1,12 @@
 "use client";
 
-import type { CheckResult } from "@/lib/sales/import/types";
 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // The result of "Check only": exactly what an import would do right now, with nothing created or posted.
-export function CheckDialog({ result, onClose, onImport, busy }: { result: CheckResult; onClose: () => void; onImport: () => void; busy: boolean }) {
+export type CheckSummary = { wouldImport: number; total: number; tax: number; newParties: string[]; skipped: { rowNumber: number; reason: string }[] };
+
+export function CheckDialog({ result, onClose, onImport, busy, noun, partyLabel }: { result: CheckSummary; onClose: () => void; onImport: () => void; busy: boolean; noun: string; partyLabel: string }) {
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
       <div className="my-10 w-full max-w-lg rounded-lg bg-[var(--card-bg)] p-5 shadow-xl">
@@ -14,7 +15,7 @@ export function CheckDialog({ result, onClose, onImport, busy }: { result: Check
 
         <dl className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between">
-            <dt className="text-[var(--text-secondary)]">Invoices that would be created</dt>
+            <dt className="text-[var(--text-secondary)]">{noun[0].toUpperCase() + noun.slice(1)}s that would be created</dt>
             <dd className="font-medium tabular-nums">{result.wouldImport}</dd>
           </div>
           <div className="flex justify-between">
@@ -22,17 +23,19 @@ export function CheckDialog({ result, onClose, onImport, busy }: { result: Check
             <dd className="tabular-nums">{money(result.tax)}</dd>
           </div>
           <div className="flex justify-between border-t border-[var(--card-border)] pt-1 font-semibold">
-            <dt>Invoice total</dt>
+            <dt>Total</dt>
             <dd className="tabular-nums">{money(result.total)}</dd>
           </div>
         </dl>
 
-        {result.customersToCreate.length > 0 && (
+        {result.newParties.length > 0 && (
           <div className="mt-4 text-sm">
-            <p className="font-medium text-[var(--text-primary)]">New customers that would be added ({result.customersToCreate.length})</p>
+            <p className="font-medium text-[var(--text-primary)]">
+              New {partyLabel} that would be added ({result.newParties.length})
+            </p>
             <p className="text-[var(--text-secondary)]">
-              {result.customersToCreate.slice(0, 8).join(", ")}
-              {result.customersToCreate.length > 8 ? ` and ${result.customersToCreate.length - 8} more` : ""}
+              {result.newParties.slice(0, 8).join(", ")}
+              {result.newParties.length > 8 ? ` and ${result.newParties.length - 8} more` : ""}
             </p>
           </div>
         )}

@@ -11,13 +11,23 @@ import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-acco
 import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
+import { assertCashBankAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
-import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { todayIso } from "@/lib/calendar";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
+import {
+  billLineItems,
+  cashPurchaseEntryLines,
+  createCashPurchaseCore,
+  prepareCashPurchase,
+  taxReceivableIdIfClaimed,
+  type CashBillType,
+  type CashPaymentLine,
+  type CashPurchaseInput,
+  type CashPurchaseLine,
+} from "@/lib/purchases/cash-purchase";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -67,159 +77,13 @@ async function activeEntryLines(tenantId: string, billId: string) {
   return db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
 }
 
-export type CashBillType = "vat" | "pan" | "estimate" | "challan" | "no_bill";
+export type { CashBillType, CashPaymentLine, CashPurchaseLine, CashPurchaseInput } from "@/lib/purchases/cash-purchase";
 
-export type CashPaymentLine = { accountId: string; amount: number };
-
-// One line of a Consumable purchase: what was bought, and the purchase category it is booked to.
-export type CashPurchaseLine = { description: string; categoryId: string; rate: number; quantity: number; discount: number };
-
-// A Consumable purchase is ONE bill with one or more lines. It is settled by whatever payments are recorded with
-// it — in full, in part or not at all; what isn't paid is owed to the supplier (Accounts Payable), so a supplier
-// is required whenever the payments don't cover the total.
-export type CashPurchaseInput = {
-  billNumber: string;
-  billDate: string;
-  vendorId: string;
-  billType: CashBillType;
-  billAvailable?: boolean;
-  lines: CashPurchaseLine[];
-  payments: CashPaymentLine[];
-};
-
-function computeCashLine(line: CashPurchaseLine, vatRate: number) {
-  const gross = round2(line.rate * line.quantity);
-  const discount = round2(Math.min(Math.max(line.discount, 0), gross));
-  const taxable = round2(gross - discount);
-  const vat = round2(taxable * (vatRate / 100));
-  return { gross, discount, taxable, vat };
-}
-
-// Checks everything about a consumable purchase before anything is saved or reversed, and works out the amounts.
-// VAT applies only when the bill type is VAT; the payments may not exceed the bill total (VAT included). Taxed at
-// the rate that applied on the BILL'S date, not today's — a backdated bill is not re-taxed at the current rate.
-async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput) {
-  const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
-  if (validLines.length === 0) throw new Error("Add at least one line with a rate and quantity");
-  for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertCogsCategory(tenantId, categoryId);
-
-  const vatRate = input.billType === "vat" ? await getTaxRate(tenantId, "vat", input.billDate) : 0;
-  const computed = validLines.map((l) => ({ line: l, ...computeCashLine(l, vatRate) }));
-  const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
-  const tax = round2(computed.reduce((s, c) => s + c.vat, 0));
-  const total = round2(subtotal + tax);
-
-  const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
-  if (paid > total + 0.004) throw new Error(`The payments (${paid.toFixed(2)}) cannot exceed the bill total (${total.toFixed(2)}, VAT included)`);
-  const remaining = round2(Math.max(total - paid, 0));
-  if (remaining > 0.004 && !input.vendorId) throw new Error("Select a supplier — the unpaid balance is owed to them");
-  await assertCashBankAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
-  if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
-
-  const status = (total > 0 && remaining <= 0.004 ? "paid" : paid > 0 ? "partially_paid" : "open") as "paid" | "partially_paid" | "open";
-  const description = validLines.map((l) => l.description.trim()).filter(Boolean).join(", ").slice(0, 200) || null;
-  return { computed, subtotal, tax, total, paid, remaining, status, description };
-}
-
-// The ledger side of a consumable purchase: each category is debited its lines' taxable amount; the VAT is
-// claimed (Tax Receivable) when the organization can claim it, otherwise it is part of the cost and goes to the
-// categories with the lines it belongs to. The payments are credited, and anything unpaid is credited to the
-// supplier's payable account.
-function cashPurchaseEntryLines(
-  computed: { line: CashPurchaseLine; taxable: number; vat: number }[],
-  tax: number,
-  taxReceivableId: string | null,
-  billNumber: string,
-  paymentList: CashPaymentLine[],
-  payable: { accountId: string; amount: number } | null
-): PostLineInput[] {
-  const claimTax = tax > 0 && taxReceivableId;
-  const byCategory = new Map<string, number>();
-  for (const c of computed) byCategory.set(c.line.categoryId, round2((byCategory.get(c.line.categoryId) ?? 0) + c.taxable + (claimTax ? 0 : c.vat)));
-  const lines: PostLineInput[] = [...byCategory].map(([accountId, amount]) => ({ accountId, debitAmount: amount, description: `Bill ${billNumber}` }));
-  if (claimTax) lines.push({ accountId: taxReceivableId, debitAmount: tax, description: `Tax on bill ${billNumber}` });
-  if (payable && payable.amount > 0) lines.push({ accountId: payable.accountId, creditAmount: payable.amount, description: `Bill ${billNumber}` });
-  for (const payment of paymentList.filter((p) => p.accountId && p.amount > 0)) {
-    lines.push({ accountId: payment.accountId, creditAmount: round2(payment.amount), description: `Bill ${billNumber}` });
-  }
-  return lines;
-}
-
-async function taxReceivableIdIfClaimed(tenantId: string, tax: number) {
-  if (tax <= 0 || !(await inputVatClaimable(tenantId))) return null;
-  const taxReceivable = await findControlAccount(tenantId, ["1300"], "Tax Receivable");
-  if (!taxReceivable) throw new Error("No Tax Receivable account found — add one to the Chart of Accounts first");
-  return taxReceivable.id;
-}
-
-function billLineItems(computed: { line: CashPurchaseLine }[]): PurchaseLineItem[] {
-  return computed.map(({ line }) => ({ itemId: null, categoryId: line.categoryId, description: line.description.trim(), rate: line.rate, quantity: line.quantity, discount: line.discount }));
-}
-
-// One consumable bill per Save.
+// One consumable bill per Save. The writing itself is shared with Import Purchases (lib/purchases/cash-purchase.ts).
 export async function createCashPurchase(input: CashPurchaseInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
-  if (!input.billDate) throw new Error("Bill date is required");
-
-  const prepared = await prepareCashPurchase(session.tenantId, input);
-  const vendorId = input.vendorId || null;
-
-  // Bills without a supplier number get AUTO-n, skipping any already used.
-  let billNumber = input.billNumber.trim();
-  if (billNumber) {
-    await assertBillNumberFree(session.tenantId, vendorId, billNumber);
-  } else {
-    const existing = await db.select({ n: purchaseBills.billNumber }).from(purchaseBills).where(eq(purchaseBills.tenantId, session.tenantId));
-    const taken = new Set(existing.map((r) => r.n));
-    billNumber = nextFreeInvoiceNumber(taken, (n) => `AUTO-${n}`, taken.size + 1).number;
-  }
-  await assertPeriodOpen(session.tenantId, input.billDate);
-  const taxReceivableId = await taxReceivableIdIfClaimed(session.tenantId, prepared.tax);
-  const payable = prepared.remaining > 0 && vendorId ? { accountId: await getOrCreateSupplierPayableAccountId(session.tenantId, vendorId), amount: prepared.remaining } : null;
-
-  const [bill] = await db
-    .insert(purchaseBills)
-    .values({
-      tenantId: session.tenantId,
-      vendorId,
-      billNumber,
-      billDate: input.billDate,
-      billType: input.billType,
-      description: prepared.description,
-      lineItems: billLineItems(prepared.computed),
-      subtotal: prepared.subtotal.toFixed(2),
-      taxAmount: prepared.tax.toFixed(2),
-      total: prepared.total.toFixed(2),
-      purchaseType: "cash",
-      status: prepared.status,
-      amountPaid: prepared.paid.toFixed(2),
-      billAvailable: input.billAvailable ?? null,
-    })
-    .returning();
-
-  try {
-    const entry = await postJournalEntry({
-      tenantId: session.tenantId,
-      entryDate: input.billDate,
-      sourceType: "purchase",
-      sourceId: bill.id,
-      referenceNumber: billNumber,
-      memo: `Consumable purchase ${billNumber}`,
-      createdBy: session.userId,
-      lines: cashPurchaseEntryLines(prepared.computed, prepared.tax, taxReceivableId, billNumber, input.payments, payable),
-    });
-    if (prepared.paid > 0) {
-      const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, bill.id, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber);
-    }
-  } catch (e) {
-    await discardBill(session.tenantId, bill.id, session.userId);
-    throw e;
-  }
-
-  // Any advance paid to this supplier goes to their oldest open bills first.
-  if (vendorId) await autoApplyAdvance(session.tenantId, session.userId, "supplier", vendorId);
+  await createCashPurchaseCore({ tenantId: session.tenantId, userId: session.userId }, input);
 
   revalidatePath("/purchases/consumable");
   revalidatePath("/suppliers");

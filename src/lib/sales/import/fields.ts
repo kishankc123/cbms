@@ -23,6 +23,8 @@ export const IMPORT_FIELDS: ImportField[] = [
 
 export type SalesColumnMapping = Partial<Record<ImportFieldKey, string>>;
 
+export type FieldDef<K extends string> = { key: K; label: string; required: boolean; synonyms: string[]; help: string };
+
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /**
@@ -31,11 +33,16 @@ const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").tri
  * never taken for the bill type (that would be "VAT Amount").
  */
 export function suggestMapping(headers: string[]): SalesColumnMapping {
+  return suggestMappingFrom(IMPORT_FIELDS, headers);
+}
+
+/** The same matching for any list of fields (Import Purchases has its own columns). */
+export function suggestMappingFrom<K extends string>(fields: FieldDef<K>[], headers: string[]): Partial<Record<K, string>> {
   const cleaned = headers.map((h) => ({ raw: h, n: norm(h) })).filter((h) => h.n !== "");
   const used = new Set<string>();
-  const mapping: SalesColumnMapping = {};
+  const mapping: Partial<Record<K, string>> = {};
 
-  const pick = (field: ImportField, test: (header: string, synonym: string) => boolean) => {
+  const pick = (field: FieldDef<K>, test: (header: string, synonym: string) => boolean) => {
     if (mapping[field.key]) return;
     for (const syn of field.synonyms) {
       const hit = cleaned.find((h) => !used.has(h.raw) && test(h.n, norm(syn)) && !(field.key === "billType" && /amount/.test(h.n)));
@@ -48,8 +55,8 @@ export function suggestMapping(headers: string[]): SalesColumnMapping {
   };
 
   // Exact matches for every field first, so a loose match never steals a header another field matches exactly.
-  for (const f of IMPORT_FIELDS) pick(f, (h, s) => h === s);
-  for (const f of IMPORT_FIELDS) pick(f, (h, s) => s.length >= 4 && (h.includes(s) || h.startsWith(s)));
+  for (const f of fields) pick(f, (h, s) => h === s);
+  for (const f of fields) pick(f, (h, s) => s.length >= 4 && (h.includes(s) || h.startsWith(s)));
   return mapping;
 }
 

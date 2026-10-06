@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import type { SalesColumnMapping } from "@/lib/sales/import/fields";
 import type { CheckResult, DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
-import { analyzeFile, checkImport, getImportSetup, reviewFile, runImport, type ImportSetup } from "./actions";
+import { analyzeFile, checkImport, downloadTemplate, getImportSetup, reviewFile, runImport, undoImport, type ImportSetup } from "./actions";
 import { CheckDialog } from "./check-dialog";
 import { DoneStep } from "./done-step";
 import { HistoryList } from "./history-list";
@@ -197,8 +197,20 @@ export function ImportSales() {
 
       {step === "upload" && (
         <>
-          <UploadStep busy={busy} onFile={onFile} />
-          {setup && setup.history.length > 0 && <HistoryList history={setup.history} canUndo={setup.canUndo} onChanged={() => getImportSetup().then(setSetup)} />}
+          <UploadStep
+            busy={busy}
+            onFile={onFile}
+            onTemplate={downloadTemplate}
+            rowNoun="invoice"
+            pasteExample={"Date\tCustomer\tAmount\n2083-04-15\tHimal Enterprises\t10000"}
+            notes={[
+              "Columns and dates (AD or BS) are matched for you. You only fix what can't be read.",
+              "Customers in the file are matched to yours; new names are created only if you tick them.",
+              "Invoices are numbered automatically, continuing your sequence, and post exactly like Multi-Invoice.",
+              "You can undo a whole import afterwards.",
+            ]}
+          />
+          {setup && setup.history.length > 0 && <HistoryList history={setup.history} canUndo={setup.canUndo} onChanged={() => getImportSetup().then(setSetup)} onUndo={undoImport} noun="invoice" />}
         </>
       )}
 
@@ -231,8 +243,19 @@ export function ImportSales() {
         />
       )}
 
-      {step === "done" && result && <DoneStep result={result} onAnother={reset} onFix={fixRest} />}
-      {checkResult && <CheckDialog result={checkResult} busy={busy} onClose={() => setCheckResult(null)} onImport={doImport} />}
+      {step === "done" && result && (
+        <DoneStep result={{ ...result, created: result.customersCreated }} onAnother={reset} onFix={fixRest} noun="invoice" viewHref="/sales/invoices" createdLabel="New customers created" />
+      )}
+      {checkResult && (
+        <CheckDialog
+          result={{ wouldImport: checkResult.wouldImport, total: checkResult.total, tax: checkResult.tax, newParties: checkResult.customersToCreate, skipped: checkResult.skipped }}
+          busy={busy}
+          onClose={() => setCheckResult(null)}
+          onImport={doImport}
+          noun="invoice"
+          partyLabel="customers"
+        />
+      )}
       {dialog}
     </div>
   );

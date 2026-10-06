@@ -3,11 +3,10 @@
 import { useRef, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { pastedToCsv } from "@/lib/sales/import/paste";
-import { downloadTemplate } from "./actions";
 
 const card = "rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]";
 
-export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blob & { name: string }) => void }) {
+export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExample }: { busy: boolean; onFile: (file: Blob & { name: string }) => void; onTemplate: () => Promise<{ fileName: string; base64: string }>; rowNoun: string; notes: string[]; pasteExample: string }) {
   const { reportError, dialog } = useProblem();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -17,12 +16,12 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
   function usePasted() {
     const csv = pastedToCsv(pasted);
     if (!csv) return reportError(new Error("Paste the cells including the header row and at least one data row."));
-    onFile(new File([csv], "pasted-sales.csv", { type: "text/csv" }));
+    onFile(new File([csv], `pasted-${rowNoun === "bill" ? "purchases" : "sales"}.csv`, { type: "text/csv" }));
   }
 
   async function template() {
     try {
-      const t = await downloadTemplate();
+      const t = await onTemplate();
       const bytes = Uint8Array.from(atob(t.base64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const a = document.createElement("a");
@@ -52,7 +51,7 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
         className={`${card} flex flex-col items-center gap-3 border-dashed p-10 text-center ${over ? "border-[var(--color-primary)] bg-[var(--surface-muted-bg)]" : ""}`}
       >
         <p className="text-sm font-medium text-[var(--text-primary)]">{busy ? "Reading your file..." : "Drop a CSV or Excel file here"}</p>
-        <p className="text-xs text-[var(--text-secondary)]">One row per invoice. Only a date and an amount are needed. Up to 5,000 rows.</p>
+        <p className="text-xs text-[var(--text-secondary)]">One row per {rowNoun}. Only a date and an amount are needed.</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button type="button" disabled={busy} onClick={() => input.current?.click()} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
             Choose file
@@ -84,7 +83,7 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
               value={pasted}
               onChange={(e) => setPasted(e.target.value)}
               rows={6}
-              placeholder={"Copy the cells in Excel or Google Sheets, header row included, and paste here.\nDate\tCustomer\tAmount\n2083-04-15\tHimal Enterprises\t10000"}
+              placeholder={`Copy the cells in Excel or Google Sheets, header row included, and paste here.\n${pasteExample}`}
               className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 font-mono text-xs focus:border-[var(--color-primary)] focus:outline-none"
             />
             <button type="button" disabled={busy || !pasted.trim()} onClick={usePasted} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
@@ -97,10 +96,9 @@ export function UploadStep({ busy, onFile }: { busy: boolean; onFile: (file: Blo
       <div className={`${card} p-4 text-sm text-[var(--text-secondary)]`}>
         <p className="font-medium text-[var(--text-primary)]">What happens next</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-5">
-          <li>Columns and dates (AD or BS) are matched for you. You only fix what can&apos;t be read.</li>
-          <li>Customers in the file are matched to yours; new names are created only if you tick them.</li>
-          <li>Invoices are numbered automatically, continuing your sequence, and post exactly like Multi-Invoice.</li>
-          <li>You can undo a whole import afterwards.</li>
+          {notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
         </ul>
       </div>
       {dialog}
