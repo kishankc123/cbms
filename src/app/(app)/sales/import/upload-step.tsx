@@ -3,20 +3,22 @@
 import { useRef, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { pastedToCsv } from "@/lib/sales/import/paste";
+import type { ColumnGuideRow } from "@/lib/sales/import/column-guide";
 
 const card = "rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]";
 
-export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExample }: { busy: boolean; onFile: (file: Blob & { name: string }) => void; onTemplate: () => Promise<{ fileName: string; base64: string }>; rowNoun: string; notes: string[]; pasteExample: string }) {
+export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExample, guide }: { busy: boolean; onFile: (file: Blob & { name: string }) => void; onTemplate: () => Promise<{ fileName: string; base64: string }>; rowNoun: string; notes: string[]; pasteExample: string; guide: ColumnGuideRow[] }) {
   const { reportError, dialog } = useProblem();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [pasting, setPasting] = useState(false);
   const [pasted, setPasted] = useState("");
+  const [guiding, setGuiding] = useState(false);
 
   function usePasted() {
     const csv = pastedToCsv(pasted);
     if (!csv) return reportError(new Error("Paste the cells including the header row and at least one data row."));
-    onFile(new File([csv], `pasted-${rowNoun === "bill" ? "purchases" : "sales"}.csv`, { type: "text/csv" }));
+    onFile(new File([csv], `pasted-${rowNoun === "bill" ? "purchases" : rowNoun === "expense" ? "expenses" : "sales"}.csv`, { type: "text/csv" }));
   }
 
   async function template() {
@@ -89,6 +91,39 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
             <button type="button" disabled={busy || !pasted.trim()} onClick={usePasted} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
               Use pasted data
             </button>
+          </div>
+        )}
+      </div>
+
+      <div className={`${card} p-4`}>
+        <button type="button" onClick={() => setGuiding((v) => !v)} className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+          {guiding ? "Hide the column guide" : "Column guide: what each column can hold"}
+        </button>
+        {guiding && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 text-gray-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Column</th>
+                  <th className="px-3 py-2 font-medium">Needed</th>
+                  <th className="px-3 py-2 font-medium">What to enter</th>
+                  <th className="px-3 py-2 font-medium">Example</th>
+                  <th className="px-3 py-2 font-medium">Also found as</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-[var(--text-secondary)]">
+                {guide.map((g) => (
+                  <tr key={g.column}>
+                    <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{g.column}</td>
+                    <td className={`px-3 py-2 ${g.needed === "Required" ? "font-medium text-[var(--text-primary)]" : ""}`}>{g.needed}</td>
+                    <td className="px-3 py-2">{g.accepts}</td>
+                    <td className="px-3 py-2 tabular-nums">{g.example}</td>
+                    <td className="px-3 py-2">{g.alsoRead}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-[var(--text-secondary)]">The first row of the file must be the column names. The order of columns does not matter, and columns you do not have can be left out.</p>
           </div>
         )}
       </div>

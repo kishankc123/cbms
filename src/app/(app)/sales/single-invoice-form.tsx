@@ -8,6 +8,7 @@ import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
+import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -55,6 +56,7 @@ export type InitialSingleInvoice = {
   dueDate?: string | null;
   customerId: string;
   billType: SalesBillType;
+  revenueAccountId?: string | null;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
 };
@@ -116,6 +118,7 @@ export function SingleInvoiceForm({
   const invoiceNumber = initial ? (invoiceNumberOverride ?? initial.invoiceNumber) : (invoiceNumberOverride ?? nextInvoiceNumber ?? "");
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
   const [billType, setBillType] = useState<SalesBillType>(initial?.billType ?? "taxable");
+  const [revenueAccountId, setRevenueAccountId] = useState(initial?.revenueAccountId ?? "");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({
@@ -228,6 +231,7 @@ export function SingleInvoiceForm({
         dueDate: dueDate || null,
         customerId,
         billType,
+        revenueAccountId: revenueAccountId || null,
         lines: lines.filter(isLineComplete).map((l) => ({
           itemId: l.itemId || null,
           description: l.description.trim(),
@@ -251,6 +255,7 @@ export function SingleInvoiceForm({
         setInvoiceNumberOverride(null);
         setDueDate("");
         setCustomerId("");
+        setRevenueAccountId("");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
         setPayments([]);
         setSavedMessage(true);
@@ -324,6 +329,10 @@ export function SingleInvoiceForm({
               <option value="taxable">Taxable</option>
               <option value="zero_rated">Zero-rated</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Revenue Account (optional)</label>
+            <RevenueAccountSelect value={revenueAccountId} onChange={setRevenueAccountId} className={inputCls} blankLabel="Item's account, else Sales Revenue" />
           </div>
         </div>
       </section>

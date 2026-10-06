@@ -119,6 +119,8 @@ export const salesInvoices = pgTable("sales_invoices", {
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
   /** Set when the invoice came in through Import Sales. */
   importId: uuid("import_id").references(() => salesImports.id),
+  /** The revenue account the whole invoice was booked to, when one was chosen (blank: each line's item account, else Sales Revenue). */
+  revenueAccountId: uuid("revenue_account_id").references(() => accounts.id),
 });
 
 // A sales return (issued to the customer as a debit note): goods sent back or a price

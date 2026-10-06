@@ -71,6 +71,7 @@ export function EditSingleInvoiceModal({
               dueDate: data.dueDate,
               customerId: data.customerId,
               billType: data.billType,
+              revenueAccountId: data.revenueAccountId,
               lines: data.lines,
               payments: data.payments,
             }}

@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { customers } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
+import { getRevenueAccounts } from "@/lib/sales/revenue-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
 import { analyzeSalesFile, buildSalesTemplate, checkSalesImport, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
 import type { CheckResult, DateOptions, FileAnalysis, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
@@ -17,14 +18,16 @@ import { voidInvoice } from "../actions";
 export async function getImportSetup() {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
-  const [groups, history, vatRate, customerList] = await Promise.all([
+  const [groups, history, vatRate, customerList, revenue] = await Promise.all([
     getCashBankAccounts(session.tenantId),
     listSalesImports(session.tenantId),
     salesVatRate(session.tenantId),
     db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
+    getRevenueAccounts(session.tenantId),
   ]);
   return {
     vatRate,
+    revenueAccounts: revenue.map((a) => ({ id: a.id, name: `${a.code} — ${a.name}`, group: a.group })),
     customers: customerList,
     accounts: groups.flatMap((g) => (g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }])).map((a) => ({ id: a.id, name: a.name })),
     history,

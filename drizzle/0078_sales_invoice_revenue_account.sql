@@ -1,0 +1,2 @@
+ALTER TABLE "sales_invoices" ADD COLUMN "revenue_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_revenue_account_id_accounts_id_fk" FOREIGN KEY ("revenue_account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;

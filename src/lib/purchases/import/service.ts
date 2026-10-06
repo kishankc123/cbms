@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { purchaseColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { importColumnMappings, purchaseBills, purchaseImports, supplierAliases, vendors } from "@/db/schema";
@@ -548,6 +549,9 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Purchase categories"], ...categoryList.map((c) => [c.name])]), "Categories");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
+  const guideData = XLSX.utils.aoa_to_sheet(guideSheet(purchaseColumnGuide()));
+  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, guideData, "Columns");
   XLSX.utils.book_append_sheet(
     wb,
     XLSX.utils.aoa_to_sheet([

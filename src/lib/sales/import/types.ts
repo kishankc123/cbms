@@ -13,6 +13,8 @@ export type ImportSettings = {
   paidMode: "file" | "unpaid" | "full";
   /** Used when money was received and the file doesn't name the account. */
   defaultAccountId: string | null;
+  /** Used when the file names no revenue account; blank means Sales Revenue. */
+  defaultRevenueAccountId?: string | null;
 };
 
 /** Corrections typed into the review: a row's cell text, by the row's number in the file, that replaces what the file says. */

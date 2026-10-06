@@ -9,6 +9,7 @@ import { CheckDialog } from "./check-dialog";
 import { DoneStep } from "./done-step";
 import { HistoryList } from "./history-list";
 import { ReviewStep } from "./review-step";
+import { salesColumnGuide } from "@/lib/sales/import/column-guide";
 import { UploadStep } from "./upload-step";
 
 type Step = "upload" | "review" | "done";
@@ -199,6 +200,7 @@ export function ImportSales() {
         <>
           <UploadStep
             busy={busy}
+            guide={salesColumnGuide()}
             onFile={onFile}
             onTemplate={downloadTemplate}
             rowNoun="invoice"

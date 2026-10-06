@@ -547,6 +547,13 @@
       "when": 1791287202779,
       "tag": "0077_expense_imports",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791307579895,
+      "tag": "0078_sales_invoice_revenue_account",
+      "breakpoints": true
     }
   ]
 }

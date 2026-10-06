@@ -161,6 +161,7 @@ function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, for
 
 function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
   const paidColumn = Boolean(mapping.paid);
+  const revenueColumn = Boolean(mapping.revenue);
   const needsAccount = settings.paidMode === "full" || (settings.paidMode === "file" && paidColumn && !mapping.account);
   return (
     <section className={`${card} p-4`}>
@@ -178,6 +179,17 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
           <select className={`${field} w-full`} value={settings.defaultBillType} onChange={(e) => onSettings({ ...settings, defaultBillType: e.target.value as ImportSettings["defaultBillType"] })}>
             <option value="taxable">Taxable{setup && setup.vatRate > 0 ? ` (${setup.vatRate}%)` : ""}</option>
             <option value="zero_rated">Zero-rated</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Revenue account</label>
+          <select className={`${field} w-full`} value={settings.defaultRevenueAccountId ?? ""} onChange={(e) => onSettings({ ...settings, defaultRevenueAccountId: e.target.value || null })}>
+            <option value="">{revenueColumn ? "— when the file names none —" : "Sales Revenue (default)"}</option>
+            {(setup?.revenueAccounts ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
           </select>
         </div>
         <div>

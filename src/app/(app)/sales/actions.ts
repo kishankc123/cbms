@@ -18,7 +18,7 @@ import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
-import { resolveRevenueLines } from "@/lib/sales/revenue-accounts";
+import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
 import {
@@ -211,6 +211,13 @@ export type SingleInvoiceEditLine = {
   discount: number;
 };
 
+/** The revenue accounts an invoice can be booked to (lowest level only), for the pickers on the invoice forms. */
+export async function getRevenueAccountOptions() {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "create") && !can(session, "sales", "edit")) throw new Error("Not permitted");
+  return getRevenueAccounts(session.tenantId);
+}
+
 export type SingleInvoiceEditData = {
   invoiceId: string;
   invoiceNumber: string;
@@ -218,6 +225,7 @@ export type SingleInvoiceEditData = {
   dueDate: string | null;
   customerId: string;
   billType: SalesBillType;
+  revenueAccountId: string | null;
   lines: SingleInvoiceEditLine[];
   payments: BatchPaymentLine[];
 };
@@ -288,6 +296,7 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     dueDate: invoice.dueDate,
     customerId: invoice.customerId,
     billType: invoice.taxTreatment,
+    revenueAccountId: invoice.revenueAccountId,
     lines,
     payments,
   };
@@ -347,7 +356,11 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
   // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
   // line, so a Product and a Service with different accounts both land correctly in the same entry.
-  const revenueLines = await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
+  // A revenue account chosen for the invoice takes every line to it.
+  const revenueAccountId = input.revenueAccountId ? await assertRevenueAccount(session.tenantId, input.revenueAccountId) : null;
+  const revenueLines = revenueAccountId
+    ? [{ accountId: revenueAccountId, amount: subtotal }]
+    : await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
 
   let taxPayableId: string | null = null;
   if (taxAmount > 0) {
@@ -394,6 +407,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       total: total.toFixed(2),
       amountPaid: paid.toFixed(2),
       status,
+      revenueAccountId,
     })
     .where(eq(salesInvoices.id, input.invoiceId));
 
@@ -477,6 +491,8 @@ export type SingleInvoiceInput = {
   dueDate?: string | null;
   customerId: string;
   billType?: SalesBillType;
+  /** Book the whole invoice to this revenue account; blank: each item's own account, else Sales Revenue. */
+  revenueAccountId?: string | null;
   lines: SingleInvoiceLine[];
   payments: SingleInvoicePayment[];
 };
@@ -531,7 +547,11 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
   // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
   // line, so a Product and a Service with different accounts both land correctly in the same entry.
-  const revenueLines = await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
+  // A revenue account chosen for the invoice takes every line to it.
+  const revenueAccountId = input.revenueAccountId ? await assertRevenueAccount(session.tenantId, input.revenueAccountId) : null;
+  const revenueLines = revenueAccountId
+    ? [{ accountId: revenueAccountId, amount: subtotal }]
+    : await resolveRevenueLines(session.tenantId, validLines.map((l, i) => ({ itemId: l.itemId, amount: computed[i].taxable })));
 
   let taxPayableId: string | null = null;
   if (taxAmount > 0) {
@@ -564,6 +584,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       total: total.toFixed(2),
       amountPaid: paid.toFixed(2),
       status,
+      revenueAccountId,
     })
     .returning();
 

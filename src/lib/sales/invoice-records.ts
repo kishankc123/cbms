@@ -10,6 +10,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
+import { assertRevenueAccount } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts } from "@/lib/ledger/account-guards";
 
 // The records every way of creating a sales invoice shares (the Single and Multi-Invoice forms, and Import Sales): the
@@ -26,6 +27,8 @@ export type BatchInvoiceRow = {
   grossAmount: number;
   discountAmount: number;
   billType?: SalesBillType;
+  /** The revenue account to book to; blank uses the default Sales Revenue account. */
+  revenueAccountId?: string | null;
   payments: BatchPaymentLine[];
 };
 
@@ -169,8 +172,11 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
   for (const date of new Set(indexed.map(({ r }) => r.invoiceDate))) await assertPeriodOpen(tenantId, date);
   await assertCashBankAccounts(tenantId, indexed.flatMap(({ r }) => r.payments.filter((p) => p.amount > 0).map((p) => p.accountId)));
 
-  const revenueAccount = await findControlAccount(tenantId, ["4000"], "Sales Revenue");
-  if (!revenueAccount) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
+  const chosen = new Set(indexed.map(({ r }) => r.revenueAccountId).filter((id): id is string => Boolean(id)));
+  for (const id of chosen) await assertRevenueAccount(tenantId, id);
+  const needsDefault = indexed.some(({ r }) => !r.revenueAccountId);
+  const defaultRevenue = needsDefault ? await findControlAccount(tenantId, ["4000"], "Sales Revenue") : null;
+  if (needsDefault && !defaultRevenue) throw new Error("No Sales Revenue account found — add one to the Chart of Accounts first");
 
   // A row is taxed at the rate that applied on ITS OWN date — rows in one batch can span a rate change.
   const vatRateByDate = new Map<string, number>();
@@ -251,13 +257,14 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
           amountPaid: paid.toFixed(2),
           status,
           importId: opts.importId ?? null,
+          revenueAccountId: row.revenueAccountId || null,
         })
         .returning();
 
       try {
         const lines: PostLineInput[] = [
           { accountId: arId, debitAmount: total, description: `Invoice ${invoiceNumber}` },
-          { accountId: revenueAccount.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
+          { accountId: row.revenueAccountId || defaultRevenue!.id, creditAmount: subtotal, description: `Invoice ${invoiceNumber}` },
         ];
         if (taxAmount > 0 && taxPayableId) {
           lines.push({ accountId: taxPayableId, creditAmount: taxAmount, description: `Tax on invoice ${invoiceNumber}` });

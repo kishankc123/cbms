@@ -5,7 +5,7 @@ import type { SalesBillTypeValue } from "./values";
 // review screen and the import itself both run this, so what you approved is what gets posted.
 
 export type RowStatus = "ready" | "attention" | "duplicate" | "skipped";
-export type RowIssue = "date" | "locked" | "amount" | "discount" | "billType" | "paid" | "account" | "customer";
+export type RowIssue = "date" | "locked" | "amount" | "discount" | "billType" | "revenue" | "paid" | "account" | "customer";
 
 export type CustomerState = "none" | "matched" | "create" | "unknown" | "skipped";
 
@@ -22,6 +22,9 @@ export type RowCheckInput = {
   /** The account named in the file: none given, found, or named but not a cash/bank account. */
   account: "none" | "ok" | "unknown";
   accountText?: string;
+  /** The revenue account named in the file: none given, found, or named but not one that can be chosen. */
+  revenue?: "none" | "ok" | "unknown";
+  revenueText?: string;
   customer: CustomerState;
   duplicate: boolean;
   settings: {
@@ -68,6 +71,7 @@ export function checkRow(i: RowCheckInput): RowCheck {
 
   if (i.billType === null) flag("billType", `"${i.billTypeText ?? ""}" isn't a bill type. Use taxable or zero-rated.`);
   const billType: SalesBillTypeValue = i.billType ?? i.settings.defaultBillType;
+  if (i.revenue === "unknown") flag("revenue", `"${i.revenueText ?? ""}" isn't a revenue account you can post to (a group that has sub-groups can't be chosen; pick one of its sub-groups).`);
 
   let computed: RowCheck["computed"] = null;
   const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0 && !i.discount.invalid && discountValue >= 0 && discountValue <= i.amount.value;

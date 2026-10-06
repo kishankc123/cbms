@@ -8,6 +8,7 @@ import type { CategoryDecision, SupplierDecision } from "@/lib/purchases/import/
 import { CheckDialog } from "../../sales/import/check-dialog";
 import { DoneStep, type DoneResult } from "../../sales/import/done-step";
 import { HistoryList } from "../../sales/import/history-list";
+import { expenseColumnGuide } from "@/lib/sales/import/column-guide";
 import { UploadStep } from "../../sales/import/upload-step";
 import { analyzeExpenses, checkExpenses, downloadExpenseTemplate, finishExpenses, getExpenseImportSetup, importExpensesChunk, prepareExpenses, reviewExpenses, undoExpenseImport, type ExpenseImportSetup } from "./actions";
 import { ReviewStep } from "./review-step";
@@ -228,6 +229,7 @@ export function ImportExpenses() {
         <>
           <UploadStep
             busy={busy}
+            guide={expenseColumnGuide()}
             onFile={onFile}
             onTemplate={downloadExpenseTemplate}
             rowNoun="expense"

@@ -9,6 +9,7 @@ import { recordSalesBatch, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
+import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -23,6 +24,7 @@ type Row = {
   grossAmount: string;
   discountAmount: string;
   billType: SalesBillType;
+  revenueAccountId: string;
   payments: PaymentLine[];
 };
 
@@ -30,7 +32,7 @@ const MIN_ROWS = 7;
 const DATE_FILL_AHEAD = 5;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
-const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", billType: "taxable", payments: [] });
+const emptyRow = (): Row => ({ invoiceDate: "", customerId: "", grossAmount: "", discountAmount: "0", billType: "taxable", revenueAccountId: "", payments: [] });
 
 function computeRow(row: Row, vatRate: number) {
   const gross = parseFloat(row.grossAmount) || 0;
@@ -169,6 +171,7 @@ export function InvoiceForm({
           grossAmount: parseFloat(r.grossAmount) || 0,
           discountAmount: parseFloat(r.discountAmount) || 0,
           billType: r.billType,
+          revenueAccountId: r.revenueAccountId || null,
           payments: r.payments,
         })),
       });
@@ -221,6 +224,7 @@ export function InvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Date</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Customer</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Bill Type</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Revenue</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross Amount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
@@ -274,6 +278,14 @@ export function InvoiceForm({
                         <option value="taxable">Taxable</option>
                         <option value="zero_rated">Zero-rated</option>
                       </select>
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <RevenueAccountSelect
+                        value={row.revenueAccountId}
+                        onChange={(id) => setRows((prev) => prev.map((x, idx) => (idx === i ? { ...x, revenueAccountId: id } : x)))}
+                        className={`mx-auto block w-40 ${cellInputCls}`}
+                        blankLabel="Sales Revenue"
+                      />
                     </td>
                     <td className="px-1 py-1 text-center">
                       <input

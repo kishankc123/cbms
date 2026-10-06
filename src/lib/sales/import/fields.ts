@@ -1,6 +1,6 @@
 // The columns Import Sales understands, and how a file's headers are matched to them. Pure: no database.
 
-export type ImportFieldKey = "date" | "customer" | "amount" | "discount" | "billType" | "paid" | "account";
+export type ImportFieldKey = "date" | "customer" | "amount" | "discount" | "billType" | "revenue" | "paid" | "account";
 
 export type ImportField = {
   key: ImportFieldKey;
@@ -17,6 +17,7 @@ export const IMPORT_FIELDS: ImportField[] = [
   { key: "customer", label: "Customer", required: false, synonyms: ["customer", "customer name", "party", "party name", "client", "client name", "buyer", "sold to", "name"], help: "Leave blank for cash sales that are paid in full." },
   { key: "discount", label: "Discount", required: false, synonyms: ["discount", "discount amount", "disc", "disc amount"], help: "Optional." },
   { key: "billType", label: "Bill type", required: false, synonyms: ["bill type", "tax type", "vat type", "vat", "taxable", "tax"], help: "Taxable or zero-rated." },
+  { key: "revenue", label: "Revenue account", required: false, synonyms: ["revenue account", "revenue", "revenue head", "revenue group", "income account", "income head", "income", "sales account", "sales head", "sales ledger"], help: "The revenue account the sale is booked to. Blank uses the default you choose (Sales Revenue)." },
   { key: "paid", label: "Paid amount", required: false, synonyms: ["paid", "paid amount", "amount paid", "received", "amount received", "received amount", "collected", "payment", "receipt"], help: "How much has been received for the invoice." },
   { key: "account", label: "Received into", required: false, synonyms: ["received into", "payment account", "deposit account", "account", "bank", "cash/bank", "cash bank", "payment mode", "mode"], help: "The cash or bank account name." },
 ];

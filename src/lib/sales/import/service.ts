@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { salesColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customerAliases, customers, importColumnMappings, salesImports, salesInvoices } from "@/db/schema";
@@ -8,6 +9,7 @@ import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { PartialBatchError, postSalesBatch, type BatchInvoiceRow } from "@/lib/sales/invoice-records";
+import { assertRevenueAccount, getRevenueAccounts } from "@/lib/sales/revenue-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
 import { checkRow, type CustomerState } from "./checks";
 import { headerSignature, IMPORT_FIELDS, mappingComplete, suggestMapping, type SalesColumnMapping } from "./fields";
@@ -59,7 +61,7 @@ export async function analyzeSalesFile(tenantId: string, input: { fileName: stri
 
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; discount: number; accountId: string | null };
+type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; discount: number; accountId: string | null; revenueAccountId: string | null };
 
 async function cashBankAccountList(tenantId: string) {
   const groups = await getCashBankAccounts(tenantId);
@@ -103,11 +105,17 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
   const dates = datesFor(parsed, mapping, dateOptions);
-  const [customerList, aliasRows, accountList] = await Promise.all([
+  const [customerList, aliasRows, accountList, revenueList] = await Promise.all([
     db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId)),
     db.select({ alias: customerAliases.alias, customerId: customerAliases.customerId }).from(customerAliases).where(eq(customerAliases.tenantId, tenantId)),
     cashBankAccountList(tenantId),
+    getRevenueAccounts(tenantId),
   ]);
+  const revenueByText = new Map<string, string>();
+  for (const a of revenueList) {
+    revenueByText.set(normalizeName(a.name), a.id);
+    revenueByText.set(normalizeName(a.code), a.id);
+  }
   const byName = new Map<string, { id: string; name: string }>();
   for (const c of customerList) if (!byName.has(normalizeName(c.name))) byName.set(normalizeName(c.name), c);
   const byAlias = new Map(aliasRows.map((a) => [a.alias, a.customerId]));
@@ -172,6 +180,8 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
 
     const accountText = cell(r, "account");
     const accountId = accountText ? accountByText.get(normalizeName(accountText)) ?? null : null;
+    const revenueText = cell(r, "revenue");
+    const revenueId = revenueText ? revenueByText.get(normalizeName(revenueText)) ?? null : null;
     const amount = parseAmountCell(cell(r, "amount"));
     const discount = parseAmountCell(cell(r, "discount"));
     const paid = parseAmountCell(cell(r, "paid"));
@@ -190,6 +200,8 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
       paid,
       account: accountText === "" ? "none" : accountId ? "ok" : "unknown",
       accountText,
+      revenue: revenueText === "" ? "none" : revenueId ? "ok" : "unknown",
+      revenueText,
       customer: state,
       duplicate: false, // set below, once the total is known
       settings: { amountsIncludeVat: settings.amountsIncludeVat, vatRate: iso ? vatByDate.get(iso) ?? 0 : 0, defaultBillType: settings.defaultBillType, paidMode: settings.paidMode, hasDefaultAccount: Boolean(settings.defaultAccountId) },
@@ -223,6 +235,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
       gross: check.computed?.gross ?? 0,
       discount: check.computed?.discount ?? 0,
       accountId: accountId ?? settings.defaultAccountId,
+      revenueAccountId: revenueId ?? (settings.defaultRevenueAccountId && revenueList.some((a) => a.id === settings.defaultRevenueAccountId) ? settings.defaultRevenueAccountId : null),
     });
   });
   return { rows: out, dates, customerList };
@@ -321,6 +334,13 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
     const accountList = await cashBankAccountList(tenantId);
     if (!accountList.some((a) => a.id === input.settings.defaultAccountId)) return { ok: false, error: "Choose a cash or bank account of this organization." };
   }
+  if (input.settings.defaultRevenueAccountId) {
+    try {
+      await assertRevenueAccount(tenantId, input.settings.defaultRevenueAccountId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Choose a revenue account." };
+    }
+  }
 
   // Decisions: an existing customer must belong to this organization; ticked new customers are created (or, if one of that
   // name already exists, that one is used) before any invoice is posted.
@@ -366,6 +386,7 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
       grossAmount: r.gross,
       discountAmount: r.discount,
       billType: r.billType ?? input.settings.defaultBillType,
+      revenueAccountId: r.revenueAccountId,
       payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid }] : [],
     }));
     try {
@@ -436,20 +457,25 @@ export async function markImportUndone(tenantId: string, importId: string) {
 
 /** A ready-to-fill workbook: the columns with two example rows, plus this organization's customers and accounts to copy names from. */
 export async function buildSalesTemplate(tenantId: string): Promise<string> {
-  const [customerList, accountList] = await Promise.all([
+  const [customerList, accountList, revenueList] = await Promise.all([
     db.select({ name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId)).orderBy(customers.name),
     cashBankAccountList(tenantId),
+    getRevenueAccounts(tenantId),
   ]);
   const wb = XLSX.utils.book_new();
   const sales = XLSX.utils.aoa_to_sheet([
-    ["Date", "Customer", "Amount", "Discount", "Bill type", "Paid amount", "Received into"],
-    ["2083-04-15", customerList[0]?.name ?? "Customer name", 10000, 0, "Taxable", 0, ""],
-    ["2083-04-16", "", 2500, 0, "Taxable", 2825, accountList[0]?.name ?? "Cash"],
+    ["Date", "Customer", "Amount", "Discount", "Bill type", "Revenue account", "Paid amount", "Received into"],
+    ["2083-04-15", customerList[0]?.name ?? "Customer name", 10000, 0, "Taxable", revenueList[0]?.name ?? "Sales Revenue", 0, ""],
+    ["2083-04-16", "", 2500, 0, "Taxable", "", 2825, accountList[0]?.name ?? "Cash"],
   ]);
-  sales["!cols"] = [{ wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
+  sales["!cols"] = [{ wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, sales, "Sales");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Customers (copy names from here)"], ...customerList.map((c) => [c.name])]), "Customers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Revenue accounts"], ...revenueList.map((a) => [a.name])]), "Revenue accounts");
+  const guideData = XLSX.utils.aoa_to_sheet(guideSheet(salesColumnGuide()));
+  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, guideData, "Columns");
   XLSX.utils.book_append_sheet(
     wb,
     XLSX.utils.aoa_to_sheet([

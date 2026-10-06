@@ -7,6 +7,7 @@ import type { CategoryDecision, PurchaseCheckResult, PurchaseDateOptions, Purcha
 import { CheckDialog } from "../../sales/import/check-dialog";
 import { DoneStep, type DoneResult } from "../../sales/import/done-step";
 import { HistoryList } from "../../sales/import/history-list";
+import { purchaseColumnGuide } from "@/lib/sales/import/column-guide";
 import { UploadStep } from "../../sales/import/upload-step";
 import { analyzePurchases, checkPurchases, downloadPurchaseTemplate, finishPurchases, getPurchaseImportSetup, importPurchasesChunk, preparePurchases, reviewPurchases, undoPurchaseImport, type PurchaseImportSetup } from "./actions";
 import { ReviewStep } from "./review-step";
@@ -227,6 +228,7 @@ export function ImportPurchases() {
         <>
           <UploadStep
             busy={busy}
+            guide={purchaseColumnGuide()}
             onFile={onFile}
             onTemplate={downloadPurchaseTemplate}
             rowNoun="bill"
