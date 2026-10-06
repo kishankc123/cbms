@@ -2,9 +2,9 @@
 
 # Development Context (for continuing in a new session)
 
-Last updated: 2026-09-29, as of commit `454e9e7` on `main`, with Phase 5 of the Fiscal Year Engine
-built and verified locally but **not yet committed** (see item 3 below — check `git status` first thing
-in a new session).
+Last updated: 2026-10-06, as of commit `b78be66` on `main` (working tree clean at that point — still run
+`git status` first thing in a new session). Migrations in the repo run through `0076`; **Vercel's database
+only has what was run on it by hand — deploys do not run migrations** (see "Operations" below).
 
 ## What this app is
 
@@ -15,130 +15,131 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 
 ## Core architectural principles (already established, keep following them)
 
-- **Multi-tenant via `tenantId`**, scoped on every query. A user can belong to multiple organizations
-  (`memberships` table, many-to-many); "active organization" is session-scoped (`activeTenantId`), not a
-  column on the user.
-- **Journal entries are the ledger's single source of truth.** Every module (Sales, Purchases, Expenses,
-  Payments, Payroll, Inventory, manual Journal) posts through `postJournalEntry()` /
-  `reverseJournalEntry()` in `src/lib/ledger/post.ts` — the one choke point. Never insert into
-  `journal_entries`/`journal_lines` directly from a module.
-- **Reports never recreate accounting logic.** They always read from `journal_entries`/`journal_lines`
-  via `src/lib/ledger/reports.ts` and sibling files (`src/lib/ledger/sales-summary.ts`,
-  `purchase-summary.ts`, `receivable-ageing.ts`, etc.) — never a second computation that could disagree
-  with the official numbers. Every report was cross-checked against at least one other report for
-  consistency before being called done.
-- **Permissions**: `can(session, module, action)` in `src/lib/session.ts`, modules listed in
-  `src/lib/roles.ts` (`audit, bank_reconciliation, chart_of_accounts, compliance, expenses, inventory,
-  payments, payroll, purchases, sales, settings`), actions are `view/create/edit/delete`. Roles:
-  `owner, admin, accountant, staff` — owner/admin bypass all checks. Every new page/action must call
-  `can()` explicitly; it is **not** automatic. (A real gap here — payroll/report pages missing `can()`
-  checks — was found and fixed this session, see item 2 below. Stay vigilant for the same mistake on new
-  pages.)
-- **Audit logging**: `logAuditEvent()` in `src/lib/audit.ts`, append-only, tenant-scoped.
-- **Close/reopen pattern** (used for accounting periods, bank reconciliations, and fiscal years alike):
-  closing is a routine action gated on `edit` permission; reopening is admin-only, requires a reason, and
-  is always audit-logged. Follow this exact shape for any future close/reopen feature.
+- **Users are global; organizations are tenants.** One `users` row per person (login is **email +
+  password only**; `name` is the display name). They join organizations through `memberships`
+  (many-to-many); "active organization" is session-scoped (`activeTenantId`). Every query is scoped by
+  `tenantId`.
+- **Journal entries are the ledger's single source of truth.** Every module posts through
+  `postJournalEntry()` / `reverseJournalEntry()` in `src/lib/ledger/post.ts` — the one choke point. Never
+  insert into `journal_entries`/`journal_lines` directly from a module.
+- **One writer per kind of document, in `src/lib`, shared by every way of creating it.** Sales multi-invoice
+  → `lib/sales/invoice-records.ts` (`postSalesBatch`); consumable purchases → `lib/purchases/cash-purchase.ts`
+  (`createCashPurchaseCore`); supplier bills (incl. asset purchases) → `lib/purchases/bill-records.ts`. The
+  forms, edit screens and the import screens all call these. Never add a second posting path.
+- **Reports never recreate accounting logic.** They read from `journal_entries`/`journal_lines` via
+  `src/lib/ledger/reports.ts` and sibling files — never a second computation that could disagree with the
+  official numbers.
+- **Permissions** (see `src/lib/permissions.ts` — the single catalog): modules × actions
+  `view/create/edit/void/delete`, only actions that some check enforces are listed. `can(session, module,
+  action)` in `src/lib/session.ts`. Roles are per-organization rows in `roles` (4 standard: Owner,
+  Administrator = fixed full access/bypass; Accountant, Staff = editable; plus custom). `memberships.role` is
+  the authority level (custom roles count as staff-level), `memberships.roleId` decides permissions.
+  - "Void" means cancel/reverse a transaction; "Delete" means remove records (customers, accounts...).
+  - **Every page must check View before reading data**: first line of a module page is
+    `const denied = await guardView("<module>"); if (denied) return denied;` (`components/page-guard.tsx`).
+    Layouts are NOT a security boundary (Next docs: they don't re-run on navigation).
+  - **Every exported server action must call `can()`/`requireOrgAdmin`/`requirePlatformAdmin`**, and **no
+    exported server action may take a `tenantId` from the caller** (anyone could pass another org's). Helpers
+    that take a tenantId live in plain lib files, not in `"use server"` files.
+  - `src/lib/permission-coverage.test.ts` fails when a page or action lacks a check. Keep it green; only add
+    to its allowlists with a stated reason.
+- **Audit logging**: `logAuditEvent()` in `src/lib/audit.ts`, append-only. Platform-admin actions log with
+  `tenantId` null.
+- **Close/reopen pattern** (accounting periods, bank reconciliations, fiscal years): closing is a routine
+  action gated on `edit`; reopening is admin-only, requires a reason, always audit-logged.
+- **Imports follow one shape** (Sales, Purchases): Upload → Review → Done; columns and AD/BS dates detected
+  automatically; unknown customers/suppliers grouped and decided once (tick to create, never auto-created);
+  remembered matches and column mappings; typed row corrections ("overrides"); Check only; undo per import
+  (batch id on the invoices/bills). The server re-reads and re-checks the file at every step and never trusts
+  the browser's decisions. Pure rules are in `lib/*/import/{fields,values,checks,amounts,paste}.ts` (unit
+  tested); DB work in `service.ts`. Purchases posts in slices (prepare → chunks → finish) with a progress bar
+  because each bill does many queries; Sales still posts in one request.
 - Build **phase by phase**, verify live in the browser (built-in Browser pane) plus `npx tsc --noEmit`,
-  `npx eslint`, and `npm test` before calling a phase done, then **pause for the user's explicit go-ahead**
-  before continuing to the next phase. **Only commit/push when explicitly asked** — work sits uncommitted
-  between phases by design.
+  `npx eslint`, `npx vitest run` and the integration tests, then **pause for the user's explicit go-ahead**
+  before the next phase. **Only commit/push when explicitly asked.**
 - Drizzle migrations: generate with
-  `node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs generate`, apply with `...migrate`
-  (the plain `npx drizzle-kit` shim breaks under this shell — always call the `.cjs`/`.mjs` entry
-  directly). A data backfill can be hand-appended to a generated migration's `.sql` file.
+  `node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs generate --name=<name>`, apply with
+  `...migrate` (never the plain `npx drizzle-kit` shim). A data backfill can be hand-appended to a generated
+  `.sql`. Integration tests: `node --env-file=.env.local node_modules/vitest/vitest.mjs run -c
+  vitest.int.config.ts <path>` (they use throwaway `ZZ ...` organizations from `src/test/temp-org.ts`).
 
-## What's been built this session (all committed except where noted)
+## What's built (all committed)
 
-### 1. Reports module — complete, all 29 reports across 7 phases (commits `f715caf`..`e6c01e5`)
-Landing page at `/reports` (`src/app/(app)/reports/report-catalog.ts` drives it — one row per report).
-Covers Financial Statements, Ledger & Accounting, Sales/Purchases & Receivables/Payables, Cash & Bank,
-Inventory, Payroll. Two real bugs were caught and fixed during build (not left as known issues):
-unitemized invoices/bills (Multi-invoice/batch flow doesn't store line items) were rolled into an
-explicit "Not itemized" row so by-item reports still tie to their Summary report's total; vendor-less
-Consumable purchases got a "No Supplier" row in Purchase by Supplier for the same reason.
+- **Reports** — all 29 reports across 7 phases, driven by `reports/report-catalog.ts`; the landing page lists
+  only reports the person's role can open (each report page also checks its own module).
+- **Fiscal Year & Accounting Period Engine, Phases 1-5** — `fiscal_years` table + service (`lib/fiscal.ts`),
+  sidebar fiscal-year switcher, `journal_entries.fiscal_year_id` stamped at posting time, report defaults
+  follow the active year, year-end closing readiness checklist (`lib/fiscal-closing.ts`). **Design decision
+  (do not change casually):** no literal closing/zeroing journal entries — `balanceSheet()` computes retained
+  earnings live from all P&L activity, so closing entries would corrupt cross-year P&L ranges.
+- **Fixed Assets** (`src/lib/assets`, `src/app/(app)/assets`, sidebar group "Assets") — setup (categories,
+  locations, default accounts), register + detail + schedule, purchase (creates a normal supplier bill of type
+  `asset`), opening assets (post Dr cost / Cr accumulated depreciation / Cr Brought forward, editable until
+  depreciation is posted), monthly book depreciation (one journal entry per run, per-asset lines in
+  `asset_depreciation_lines`, catch-up for late assets, only the latest run reversible), sale / disposal /
+  write-off (reversible; sales feed the sales register and VAT return; cash flow treats depreciation as a
+  non-cash add-back and gain/loss as investing). Not built: transfers, bulk import, asset reports, audit
+  checks, tax depreciation (country rules to be supplied), credit sales of assets, quantity per purchase.
+- **Settings** is a sidebar group: Company details, General (calendar, invoice/payment numbering), Fiscal
+  years (+ books start date), Users, Roles.
+- **Roles & permissions** — `roles` table (migration 0073), matrix editor at Settings → Roles (list | add new,
+  duplicate, reset standard role, delete when unused). `lib/role-store.ts` lazily creates the standard roles
+  and links existing members.
+- **User accounts & membership** — separate "Create a user account" and "Create a business account" on the
+  login page; a signed-in person with no organization sees a landing screen. Settings → Users: list (member
+  IDs `USR-0001`), Add new (exact email → if the account exists and its email is verified they are added
+  **instantly**, with a notice banner + email and a Leave option; otherwise an invitation is offered), edit
+  role/status, remove. `lib/org-members.ts`.
+- **Platform administration** (`/admin`, platform-admin flag only): Overview counts, Users (list, detail,
+  unlock, force sign-out, disable/enable, grant/revoke platform admin) and Organizations (list, detail,
+  suspend with reason / reactivate). `lib/platform-admin.ts`. Still placeholders: Platform Audit Log, Billing,
+  Compliance Configuration.
+- **Import Sales / Import Purchases** — tabs on Sales → Add new and Purchases → Consumable purchase. One row
+  per invoice/bill (consumable purchases only; stockable purchases need item lines). Paste from Excel, template
+  download, fix rows in place, Check only, "Fix and import the remaining rows", undo. Tables:
+  `sales_imports`, `purchase_imports`, `customer_aliases`, `supplier_aliases`, `import_column_mappings`.
+  Server-action body limit raised to 4 MB in `next.config.ts` for these screens.
+- **Dashboard** (`/dashboard`) now has KPIs, a revenue/expense chart and cash/bank balances; the original
+  full spec was never re-checked against it.
 
-### 2. Permission gaps fixed (commit `8e1666d`)
-`journal/actions.ts`'s manual-entry create/reverse, and all 25 report pages, were missing `can()` checks
-entirely (any signed-in tenant member — including `staff`, denied payroll access by default — could see
-Payroll Summary/Salary Payable, and could post/reverse manual journal vouchers). Fixed by mapping each
-report to the module whose data it exposes (financial statements → `chart_of_accounts`, sales reports →
-`sales`, payroll reports → `payroll`, etc.) and gating journal actions on `chart_of_accounts`.
+## Operations / things only the user can do
 
-### 3. Fiscal Year & Accounting Period Engine — Phases 1-4 committed (`f438f3e`, `90d5811`, `454e9e7`),
-### **Phase 5 built and verified but NOT yet committed** — check `git status` / ask the user before continuing.
+- Run migrations **0065–0076** (and any later ones) on the Vercel database by hand, and make sure its host
+  matches `.env.local`. Without 0073/0074/0075/0076 the Roles, Users, Import screens will error there.
+- `lib/rate-limit.ts` is in-memory per server instance — ineffective on Vercel's serverless; needs a shared
+  store. Email needs a real provider in production (dev prints invitation links).
+- Import Sales posts in a single request; a very large file could exceed Vercel's time limit (Purchases
+  already posts in slices).
 
-Core files: `src/db/schema/fiscal.ts` (new `fiscal_years` table, one row per fiscal year per tenant, with
-`open/closed/reopened` status — replaces the old single mutable start/end pair on `tenants`, which had no
-history), `src/lib/fiscal.ts` (the service: `getCurrentFiscalYear`, `getFiscalYearByDate`,
-`listFiscalYears`, `createFiscalYear`, `assertFiscalYearOpen`, `resolveFiscalYearId`,
-`getActiveFiscalYear`/cookie-based sidebar context, `fiscalYearDefaultRange`/`fiscalYearDefaultAsOf` for
-report defaults), `src/lib/fiscal-closing.ts` (year-end readiness checklist + opening-balance
-reconciliation, **uncommitted**).
+## What's explicitly NOT built / open decisions
 
-- **Phase 1**: the `fiscal_years` table + service; `getFiscalRange()` rewritten to read from it (same
-  signature, so all report pages picked it up for free); `assertFiscalYearOpen()` wired into the central
-  posting path; Settings → Fiscal Years page (list/add/close/reopen).
-- **Phase 2**: global fiscal-year switcher in the sidebar (`src/app/(app)/fiscal-year-switcher.tsx` +
-  `fiscal-year-actions.ts`, cookie-based, per-tenant), an `all_time` preset added to
-  `src/lib/calendar/service.ts`, Transaction Register wired as the first report to read the switcher's
-  context (FY column in All Time mode).
-- **Phase 3**: `journal_entries.fiscal_year_id` column (FK), stamped at posting time via
-  `resolveFiscalYearId()` in the central `postJournalEntry()`/`reverseJournalEntry()` path — covers every
-  module automatically. Historical backfill migration included. Recorded once at posting time (not
-  recomputed from date on every read) so a later fix to a fiscal year's boundaries can't reassign an
-  already-posted transaction's year.
-- **Phase 4**: every report page's default period now follows the sidebar's active fiscal-year context
-  (`fiscalYearDefaultRange`/`fiscalYearDefaultAsOf` in `lib/fiscal.ts`) instead of a hardcoded
-  "this month" — an explicit `?from=`/`?to=` in the URL still wins.
-- **Phase 5 (uncommitted)**: year-end closing readiness checklist (draft invoices/bills, unbalanced
-  trial balance/balance sheet, negative stock) reusing existing report functions; the existing
-  `closeFiscalYear` action now enforces this checklist server-side; opening-balance reconciliation
-  comparing a closed year's final Balance Sheet to the next year's first day. **Deliberate design
-  decision, stated to the user**: this does NOT post literal closing/zeroing journal entries for
-  revenue/expense accounts, because `balanceSheet()`'s retained earnings is already computed live by
-  summing all P&L activity since epoch (see that function's own comment) — posting closing entries would
-  corrupt any future cross-year custom-range P&L report for no benefit. If the user pushes back on this
-  and wants literal closing entries per the spec's letter, that needs a real design conversation first,
-  not a quick patch.
-
-## What's explicitly NOT built (reviewed/audited, deliberately deferred)
-
-- **Fixed Assets module** — doesn't exist at all (no schema, no pages). Confirmed via audit. Any
-  Dashboard or Fiscal Year spec item referencing assets/depreciation needs this built first.
-- **Interactive Financial Dashboard** — only a minimal placeholder exists at `/dashboard`
-  (`src/app/(app)/dashboard/page.tsx`, a few KPI cards). The full spec (revenue/expense/profit KPIs,
-  ageing/inventory/compliance widgets, drill-down, "Needs Attention", charts) was reviewed and audited
-  in detail but not built — the user chose to build the Fiscal Year Engine first. Known blockers found
-  during that audit: no charting library installed; no caching layer anywhere (a naive dashboard
-  importing many report functions could trigger 35-60+ DB round-trips per load — needs a dedicated
-  lightweight aggregate-query layer, not reused report functions).
-- **Full User Access Control spec** — audited in detail; the existing model (multi-org membership,
-  session-fresh permissions every request, tenant-scoped queries, secure invitations, append-only audit
-  log, platform-admin isolation) already matches the spec closely. Real gaps found: permission
-  granularity is coarse CRUD only (no `payroll.view_salary`-style sub-actions); no dedicated
-  `transferOwnership()` action (self-escalation is already blocked by other means, so lower urgency); no
-  login/failed-authentication audit events.
-- **Fiscal Year Engine Phase 6** (period-locking UI polish, e.g. per-month lock granularity) and
-  broader Dashboard integration of the fiscal-year context — not started.
-- Only **Transaction Register** has an "All Time" + FY-column treatment; the other reports respect the
-  fiscal-year default range but don't show an FY column (that was intentionally scoped to one flagship
-  report as a proof, not rolled out everywhere).
+- Default **Staff** still sees the Dashboard KPIs and financial statements because Chart of Accounts view is on
+  for Staff — a role-configuration decision for the user (turn it off, or add a dashboard permission).
+- Fiscal Year Engine **Phase 6** (per-month period-lock polish) and wider fiscal-year integration; only the
+  Transaction Register has the "All time" + FY column.
+- Login/failed-login audit events, a `transferOwnership()` action, `payroll.view_salary`-style sub-permissions.
+- `memberships.permissions` (per-member override) is unused now that roles exist; safe to drop in a cleanup.
+- Recurring Expenses feature: see the saved memory note for its phase status (not re-checked recently).
+- Global UI redesign: postponed on purpose (plan saved in memory).
+- Possible next imports: line-item layout for Sales, Stockable purchases, customers/suppliers/opening
+  balances/items/expenses/assets.
 
 ## Known data quirks (don't mistake these for bugs)
 
-- The primary demo tenant is **"DS Finance group"** — treat its inventory-vs-ledger difference on the
-  Stock Summary report as **intentional test-data leftover**, not a bug (already flagged once this
-  session). Re-verify with real client data before assuming it's fixed.
-- No real draft sales invoices/purchase bills exist anywhere in the current dataset, so the Phase 5
-  closing-readiness "draft transaction" check has only been logic-verified, not exercised against real
-  blocking data.
-- The browser session used for live verification during this work was logged in as the **`accountant`**
-  role (not owner/admin), which is why some `settings:edit`-gated actions (like actually closing a fiscal
-  year) had to be verified via a throwaway script against a different test tenant instead of the live UI.
+- The primary demo tenant is **"DS Finance group"** — its inventory-vs-ledger difference on the Stock Summary
+  report is **intentional test-data leftover**. It also holds many **voided/reversed test records** from live
+  verification (voided test invoices/bills incl. `ZZ-B1/B2/B4`, voided test assets, reversed depreciation
+  runs); numbers used by voided documents are never reused. Treat as clutter, not corruption.
+- Demo/seed accounts live in `src/db/seed.ts` (platform admin and a demo owner). Sessions in the Browser pane
+  expire; when verifying locally, sign in with those seed accounts or throwaway users you create and delete.
+- One integration test is flaky and fails on a clean checkout too: "stock that has already been sold can't be
+  taken back out by voiding" (purchases). ESLint reports a handful of pre-existing errors in untouched files
+  (e.g. `payroll/setup/settings-form.tsx`).
 
 ## Verification pattern to keep using
 
-For any DB-level check that can't go through the browser (e.g. testing a permission-gated action, or
-confirming a migration backfilled correctly), write a throwaway `tmp-check-*.ts` script at the repo root,
-run it with `node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs tmp-check-*.ts`, then delete it —
-never leave temp scripts committed.
+For any DB-level check that can't go through the browser, write a throwaway script (repo root, e.g.
+`tmp-check-*.ts`, or an inline `node --env-file=.env.local -e` using the `postgres` package), run it with
+`node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs <file>`, then delete it — never commit temp
+scripts. Test users created for live checks must be deleted afterwards (delete their `audit_log` rows first).
+Shell note: heredocs/`node -e` with apostrophes break in this Git Bash — write files with the Write tool.
