@@ -60,6 +60,14 @@ export function passwordResetEmail(link: string) {
   };
 }
 
+export function addedToOrganizationEmail(orgName: string, adderName: string, roleLabel: string, link: string) {
+  return {
+    subject: `You've been added to ${orgName} — Client Books`,
+    html: layout(`You're now part of ${esc(orgName)}`, `${esc(adderName)} added you to <b>${esc(orgName)}</b> as <b>${esc(roleLabel)}</b>. You can sign in with your existing email and password; if this isn't expected you can leave the organization from your account.`, link, "Open Client Books"),
+    text: `${adderName} added you to ${orgName} as ${roleLabel}. Sign in with your existing account: ${link}`,
+  };
+}
+
 export function invitationEmail(orgName: string, inviterName: string, roleLabel: string, link: string) {
   return {
     subject: `You've been invited to ${orgName} — Client Books`,

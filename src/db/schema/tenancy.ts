@@ -167,10 +167,17 @@ export const memberships = pgTable(
     // The role this member holds; its permissions are what the member can do. Null only until the standard roles have
     // been linked (the member then gets the standard role of their baseRole).
     roleId: uuid("role_id").references(() => roles.id),
+    // The member's ID within the organization (USR-0001...). Assigned in order of joining the first time the Users list
+    // is opened (see lib/org-members.ts), so a member added through any route gets one.
+    memberNumber: integer("member_number"),
+    // Who added this person directly (null when they created the organization or accepted an invitation), and when they
+    // dismissed the "you were added" notice that is shown until then.
+    addedBy: uuid("added_by").references(() => users.id),
+    noticeDismissedAt: timestamp("notice_dismissed_at", { withTimezone: true }),
     status: membershipStatusEnum("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("memberships_user_tenant_idx").on(t.userId, t.tenantId)]
+  (t) => [uniqueIndex("memberships_user_tenant_idx").on(t.userId, t.tenantId), uniqueIndex("memberships_tenant_number_idx").on(t.tenantId, t.memberNumber)]
 );
 
 export const invitations = pgTable("invitations", {

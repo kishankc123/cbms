@@ -8,6 +8,8 @@ import { OrgSwitcher } from "./org-switcher";
 import { FiscalYearSwitcher } from "./fiscal-year-switcher";
 import { getActiveFiscalYear, listFiscalYears } from "@/lib/fiscal";
 import { VerifyBanner } from "./verify-banner";
+import { AddNoticeBanner } from "@/components/add-notice-banner";
+import { listAddNotices } from "@/lib/org-members";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
 import { InventoryProvider } from "@/components/inventory/opening-date";
 import { getOpeningDate } from "@/lib/inventory/stock";
@@ -163,8 +165,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUserSession();
   // Independent reads, so run them together. (getActiveFiscalYear never writes — fiscal years are
   // only created explicitly in Settings — so listFiscalYears can't race an auto-create.)
-  const [orgs, inventoryOpeningDate, activeFiscalYear, fiscalYearsList, cookieStore] = await Promise.all([
+  const [orgs, notices, inventoryOpeningDate, activeFiscalYear, fiscalYearsList, cookieStore] = await Promise.all([
     listActiveMemberships(user.id),
+    listAddNotices(user.id),
     getOpeningDate(session.tenantId),
     getActiveFiscalYear(session.tenantId),
     listFiscalYears(session.tenantId),
@@ -196,6 +199,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <main className="flex-1 p-8">
+        <AddNoticeBanner notices={notices} activeTenantId={session.tenantId} />
         {!user.emailVerifiedAt && <VerifyBanner />}
         {children}
       </main>

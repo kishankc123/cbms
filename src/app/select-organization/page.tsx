@@ -5,13 +5,15 @@ import { listActiveMemberships } from "@/lib/memberships";
 import { switchOrganization } from "./actions";
 import { SignOutLink } from "./sign-out-link";
 import { VerifyEmailNotice } from "./verify-email-notice";
+import { AddNoticeBanner } from "@/components/add-notice-banner";
+import { listAddNotices } from "@/lib/org-members";
 
 export default async function SelectOrganizationPage() {
   // A token that no longer matches the account (disabled, password reset, old
   // format) must end the session rather than show an error.
   const user = await requireUserSession().catch(() => null);
   if (!user) redirect("/signed-out");
-  const orgs = await listActiveMemberships(user.id);
+  const [orgs, notices] = await Promise.all([listActiveMemberships(user.id), listAddNotices(user.id)]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
@@ -21,6 +23,7 @@ export default async function SelectOrganizationPage() {
           <p className="text-sm text-gray-500">Signed in as {user.email}</p>
         </div>
 
+        <AddNoticeBanner notices={notices} activeTenantId={null} />
         {!user.emailVerifiedAt && <VerifyEmailNotice />}
 
         {orgs.length === 0 ? (

@@ -5,6 +5,7 @@ import { and, desc, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { memberships, users, invitations, tenants } from "@/db/schema";
 import { ensureSystemRoles, getRole, listRoles, type RoleRow } from "@/lib/role-store";
+import { addExistingAccount, listMembersPage, lookupAccount, memberCode, type AccountLookup, type AddResult } from "@/lib/org-members";
 import { requireTenantSession, requireUserSession, type AppSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import { generateToken, hashToken } from "@/lib/tokens";
@@ -39,16 +40,12 @@ async function activeOwnerCount(tenantId: string) {
   return value;
 }
 
-export async function listMembers() {
+export async function getUsersPage(params: { search?: string; status?: string; roleId?: string; page?: number; pageSize?: number }) {
   const session = await requireOrgAdmin();
   const roleList = await listRoles(session.tenantId); // also links members to the standard roles on first use
-  const [members, pending] = await Promise.all([
-    db
-      .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, roleId: memberships.roleId, status: memberships.status, verified: users.emailVerifiedAt })
-      .from(memberships)
-      .innerJoin(users, eq(users.id, memberships.userId))
-      .where(eq(memberships.tenantId, session.tenantId))
-      .orderBy(users.name),
+  const pageSize = [25, 50, 100].includes(params.pageSize ?? 0) ? params.pageSize! : 25;
+  const [list, pending] = await Promise.all([
+    listMembersPage(session.tenantId, { search: params.search, status: params.status, roleId: params.roleId, page: params.page ?? 1, pageSize }),
     db
       .select({ id: invitations.id, email: invitations.email, role: invitations.role, roleId: invitations.roleId, expiresAt: invitations.expiresAt })
       .from(invitations)
@@ -58,11 +55,68 @@ export async function listMembers() {
   return {
     me: session.userId,
     myRole: session.role,
-    roles: roleList.map((r) => ({ id: r.id, name: r.name, description: r.description ?? "", baseRole: r.baseRole, isActive: r.isActive })),
-    members: members.map((m) => ({ ...m, verified: Boolean(m.verified) })),
-    pending: pending.map((p) => ({ ...p, expiresAt: p.expiresAt.toISOString(), expired: p.expiresAt < new Date() })),
+    roles: roleList.map((r) => ({ id: r.id, name: r.name, baseRole: r.baseRole, isActive: r.isActive })),
+    list,
+    pending: pending.map((p) => ({ id: p.id, email: p.email, roleName: roleList.find((r) => r.id === p.roleId)?.name ?? p.role, expiresAt: p.expiresAt.toISOString(), expired: p.expiresAt < new Date() })),
   };
 }
+export type UsersPage = Awaited<ReturnType<typeof getUsersPage>>;
+
+/** The roles this person may hand out: active ones, and Owner only if they are an Owner themselves. */
+export async function getAddUserData() {
+  const session = await requireOrgAdmin();
+  const roleList = await listRoles(session.tenantId);
+  return {
+    roles: roleList.filter((r) => r.isActive && (r.baseRole !== "owner" || session.role === "owner")).map((r) => ({ id: r.id, name: r.name, description: r.description ?? "" })),
+  };
+}
+export type AddUserData = Awaited<ReturnType<typeof getAddUserData>>;
+
+export async function findAccount(email: string): Promise<AccountLookup> {
+  const session = await requireOrgAdmin();
+  if (!rateLimit(`lookup:${session.userId}`, 40, 60 * 60 * 1000)) throw new Error("Too many lookups. Try again later.");
+  return lookupAccount(session.tenantId, email);
+}
+
+/** Adds an existing, verified account straight away (the role and status are the organization's to set). */
+export async function addUser(input: { email: string; roleId: string; status: "active" | "suspended" }): Promise<AddResult> {
+  const session = await requireOrgAdmin();
+  const me = await requireUserSession();
+  if (!me.emailVerifiedAt) return { ok: false, error: "Verify your own email address before adding others." };
+  if (!rateLimit(`add-user:${session.userId}`, 30, 60 * 60 * 1000)) return { ok: false, error: "Too many additions. Try again later." };
+  if (input.status !== "active" && input.status !== "suspended") return { ok: false, error: "Choose a status." };
+  let role: RoleRow;
+  try {
+    role = await loadAssignableRole(session, input.roleId);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const result = await addExistingAccount(session.tenantId, { userId: session.userId, name: me.name }, { email: input.email, role, status: input.status });
+  if (result.ok) revalidatePath("/settings/users");
+  return result;
+}
+
+export async function getMemberForEdit(userId: string) {
+  const session = await requireOrgAdmin();
+  await listRoles(session.tenantId);
+  const [row] = await db
+    .select({ userId: users.id, number: memberships.memberNumber, name: users.name, email: users.email, mobile: users.mobile, verified: users.emailVerifiedAt, baseRole: memberships.role, roleId: memberships.roleId, status: memberships.status })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(and(eq(memberships.tenantId, session.tenantId), eq(memberships.userId, userId)))
+    .limit(1);
+  if (!row) return null;
+  const roleList = await listRoles(session.tenantId);
+  const isMe = row.userId === session.userId;
+  return {
+    member: { ...row, code: memberCode(row.number), verified: Boolean(row.verified) },
+    isMe,
+    // An Administrator can't touch an Owner, and nobody edits their own membership here.
+    locked: isMe || (row.baseRole === "owner" && session.role !== "owner"),
+    roles: roleList.filter((r) => (r.isActive || r.id === row.roleId) && (r.baseRole !== "owner" || session.role === "owner" || r.id === row.roleId)).map((r) => ({ id: r.id, name: r.name })),
+  };
+}
+export type MemberForEdit = NonNullable<Awaited<ReturnType<typeof getMemberForEdit>>>;
 
 export async function inviteUser(input: { email: string; roleId: string }): Promise<{ ok: true; devLink?: string } | { ok: false; error: string }> {
   const session = await requireOrgAdmin();

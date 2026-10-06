@@ -519,6 +519,13 @@
       "when": 1791276722291,
       "tag": "0073_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791277635046,
+      "tag": "0074_member_numbers_and_notices",
+      "breakpoints": true
     }
   ]
 }
