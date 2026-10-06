@@ -2,11 +2,12 @@ import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, vendors, accounts } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { requireTenantSession, can } from "@/lib/session";
 import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getExpenseTaxDefaults } from "./actions";
 import { ExpensesTable } from "./expenses-table";
+import { ExpensesTabs } from "./expenses-tabs";
 
 export default async function ExpensesPage() {
   const denied = await guardView("expenses");
@@ -81,6 +82,7 @@ export default async function ExpensesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-gray-900">Expenses</h1>
 
+      <ExpensesTabs canImport={can(session, "expenses", "create")}>
       <ExpensesTable
         expenses={rows}
         vendors={vendorList}
@@ -89,6 +91,7 @@ export default async function ExpensesPage() {
         vatRate={taxDefaults.vatRate}
         tdsRate={taxDefaults.tdsRate}
       />
+      </ExpensesTabs>
     </div>
   );
 }

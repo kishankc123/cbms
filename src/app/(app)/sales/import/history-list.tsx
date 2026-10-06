@@ -40,7 +40,7 @@ export function HistoryList({ history, canUndo, onChanged, onUndo, noun }: { his
           <tr>
             <th className="px-4 py-2 font-medium">File</th>
             <th className="px-4 py-2 font-medium">When</th>
-            <th className="px-4 py-2 text-right font-medium">{noun === "bill" ? "Bills" : "Invoices"}</th>
+            <th className="px-4 py-2 text-right font-medium">{noun === "bill" ? "Bills" : noun === "expense" ? "Expenses" : "Invoices"}</th>
             <th className="px-4 py-2 text-right font-medium">Total</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2" />
