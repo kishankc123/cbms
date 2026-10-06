@@ -153,7 +153,7 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
 /** Voids a credit note: reverses what it posted and puts the goods back into stock. */
 export async function voidPurchaseReturn(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "purchases", "delete")) throw new Error("Not permitted");
+  if (!can(session, "purchases", "void")) throw new Error("Not permitted");
 
   const id = String(formData.get("noteId"));
   const [note] = await db

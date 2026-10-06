@@ -5,6 +5,7 @@ import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-account
 import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
 import { requirePan } from "@/lib/pan";
+import { ensureSystemRoles } from "@/lib/role-store";
 
 export type BusinessInfo = {
   name: string;
@@ -70,6 +71,7 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
         return t;
       });
 
+      await ensureSystemRoles(tenant.id); // the standard roles, with the founder linked to Owner
       if (tenant.panVatNumber) await ensurePanRegistration(tenant.id);
       await logAuditEvent({ tenantId: tenant.id, userId: ownerUserId, action: "organization_created", entityType: "organization", entityId: tenant.id, after: { name: tenant.companyName, clientCode } });
       return tenant;

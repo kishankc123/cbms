@@ -505,7 +505,7 @@ async function voidPaymentsForExpense(tenantId: string, expenseId: string, userI
 
 export async function voidExpense(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "expenses", "delete")) throw new Error("Not permitted");
+  if (!can(session, "expenses", "void")) throw new Error("Not permitted");
 
   const expenseId = String(formData.get("expenseId"));
   const [expense] = await db

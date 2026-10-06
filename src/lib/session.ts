@@ -2,9 +2,9 @@ import { cache } from "react";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { memberships, tenants, users } from "@/db/schema";
-import type { Permissions } from "@/db/schema/tenancy";
-import { effectivePermissions, type OrgRole } from "@/lib/roles";
+import { memberships, roles, tenants, users } from "@/db/schema";
+import { hasPermission, type Permissions, type PermissionAction } from "@/lib/permissions";
+import { effectivePermissions, roleLabel, type OrgRole } from "@/lib/roles";
 import { isSessionExpired } from "@/lib/session-expiry";
 import type { CalendarSystem } from "@/lib/calendar";
 
@@ -23,7 +23,10 @@ export class TenantScopeError extends Error {
 export type AppSession = {
   userId: string;
   tenantId: string;
+  /** The level of authority (Owner/Administrator manage the organization); custom roles count as Staff here. */
   role: OrgRole;
+  /** The name of the member's role, standard or custom. */
+  roleName: string;
   permissions: Permissions;
   /** How this organization shows/enters dates (storage is always AD). */
   calendar: CalendarSystem;
@@ -62,9 +65,10 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
   if (!user.activeTenantId) throw new TenantScopeError();
 
   const [row] = await db
-    .select({ role: memberships.role, permissions: memberships.permissions, calendar: tenants.calendarSystem })
+    .select({ role: memberships.role, permissions: memberships.permissions, roleName: roles.name, rolePermissions: roles.permissions, calendar: tenants.calendarSystem })
     .from(memberships)
     .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+    .leftJoin(roles, eq(roles.id, memberships.roleId))
     .where(
       and(
         eq(memberships.userId, user.id),
@@ -80,14 +84,15 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
     userId: user.id,
     tenantId: user.activeTenantId,
     role: row.role,
-    permissions: effectivePermissions(row.role, row.permissions),
+    roleName: row.roleName ?? roleLabel(row.role),
+    // The member's role decides; a member not yet linked to a role record gets the standard role of their level.
+    permissions: row.rolePermissions ?? effectivePermissions(row.role, row.permissions),
     calendar: row.calendar === "BS" ? "BS" : "AD",
   };
 });
 
-export function can(session: AppSession, module: string, action: "view" | "create" | "edit" | "delete"): boolean {
-  if (session.role === "owner" || session.role === "admin") return true;
-  return Boolean(session.permissions[module]?.[action]);
+export function can(session: AppSession, module: string, action: PermissionAction): boolean {
+  return hasPermission(session.role, session.permissions, module, action);
 }
 
 /**

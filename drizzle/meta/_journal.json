@@ -512,6 +512,13 @@
       "when": 1791179602205,
       "tag": "0072_asset_disposals",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791276722291,
+      "tag": "0073_roles",
+      "breakpoints": true
     }
   ]
 }

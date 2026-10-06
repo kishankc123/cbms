@@ -1,4 +1,4 @@
-import type { Permissions } from "@/db/schema/tenancy";
+import { defaultPermissionsFor, type Permissions } from "@/lib/permissions";
 
 export type OrgRole = "owner" | "admin" | "accountant" | "staff";
 
@@ -15,35 +15,10 @@ export const roleLabel = (role: OrgRole) => ORG_ROLES.find((r) => r.value === ro
 // locked periods) and bypass per-module permission checks.
 export const isOrgAdmin = (role: OrgRole) => role === "owner" || role === "admin";
 
-const MODULES = [
-  "assets",
-  "audit",
-  "bank_reconciliation",
-  "chart_of_accounts",
-  "compliance",
-  "expenses",
-  "inventory",
-  "payments",
-  "payroll",
-  "purchases",
-  "sales",
-  "settings",
-] as const;
-
-const all = (view: boolean, create: boolean, edit: boolean, del: boolean) => ({ view, create, edit, delete: del });
-
-// Default permissions per role, used unless a membership carries its own
-// override. Owner/Administrator never reach this (they bypass checks).
+// Default permissions per standard role, used until the member is linked to a role record (see lib/role-store.ts).
+// Owner/Administrator never reach this (they bypass checks).
 export function defaultPermissions(role: OrgRole): Permissions {
-  const perms: Permissions = {};
-  for (const m of MODULES) {
-    if (role === "accountant") perms[m] = m === "settings" ? all(true, false, false, false) : all(true, true, true, true);
-    else if (role === "staff") {
-      const entry = ["sales", "purchases", "expenses", "payments", "inventory"].includes(m);
-      perms[m] = entry ? all(true, true, true, false) : m === "chart_of_accounts" ? all(true, false, false, false) : all(false, false, false, false);
-    } else perms[m] = all(true, true, true, true);
-  }
-  return perms;
+  return defaultPermissionsFor(role);
 }
 
 export function effectivePermissions(role: OrgRole, override: Permissions | null | undefined): Permissions {

@@ -438,7 +438,7 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
 
 export async function voidInvoice(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "sales", "delete")) throw new Error("Not permitted");
+  if (!can(session, "sales", "void")) throw new Error("Not permitted");
 
   const invoiceId = String(formData.get("invoiceId"));
 

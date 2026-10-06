@@ -147,7 +147,7 @@ export async function createPayment(input: CreatePaymentActionInput) {
 
 export async function voidPayment(paymentId: string, reason: string) {
   const session = await requireTenantSession();
-  if (!can(session, "payments", "delete")) throw new Error("Not permitted");
+  if (!can(session, "payments", "void")) throw new Error("Not permitted");
   if (!reason.trim()) throw new Error("A void reason is required");
 
   await voidPaymentEngine(session.tenantId, paymentId, session.userId, reason.trim());

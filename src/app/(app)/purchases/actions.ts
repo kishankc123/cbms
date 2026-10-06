@@ -356,7 +356,7 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
 
 export async function voidBill(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "purchases", "delete")) throw new Error("Not permitted");
+  if (!can(session, "purchases", "void")) throw new Error("Not permitted");
 
   const billId = String(formData.get("billId"));
 

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { inviteUser, revokeInvitation, changeMemberRole, setMemberStatus, removeMember, type listMembers } from "./actions";
-import { ORG_ROLES, roleLabel, type OrgRole } from "@/lib/roles";
 import { StatusPill } from "@/components/ui/status-pill";
 
 type Data = Awaited<ReturnType<typeof listMembers>>;
@@ -12,12 +11,12 @@ const selCls = "rounded border border-gray-300 bg-white px-2 py-1.5 text-sm";
 export function UsersManager({ data }: { data: Data }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<OrgRole>("accountant");
+  // Owners can hand out any role; administrators can't create or touch Owners. Inactive roles can't be given to anyone new.
+  const assignable = data.roles.filter((r) => r.isActive && (r.baseRole !== "owner" || data.myRole === "owner"));
+  const [roleId, setRoleId] = useState(() => assignable.find((r) => r.name === "Accountant")?.id ?? assignable[0]?.id ?? "");
+  const roleName = (id: string | null, fallback: string) => data.roles.find((r) => r.id === id)?.name ?? fallback;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string; link?: string } | null>(null);
-
-  // Owners can hand out any role; administrators can't create or touch Owners.
-  const assignable = ORG_ROLES.filter((r) => r.value !== "owner" || data.myRole === "owner");
 
   async function run(fn: () => Promise<unknown>) {
     setMessage(null);
@@ -33,7 +32,7 @@ export function UsersManager({ data }: { data: Data }) {
     e.preventDefault();
     setBusy(true);
     setMessage(null);
-    const r = await inviteUser({ email, role });
+    const r = await inviteUser({ email, roleId });
     setBusy(false);
     if (!r.ok) return setMessage({ tone: "error", text: r.error });
     setMessage({ tone: "ok", text: `Invitation sent to ${email}.`, link: r.devLink });
@@ -52,10 +51,10 @@ export function UsersManager({ data }: { data: Data }) {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as OrgRole)} className={selCls}>
+            <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className={selCls}>
               {assignable.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
+                <option key={r.id} value={r.id}>
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -64,7 +63,7 @@ export function UsersManager({ data }: { data: Data }) {
             {busy ? "Sending..." : "Send Invitation"}
           </button>
         </div>
-        <p className="text-xs text-gray-500">{ORG_ROLES.find((r) => r.value === role)?.description}. If they already have an account they keep their existing email and password.</p>
+        <p className="text-xs text-gray-500">{data.roles.find((r) => r.id === roleId)?.description || "Custom role"}. If they already have an account they keep their existing email and password.</p>
         {message && (
           <div className={`text-sm ${message.tone === "ok" ? "text-green-700" : "text-red-600"}`}>
             <p>{message.text}</p>
@@ -100,12 +99,13 @@ export function UsersManager({ data }: { data: Data }) {
                   <td className="px-3 py-2 text-gray-600">{m.email}</td>
                   <td className="px-3 py-2">
                     {locked ? (
-                      roleLabel(m.role)
+                      roleName(m.roleId, m.role)
                     ) : (
-                      <select value={m.role} onChange={(e) => run(() => changeMemberRole(m.userId, e.target.value as OrgRole))} className={selCls}>
+                      <select value={m.roleId ?? ""} onChange={(e) => run(() => changeMemberRole(m.userId, e.target.value))} className={selCls}>
+                        {!assignable.some((r) => r.id === m.roleId) && <option value={m.roleId ?? ""}>{roleName(m.roleId, m.role)}</option>}
                         {assignable.map((r) => (
-                          <option key={r.value} value={r.value}>
-                            {r.label}
+                          <option key={r.id} value={r.id}>
+                            {r.name}
                           </option>
                         ))}
                       </select>
@@ -148,7 +148,7 @@ export function UsersManager({ data }: { data: Data }) {
                 {data.pending.map((p) => (
                   <tr key={p.id} className="border-t border-gray-100 first:border-t-0">
                     <td className="px-3 py-2">{p.email}</td>
-                    <td className="px-3 py-2 text-gray-600">{roleLabel(p.role)}</td>
+                    <td className="px-3 py-2 text-gray-600">{roleName(p.roleId, p.role)}</td>
                     <td className="px-3 py-2">{p.expired ? <StatusPill tone="critical">expired</StatusPill> : <StatusPill tone="pending">pending</StatusPill>}</td>
                     <td className="px-3 py-2 text-right">
                       <button type="button" onClick={() => run(() => revokeInvitation(p.id))} className="text-xs text-red-600 hover:underline">

@@ -177,7 +177,7 @@ export async function createSalesReturn(input: SalesReturnInput) {
 /** Voids a debit note: reverses what it posted and takes the returned stock back out. */
 export async function voidSalesReturn(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "sales", "delete")) throw new Error("Not permitted");
+  if (!can(session, "sales", "void")) throw new Error("Not permitted");
 
   const id = String(formData.get("noteId"));
   const [note] = await db

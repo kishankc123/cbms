@@ -67,7 +67,7 @@ export async function getAssetDetailData(assetId: string) {
 
   return {
     canEdit: can(session, "assets", "edit"),
-    canVoid: can(session, "assets", "delete"),
+    canVoid: can(session, "assets", "void"),
     asset: {
       id: a.id,
       assetCode: a.assetCode,
@@ -168,7 +168,7 @@ export async function createAssetPurchase(input: AssetPurchaseInput): Promise<As
 
 export async function voidAssetPurchaseAction(assetId: string) {
   const session = await requireTenantSession();
-  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to void asset purchases." };
+  if (!can(session, "assets", "void")) return { ok: false as const, error: "You don't have permission to void asset purchases." };
   const result = await voidAssetPurchase(session.tenantId, session.userId, assetId);
   if (result.ok) for (const p of ["/assets", "/suppliers", "/dashboard", "/journal", "/payments"]) revalidatePath(p, p === "/assets" ? "layout" : "page");
   return result;
@@ -194,7 +194,7 @@ export async function getOpeningAssetsData() {
   return {
     canCreate: can(session, "assets", "create"),
     canEdit: can(session, "assets", "edit"),
-    canVoid: can(session, "assets", "delete"),
+    canVoid: can(session, "assets", "void"),
     autoGenerateCode: settings.autoGenerateCode,
     nextCode,
     openingDate,
@@ -254,7 +254,7 @@ export async function updateOpeningAssetAction(assetId: string, input: OpeningAs
 
 export async function voidOpeningAssetAction(assetId: string) {
   const session = await requireTenantSession();
-  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to void opening assets." };
+  if (!can(session, "assets", "void")) return { ok: false as const, error: "You don't have permission to void opening assets." };
   const result = await voidOpeningAsset(session.tenantId, session.userId, assetId);
   if (result.ok) refreshAfterOpening();
   return result;
@@ -269,7 +269,7 @@ export async function getDepreciationPageData() {
   const [months, runs, summary] = await Promise.all([runnableMonths(session.tenantId, session.calendar), listRuns(session.tenantId), depreciationSummary(session.tenantId)]);
   const latestPosted = runs.find((r) => r.status === "posted") ?? null;
   const preview = months[0] ? await previewRun(session.tenantId, session.calendar, months[0].anchor) : null;
-  return { canRun: can(session, "assets", "edit"), canReverse: can(session, "assets", "delete"), months, runs, latestPostedId: latestPosted?.id ?? null, lastRunLabel: latestPosted?.periodLabel ?? null, summary, preview };
+  return { canRun: can(session, "assets", "edit"), canReverse: can(session, "assets", "void"), months, runs, latestPostedId: latestPosted?.id ?? null, lastRunLabel: latestPosted?.periodLabel ?? null, summary, preview };
 }
 export type DepreciationPageData = Awaited<ReturnType<typeof getDepreciationPageData>>;
 
@@ -293,7 +293,7 @@ export async function runDepreciation(anchor: string) {
 
 export async function reverseDepreciation(runId: string) {
   const session = await requireTenantSession();
-  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to reverse depreciation." };
+  if (!can(session, "assets", "void")) return { ok: false as const, error: "You don't have permission to reverse depreciation." };
   const result = await reverseDepreciationRun(session.tenantId, session.userId, runId);
   if (result.ok) refreshAfterRun();
   return result;
@@ -318,7 +318,7 @@ export async function getDisposalFormData() {
   ]);
   return {
     canCreate: can(session, "assets", "edit"),
-    canReverse: can(session, "assets", "delete"),
+    canReverse: can(session, "assets", "void"),
     vatRate,
     assets: eligible.map((e) => ({ id: e.id, assetCode: e.assetCode, name: e.name, cost: Number(e.cost), accumulated: Number(e.accumulated) })),
     customers: customerList,
@@ -342,7 +342,7 @@ export async function createAssetDisposal(input: AssetDisposalInput) {
 
 export async function reverseAssetDisposalAction(disposalId: string) {
   const session = await requireTenantSession();
-  if (!can(session, "assets", "delete")) return { ok: false as const, error: "You don't have permission to reverse this." };
+  if (!can(session, "assets", "void")) return { ok: false as const, error: "You don't have permission to reverse this." };
   const result = await reverseAssetDisposal(session.tenantId, session.userId, disposalId);
   if (result.ok) refreshAfterDisposal();
   return result;

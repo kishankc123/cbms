@@ -283,7 +283,7 @@ export async function recordTaxCharge(input: TaxChargeInput) {
 
 export async function voidTaxCharge(assessmentId: string, reason: string) {
   const session = await requireTenantSession();
-  if (!can(session, "compliance", "delete")) throw new Error("Not permitted");
+  if (!can(session, "compliance", "void")) throw new Error("Not permitted");
   await voidTaxAssessment(session.tenantId, session.userId, assessmentId, reason);
   for (const p of ["/compliance", "/dashboard", "/journal"]) revalidatePath(p, "layout");
 }

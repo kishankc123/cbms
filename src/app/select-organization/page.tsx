@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUserSession } from "@/lib/session";
 import { listActiveMemberships } from "@/lib/memberships";
-import { roleLabel } from "@/lib/roles";
 import { switchOrganization } from "./actions";
 import { SignOutLink } from "./sign-out-link";
 
@@ -35,7 +34,7 @@ export default async function SelectOrganizationPage() {
                 >
                   <p className="text-sm font-medium text-gray-900">{o.companyName}</p>
                   <p className="text-xs text-gray-500">
-                    Role: {roleLabel(o.role)}
+                    Role: {o.roleName}
                     {o.clientCode ? ` · ${o.clientCode}` : ""}
                   </p>
                 </button>

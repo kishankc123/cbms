@@ -20,7 +20,7 @@ export default async function AcceptInvitePage({ params }: { params: Promise<{ t
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
           You&apos;ve been invited to join <span className="font-medium text-gray-900">{invite.orgName}</span> as{" "}
-          <span className="font-medium text-gray-900">{roleLabel(invite.role)}</span>.
+          <span className="font-medium text-gray-900">{invite.roleName ?? roleLabel(invite.role)}</span>.
         </p>
         <p className="text-xs text-gray-500">Invitation for {invite.email}</p>
 

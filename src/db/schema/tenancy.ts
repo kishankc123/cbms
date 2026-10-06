@@ -11,6 +11,8 @@ import {
   numeric,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import type { Permissions } from "@/lib/permissions";
 
 export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "cancelled"]);
 // Role a user holds *within one organization* (see memberships) — never
@@ -87,10 +89,34 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export type Permissions = Record<
-  string,
-  { view: boolean; create: boolean; edit: boolean; delete: boolean }
->;
+export type { Permissions } from "@/lib/permissions";
+
+// A role is a named set of permissions, kept per organization. The four standard roles (systemKey set) exist in every
+// organization; the rest are custom. baseRole is what a member of this role counts as for the checks that are about
+// authority rather than modules (Owner and Administrator manage the organization and bypass module checks; every
+// other role, custom ones included, never does).
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    roleNumber: integer("role_number").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    systemKey: text("system_key"),
+    baseRole: orgRoleEnum("base_role").notNull().default("staff"),
+    permissions: jsonb("permissions").$type<Permissions>().notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("roles_tenant_number").on(t.tenantId, t.roleNumber),
+    uniqueIndex("roles_tenant_name").on(t.tenantId, sql`lower(${t.name})`),
+    uniqueIndex("roles_tenant_system_key").on(t.tenantId, t.systemKey).where(sql`${t.systemKey} is not null`),
+  ]
+);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -138,6 +164,9 @@ export const memberships = pgTable(
     role: orgRoleEnum("role").notNull(),
     // Optional per-member override of the role's default permissions.
     permissions: jsonb("permissions").$type<Permissions>(),
+    // The role this member holds; its permissions are what the member can do. Null only until the standard roles have
+    // been linked (the member then gets the standard role of their baseRole).
+    roleId: uuid("role_id").references(() => roles.id),
     status: membershipStatusEnum("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -149,6 +178,7 @@ export const invitations = pgTable("invitations", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   email: text("email").notNull(),
   role: orgRoleEnum("role").notNull(),
+  roleId: uuid("role_id").references(() => roles.id),
   // Only a SHA-256 hash of the emailed token is stored.
   tokenHash: text("token_hash").notNull().unique(),
   invitedBy: uuid("invited_by").notNull().references(() => users.id),

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
 import { listActiveMemberships } from "@/lib/memberships";
-import { roleLabel } from "@/lib/roles";
 import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
 import { OrgSwitcher } from "./org-switcher";
@@ -180,7 +179,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
         <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
           <OrgSwitcher
-            orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: roleLabel(o.role) }))}
+            orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: o.roleName }))}
             activeId={session.tenantId}
           />
           <FiscalYearSwitcher

@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { memberships, users, invitations, tenants } from "@/db/schema";
+import { ensureSystemRoles, getRole, listRoles, type RoleRow } from "@/lib/role-store";
 import { requireTenantSession, requireUserSession, type AppSession } from "@/lib/session";
-import { isOrgAdmin, roleLabel, type OrgRole } from "@/lib/roles";
+import { isOrgAdmin } from "@/lib/roles";
 import { generateToken, hashToken } from "@/lib/tokens";
 import { sendEmail, invitationEmail, appUrl, isEmailConfigured } from "@/lib/email";
 import { isEmail } from "@/lib/password";
@@ -13,7 +14,6 @@ import { rateLimit } from "@/lib/rate-limit";
 import { logAuditEvent } from "@/lib/audit";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const ROLES: OrgRole[] = ["owner", "admin", "accountant", "staff"];
 
 async function requireOrgAdmin(): Promise<AppSession> {
   const session = await requireTenantSession();
@@ -21,10 +21,14 @@ async function requireOrgAdmin(): Promise<AppSession> {
   return session;
 }
 
-// Only an Owner may grant the Owner role or change/remove an existing Owner.
-function assertCanAssign(session: AppSession, role: OrgRole) {
-  if (!ROLES.includes(role)) throw new Error("Invalid role.");
-  if (role === "owner" && session.role !== "owner") throw new Error("Only an Owner can assign the Owner role.");
+// Only an Owner may grant the Owner role or change/remove an existing Owner. A role must be one of this organization's
+// active roles.
+async function loadAssignableRole(session: AppSession, roleId: string): Promise<RoleRow> {
+  const role = await getRole(session.tenantId, roleId);
+  if (!role) throw new Error("Choose a role.");
+  if (!role.isActive) throw new Error(`The role "${role.name}" is inactive; choose another.`);
+  if (role.baseRole === "owner" && session.role !== "owner") throw new Error("Only an Owner can assign the Owner role.");
+  return role;
 }
 
 async function activeOwnerCount(tenantId: string) {
@@ -37,15 +41,16 @@ async function activeOwnerCount(tenantId: string) {
 
 export async function listMembers() {
   const session = await requireOrgAdmin();
+  const roleList = await listRoles(session.tenantId); // also links members to the standard roles on first use
   const [members, pending] = await Promise.all([
     db
-      .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, status: memberships.status, verified: users.emailVerifiedAt })
+      .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, roleId: memberships.roleId, status: memberships.status, verified: users.emailVerifiedAt })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .where(eq(memberships.tenantId, session.tenantId))
       .orderBy(users.name),
     db
-      .select({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt })
+      .select({ id: invitations.id, email: invitations.email, role: invitations.role, roleId: invitations.roleId, expiresAt: invitations.expiresAt })
       .from(invitations)
       .where(and(eq(invitations.tenantId, session.tenantId), eq(invitations.status, "pending")))
       .orderBy(desc(invitations.createdAt)),
@@ -53,12 +58,13 @@ export async function listMembers() {
   return {
     me: session.userId,
     myRole: session.role,
+    roles: roleList.map((r) => ({ id: r.id, name: r.name, description: r.description ?? "", baseRole: r.baseRole, isActive: r.isActive })),
     members: members.map((m) => ({ ...m, verified: Boolean(m.verified) })),
     pending: pending.map((p) => ({ ...p, expiresAt: p.expiresAt.toISOString(), expired: p.expiresAt < new Date() })),
   };
 }
 
-export async function inviteUser(input: { email: string; role: OrgRole }): Promise<{ ok: true; devLink?: string } | { ok: false; error: string }> {
+export async function inviteUser(input: { email: string; roleId: string }): Promise<{ ok: true; devLink?: string } | { ok: false; error: string }> {
   const session = await requireOrgAdmin();
   const me = await requireUserSession();
   if (!me.emailVerifiedAt) return { ok: false, error: "Verify your own email address before inviting others." };
@@ -66,8 +72,9 @@ export async function inviteUser(input: { email: string; role: OrgRole }): Promi
 
   const email = input.email.trim().toLowerCase();
   if (!isEmail(email)) return { ok: false, error: "Enter a valid email address." };
+  let role: RoleRow;
   try {
-    assertCanAssign(session, input.role);
+    role = await loadAssignableRole(session, input.roleId);
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -89,13 +96,13 @@ export async function inviteUser(input: { email: string; role: OrgRole }): Promi
   const token = generateToken();
   const [invite] = await db
     .insert(invitations)
-    .values({ tenantId: session.tenantId, email, role: input.role, tokenHash: hashToken(token), invitedBy: session.userId, expiresAt: new Date(Date.now() + INVITE_TTL_MS) })
+    .values({ tenantId: session.tenantId, email, role: role.baseRole, roleId: role.id, tokenHash: hashToken(token), invitedBy: session.userId, expiresAt: new Date(Date.now() + INVITE_TTL_MS) })
     .returning();
 
   const [tenant] = await db.select({ name: tenants.companyName }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const link = `${appUrl()}/accept-invite/${token}`;
-  await sendEmail({ to: email, ...invitationEmail(tenant.name, me.name, roleLabel(input.role), link) });
-  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "user_invited", entityType: "invitation", entityId: invite.id, after: { email, role: input.role } });
+  await sendEmail({ to: email, ...invitationEmail(tenant.name, me.name, role.name, link) });
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "user_invited", entityType: "invitation", entityId: invite.id, after: { email, role: role.name } });
 
   revalidatePath("/settings/users");
   // Without an email provider (local development only) show the link so the
@@ -121,16 +128,18 @@ async function loadTargetMember(session: AppSession, userId: string) {
   return m;
 }
 
-export async function changeMemberRole(userId: string, role: OrgRole) {
+export async function changeMemberRole(userId: string, roleId: string) {
   const session = await requireOrgAdmin();
-  assertCanAssign(session, role);
+  const role = await loadAssignableRole(session, roleId);
   const m = await loadTargetMember(session, userId);
-  if (m.role === "owner" && role !== "owner" && (await activeOwnerCount(session.tenantId)) <= 1) {
+  if (m.role === "owner" && role.baseRole !== "owner" && (await activeOwnerCount(session.tenantId)) <= 1) {
     throw new Error("An organization must keep at least one Owner.");
   }
-  // Switching role also resets any custom permission override.
-  await db.update(memberships).set({ role, permissions: null }).where(eq(memberships.id, m.id));
-  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "role_changed", entityType: "membership", entityId: m.id, before: { role: m.role }, after: { role, userId } });
+  const roleIds = await ensureSystemRoles(session.tenantId);
+  const before = [...roleIds].find(([, id]) => id === m.roleId)?.[0] ?? m.role;
+  // The role decides what the member can do, so any old per-member override is cleared.
+  await db.update(memberships).set({ role: role.baseRole, roleId: role.id, permissions: null }).where(eq(memberships.id, m.id));
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "role_changed", entityType: "membership", entityId: m.id, before: { role: before, roleId: m.roleId }, after: { role: role.name, roleId: role.id, userId } });
   revalidatePath("/settings/users");
 }
 

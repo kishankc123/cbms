@@ -66,7 +66,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
 
 export async function reverseEntry(formData: FormData) {
   const session = await requireTenantSession();
-  if (!can(session, "chart_of_accounts", "delete")) throw new Error("Not permitted");
+  if (!can(session, "chart_of_accounts", "void")) throw new Error("Not permitted");
   const journalEntryId = String(formData.get("journalEntryId"));
   await assertEntryNotReconciled(session.tenantId, journalEntryId, "entry");
   await reverseJournalEntry(session.tenantId, journalEntryId, session.userId);

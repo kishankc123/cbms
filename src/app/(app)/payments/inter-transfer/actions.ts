@@ -47,7 +47,7 @@ export async function updateInterTransfer(transferId: string, input: TransferInp
 
 export async function voidInterTransfer(transferId: string, reason: string) {
   const session = await requireTenantSession();
-  if (!can(session, "payments", "delete")) throw new Error("Not permitted");
+  if (!can(session, "payments", "void")) throw new Error("Not permitted");
   if (!reason.trim()) throw new Error("A void reason is required.");
   await voidEngine(session.tenantId, session.userId, transferId, reason.trim());
   refresh();

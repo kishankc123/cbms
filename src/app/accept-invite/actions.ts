@@ -7,15 +7,18 @@ import { db } from "@/db";
 import { invitations, memberships, users } from "@/db/schema";
 import { unstable_update } from "@/lib/auth";
 import { loadInvitation, type LoadedInvitation } from "@/lib/invitations";
+import { ensureSystemRoles } from "@/lib/role-store";
 import { requireUserSession } from "@/lib/session";
 import { validatePassword } from "@/lib/password";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { logAuditEvent } from "@/lib/audit";
 
 async function completeAcceptance(invite: LoadedInvitation, userId: string) {
+  // The invitation names a role; one that predates roles gets the standard role of its level.
+  const roleId = invite.roleId ?? (await ensureSystemRoles(invite.tenantId)).get(invite.role) ?? null;
   await db
     .insert(memberships)
-    .values({ userId, tenantId: invite.tenantId, role: invite.role })
+    .values({ userId, tenantId: invite.tenantId, role: invite.role, roleId })
     .onConflictDoNothing();
   await db.update(invitations).set({ status: "accepted", acceptedAt: new Date() }).where(eq(invitations.id, invite.id));
   await logAuditEvent({ tenantId: invite.tenantId, userId, action: "invitation_accepted", entityType: "invitation", entityId: invite.id, after: { role: invite.role } });
