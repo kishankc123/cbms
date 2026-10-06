@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
@@ -8,6 +9,8 @@ import { buildStatement, partyBuckets } from "@/lib/ledger/party-statement";
 import { ProfileTabs } from "./profile-tabs";
 
 export default async function CustomerProfilePage({ params }: { params: Promise<{ customerId: string }> }) {
+  const denied = await guardView("sales");
+  if (denied) return denied;
   const { customerId } = await params;
   const session = await requireTenantSession();
 

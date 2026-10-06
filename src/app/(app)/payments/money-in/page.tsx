@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { getPaymentFormOptions, listPayments, getPaymentSummary } from "../actions";
 import { PaymentsWorkspace } from "../payments-workspace";
@@ -6,6 +7,8 @@ import { presetRange, todayIso } from "@/lib/calendar";
 import { getFiscalRange } from "@/lib/fiscal";
 
 export default async function MoneyInPage() {
+  const denied = await guardView("payments");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   // The current month in the organization's calendar (BS month for BS orgs).

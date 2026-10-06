@@ -136,6 +136,7 @@ export async function createItem(input: ItemInput): Promise<CreatedItem> {
 /** Income accounts an item can post its revenue to — every item type can set one, not just Product. */
 export async function listRevenueAccountOptions() {
   const session = await requireTenantSession();
+  if (!can(session, "inventory", "view")) throw new Error("Not permitted");
   return db
     .select({ id: accounts.id, code: accounts.code, name: accounts.name })
     .from(accounts)
@@ -146,6 +147,7 @@ export async function listRevenueAccountOptions() {
 /** Units, groups, categories and revenue accounts for the item form (used when it is opened from a sales or purchase screen). */
 export async function getItemFormOptions() {
   const session = await requireTenantSession();
+  if (!can(session, "inventory", "view")) throw new Error("Not permitted");
   const [units, groups, categories, revenueAccounts] = await Promise.all([
     db.select({ id: itemUnits.id, name: itemUnits.name }).from(itemUnits).where(eq(itemUnits.tenantId, session.tenantId)).orderBy(itemUnits.name),
     db.select({ id: itemGroups.id, name: itemGroups.name }).from(itemGroups).where(eq(itemGroups.tenantId, session.tenantId)).orderBy(itemGroups.name),

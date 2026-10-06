@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
@@ -7,6 +8,8 @@ import { partyBuckets } from "@/lib/ledger/party-statement";
 import { SuppliersTable } from "./suppliers-table";
 
 export default async function SuppliersPage() {
+  const denied = await guardView("purchases");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [supplierList, lines] = await Promise.all([

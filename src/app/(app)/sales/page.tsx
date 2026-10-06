@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, count, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, tenants, salesInvoices, items } from "@/db/schema";
@@ -12,6 +13,8 @@ import { InvoicesTable } from "./invoices-table";
 import { SalesViewTabs } from "./sales-view-tabs";
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const denied = await guardView("sales");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const { view } = await searchParams;
 

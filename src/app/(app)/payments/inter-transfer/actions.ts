@@ -22,11 +22,13 @@ function refresh() {
 
 export async function getTransferFormOptions() {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   return getTransferAccountOptions(session.tenantId);
 }
 
 export async function getSourceBalance(accountId: string) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   return getAccountLedgerBalance(session.tenantId, accountId);
 }
 
@@ -65,6 +67,7 @@ export type TransferListFilters = {
 
 export async function listInterTransfers(filters: TransferListFilters) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
 
   const conditions = [eq(interTransfers.tenantId, session.tenantId)];
   if (filters.from) conditions.push(gte(interTransfers.transferDate, filters.from));
@@ -98,6 +101,7 @@ export async function listInterTransfers(filters: TransferListFilters) {
 
 export async function getInterTransferDetail(transferId: string) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const [t] = await db.select().from(interTransfers).where(and(eq(interTransfers.id, transferId), eq(interTransfers.tenantId, session.tenantId))).limit(1);
   if (!t) return null;
 

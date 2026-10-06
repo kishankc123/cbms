@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances } from "@/lib/ledger/chart";
 import { SubGroupsTable } from "./sub-groups-table";
 
 export default async function SubGroupsPage() {
+  const denied = await guardView("chart_of_accounts");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const all = await listAccountsWithBalances(session.tenantId);
   const groups = all.filter((a) => a.parentAccountId === null);

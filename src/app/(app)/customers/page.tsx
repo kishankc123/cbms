@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customers } from "@/db/schema";
@@ -7,6 +8,8 @@ import { partyBuckets } from "@/lib/ledger/party-statement";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
+  const denied = await guardView("sales");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [customerList, lines] = await Promise.all([

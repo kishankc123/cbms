@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { getAuditOverview } from "./actions";
 
@@ -20,6 +21,8 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 // Audit keeps the books honest: exceptions to review, periods that are locked, the rules watching for problems,
 // and a trail of who changed what. Compliance is what you owe the tax authority; this is data integrity.
 export default async function AuditOverviewPage() {
+  const denied = await guardView("audit");
+  if (denied) return denied;
   const data = await getAuditOverview();
 
   return (

@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances } from "@/lib/ledger/chart";
 import { AccountsTable } from "./accounts-table";
 
 export default async function ChartOfAccountsPage() {
+  const denied = await guardView("chart_of_accounts");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const list = (await listAccountsWithBalances(session.tenantId)).filter((a) => a.parentAccountId === null);
 

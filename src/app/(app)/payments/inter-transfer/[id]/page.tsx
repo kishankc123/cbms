@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireTenantSession } from "@/lib/session";
@@ -8,6 +9,8 @@ import { VoidButton } from "./void-button";
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function TransferDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const denied = await guardView("payments");
+  if (denied) return denied;
   const { id } = await params;
   await requireTenantSession();
   const t = await getInterTransferDetail(id);

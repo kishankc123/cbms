@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { listTaxCompliance } from "../tax-actions";
 import { TaxComplianceTabs } from "./tax-compliance-tabs";
 
 export default async function TaxCompliancePage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const data = await listTaxCompliance();
   return (
     <div className="space-y-6">

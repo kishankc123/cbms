@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, salaryHistory } from "@/db/schema";
@@ -6,6 +7,8 @@ import { EmployeesTabs } from "./employees-tabs";
 
 import { todayIso } from "@/lib/calendar";
 export default async function EmployeesPage() {
+  const denied = await guardView("payroll");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const today = todayIso();
 

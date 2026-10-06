@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -18,6 +19,8 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function StockCardPage({ params }: { params: Promise<{ itemId: string }> }) {
+  const denied = await guardView("inventory");
+  if (denied) return denied;
   const { itemId } = await params;
   const session = await requireTenantSession();
   const [item] = await db.select().from(items).where(and(eq(items.id, itemId), eq(items.tenantId, session.tenantId))).limit(1);

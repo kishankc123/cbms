@@ -9,12 +9,12 @@ import { listOrgUsers } from "@/lib/org-users";
 import { isOrgAdmin } from "@/lib/roles";
 import { runComplianceScan } from "@/lib/compliance/exception-scan";
 import { logAuditEvent } from "@/lib/audit";
-import { todayIso } from "@/lib/calendar";
 
 // ---------- Period locking ----------
 
 export async function listPeriods() {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
   return db
     .select()
     .from(accountingPeriods)
@@ -107,6 +107,7 @@ export async function reopenPeriod(input: { periodId: string; reason: string }) 
 
 export async function listRules() {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
   return db.select().from(complianceRules).where(eq(complianceRules.tenantId, session.tenantId)).orderBy(desc(complianceRules.createdAt));
 }
 
@@ -179,44 +180,13 @@ export async function deleteRule(ruleId: string) {
   revalidatePath("/audit/rules");
 }
 
-// Evaluates any active "amount_threshold" rules for a module — the one
-// live enforcement point wired into Expenses (see expenses/actions.ts).
-// Returns a warning message (non-blocking) or throws (blocking), per each
-// matching rule's configured action.
-export type RuleModule = "sales" | "purchases" | "expenses" | "payroll" | "bank_reconciliation" | "general";
-
-export async function evaluateAmountThresholdRules(tenantId: string, module: RuleModule, amount: number): Promise<string[]> {
-  const rules = await db
-    .select()
-    .from(complianceRules)
-    .where(
-      and(
-        eq(complianceRules.tenantId, tenantId),
-        eq(complianceRules.applicableModule, module),
-        eq(complianceRules.checkType, "amount_threshold"),
-        eq(complianceRules.isActive, true)
-      )
-    );
-
-  const warnings: string[] = [];
-  const today = todayIso();
-  for (const rule of rules) {
-    if (rule.effectiveDate && rule.effectiveDate > today) continue;
-    if (rule.expiryDate && rule.expiryDate < today) continue;
-    if (!rule.thresholdValue || amount <= Number(rule.thresholdValue)) continue;
-
-    if (rule.action === "block") {
-      throw new Error(`Blocked by rule "${rule.name}": amount exceeds ${Number(rule.thresholdValue).toFixed(2)}`);
-    }
-    warnings.push(`Rule "${rule.name}": amount exceeds ${Number(rule.thresholdValue).toFixed(2)}`);
-  }
-  return warnings;
-}
+export type { RuleModule } from "@/lib/audit-rules";
 
 // ---------- Exception Centre ----------
 
 export async function listExceptions() {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
   const rows = await db
     .select()
     .from(complianceExceptions)
@@ -231,6 +201,7 @@ export async function listExceptions() {
 
 export async function listAssignableUsers() {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
   return listOrgUsers(session.tenantId);
 }
 
@@ -292,6 +263,7 @@ export async function updateException(input: {
 
 export async function listAuditTrail(input: { from?: string; to?: string; entityType?: string }) {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
 
   const conditions = [eq(auditLog.tenantId, session.tenantId)];
   if (input.from) conditions.push(gte(auditLog.timestamp, new Date(input.from)));
@@ -315,6 +287,7 @@ export async function listAuditTrail(input: { from?: string; to?: string; entity
 
 export async function getAuditOverview() {
   const session = await requireTenantSession();
+  if (!can(session, "audit", "view")) throw new Error("Not permitted");
 
   const [openExceptions, lockedPeriods, recentActivity] = await Promise.all([
     // "Open" here means still needs attention — not yet closed — matching the count Compliance shows for the same data.

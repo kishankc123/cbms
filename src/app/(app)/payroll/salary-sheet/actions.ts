@@ -8,7 +8,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { daysInMonth as calendarDaysInMonth, isoFromYmd, type CalendarSystem } from "@/lib/calendar";
-import { getOrCreateSettings } from "../setup/actions";
+import { getOrCreateSettings } from "@/lib/payroll/settings";
 import { reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, removeRunRecoveries } from "@/lib/payroll/staff-advances";

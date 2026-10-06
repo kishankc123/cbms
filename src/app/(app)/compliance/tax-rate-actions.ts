@@ -6,11 +6,13 @@ import { changeTaxRate, getCurrentTaxRateInfo, getTaxRateHistory, type TaxTypeKe
 
 export async function getTaxRateInfo(taxTypeKey: TaxTypeKey) {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   return getCurrentTaxRateInfo(session.tenantId, taxTypeKey);
 }
 
 export async function listTaxRateHistory(taxTypeKey: TaxTypeKey) {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   return getTaxRateHistory(session.tenantId, taxTypeKey);
 }
 

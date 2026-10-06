@@ -73,6 +73,7 @@ async function ensureCompliance(tenantId: string) {
 
 export async function getComplianceDashboard() {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   const today = todayIso();
   await ensureCompliance(session.tenantId);
 
@@ -144,11 +145,13 @@ export async function getComplianceDashboard() {
 
 export async function listAssignableUsers() {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   return listOrgUsers(session.tenantId);
 }
 
 export async function listCalendarItems() {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   const today = todayIso();
   await ensureCompliance(session.tenantId);
 
@@ -286,6 +289,7 @@ export async function generateComplianceItems() {
 
 export async function generateReport(input: { type: ComplianceReportType; from: string; to: string }) {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   switch (input.type) {
     case "sales_register":
       return getSalesRegister(session.tenantId, input.from, input.to);

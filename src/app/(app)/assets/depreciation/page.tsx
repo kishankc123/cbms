@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { getDepreciationPageData } from "../actions";
 import { DepreciationView } from "./depreciation-view";
 
 export default async function DepreciationPage() {
+  const denied = await guardView("assets");
+  if (denied) return denied;
   const data = await getDepreciationPageData();
   return (
     <div className="space-y-5">

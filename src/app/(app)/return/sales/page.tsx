@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, items, salesReturns } from "@/db/schema";
@@ -6,6 +7,8 @@ import { salesVatRate } from "@/lib/sales/vat";
 import { SalesReturnTabs } from "./sales-return-tabs";
 
 export default async function SalesReturnPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const denied = await guardView("sales");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const { view } = await searchParams;
 

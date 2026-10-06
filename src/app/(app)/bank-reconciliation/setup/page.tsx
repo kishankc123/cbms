@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { listBankAccounts, getBankAccountLedgerOptions } from "../actions";
 import { BankAccountsTable } from "./bank-accounts-table";
 
 export default async function BankAccountSetupPage() {
+  const denied = await guardView("bank_reconciliation");
+  if (denied) return denied;
   const [bankAccounts, ledgerOptions] = await Promise.all([listBankAccounts(), getBankAccountLedgerOptions()]);
 
   return (

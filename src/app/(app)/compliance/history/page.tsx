@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { loadComplianceHistory } from "@/lib/compliance/history";
 import { HistoryList } from "./history-list";
 
 export default async function ComplianceHistoryPage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const items = await loadComplianceHistory(session.tenantId);
   return (

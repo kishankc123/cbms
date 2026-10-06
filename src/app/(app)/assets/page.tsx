@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { D } from "@/components/calendar/date-text";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -19,6 +20,8 @@ function Card({ label, value, note }: { label: string; value: string; note?: str
 }
 
 export default async function AssetListPage({ searchParams }: { searchParams: SearchParams }) {
+  const denied = await guardView("assets");
+  if (denied) return denied;
   const sp = await searchParams;
   const page = Math.max(Number(one(sp.page)) || 1, 1);
   const pageSize = Number(one(sp.size)) || 25;

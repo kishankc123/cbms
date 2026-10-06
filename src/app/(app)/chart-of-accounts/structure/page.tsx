@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances, type AccountRow } from "@/lib/ledger/chart";
 import { Balance, SystemBadge, TYPE_LABEL } from "../shared";
@@ -7,6 +8,8 @@ const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as cons
 // The whole chart as one tree: each group with its sub-accounts beneath it. A
 // group's balance includes everything below it; a sub-account shows its own.
 export default async function ChartStructurePage() {
+  const denied = await guardView("chart_of_accounts");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const all = await listAccountsWithBalances(session.tenantId);
 

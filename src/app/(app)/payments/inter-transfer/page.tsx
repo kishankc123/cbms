@@ -1,9 +1,12 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { requireTenantSession } from "@/lib/session";
 import { listInterTransfers, getTransferFormOptions } from "./actions";
 import { TransfersTable } from "./transfers-table";
 
 export default async function InterTransferPage() {
+  const denied = await guardView("payments");
+  if (denied) return denied;
   await requireTenantSession();
   const [rows, options] = await Promise.all([listInterTransfers({}), getTransferFormOptions()]);
 

@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { listBankAccounts, getOffsetAccountOptions } from "./actions";
 import { ReconciliationWorkspace } from "./reconciliation-workspace";
 
 export default async function BankReconciliationPage() {
+  const denied = await guardView("bank_reconciliation");
+  if (denied) return denied;
   const [bankAccounts, offsetAccounts] = await Promise.all([listBankAccounts(), getOffsetAccountOptions()]);
   const activeBankAccounts = bankAccounts.filter((b) => b.isActive);
 

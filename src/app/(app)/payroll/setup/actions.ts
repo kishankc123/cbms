@@ -11,18 +11,11 @@ import {
   type payrollComponentTypeEnum,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { getOrCreateSettings } from "@/lib/payroll/settings";
 
 type ProrationMethod = (typeof prorationMethodEnum.enumValues)[number];
 type WorkingDaysMethod = (typeof workingDaysMethodEnum.enumValues)[number];
 type ComponentType = (typeof payrollComponentTypeEnum.enumValues)[number];
-
-export async function getOrCreateSettings(tenantId: string) {
-  const [existing] = await db.select().from(payrollSettings).where(eq(payrollSettings.tenantId, tenantId)).limit(1);
-  if (existing) return existing;
-
-  const [created] = await db.insert(payrollSettings).values({ tenantId }).returning();
-  return created;
-}
 
 export async function updateSettings(input: {
   prorationMethod: ProrationMethod;
@@ -34,6 +27,7 @@ export async function updateSettings(input: {
   roundingRule: string;
 }) {
   const session = await requireTenantSession();
+  if (!can(session, "payroll", "view")) throw new Error("Not permitted");
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
   if (input.weeklyHolidays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw new Error("Weekly holidays must be days of the week");
   if (input.publicHolidays.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) throw new Error("Public holidays must be valid dates");

@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { listAuditTrail } from "../actions";
 import { AuditTrailTable } from "./audit-trail-table";
 
 export default async function AuditTrailPage() {
+  const denied = await guardView("audit");
+  if (denied) return denied;
   const entries = await listAuditTrail({});
   return (
     <div className="space-y-6">

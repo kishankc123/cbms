@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { getAssetPurchaseFormData, getDisposalFormData, getOpeningAssetsData } from "../actions";
 import { TransactionsTabs } from "./transactions-tabs";
 
 export default async function AssetTransactionsPage() {
+  const denied = await guardView("assets");
+  if (denied) return denied;
   const [data, opening, disposal] = await Promise.all([getAssetPurchaseFormData(), getOpeningAssetsData(), getDisposalFormData()]);
   return (
     <div className="space-y-5">

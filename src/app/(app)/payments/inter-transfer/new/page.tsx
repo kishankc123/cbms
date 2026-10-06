@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { getTransferFormOptions } from "../actions";
 import { TransferForm } from "../transfer-form";
 
 export default async function NewTransferPage() {
+  const denied = await guardView("payments");
+  if (denied) return denied;
   await requireTenantSession();
   const options = await getTransferFormOptions();
 

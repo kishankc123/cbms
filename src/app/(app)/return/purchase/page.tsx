@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -6,6 +7,8 @@ import { requireTenantSession } from "@/lib/session";
 import { PurchaseReturnTabs } from "./purchase-return-tabs";
 
 export default async function PurchaseReturnPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const denied = await guardView("purchases");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const { view } = await searchParams;
 

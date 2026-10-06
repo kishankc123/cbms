@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { getComplianceDashboard } from "./actions";
 import { ComplianceDashboard } from "./compliance-dashboard";
 
 export default async function CompliancePage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const data = await getComplianceDashboard();
   return (
     <div className="space-y-6">

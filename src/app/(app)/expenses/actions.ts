@@ -15,7 +15,7 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
 import { withPaymentNumber } from "@/lib/payment-number";
-import { evaluateAmountThresholdRules } from "../audit/actions";
+import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
 
 import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -531,6 +531,7 @@ export async function voidExpense(formData: FormData) {
 // VAT/TDS amount by hand, so this is not the source of what actually gets posted.
 export async function getExpenseTaxDefaults() {
   const session = await requireTenantSession();
+  if (!can(session, "expenses", "view")) throw new Error("Not permitted");
   const [vatRate, tdsRate] = await Promise.all([getCurrentTaxRate(session.tenantId, "vat"), getCurrentTaxRate(session.tenantId, "tds")]);
   return { vatRate, tdsRate };
 }

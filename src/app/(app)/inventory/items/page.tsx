@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { items, itemUnits, itemGroups, itemCategories } from "@/db/schema";
@@ -7,6 +8,8 @@ import { ItemsTabs } from "./items-tabs";
 import { listRevenueAccountOptions } from "./actions";
 
 export default async function ItemsPage() {
+  const denied = await guardView("inventory");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [itemList, units, groups, categories, revenueAccounts] = await Promise.all([

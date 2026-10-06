@@ -32,6 +32,7 @@ export async function getPenaltyCalculatorContext() {
 /** The penalty rule parameters in force for this tax type on the given due date, plus their verification status. */
 export async function getPenaltyRuleForPreview(taxTypeKey: TaxTypeKey, dueDate: IsoDate) {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   if (!tenant) throw new Error("Organization not found");
   if (!validateADDate(dueDate)) throw new Error("Invalid due date");

@@ -45,6 +45,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function getPaymentFormOptions() {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
 
   const [customerList, vendorList, employeeList, cashBankAccounts, incomeAccounts, expenseAccounts, taxAccounts] = await Promise.all([
     db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, session.tenantId)).orderBy(asc(customers.name)),
@@ -61,6 +62,7 @@ export async function getPaymentFormOptions() {
 
 export async function getOutstandingInvoicesForCustomer(customerId: string) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const rows = await db
     .select({ id: salesInvoices.id, invoiceNumber: salesInvoices.invoiceNumber, invoiceDate: salesInvoices.invoiceDate, total: salesInvoices.total, amountPaid: salesInvoices.amountPaid, status: salesInvoices.status })
     .from(salesInvoices)
@@ -72,6 +74,7 @@ export async function getOutstandingInvoicesForCustomer(customerId: string) {
 
 export async function getOutstandingBillsForSupplier(vendorId: string) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const rows = await db
     .select({ id: purchaseBills.id, billNumber: purchaseBills.billNumber, billDate: purchaseBills.billDate, total: purchaseBills.total, amountPaid: purchaseBills.amountPaid, status: purchaseBills.status })
     .from(purchaseBills)
@@ -83,6 +86,7 @@ export async function getOutstandingBillsForSupplier(vendorId: string) {
 
 export async function getOutstandingExpenses(vendorId?: string | null) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const conditions = [eq(expenses.tenantId, session.tenantId), inArray(expenses.status, ["unpaid", "partially_paid"])];
   if (vendorId) conditions.push(eq(expenses.vendorId, vendorId));
 
@@ -215,6 +219,7 @@ async function getReconciledJournalEntryIds(tenantId: string, journalEntryIds: s
 
 export async function listPayments(filters: PaymentListFilters) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
 
   const conditions = [eq(payments.tenantId, session.tenantId)];
   if (filters.from) conditions.push(gte(payments.paymentDate, filters.from));
@@ -294,6 +299,7 @@ export async function listPayments(filters: PaymentListFilters) {
 
 export async function getPaymentSummary(filters: Pick<PaymentListFilters, "from" | "to" | "direction">) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const conditions = [eq(payments.tenantId, session.tenantId), ne(payments.status, "voided")];
   if (filters.from) conditions.push(gte(payments.paymentDate, filters.from));
   if (filters.to) conditions.push(lte(payments.paymentDate, filters.to));
@@ -328,6 +334,7 @@ export async function getPaymentSummary(filters: Pick<PaymentListFilters, "from"
 
 export async function getPaymentDetail(paymentId: string) {
   const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
   const [payment] = await db.select().from(payments).where(and(eq(payments.id, paymentId), eq(payments.tenantId, session.tenantId))).limit(1);
   if (!payment) throw new Error("Payment not found");
 

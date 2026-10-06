@@ -135,6 +135,7 @@ export type LedgerRow = { date: string; details: string; debit: number; credit: 
 
 export async function getCustomerHistory(customerId: string, from?: string, to?: string) {
   const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
 
   const [customer] = await db
     .select()

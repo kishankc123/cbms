@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/ui/back-button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -15,6 +16,8 @@ function Card({ label, value }: { label: string; value: string }) {
 }
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ assetId: string }> }) {
+  const denied = await guardView("assets");
+  if (denied) return denied;
   const { assetId } = await params;
   const data = await getAssetDetailData(assetId);
   if (!data) notFound();

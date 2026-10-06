@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { listStatutory } from "../statutory-actions";
 import { StatutoryTable } from "./statutory-table";
 
 export default async function StatutoryCompliancePage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const data = await listStatutory();
   return (
     <div className="space-y-6">

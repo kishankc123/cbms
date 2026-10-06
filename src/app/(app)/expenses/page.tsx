@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, vendors, accounts } from "@/db/schema";
@@ -8,6 +9,8 @@ import { getExpenseTaxDefaults } from "./actions";
 import { ExpensesTable } from "./expenses-table";
 
 export default async function ExpensesPage() {
+  const denied = await guardView("expenses");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [expenseRows, vendorList, categoryAccounts, cashBankAccounts, taxDefaults] = await Promise.all([

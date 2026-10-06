@@ -1,8 +1,11 @@
+import { guardView } from "@/components/page-guard";
 import { getCompanyDetails } from "../company-actions";
 import { listTaxRegistrations } from "../registration-actions";
 import { CompanyTabs } from "./company-tabs";
 
 export default async function CompanyDetailsPage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const [data, registrations] = await Promise.all([getCompanyDetails(), listTaxRegistrations()]);
   return (
     <div className="space-y-6">

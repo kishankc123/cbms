@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -11,6 +12,8 @@ import { ConsumablePurchaseTabs } from "../consumable-purchase-tabs";
 // "Consumable purchase" was previously labeled "Cash purchase" — purchaseType stays "cash" internally; only the
 // user-facing name changed. A bill can be paid in full, in part or not at all; any balance is owed to the supplier.
 export default async function ConsumablePurchasePage() {
+  const denied = await guardView("purchases");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [vendorList, billList, categoryAccounts, cashBankAccounts, vatRate, vendorBalances] = await Promise.all([

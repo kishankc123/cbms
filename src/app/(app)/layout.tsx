@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
+import { can, requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
+import { isOrgAdmin } from "@/lib/roles";
 import { listActiveMemberships } from "@/lib/memberships";
 import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
@@ -150,6 +151,47 @@ const NAV = [
   },
 ];
 
+// Which module's View each sidebar entry needs (children inherit their parent's unless listed). "admin" means Owner or
+// Administrator only. Entries not listed (Dashboard, Reports) are shown to everyone; each report checks its own module.
+const NAV_ACCESS: Record<string, string> = {
+  "/chart-of-accounts": "chart_of_accounts",
+  "/customers": "sales",
+  "/sales": "sales",
+  "/return/sales": "sales",
+  "/return/purchase": "purchases",
+  "/purchases": "purchases",
+  "/suppliers": "purchases",
+  "/expenses": "expenses",
+  "/payments": "payments",
+  "/inventory": "inventory",
+  "/assets": "assets",
+  "/payroll": "payroll",
+  "/bank-reconciliation": "bank_reconciliation",
+  "/compliance": "compliance",
+  "/audit": "audit",
+  "/journal": "chart_of_accounts",
+  "/settings": "settings",
+  "/settings/users": "admin",
+  "/settings/roles": "admin",
+};
+
+type NavEntry = { href: string; label: string; children?: { href: string; label: string }[] };
+
+/** Only what this person may open: a group with no visible children disappears with them. */
+function visibleNav(items: NavEntry[], session: Awaited<ReturnType<typeof requireTenantSession>>): NavEntry[] {
+  const allowed = (access: string | undefined) => !access || (access === "admin" ? isOrgAdmin(session.role) : can(session, access, "view"));
+  return items
+    .map((item) => {
+      if (!item.children) return allowed(NAV_ACCESS[item.href]) ? item : null;
+      const own = NAV_ACCESS[item.href];
+      const children = item.children.filter((c) => allowed(NAV_ACCESS[c.href] ?? own));
+      if (children.length === 0) return null;
+      // The parent itself has no page of its own to open when it is only a group, so its own access is the children's.
+      return { ...item, children };
+    })
+    .filter((x): x is NavEntry => x !== null);
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Resolve the session first; redirect() must not run inside a try/catch.
   let session: Awaited<ReturnType<typeof requireTenantSession>> | null = null;
@@ -192,7 +234,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             suggestedCode={"suggested" in activeFiscalYear ? activeFiscalYear.code : null}
           />
         </div>
-        <AppNav items={NAV} />
+        <AppNav items={visibleNav(NAV, session)} />
         <div className="px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between gap-2">
           <SignOutButton />
           <ThemeToggle initial={activeTheme} />

@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
@@ -12,6 +13,8 @@ import { StockableTabs } from "../stockable-tabs";
 // this way post to Inventory (an asset) rather than straight to an expense
 // account, since they're being stocked, not consumed.
 export default async function StockablePurchasePage() {
+  const denied = await guardView("purchases");
+  if (denied) return denied;
   const session = await requireTenantSession();
 
   const [vendorList, billList, itemList, cashBankAccounts, vatRate] = await Promise.all([

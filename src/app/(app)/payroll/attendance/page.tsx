@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
@@ -8,6 +9,8 @@ import { requireTenantSession } from "@/lib/session";
 // this page is the entry point for picking which employee's attendance to
 // open, since attendance always belongs to one employee's record.
 export default async function AttendanceIndexPage() {
+  const denied = await guardView("payroll");
+  if (denied) return denied;
   const session = await requireTenantSession();
   const employeeList = await db
     .select()

@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { getOwnership } from "../ownership-actions";
 import { OwnershipWorkspace } from "./ownership-workspace";
 
 export default async function OwnershipPage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const data = await getOwnership();
   return (
     <div className="space-y-6">

@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { payrollRuns, payrollLines, employees } from "@/db/schema";
@@ -9,6 +10,8 @@ import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { getRunRecoveryBreakdown } from "@/lib/payroll/staff-advances";
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ runId: string }> }) {
+  const denied = await guardView("payroll");
+  if (denied) return denied;
   const { runId } = await params;
   const session = await requireTenantSession();
 

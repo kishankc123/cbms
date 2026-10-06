@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
@@ -8,6 +9,8 @@ import { buildStatement, partyBuckets } from "@/lib/ledger/party-statement";
 import { ProfileTabs } from "./profile-tabs";
 
 export default async function SupplierProfilePage({ params }: { params: Promise<{ supplierId: string }> }) {
+  const denied = await guardView("purchases");
+  if (denied) return denied;
   const { supplierId } = await params;
   const session = await requireTenantSession();
 

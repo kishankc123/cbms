@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, salaryHistory, employeeBenefits, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
@@ -9,6 +10,8 @@ import { ProfileTabs } from "./profile-tabs";
 import type { AttendanceStatus } from "../attendance-actions";
 
 export default async function EmployeeProfilePage({ params }: { params: Promise<{ employeeId: string }> }) {
+  const denied = await guardView("payroll");
+  if (denied) return denied;
   const { employeeId } = await params;
   const session = await requireTenantSession();
 

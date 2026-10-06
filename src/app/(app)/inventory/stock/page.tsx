@@ -1,3 +1,4 @@
+import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -15,6 +16,8 @@ import { verifyStockBalances } from "@/lib/inventory/recalc";
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const denied = await guardView("inventory");
+  if (denied) return denied;
   const { tab } = await searchParams;
   const session = await requireTenantSession();
   const [valuation, units, openingDate, openingRows, history, mismatched] = await Promise.all([

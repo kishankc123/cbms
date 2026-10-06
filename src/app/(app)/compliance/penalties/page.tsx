@@ -1,7 +1,10 @@
+import { guardView } from "@/components/page-guard";
 import { getPenaltyCalculatorContext } from "./actions";
 import { PenaltyCalculator } from "./penalty-calculator";
 
 export default async function PenaltiesPage() {
+  const denied = await guardView("compliance");
+  if (denied) return denied;
   const ctx = await getPenaltyCalculatorContext();
   return (
     <div className="space-y-6">

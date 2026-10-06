@@ -142,6 +142,7 @@ export async function getTaxObligationDetail(id: string) {
 /** Choices for the payment and charge forms. */
 export async function getTaxActionOptions() {
   const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   const groups = await getCashBankAccounts(session.tenantId);
   // A group with sub-accounts (e.g. Bank) is a heading; its children are what can be paid from.
   const cashBank = groups.flatMap((g) => (g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]));
