@@ -4,6 +4,7 @@ import { requireUserSession } from "@/lib/session";
 import { listActiveMemberships } from "@/lib/memberships";
 import { switchOrganization } from "./actions";
 import { SignOutLink } from "./sign-out-link";
+import { VerifyEmailNotice } from "./verify-email-notice";
 
 export default async function SelectOrganizationPage() {
   // A token that no longer matches the account (disabled, password reset, old
@@ -20,10 +21,16 @@ export default async function SelectOrganizationPage() {
           <p className="text-sm text-gray-500">Signed in as {user.email}</p>
         </div>
 
+        {!user.emailVerifiedAt && <VerifyEmailNotice />}
+
         {orgs.length === 0 ? (
-          <p className="text-sm text-gray-600">
-            You don&apos;t belong to any organization yet. Create one, or ask an administrator to invite you.
-          </p>
+          <div className="space-y-3 text-sm text-gray-600">
+            <p className="font-medium text-gray-900">You aren&apos;t part of any organization yet.</p>
+            <p>
+              Ask an administrator of your organization to add you using <span className="font-medium text-gray-900">{user.email}</span>. {user.emailVerifiedAt ? "They can add you straight away." : "They can add you once your email is verified."} The organization then appears here.
+            </p>
+            <p>Running a business of your own? You can set one up yourself.</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {orgs.map((o) => (
@@ -45,7 +52,7 @@ export default async function SelectOrganizationPage() {
 
         <div className="flex items-center justify-between text-sm">
           <Link href="/create-organization" className="text-[var(--color-primary)] hover:underline">
-            + Create new organization
+            {orgs.length === 0 ? "Create a business account" : "+ Create another business"}
           </Link>
           <SignOutLink />
         </div>

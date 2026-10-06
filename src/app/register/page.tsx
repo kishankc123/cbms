@@ -45,7 +45,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md bg-white rounded-lg shadow p-8 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Create an account</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Create a business account</h1>
           <p className="text-sm text-gray-500">
             Step {step} of 2 — {step === 1 ? "Business information" : "Primary administrator"}
           </p>
@@ -114,18 +114,26 @@ export default function RegisterPage() {
                 Back
               </button>
               <button type="submit" disabled={loading} className="flex-1 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium disabled:opacity-50">
-                {loading ? "Creating..." : "Create Account"}
+                {loading ? "Creating..." : "Create business account"}
               </button>
             </div>
           </form>
         )}
 
-        <p className="text-center text-sm text-gray-500">
-          Already have an account?{" "}
-          <Link href="/login" className="text-[var(--color-primary)] hover:underline">
-            Sign in
-          </Link>
-        </p>
+        <div className="space-y-1 text-center text-sm text-gray-500">
+          <p>
+            Already have an account?{" "}
+            <Link href="/login" className="text-[var(--color-primary)] hover:underline">
+              Sign in
+            </Link>
+          </p>
+          <p>
+            Joining an existing organization?{" "}
+            <Link href="/register/user" className="text-[var(--color-primary)] hover:underline">
+              Create a user account
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

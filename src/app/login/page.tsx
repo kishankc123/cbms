@@ -95,12 +95,20 @@ export default function LoginPage() {
           {loading ? "Signing in..." : "Login"}
         </button>
 
-        <p className="text-center text-sm text-gray-500">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-[var(--color-primary)] hover:underline">
-            Create an account
-          </Link>
-        </p>
+        <div className="space-y-2 border-t border-gray-100 pt-4 text-center text-sm text-gray-500">
+          <p>
+            Setting up a business?{" "}
+            <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+              Create a business account
+            </Link>
+          </p>
+          <p>
+            Joining an organization that already uses Client Books?{" "}
+            <Link href="/register/user" className="text-[var(--color-primary)] hover:underline">
+              Create a user account
+            </Link>
+          </p>
+        </div>
       </form>
     </div>
   );
