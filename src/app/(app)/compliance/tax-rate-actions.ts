@@ -19,5 +19,5 @@ export async function updateTaxRate(input: { taxTypeKey: TaxTypeKey; rate: numbe
   if (!can(session, "compliance", "edit")) throw new Error("Not permitted");
   await changeTaxRate(session.tenantId, session.userId, input);
   revalidatePath("/compliance/company");
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
 }

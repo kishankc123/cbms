@@ -22,7 +22,7 @@ export async function updateCompanyDetails(formData: FormData) {
     panVatNumber: String(formData.get("panVatNumber") ?? ""),
   });
 
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/dashboard");
   revalidatePath("/compliance");
 }
@@ -47,7 +47,7 @@ export async function updateOtherSettings(formData: FormData) {
     })
     .where(eq(tenants.id, session.tenantId));
 
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/sales");
 }
 
@@ -76,7 +76,7 @@ export async function updatePaymentNumbering(formData: FormData) {
     })
     .where(eq(tenants.id, session.tenantId));
 
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/payments");
 }
 
@@ -124,6 +124,6 @@ export async function updateFiscalYearDates(formData: FormData) {
     })
     .where(eq(tenants.id, session.tenantId));
 
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/dashboard");
 }

@@ -102,6 +102,6 @@ export async function saveCompanyDetails(input: CompanyDetailsInput) {
     console.error("compliance generation failed", e);
   }
   revalidatePath("/compliance", "layout");
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/dashboard");
 }

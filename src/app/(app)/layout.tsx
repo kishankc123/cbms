@@ -136,7 +136,17 @@ const NAV = [
     // Inventory and Compliance already do — this dropdown is where that growth happens.
     children: [{ href: "/reports", label: "Financial Reports" }],
   },
-  { href: "/settings", label: "Settings" },
+  {
+    href: "/settings",
+    label: "Settings",
+    children: [
+      { href: "/settings/company", label: "Company details" },
+      { href: "/settings/general", label: "General" },
+      { href: "/settings/fiscal-years", label: "Fiscal years" },
+      { href: "/settings/users", label: "Users" },
+      { href: "/settings/roles", label: "Roles" },
+    ],
+  },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
