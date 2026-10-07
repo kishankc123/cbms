@@ -93,10 +93,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-[var(--text-secondary)] mb-0.5">
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Dashboard</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
             {greetingFor(new Date())}, {user.name}
           </p>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Dashboard</h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
             <D value={from} /> – <D value={to} />
           </p>
