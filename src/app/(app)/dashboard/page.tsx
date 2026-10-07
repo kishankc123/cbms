@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireTenantSession, can } from "@/lib/session";
+import { requireTenantSession, requireUserSession, can } from "@/lib/session";
+import { greetingFor } from "@/lib/greeting";
 import { validateADDate, todayIso, ymdOf, monthNames } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange, fiscalYearDefaultAsOf, isFiscalYearOpen } from "@/lib/fiscal";
 import { ReportFilter } from "@/components/calendar/report-filter";
@@ -52,6 +53,7 @@ const COMPLIANCE_TONE: Record<string, { tone: StatusTone; label: string }> = {
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
+  const user = await requireUserSession();
   const sp = await searchParams;
 
   const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
@@ -91,6 +93,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
+          <p className="text-sm text-[var(--text-secondary)] mb-0.5">
+            {greetingFor(new Date())}, {user.name}
+          </p>
           <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Dashboard</h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
             <D value={from} /> – <D value={to} />
