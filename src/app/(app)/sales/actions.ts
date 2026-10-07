@@ -18,6 +18,7 @@ import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
+import { listModeOptions } from "@/lib/payment-modes";
 import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
@@ -212,6 +213,13 @@ export type SingleInvoiceEditLine = {
 };
 
 /** The revenue accounts an invoice can be booked to (lowest level only), for the pickers on the invoice forms. */
+/** The payment modes with their accounts, for the Record payment dialog. */
+export async function getPaymentModeOptions() {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "create") && !can(session, "sales", "edit")) throw new Error("Not permitted");
+  return listModeOptions(session.tenantId);
+}
+
 export async function getRevenueAccountOptions() {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create") && !can(session, "sales", "edit")) throw new Error("Not permitted");

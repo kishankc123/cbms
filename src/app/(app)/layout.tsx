@@ -147,6 +147,7 @@ const NAV = [
       { href: "/settings/fiscal-years", label: "Fiscal years" },
       { href: "/settings/users", label: "Users" },
       { href: "/settings/roles", label: "Roles" },
+      { href: "/settings/payment-modes", label: "Payment modes" },
     ],
   },
 ];
@@ -173,6 +174,7 @@ const NAV_ACCESS: Record<string, string> = {
   "/settings": "settings",
   "/settings/users": "admin",
   "/settings/roles": "admin",
+  "/settings/payment-modes": "admin",
 };
 
 type NavEntry = { href: string; label: string; children?: { href: string; label: string }[] };

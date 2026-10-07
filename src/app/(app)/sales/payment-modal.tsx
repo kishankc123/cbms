@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type Customer = { id: string; name: string };
-type PaymentLine = { accountId: string; amount: string };
+type PaymentLine = { modeId: string; accountId: string; amount: string };
 
 // A group with sub-groups is shown as a locked (unselectable) heading — only
 // its sub-groups are selectable settlement accounts. A group with none is
@@ -40,8 +41,8 @@ export function PaymentModal({
 }) {
   const [lines, setLines] = useState<PaymentLine[]>(() =>
     initialLines && initialLines.length > 0
-      ? initialLines.map((l) => ({ accountId: l.accountId, amount: String(l.amount) }))
-      : [{ accountId: firstSelectableId(cashBankAccounts), amount: "" }]
+      ? initialLines.map((l) => ({ modeId: "", accountId: l.accountId, amount: String(l.amount) }))
+      : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }]
   );
   const [customerId, setCustomerId] = useState(initialCustomerId);
 
@@ -53,7 +54,7 @@ export function PaymentModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onCancel]);
 
-  function updateLine(i: number, field: keyof PaymentLine, value: string) {
+  function updateLine(i: number, field: "amount", value: string) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
   }
 
@@ -90,28 +91,11 @@ export function PaymentModal({
         <div className="space-y-2">
           {lines.map((line, i) => (
             <div key={i} className="flex items-center gap-2">
-              <select
-                value={line.accountId}
-                onChange={(e) => updateLine(i, "accountId", e.target.value)}
+              <PaymentModeSelect
+                value={{ modeId: line.modeId, accountId: line.accountId }}
+                onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
                 className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Select account</option>
-                {cashBankAccounts.map((g) =>
-                  g.children.length === 0 ? (
-                    <option key={g.id} value={g.id} className="font-bold">
-                      {g.code} — {g.name}
-                    </option>
-                  ) : (
-                    <optgroup key={g.id} label={`${g.code} — ${g.name}`}>
-                      {g.children.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.code} — {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )
-                )}
-              </select>
+              />
               <input
                 type="number"
                 step="0.01"
@@ -127,7 +111,7 @@ export function PaymentModal({
 
         <button
           type="button"
-          onClick={() => setLines((prev) => [...prev, { accountId: firstSelectableId(cashBankAccounts), amount: "" }])}
+          onClick={() => setLines((prev) => [...prev, { modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }])}
           className="text-sm text-gray-600 hover:text-gray-900"
         >
           + Add other payment option

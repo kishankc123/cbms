@@ -2,14 +2,19 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { advanceApplications, creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
+import { modeAccountIds } from "@/lib/payment-modes";
 import { getCogsSubGroups } from "./control-accounts";
 import { assertSourceNotReconciled } from "./reconciliation-guards";
 
-/** Every id must be a Cash or Bank account of this organization (what a payment can be received into / paid from). */
+/**
+ * Every id must be an account money can move through in this organization: a Cash or Bank account, or an account linked to
+ * an active payment mode (Fonepay and wallet accounts live there). What a payment can be received into / paid from.
+ */
 export async function assertCashBankAccounts(tenantId: string, accountIds: string[]) {
   if (accountIds.length === 0) return;
   const groups = await getCashBankAccounts(tenantId);
   const allowed = new Set(groups.flatMap((g) => [g.id, ...g.children.map((c) => c.id)]));
+  for (const id of await modeAccountIds(tenantId)) allowed.add(id);
   if (accountIds.some((id) => !allowed.has(id))) throw new Error("Choose a Cash or Bank account of this organization for the payment");
 }
 

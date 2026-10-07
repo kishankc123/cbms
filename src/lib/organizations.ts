@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
 import { requirePan } from "@/lib/pan";
 import { ensureSystemRoles } from "@/lib/role-store";
+import { seedPaymentModes } from "@/lib/payment-modes";
 
 export type BusinessInfo = {
   name: string;
@@ -72,6 +73,7 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
       });
 
       await ensureSystemRoles(tenant.id); // the standard roles, with the founder linked to Owner
+      await seedPaymentModes(tenant.id); // Cash, Cheque, Bank transfer, Fonepay, Card, Wallet, linked to the standard accounts
       if (tenant.panVatNumber) await ensurePanRegistration(tenant.id);
       await logAuditEvent({ tenantId: tenant.id, userId: ownerUserId, action: "organization_created", entityType: "organization", entityId: tenant.id, after: { name: tenant.companyName, clientCode } });
       return tenant;
