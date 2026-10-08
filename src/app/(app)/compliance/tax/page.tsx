@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { listTaxCompliance } from "../tax-actions";
 import { TaxComplianceTabs } from "./tax-compliance-tabs";
+import { ComplianceProfileNotice } from "../profile-notice";
 
 export default async function TaxCompliancePage() {
   const denied = await guardView("compliance");
@@ -12,6 +13,7 @@ export default async function TaxCompliancePage() {
         <h1 className="text-2xl font-semibold text-gray-900">Tax Compliance</h1>
         <p className="mt-0.5 text-sm text-gray-500">Returns and payments owed to the tax authority. Amounts come from your books, and payments recorded here are real payments.</p>
       </div>
+      <ComplianceProfileNotice />
       <TaxComplianceTabs data={data} />
     </div>
   );

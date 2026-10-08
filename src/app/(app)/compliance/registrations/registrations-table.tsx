@@ -235,6 +235,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Filing basis from</label>
                     <DatePicker id="rg-filing-from" value={editing.form.filingFrequencyEffectiveFrom} onChange={(v) => set("filingFrequencyEffectiveFrom", v)} disabled={!data.canEdit} className={input} />
+                    <p className="mt-1 text-xs text-gray-500">Leave blank to start from the registration&apos;s Effective from date.</p>
                   </div>
                 )}
                 {editing.form.filingFrequency === "quarterly" && (

@@ -7,6 +7,8 @@ import { isApplicable } from "./applicability";
 import { eventPeriod } from "./events";
 import { assertValidDueRule, computeDueDate, periodsFor, type DueRule } from "./due-rules";
 import { loadFacts } from "./facts";
+import { loadComplianceProfile } from "../profile";
+import { afterFloor, startFloor } from "./start-dates";
 
 type Template = typeof complianceRequirementTemplates.$inferSelect;
 
@@ -35,6 +37,11 @@ export function templateInScope(t: Template, entityType: string | null, today: I
  * Creates the compliance obligations this organization currently owes:
  *
  *   country -> entity type -> applicable templates -> one row per period.
+ *
+ * Nothing is created until the company profile is complete (see profile.ts): a deadline worked out from missing facts
+ * would be a guess. Recurring items cover every period from the start of the current fiscal year (Shrawan 1) through
+ * the next two, plus the previous period, so a return for the last month of the last year is never lost; and never a period
+ * that ended before the thing it belongs to began (VAT before the VAT registration took effect, and so on).
  *
  * Idempotent: (organization, template, period) is unique, so running it again
  * — on every page load, if need be — never duplicates anything, and it never
@@ -69,6 +76,9 @@ export async function generateObligations(
     today
   );
 
+  const profile = await loadComplianceProfile(tenantId);
+  if (!profile.complete) return 0; // the profile gate: no compliance until the company details are filled in
+
   const facts = await loadFacts(tenant);
   const templates = (await db.select().from(complianceRequirementTemplates).where(eq(complianceRequirementTemplates.countryCode, country.code))).filter(
     (t) => templateInScope(t, tenant.entityType, today) && isApplicable(t.applicability, facts)
@@ -80,7 +90,16 @@ export async function generateObligations(
     const rule = t.dueRule as DueRule;
     if (rule.period === "event") continue; // raised by the event itself, not scheduled
     const calendar = resolveCalendar(t, statutory, orgCalendar);
-    const periods = periodsFor(rule.period, { calendar, today, fiscal }, rule.period === "fiscal_year" ? 1 : back, ahead);
+    const ctx = { calendar, today, fiscal };
+    let periods = periodsFor(rule.period, ctx, rule.period === "fiscal_year" ? 1 : back, ahead);
+    if (rule.period === "month" || rule.period === "quarter" || rule.period === "term") {
+      // Everything since the start of the current fiscal year as well as the usual window around today.
+      const seen = new Set(periods.map((p) => p.key));
+      for (const p of periodsFor(rule.period, ctx, 12, ahead)) if (p.end >= fiscal.from && !seen.has(p.key)) periods.push(p);
+      periods.sort((a, b) => (a.start < b.start ? -1 : 1));
+    }
+    const floor = startFloor(t.taxTypeKey, profile.starts);
+    periods = periods.filter((p) => afterFloor(p, floor));
     for (const p of periods) {
       const due = computeDueDate(rule, p, calendar);
       rows.push({

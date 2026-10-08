@@ -97,7 +97,7 @@ export async function saveTaxRegistration(input: RegistrationInput): Promise<Sav
   }
   if (input.status === "deregistered" && !input.deregistrationDate) return { ok: false, error: "Enter the deregistration date" };
   if (input.filingFrequency && !FILING_FREQUENCIES.includes(input.filingFrequency)) return { ok: false, error: "Unknown filing basis" };
-  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) return { ok: false, error: "Enter the date the filing basis takes effect (the \"Filing basis from\" field)." };
+  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom && !input.effectiveDate) return { ok: false, error: "Enter the date the filing basis takes effect (the \"Filing basis from\" field), or the registration's \"Effective from\" date." };
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const [type] = await db
@@ -116,7 +116,7 @@ export async function saveTaxRegistration(input: RegistrationInput): Promise<Sav
     deregistrationDate: input.status === "deregistered" ? input.deregistrationDate : null,
     status: input.status,
     filingFrequency: FILING_FREQUENCY_TAX_TYPES.includes(input.taxTypeKey) ? input.filingFrequency || null : null,
-    filingFrequencyEffectiveFrom: FILING_FREQUENCY_TAX_TYPES.includes(input.taxTypeKey) ? input.filingFrequencyEffectiveFrom || null : null,
+    filingFrequencyEffectiveFrom: FILING_FREQUENCY_TAX_TYPES.includes(input.taxTypeKey) && input.filingFrequency ? input.filingFrequencyEffectiveFrom || input.effectiveDate || null : null,
     authorityKey: input.authorityKey || null,
     supportingDocument: input.supportingDocument.trim() || null,
     notes: input.notes.trim() || null,
