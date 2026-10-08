@@ -3,6 +3,7 @@ import { getAccountByRole } from "@/lib/compliance/tax-accounts";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, users } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
+import { recordedDescriptions } from "@/lib/ledger/recorded-description";
 
 /**
  * All reports below read directly from journal_entries/journal_lines — there is
@@ -317,8 +318,13 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
     openingBalance += normal === "debit" ? d : -d;
   }
 
+  // Show the description typed on the document (expense, bill, invoice items); reversal lines keep their "Reversal:" lead.
+  const recorded = await recordedDescriptions(tenantId, rows);
+
   let running = openingBalance;
-  const withRunningBalance = rows.map((r) => {
+  const withRunningBalance = rows.map((r0) => {
+    const typed = r0.sourceType && r0.sourceId ? recorded.get(r0.sourceType + ":" + r0.sourceId) : undefined;
+    const r = typed ? { ...r0, description: r0.reversalOfId ? "Reversal: " + typed : typed } : r0;
     const debit = Number(r.debitAmount);
     const credit = Number(r.creditAmount);
     running += normal === "debit" ? debit - credit : credit - debit;
