@@ -19,3 +19,15 @@ export function requirePan(v: unknown, label = "PAN"): string {
   if (error) throw new Error(error);
   return normalizePan(v);
 }
+
+/** For a PAN that may be left blank (customers, suppliers): null when blank or valid; otherwise the message to show. */
+export function optionalPanError(v: unknown, label = "PAN"): string | null {
+  return normalizePan(v) ? panError(v, label) : null;
+}
+
+/** The normalised PAN, "" when it was left blank, or throws with the message when something was typed that is not a PAN. */
+export function optionalPan(v: unknown, label = "PAN"): string {
+  const error = optionalPanError(v, label);
+  if (error) throw new Error(error);
+  return normalizePan(v);
+}

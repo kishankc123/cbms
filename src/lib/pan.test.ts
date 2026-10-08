@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePan, panError, requirePan } from "./pan";
+import { normalizePan, optionalPan, optionalPanError, panError, requirePan } from "./pan";
 
 describe("PAN validation", () => {
   it("accepts exactly nine digits", () => {
@@ -25,5 +25,20 @@ describe("PAN validation", () => {
   it("accepts Nepali digits and stores them as 0-9", () => {
     expect(normalizePan("१२३४५६७८९")).toBe("123456789");
     expect(panError("१२३४५६७८९")).toBeNull();
+  });
+});
+
+describe("an optional PAN (customers and suppliers)", () => {
+  it("may be left blank", () => {
+    expect(optionalPanError("")).toBeNull();
+    expect(optionalPanError(null)).toBeNull();
+    expect(optionalPanError("   ")).toBeNull();
+    expect(optionalPan("")).toBe("");
+  });
+  it("is still checked when something is typed", () => {
+    expect(optionalPanError("123456789")).toBeNull();
+    expect(optionalPan(" 123 456 789 ")).toBe("123456789");
+    expect(optionalPanError("12345")).toMatch(/exactly 9 digits/);
+    expect(() => optionalPan("abc")).toThrow(/exactly 9 digits/);
   });
 });

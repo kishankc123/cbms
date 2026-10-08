@@ -10,6 +10,11 @@ import { loadFacts } from "./facts";
 import { loadComplianceProfile } from "../profile";
 import { afterFloor, startFloor } from "./start-dates";
 import { ensureRenewalObligations } from "../excise-permit";
+import { applyCatchup, savedAnswers } from "../catchup";
+import { TEMPLATE_STREAM } from "../catchup-rules";
+import { templateInScope } from "./scope";
+
+export { templateInScope };
 
 type Template = typeof complianceRequirementTemplates.$inferSelect;
 
@@ -23,15 +28,6 @@ function resolveCalendar(template: Template, statutory: CalendarSystem, org: Cal
     default:
       return statutory;
   }
-}
-
-/** Is the template usable for this organization on this date (entity type, active window, has something to schedule)? */
-export function templateInScope(t: Template, entityType: string | null, today: IsoDate): boolean {
-  if (!t.isActive || t.frequency === "event_based" || !t.dueRule) return false;
-  if (t.entityTypeKey && t.entityTypeKey !== entityType) return false;
-  if (t.activeFrom && t.activeFrom > today) return false;
-  if (t.activeTo && t.activeTo < today) return false;
-  return true;
 }
 
 /**
@@ -81,6 +77,7 @@ export async function generateObligations(
   if (!profile.complete) return 0; // the profile gate: no compliance until the company details are filled in
 
   const facts = await loadFacts(tenant);
+  const answered = await savedAnswers(tenantId); // the catch-up checklist: a stream with an answer gets its full history
   const templates = (await db.select().from(complianceRequirementTemplates).where(eq(complianceRequirementTemplates.countryCode, country.code))).filter(
     (t) => templateInScope(t, tenant.entityType, today) && isApplicable(t.applicability, facts)
   );
@@ -92,8 +89,11 @@ export async function generateObligations(
     if (rule.period === "event") continue; // raised by the event itself, not scheduled
     const calendar = resolveCalendar(t, statutory, orgCalendar);
     const ctx = { calendar, today, fiscal };
-    let periods = periodsFor(rule.period, ctx, rule.period === "fiscal_year" ? 1 : back, ahead);
-    if (rule.period === "month" || rule.period === "quarter" || rule.period === "term") {
+    const stream = TEMPLATE_STREAM[t.key];
+    const fullHistory = stream !== undefined && answered.has(stream);
+    // Answered in the checklist: every period from the start date (the floor below cuts off anything before it).
+    let periods = periodsFor(rule.period, ctx, fullHistory ? (rule.period === "month" ? 360 : rule.period === "fiscal_year" ? 40 : 120) : rule.period === "fiscal_year" ? 1 : back, ahead);
+    if (!fullHistory && (rule.period === "month" || rule.period === "quarter" || rule.period === "term")) {
       // Everything since the start of the current fiscal year as well as the usual window around today.
       const seen = new Set(periods.map((p) => p.key));
       for (const p of periodsFor(rule.period, ctx, 12, ahead)) if (p.end >= fiscal.from && !seen.has(p.key)) periods.push(p);
@@ -123,9 +123,13 @@ export async function generateObligations(
   }
   // The excise permit's renewals are not a rolling period: they follow the permit year (Shrawan to Ashadh).
   const renewals = await ensureRenewalObligations(tenantId, today);
-  if (rows.length === 0) return renewals;
+  if (rows.length === 0) {
+    await applyCatchup(tenantId);
+    return renewals;
+  }
 
   const inserted = await db.insert(complianceObligations).values(rows).onConflictDoNothing().returning({ id: complianceObligations.id });
+  await applyCatchup(tenantId); // periods the checklist said were filed before the system
   return inserted.length + renewals;
 }
 

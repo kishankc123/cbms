@@ -5,7 +5,7 @@ import { and, eq, count, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, salesInvoices } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
-import { requirePan } from "@/lib/pan";
+import { optionalPan } from "@/lib/pan";
 import { reverseLatestEntryForSource } from "@/lib/ledger/post";
 import { createCustomerReceivableAccount } from "@/lib/ledger/subledger-accounts";
 import { syncCustomerOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
@@ -26,7 +26,7 @@ export async function createCustomer(formData: FormData): Promise<{ id: string; 
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Customer name is required");
-  const panNumber = requirePan(formData.get("panNumber"), "PAN / VAT number");
+  const panNumber = optionalPan(formData.get("panNumber"), "PAN / VAT number");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -66,7 +66,7 @@ export async function updateCustomer(formData: FormData) {
   const id = String(formData.get("customerId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) throw new Error("Customer name is required");
-  const panNumber = requirePan(formData.get("panNumber"), "PAN / VAT number");
+  const panNumber = optionalPan(formData.get("panNumber"), "PAN / VAT number");
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);

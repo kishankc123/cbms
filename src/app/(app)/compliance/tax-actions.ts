@@ -62,6 +62,7 @@ export async function listTaxCompliance() {
         paymentDueDate: r.paymentDueDate,
         paymentDate: r.paymentDate,
         status: r.status as ObligationStatus,
+        filedBeforeSystem: r.filedBeforeSystem,
         effective: effectiveStatus(r, today),
         amountDue: a.due,
         amountPaid: a.paid,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
-import { panError } from "@/lib/pan";
+import { optionalPanError } from "@/lib/pan";
 
 type Initial = {
   name: string;
@@ -50,7 +50,7 @@ export function SupplierFormModal({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const panProblem = panError(data.get("panNumber"), "PAN / VAT number");
+    const panProblem = optionalPanError(data.get("panNumber"), "PAN / VAT number");
     if (panProblem) return report(panProblem, '[name="panNumber"]');
     setSaving(true);
     try {
@@ -109,15 +109,14 @@ export function SupplierFormModal({
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">PAN / VAT number *</label>
+                <label className="block text-xs text-gray-500 mb-1">PAN / VAT number (optional)</label>
                 <input
                   name="panNumber"
-                  required
                   inputMode="numeric"
                   maxLength={9}
                   pattern="[0-9]{9}"
                   title="Exactly 9 digits"
-                  placeholder="9 digits"
+                  placeholder="9 digits, if known"
                   defaultValue={initial?.panNumber}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />

@@ -199,6 +199,24 @@ export const tenantTaxRegistrations = pgTable(
   (t) => [uniqueIndex("tenant_tax_registrations_tenant_type").on(t.tenantId, t.taxTypeKey)]
 );
 
+/**
+ * What was already filed when the organization started using the system, per kind of requirement ("stream"): income tax,
+ * VAT, TDS, excise returns, excise permit. filedThrough is the end of the last period filed (null = none filed yet).
+ * A stream with a row here gets its full history generated from its start date; one without shows the current fiscal year only.
+ */
+export const complianceCatchup = pgTable(
+  "compliance_catchup",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    stream: text("stream").notNull(),
+    filedThrough: date("filed_through"),
+    answeredBy: uuid("answered_by"),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("compliance_catchup_tenant_stream").on(t.tenantId, t.stream)]
+);
+
 /** One row per fiscal year the excise permit was renewed for. The year the permit was first issued in counts as paid for without a row. */
 export const exciseRenewals = pgTable(
   "excise_renewals",
@@ -299,6 +317,8 @@ export const complianceObligations = pgTable(
     responsibleUserId: uuid("responsible_user_id").references(() => users.id),
     /** The old compliance_calendar_items row this was migrated from — makes migration re-runnable. */
     legacyItemId: uuid("legacy_item_id"),
+    /** Filed before the organization started using the system: the catch-up checklist marked it. Never calculates a penalty. */
+    filedBeforeSystem: boolean("filed_before_system").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

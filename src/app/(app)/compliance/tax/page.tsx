@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { listTaxCompliance } from "../tax-actions";
 import { TaxComplianceTabs } from "./tax-compliance-tabs";
+import { CatchupPrompt } from "../catchup-prompt";
 import { ExcisePermitAlert } from "../excise-permit-alert";
 import { ComplianceProfileNotice } from "../profile-notice";
 
@@ -16,6 +17,7 @@ export default async function TaxCompliancePage() {
       </div>
       <ComplianceProfileNotice />
       <ExcisePermitAlert />
+      <CatchupPrompt />
       <TaxComplianceTabs data={data} />
     </div>
   );

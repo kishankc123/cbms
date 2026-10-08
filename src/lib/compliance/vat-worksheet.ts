@@ -34,6 +34,8 @@ export type VatWorksheetRow = {
   penaltyNote: string | null;
   /** (netPay, only when positive) + fines & penalties. A credit period contributes 0 here — it is only an adjustment. */
   totalPayable: number;
+  /** Filed (and settled) before the organization started using the system: no fine is calculated and nothing is carried as owed. */
+  filedBeforeSystem: boolean;
 };
 
 export async function getVatWorksheet(tenantId: string): Promise<{ rows: VatWorksheetRow[]; today: IsoDate }> {
@@ -57,7 +59,7 @@ export async function getVatWorksheet(tenantId: string): Promise<{ rows: VatWork
       withPeriods.map(async (o) => {
         const ret = await getVatReturn(tenantId, o.periodStart!, o.periodEnd!);
         const netPay = ret.netVatPayable;
-        const actualDate = o.paymentDate ?? o.filingDate ?? (today > o.dueDate ? today : null);
+        const actualDate = o.filedBeforeSystem ? null : o.paymentDate ?? o.filingDate ?? (today > o.dueDate ? today : null);
         let daysDelayed = 0;
         let finesAndPenalties = 0;
         let penaltyNote: string | null = null;
@@ -80,7 +82,8 @@ export async function getVatWorksheet(tenantId: string): Promise<{ rows: VatWork
   const rows: VatWorksheetRow[] = [];
   let runningOpening = 0;
   for (const { o, ret, netPay, daysDelayed, finesAndPenalties, penaltyNote } of perPeriod) {
-    const paid = amounts.get(o.id)?.paid ?? 0;
+    // A period filed before the system was settled outside it, so what it came to counts as paid; a credit still carries forward.
+    const paid = o.filedBeforeSystem ? Math.max(0, netPay) : amounts.get(o.id)?.paid ?? 0;
     const opening = runningOpening;
     const closing = round2(opening + netPay - paid);
 
@@ -102,6 +105,7 @@ export async function getVatWorksheet(tenantId: string): Promise<{ rows: VatWork
       finesAndPenalties,
       penaltyNote,
       totalPayable: round2(Math.max(0, netPay) + finesAndPenalties),
+      filedBeforeSystem: o.filedBeforeSystem,
     });
     runningOpening = closing;
   }

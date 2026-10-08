@@ -113,6 +113,7 @@ const NAV = [
       { href: "/compliance/tax", label: "Tax Compliance" },
       { href: "/compliance/penalties", label: "Fines & Penalties" },
       { href: "/compliance/statutory", label: "Statutory Compliance" },
+      { href: "/compliance/catch-up", label: "Compliance Checklist" },
       { href: "/compliance/calendar", label: "Compliance Calendar" },
       { href: "/compliance/history", label: "Compliance History" },
     ],

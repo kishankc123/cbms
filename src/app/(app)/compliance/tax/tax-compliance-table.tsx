@@ -136,6 +136,7 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
               <td className="px-4 py-2 text-right">{i.amountDue > 0 ? fmt(i.balance) : "—"}</td>
               <td className="px-4 py-2">
                 <ObligationStatusPill status={i.effective} />
+                {i.filedBeforeSystem && <span className="mt-0.5 block text-[10px] text-gray-400">Filed before using this system</span>}
               </td>
               <td className="px-4 py-2 text-right">
                 <button type="button" className="text-xs text-[var(--color-primary)] hover:underline">
