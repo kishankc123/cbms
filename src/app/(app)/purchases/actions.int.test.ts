@@ -91,6 +91,34 @@ describe("stockable purchases", () => {
     await createPurchaseInvoice({ invoiceNumber: "S-2", invoiceDate: "2026-09-02", vendorId: vendorB, billType: "no_bill", lines: [line(10, 1)], payments: [] });
   });
 
+  it("a non-VAT invoice paid in full needs no supplier and no invoice number; a VAT invoice or an unpaid balance does", async () => {
+    const before = (await bills()).length;
+    for (const billType of ["no_bill", "estimate", "pan", "challan"] as const) {
+      await createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: "", billType, lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 100 }] });
+    }
+    const made = (await bills()).filter((b) => b.vendorId === null && b.billType !== "vat" && b.billNumber.startsWith("AUTO-") && b.billType !== undefined && ["no_bill", "estimate", "pan", "challan"].includes(b.billType) && b.purchaseType === "credit");
+    expect(made).toHaveLength(4);
+    expect(made.every((b) => b.vendorId === null && /^AUTO-\d+$/.test(b.billNumber) && b.status === "paid")).toBe(true);
+    expect(new Set(made.map((b) => b.billNumber)).size).toBe(4); // numbers never clash
+
+    // VAT: both are needed, even when paid in full
+    await expect(createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: vendorA, billType: "vat", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 113 }] })).rejects.toThrow(/Invoice number is required.*VAT bill/);
+    await expect(createPurchaseInvoice({ invoiceNumber: "V-1", invoiceDate: "2026-09-01", vendorId: "", billType: "vat", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 113 }] })).rejects.toThrow(/Select a supplier.*VAT bill/);
+    // a balance that is not paid: owed to a supplier
+    await expect(createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: vendorA, billType: "no_bill", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 40 }] })).rejects.toThrow(/Invoice number is required.*balance is owed/);
+    await expect(createPurchaseInvoice({ invoiceNumber: "P-1", invoiceDate: "2026-09-01", vendorId: "", billType: "no_bill", lines: [line(100, 1)], payments: [] })).rejects.toThrow(/Select a supplier/);
+    expect((await bills()).length).toBe(before + 4); // the refusals saved nothing
+  });
+
+  it("a supplier-less invoice can be edited, keeping its generated number, and still posts straight to cash and stock", async () => {
+    const b = (await bills()).find((x) => x.vendorId === null && x.billType === "no_bill" && x.billNumber.startsWith("AUTO-"))!;
+    await updatePurchaseInvoice({ billId: b.id, invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: "", billType: "no_bill", lines: [line(150, 1)], payments: [{ accountId: cashId, amount: 150 }] });
+    const [after] = await db.select().from(purchaseBills).where(eq(purchaseBills.id, b.id));
+    expect(after).toMatchObject({ billNumber: b.billNumber, vendorId: null, status: "paid", total: "150.00" });
+    // partly paid now: a supplier is required
+    await expect(updatePurchaseInvoice({ billId: b.id, invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: "", billType: "no_bill", lines: [line(150, 1)], payments: [{ accountId: cashId, amount: 50 }] })).rejects.toThrow(/Invoice number is required|Select a supplier/);
+  });
+
   it("a due date in the past of the invoice date is refused; a valid one is stored", async () => {
     await expect(createPurchaseInvoice({ invoiceNumber: "S-3", invoiceDate: "2026-09-05", dueDate: "2026-09-01", vendorId: vendorA, billType: "no_bill", lines: [line(10, 1)], payments: [] })).rejects.toThrow(/due date/);
     await createPurchaseInvoice({ invoiceNumber: "S-3", invoiceDate: "2026-09-05", dueDate: "2026-10-05", vendorId: vendorA, billType: "no_bill", lines: [line(10, 1)], payments: [] });
@@ -171,11 +199,12 @@ describe("consumable purchases", () => {
   });
 
   it("numbers bills without a supplier number without clashing", async () => {
+    const already = (await bills()).filter((b) => b.billNumber.startsWith("AUTO-")).length; // stockable invoices without a number get these too
     await createCashPurchase(purchase());
     await createCashPurchase(purchase());
     const autos = (await bills()).filter((b) => b.billNumber.startsWith("AUTO-")).map((b) => b.billNumber);
     expect(new Set(autos).size).toBe(autos.length);
-    expect(autos.length).toBe(2);
+    expect(autos.length).toBe(already + 2);
   });
 
   it("one bill can carry several lines booked to different categories, and is editable with its lines", async () => {

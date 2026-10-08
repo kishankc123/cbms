@@ -5,6 +5,7 @@ import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
+import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
 import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
@@ -184,6 +185,8 @@ export function PurchaseInvoiceForm({
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
   const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(grandTotal - paidTotal, 0);
+  // A non-VAT bill paid in full needs no supplier and no invoice number; a VAT bill or an unpaid balance does.
+  const needs = invoiceRequirements({ billType, total: grandTotal, paid: paidTotal });
   const paymentStatus = paidTotal <= 0 ? "Unpaid" : remaining <= 0.005 ? "Paid" : "Partially paid";
 
   // A document dated before the Inventory Opening Date can't move stock: say so at once, and ask what to do when saving.
@@ -197,12 +200,12 @@ export function PurchaseInvoiceForm({
       errors.date = "Please enter the invoice date.";
       first.push({ message: errors.date, target: "#inv-date" });
     }
-    if (!invoiceNumber.trim()) {
-      errors.invoiceNumber = "Invoice number is required.";
+    if (needs.numberRequired && !invoiceNumber.trim()) {
+      errors.invoiceNumber = `Invoice number is required: ${needs.reason}.`;
       first.push({ message: errors.invoiceNumber, target: '[data-field="invoiceNumber"]' });
     }
-    if (!vendorId) {
-      errors.vendorId = "Please select a supplier.";
+    if (needs.supplierRequired && !vendorId) {
+      errors.vendorId = `Please select a supplier: ${needs.reason}.`;
       first.push({ message: errors.vendorId, target: '[data-field="supplier"]' });
     }
     if (dueDate && dueDate < invoiceDate) {
@@ -286,7 +289,7 @@ export function PurchaseInvoiceForm({
             {openingDateNotice}
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Invoice Number</label>
+            <label className="block text-xs text-gray-500 mb-1">Invoice Number{needs.numberRequired ? " *" : " (optional)"}</label>
             <input
               data-field="invoiceNumber"
               value={invoiceNumber}
@@ -294,11 +297,12 @@ export function PurchaseInvoiceForm({
                 setInvoiceNumber(e.target.value);
                 if (fieldErrors.invoiceNumber) setFieldErrors((p) => ({ ...p, invoiceNumber: undefined }));
               }}
+              placeholder={needs.numberRequired ? "" : "Generated if left blank"}
               className={fieldErrors.invoiceNumber ? inputErrCls : inputCls}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Supplier</label>
+            <label className="block text-xs text-gray-500 mb-1">Supplier{needs.supplierRequired ? " *" : " (optional)"}</label>
             <div data-field="supplier" data-opens>
             <SupplierSelect
               value={vendorId}

@@ -16,7 +16,8 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { todayIso } from "@/lib/calendar";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
-import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
+import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment, nextAutoBillNumber } from "@/lib/purchases/bill-records";
+import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import {
   billLineItems,
   cashPurchaseEntryLines,
@@ -283,7 +284,7 @@ async function computeInvoiceTotals(tenantId: string, lines: PurchaseLineItem[],
 // expense account — the goods are being stocked, not consumed.
 async function buildInvoiceJournalLines(
   tenantId: string,
-  vendorId: string,
+  vendorId: string | null,
   invoiceLabel: string,
   subtotal: number,
   taxAmount: number,
@@ -306,6 +307,7 @@ async function buildInvoiceJournalLines(
   }
 
   if (remaining > 0) {
+    if (!vendorId) throw new Error("Select a supplier: the unpaid balance is owed to them");
     const apId = await getOrCreateSupplierPayableAccountId(tenantId, vendorId);
     lines.push({ accountId: apId, creditAmount: remaining, description: `Invoice ${invoiceLabel}` });
   }
@@ -341,9 +343,6 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
 
-  const invoiceNumber = input.invoiceNumber.trim();
-  if (!invoiceNumber) throw new Error("Invoice number is required");
-  if (!input.vendorId) throw new Error("Select a supplier");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
@@ -357,17 +356,25 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const remaining = round2(Math.max(total - paid, 0));
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "open";
 
+  // A non-VAT bill paid in full needs no supplier and no invoice number (one is generated); a VAT bill or an unpaid balance does.
+  const needs = invoiceRequirements({ billType: input.billType, total, paid });
+  const vendorId = input.vendorId || null;
+  let invoiceNumber = input.invoiceNumber.trim();
+  if (!invoiceNumber && needs.numberRequired) throw new Error(`Invoice number is required: ${needs.reason}`);
+  if (!vendorId && needs.supplierRequired) throw new Error(`Select a supplier: ${needs.reason}`);
+  if (!invoiceNumber) invoiceNumber = await nextAutoBillNumber(session.tenantId);
+
   // Everything is checked before anything is saved.
-  await assertSupplierOwned(session.tenantId, input.vendorId);
+  if (vendorId) await assertSupplierOwned(session.tenantId, vendorId);
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
-  await assertBillNumberFree(session.tenantId, input.vendorId, invoiceNumber);
+  await assertBillNumberFree(session.tenantId, vendorId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
 
   const claimable = await inputVatClaimable(session.tenantId);
   const stockValues = inventoryValues(computed, subtotal, taxAmount, claimable);
   const journalLines = await buildInvoiceJournalLines(
     session.tenantId,
-    input.vendorId,
+    vendorId,
     invoiceNumber,
     subtotal,
     taxAmount,
@@ -380,7 +387,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     .insert(purchaseBills)
     .values({
       tenantId: session.tenantId,
-      vendorId: input.vendorId,
+      vendorId,
       billNumber: invoiceNumber,
       billDate: input.invoiceDate,
       dueDate: input.dueDate || null,
@@ -417,7 +424,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
 
     if (paid > 0) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
+      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
     }
   } catch (e) {
     if (stockApplied) await unwindStock(session.tenantId, { date: input.invoiceDate, sourceType: "purchase", sourceId: bill.id, userId: session.userId }, { allowNegative: true }).catch(() => {});
@@ -426,7 +433,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   }
 
   // Any advance paid to this supplier goes to their oldest open bills first.
-  await autoApplyAdvance(session.tenantId, session.userId, "supplier", input.vendorId);
+  if (vendorId) await autoApplyAdvance(session.tenantId, session.userId, "supplier", vendorId);
 
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
@@ -496,9 +503,6 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   if (!existing) throw new Error("Invoice not found");
   if (existing.status === "void") throw new Error("Cannot edit a void invoice");
 
-  const invoiceNumber = input.invoiceNumber.trim();
-  if (!invoiceNumber) throw new Error("Invoice number is required");
-  if (!input.vendorId) throw new Error("Select a supplier");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
@@ -511,11 +515,18 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const remaining = round2(Math.max(total - paid, 0));
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "open";
 
+  // A non-VAT bill paid in full needs no supplier and no invoice number; a VAT bill or an unpaid balance does.
+  const needs = invoiceRequirements({ billType: input.billType, total, paid });
+  const vendorId = input.vendorId || null;
+  const invoiceNumber = input.invoiceNumber.trim() || (needs.numberRequired ? "" : existing.billNumber);
+  if (!invoiceNumber) throw new Error(`Invoice number is required: ${needs.reason}`);
+  if (!vendorId && needs.supplierRequired) throw new Error(`Select a supplier: ${needs.reason}`);
+
   // Everything is checked before the old entry is reversed, so a refusal leaves the invoice untouched.
   await assertNoLaterPayments(session.tenantId, "purchase_bill", input.billId, "bill");
-  await assertSupplierOwned(session.tenantId, input.vendorId);
+  if (vendorId) await assertSupplierOwned(session.tenantId, vendorId);
   await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
-  await assertBillNumberFree(session.tenantId, input.vendorId, invoiceNumber, input.billId);
+  await assertBillNumberFree(session.tenantId, vendorId, invoiceNumber, input.billId);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertPeriodOpen(session.tenantId, todayIso());
   // Shrinking the purchase takes stock out: only what is still on hand can go.
@@ -526,7 +537,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const stockValues = inventoryValues(computed, subtotal, taxAmount, claimable);
   const journalLines = await buildInvoiceJournalLines(
     session.tenantId,
-    input.vendorId,
+    vendorId,
     invoiceNumber,
     subtotal,
     taxAmount,
@@ -547,7 +558,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   await db
     .update(purchaseBills)
     .set({
-      vendorId: input.vendorId,
+      vendorId,
       billNumber: invoiceNumber,
       billDate: input.invoiceDate,
       dueDate: input.dueDate || null,
@@ -575,7 +586,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
 
   if (paid > 0) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
   }
 
   revalidatePath("/purchases/stockable");

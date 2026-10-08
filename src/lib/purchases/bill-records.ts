@@ -4,6 +4,7 @@ import { payments, paymentAllocations, purchaseBills } from "@/db/schema";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { reverseAllActiveEntriesForSource } from "@/lib/ledger/post";
 import { resolvePaymentMode } from "@/lib/payment-modes";
+import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 
 // Records every kind of supplier bill shares (Consumable, Stockable and Asset purchases): the embedded payment row, the
 // per-supplier bill number rule, and the clean-up of a bill that failed to save. Kept out of the "use server" action
@@ -84,6 +85,12 @@ export async function assertBillNumberFree(tenantId: string, vendorId: string | 
   if (rows.some((r) => r.id !== excludeBillId && (r.vendorId ?? null) === (vendorId ?? null))) {
     throw new Error(`Bill number ${billNumber} is already recorded${vendorId ? " for this supplier" : ""}`);
   }
+}
+
+/** The next free AUTO-n number, for a bill whose supplier gave none. */
+export async function nextAutoBillNumber(tenantId: string): Promise<string> {
+  const taken = new Set((await db.select({ n: purchaseBills.billNumber }).from(purchaseBills).where(eq(purchaseBills.tenantId, tenantId))).map((r) => r.n));
+  return nextFreeInvoiceNumber(taken, (n) => `AUTO-${n}`, taken.size + 1).number;
 }
 
 // A failed save must not leave half a bill behind: undo whatever posted and drop the row.
