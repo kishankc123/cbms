@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
-import { createEmployee } from "./actions";
+import { createEmployee, getNextEmployeeCode } from "./actions";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -25,7 +25,8 @@ const today = () => todayIso();
 
 export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const router = useRouter();
-  const [employeeCode, setEmployeeCode] = useState("");
+  // The ID is generated; this is only what the next one will be.
+  const [nextCode, setNextCode] = useState("");
   const [fullName, setFullName] = useState("");
   const [address, setAddress] = useState("");
   const [contactNumber, setContactNumber] = useState("");
@@ -44,15 +45,24 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
 
+  useEffect(() => {
+    let live = true;
+    getNextEmployeeCode()
+      .then((c) => live && setNextCode(c))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
   async function handleSave() {
-    if (!employeeCode.trim() || !fullName.trim()) {
-      report("Employee ID and full name are required.", null);
+    if (!fullName.trim()) {
+      report("Full name is required.", null);
       return;
     }
     setSaving(true);
     try {
       await createEmployee({
-        employeeCode,
         fullName,
         address,
         contactNumber,
@@ -82,7 +92,8 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Employee ID</label>
-          <input value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={nextCode || "Assigned when saved"} readOnly disabled className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500" />
+          <p className="mt-0.5 text-[11px] text-gray-400">Generated automatically.</p>
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Full Name</label>

@@ -1,5 +1,6 @@
 "use server";
 
+import { nextEmployeeCode } from "@/lib/payroll/employee-code";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -52,39 +53,63 @@ async function assertEmployeeCodeFree(tenantId: string, employeeCode: string, ex
 // Creating an employee also writes the first salaryHistory row (changeType
 // "initial") — an employee must never exist without a salary source-of-truth
 // record, since currentBasicSalary is always derived, never stored directly.
-export async function createEmployee(input: EmployeeInput & { initialSalary: number }) {
+/** The ID the next employee will get (shown on the Add new form). It is confirmed when the employee is saved. */
+export async function getNextEmployeeCode() {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  return nextEmployeeCode((await db.select({ c: employees.employeeCode }).from(employees).where(eq(employees.tenantId, session.tenantId))).map((r) => r.c));
+}
+
+const isUniqueViolation = (e: unknown) => {
+  const x = e as { code?: string; cause?: { code?: string } };
+  return x?.code === "23505" || x?.cause?.code === "23505";
+};
+
+// The employee ID is generated (EMP-0001, ...): if two people save at the same moment the database's unique rule makes the
+// second pick the next one. An ID may still be passed in (the Edit form can change it later).
+export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> & { employeeCode?: string; initialSalary: number }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
 
-  const employeeCode = input.employeeCode.trim();
+  const given = (input.employeeCode ?? "").trim();
   const fullName = input.fullName.trim();
-  if (!employeeCode) throw new Error("Employee ID is required");
   if (!fullName) throw new Error("Full name is required");
   if (!input.joiningDate) throw new Error("Joining date is required");
   if (input.initialSalary <= 0) throw new Error("Initial basic salary must be greater than zero");
   if (input.leavingDate && input.leavingDate < input.joiningDate) throw new Error("The leaving date can't be before the joining date");
-  await assertEmployeeCodeFree(session.tenantId, employeeCode);
+  if (given) await assertEmployeeCodeFree(session.tenantId, given);
 
-  const [employee] = await db
-    .insert(employees)
-    .values({
-      tenantId: session.tenantId,
-      employeeCode,
-      fullName,
-      address: input.address.trim() || null,
-      contactNumber: input.contactNumber.trim() || null,
-      email: input.email.trim() || null,
-      panNumber: input.panNumber.trim() || null,
-      joiningDate: input.joiningDate,
-      leavingDate: input.leavingDate || null,
-      department: input.department.trim() || null,
-      designation: input.designation.trim() || null,
-      employmentType: input.employmentType,
-      employmentStatus: input.employmentStatus,
-      bankName: input.bankName.trim() || null,
-      bankAccountNumber: input.bankAccountNumber.trim() || null,
-    })
-    .returning();
+  let employee: typeof employees.$inferSelect | undefined;
+  let employeeCode = given;
+  for (let attempt = 0; attempt < 5 && !employee; attempt++) {
+    if (!given) employeeCode = nextEmployeeCode((await db.select({ c: employees.employeeCode }).from(employees).where(eq(employees.tenantId, session.tenantId))).map((r) => r.c));
+    try {
+      [employee] = await db
+        .insert(employees)
+        .values({
+          tenantId: session.tenantId,
+          employeeCode,
+          fullName,
+          address: input.address.trim() || null,
+          contactNumber: input.contactNumber.trim() || null,
+          email: input.email.trim() || null,
+          panNumber: input.panNumber.trim() || null,
+          joiningDate: input.joiningDate,
+          leavingDate: input.leavingDate || null,
+          department: input.department.trim() || null,
+          designation: input.designation.trim() || null,
+          employmentType: input.employmentType,
+          employmentStatus: input.employmentStatus,
+          bankName: input.bankName.trim() || null,
+          bankAccountNumber: input.bankAccountNumber.trim() || null,
+        })
+        .returning();
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      if (given) throw new Error(`Employee ID ${given} is already used by another employee`);
+    }
+  }
+  if (!employee) throw new Error("Could not assign an employee ID. Please try again.");
 
   // Every employee gets their own Salary Payable sub-account immediately —
   // the liability side payroll accruals post to once a run is finalized.

@@ -21,6 +21,7 @@ const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun, revertRunToDr
 let cashId: string;
 const acct = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
 
+const findEmployeeByName = async (name: string) => (await db.select().from(employees).where(and(eq(employees.tenantId, org.tenantId), eq(employees.fullName, name))))[0];
 const empInput = (code: string, name: string, over: Partial<Parameters<typeof createEmployee>[0]> = {}) => ({
   employeeCode: code,
   fullName: name,
@@ -66,6 +67,20 @@ describe("employees", () => {
     await createEmployee(empInput("E-3", "Chandra"));
     await expect(updateEmployee({ ...empInput("E-1", "Chandra"), employeeId: (await findEmployee("E-3")).id })).rejects.toThrow(/already used/);
     expect(asha.payableAccountId).toBeTruthy();
+  });
+
+  it("generates the employee ID when none is given: EMP-0001 onward, never clashing with an ID typed by hand", async () => {
+    const { getNextEmployeeCode } = await import("./employees/actions");
+    expect(await getNextEmployeeCode()).toBe("EMP-0001"); // E-1 and E-3 are another style
+    await createEmployee(empInput("", "Generated One"));
+    await createEmployee(empInput("", "Generated Two"));
+    expect((await findEmployeeByName("Generated One")).employeeCode).toBe("EMP-0001");
+    expect((await findEmployeeByName("Generated Two")).employeeCode).toBe("EMP-0002");
+    expect(await getNextEmployeeCode()).toBe("EMP-0003");
+    // a hand-typed EMP number is respected and the next one moves past it
+    await createEmployee(empInput("EMP-0010", "Typed By Hand"));
+    await createEmployee(empInput("", "Generated Three"));
+    expect((await findEmployeeByName("Generated Three")).employeeCode).toBe("EMP-0011");
   });
 
   it("renames the payable account when the employee is renamed", async () => {
