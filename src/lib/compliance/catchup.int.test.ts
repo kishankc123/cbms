@@ -7,6 +7,7 @@ import { generateObligations } from "./engine/generate";
 import { loadCatchup, saveCatchup } from "./catchup";
 import { loadPermit } from "./excise-permit";
 import { getVatWorksheet } from "./vat-worksheet";
+import { bsFiscalYearOf } from "@/lib/calendar";
 
 // 2026-10-08 is 22 Ashwin 2083. The company was registered on 20 Magh 2078 (3 Feb 2022); VAT took effect on 20 Magh 2080
 // (3 Feb 2024); the excise permit dates from 20 Magh 2078.
@@ -89,11 +90,20 @@ describe("the compliance checklist", () => {
   });
 
   it("a period filed before the system never calculates a fine, and is settled", async () => {
-    const { rows } = await getVatWorksheet(org.tenantId);
-    const old = rows.filter((r) => r.filedBeforeSystem);
-    expect(old.length).toBe(30);
-    expect(old.every((r) => r.finesAndPenalties === 0 && r.daysDelayed === 0)).toBe(true);
-  });
+    // 30 periods are marked filed before the system. The worksheet shows one fiscal year at a time (the earliest is the cheapest
+    // to work out, and the year in which all of those periods start), so check that year's rows.
+    const vatRows = await db.select({ start: complianceObligations.periodStart, flagged: complianceObligations.filedBeforeSystem }).from(complianceObligations).where(and(eq(complianceObligations.tenantId, org.tenantId), eq(complianceObligations.taxTypeKey, "vat")));
+    expect(vatRows.filter((r) => r.flagged).length).toBe(30);
+    const earliest = bsFiscalYearOf(vatRows.map((r) => r.start!).filter(Boolean).sort()[0])!;
+    const sheet = await getVatWorksheet(org.tenantId, earliest.from);
+    expect(sheet.selectedKey).toBe(earliest.from);
+    expect(sheet.rows.length).toBeGreaterThan(0);
+    expect(sheet.rows.every((r) => r.periodStart! >= earliest.from && r.periodStart! <= earliest.to)).toBe(true); // only that year
+    const old = sheet.rows.filter((r) => r.filedBeforeSystem);
+    expect(old.length).toBeGreaterThan(0);
+    expect(old.every((r) => r.finesAndPenalties === 0 && r.daysDelayed === 0 && r.pendingVat === 0)).toBe(true);
+    expect(sheet.openingCredit).toBe(0); // nothing is brought forward into the first year
+  }, 240_000);
 
   it("changing an answer later moves the line: months after the new date are owed again", async () => {
     expect(await saveCatchup(org.tenantId, org.userId, { vat: "2025-07-16" }, TODAY)).toEqual({ ok: true }); // through Ashadh 2082
