@@ -191,10 +191,32 @@ export const tenantTaxRegistrations = pgTable(
     /** Reference only for now (document storage is not finalised). */
     supportingDocument: text("supporting_document"),
     notes: text("notes"),
+    /** Excise permit only: the company's standard annual renewal fee. A late renewal fine is a share of it. */
+    standardRenewalFee: numeric("standard_renewal_fee", { precision: 18, scale: 2 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("tenant_tax_registrations_tenant_type").on(t.tenantId, t.taxTypeKey)]
+);
+
+/** One row per fiscal year the excise permit was renewed for. The year the permit was first issued in counts as paid for without a row. */
+export const exciseRenewals = pgTable(
+  "excise_renewals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** Shrawan 1 (AD date) of the fiscal year renewed for. */
+    fiscalYearStart: date("fiscal_year_start").notNull(),
+    paidDate: date("paid_date").notNull(),
+    feeAmount: numeric("fee_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+    /** The late fine paid with it, if it was late. */
+    penaltyAmount: numeric("penalty_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+    receiptReference: text("receipt_reference"),
+    notes: text("notes"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("excise_renewals_tenant_year").on(t.tenantId, t.fiscalYearStart)]
 );
 
 export const assessmentKindEnum = pgEnum("assessment_kind", ["assessment", "penalty", "interest"]);

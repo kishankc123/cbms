@@ -9,6 +9,7 @@ import { assertValidDueRule, computeDueDate, periodsFor, type DueRule } from "./
 import { loadFacts } from "./facts";
 import { loadComplianceProfile } from "../profile";
 import { afterFloor, startFloor } from "./start-dates";
+import { ensureRenewalObligations } from "../excise-permit";
 
 type Template = typeof complianceRequirementTemplates.$inferSelect;
 
@@ -120,10 +121,12 @@ export async function generateObligations(
       });
     }
   }
-  if (rows.length === 0) return 0;
+  // The excise permit's renewals are not a rolling period: they follow the permit year (Shrawan to Ashadh).
+  const renewals = await ensureRenewalObligations(tenantId, today);
+  if (rows.length === 0) return renewals;
 
   const inserted = await db.insert(complianceObligations).values(rows).onConflictDoNothing().returning({ id: complianceObligations.id });
-  return inserted.length;
+  return inserted.length + renewals;
 }
 
 /**

@@ -6,6 +6,7 @@ import type { listTaxCompliance } from "../tax-actions";
 import { TaxComplianceTable } from "./tax-compliance-table";
 import { ReportsViewer } from "../reports/reports-viewer";
 import { VatWorksheet } from "./vat-worksheet";
+import { ExcisePermitPanel } from "./excise-permit-panel";
 import type { ComplianceReportType } from "@/lib/compliance/reports";
 
 type Data = Awaited<ReturnType<typeof listTaxCompliance>>;
@@ -70,6 +71,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
             ))}
           </div>
 
+          {section === "overview" && active.key === "excise" && <ExcisePermitPanel />}
           {section === "overview" && <TaxComplianceTable key={`table-${active.key}`} data={data} lockTaxType={active.key} />}
 
           {section === "worksheet" &&

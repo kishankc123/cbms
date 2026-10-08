@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { getComplianceDashboard } from "./actions";
 import { ComplianceDashboard } from "./compliance-dashboard";
+import { ExcisePermitAlert } from "./excise-permit-alert";
 import { ComplianceProfileNotice } from "./profile-notice";
 
 export default async function CompliancePage() {
@@ -11,6 +12,7 @@ export default async function CompliancePage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-gray-900">Compliance</h1>
       <ComplianceProfileNotice />
+      <ExcisePermitAlert />
       <ComplianceDashboard data={data} />
     </div>
   );
