@@ -10,7 +10,6 @@ import { ConfirmDialog } from "./confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 
 import { D } from "@/components/calendar/date-text";
-import { todayIso } from "@/lib/calendar";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -24,17 +23,19 @@ type Invoice = {
   status: string;
 };
 
-// An unpaid or part-paid invoice past its due date shows as overdue. Derived, not stored, so it can't go stale.
-function shownStatus(inv: Invoice, today: string) {
-  const open = inv.status === "sent" || inv.status === "partially_paid" || inv.status === "draft";
-  return open && inv.dueDate && inv.dueDate < today ? "overdue" : inv.status;
+// How the invoice was paid: the mode of each payment received (Cash, Fonepay, ...). A void invoice says so; one with nothing
+// received yet says Unpaid.
+function paidBy(inv: Invoice, modes: string[] | undefined) {
+  if (inv.status === "void") return "Void";
+  return modes && modes.length > 0 ? modes.join(", ") : "Unpaid";
 }
 
-type SortKey = "date" | "invoiceNumber" | "customer" | "total" | "status";
+type SortKey = "date" | "invoiceNumber" | "customer" | "total" | "mode";
 type SortDir = "asc" | "desc";
 
 export function InvoicesTable({
   invoiceList,
+  paymentModes,
   customerById,
   customers,
   items,
@@ -43,6 +44,7 @@ export function InvoicesTable({
   vatRate,
 }: {
   invoiceList: Invoice[];
+  paymentModes: Record<string, string[]>;
   customerById: Record<string, Customer>;
   customers: Customer[];
   items: Item[];
@@ -58,7 +60,6 @@ export function InvoicesTable({
   const [voidingInvoice, setVoidingInvoice] = useState<Invoice | null>(null);
   const router = useRouter();
   const { report, dialog } = useProblem();
-  const today = todayIso();
 
   async function confirmVoid() {
     const invoice = voidingInvoice;
@@ -111,9 +112,9 @@ export function InvoicesTable({
             av = Number(a.total);
             bv = Number(b.total);
             break;
-          case "status":
-            av = shownStatus(a, today);
-            bv = shownStatus(b, today);
+          case "mode":
+            av = paidBy(a, paymentModes[a.id]);
+            bv = paidBy(b, paymentModes[b.id]);
             break;
           default:
             av = customerById[a.customerId]?.name ?? "";
@@ -125,7 +126,7 @@ export function InvoicesTable({
     }
 
     return rows;
-  }, [invoiceList, customerById, search, sortKey, sortDir, today]);
+  }, [invoiceList, paymentModes, customerById, search, sortKey, sortDir]);
 
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
@@ -172,9 +173,9 @@ export function InvoicesTable({
             </th>
             <th
               className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("status")}
+              onClick={() => toggleSort("mode")}
             >
-              Status{sortIndicator("status")}
+              Mode of payment{sortIndicator("mode")}
             </th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
@@ -188,7 +189,7 @@ export function InvoicesTable({
               <td className="px-4 py-2">
                 {Number(inv.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
-              <td className={`px-4 py-2 capitalize ${shownStatus(inv, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(inv, today).replace("_", " ")}</td>
+              <td className={`px-4 py-2 ${inv.status === "void" ? "text-gray-400" : paymentModes[inv.id]?.length ? "" : "text-gray-500"}`}>{paidBy(inv, paymentModes[inv.id])}</td>
               <td className="px-4 py-2 text-right whitespace-nowrap">
                 <RowMenu
                   items={[

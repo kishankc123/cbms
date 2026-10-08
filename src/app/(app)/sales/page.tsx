@@ -6,6 +6,7 @@ import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
 import { salesVatRate } from "@/lib/sales/vat";
+import { paymentModesByInvoice } from "@/lib/sales/invoice-payment-modes";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { SalesEntryTabs } from "./sales-entry-tabs";
@@ -31,6 +32,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
 
   const vatRate = await salesVatRate(session.tenantId);
   const customerById = Object.fromEntries(customerList.map((c) => [c.id, c]));
+  const paymentModes = await paymentModesByInvoice(session.tenantId, invoiceList.map((i) => i.id));
 
   // Continues the same sequence Multi-invoice draws from — the same "so far + 1" starting point, skipped
   // forward past every invoice number already on record (single or multi) so the two entry forms never hand
@@ -70,6 +72,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         invoices={
           <InvoicesTable
             invoiceList={invoiceList}
+            paymentModes={paymentModes}
             customerById={customerById}
             customers={customerList}
             items={itemList}

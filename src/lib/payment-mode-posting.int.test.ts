@@ -9,6 +9,7 @@ import { reverseJournalEntry } from "@/lib/ledger/post";
 import { listPaymentModes, resolvePaymentMode, updatePaymentMode, buildPaymentResolver } from "@/lib/payment-modes";
 import { runSalesImport } from "@/lib/sales/import/service";
 import { postSalesBatch } from "@/lib/sales/invoice-records";
+import { paymentModesByInvoice } from "@/lib/sales/invoice-payment-modes";
 import type { ImportSettings } from "@/lib/sales/import/types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -64,6 +65,22 @@ describe("saving the payment mode", () => {
     const reversal = await reverseJournalEntry(org.tenantId, lines[0].entry, org.userId);
     const back = await db.select().from(journalLines).where(and(eq(journalLines.journalEntryId, reversal.id), eq(journalLines.accountId, walletId)));
     expect(back[0]).toMatchObject({ paymentModeId: fonepayMode, paymentModeName: "Fonepay" });
+  });
+
+  it("the invoice list shows how each invoice was paid: every mode of a split payment, the account for an older payment, nothing for an unpaid one", async () => {
+    const made = await postSalesBatch({ tenantId: org.tenantId, userId: org.userId }, [
+      { invoiceDate: "2026-09-12", customerId: "", grossAmount: 600, discountAmount: 0, billType: "zero_rated", payments: [{ accountId: walletId, amount: 400, modeId: fonepayMode }, { accountId: cashId, amount: 200, modeId: cashMode }] },
+      { invoiceDate: "2026-09-12", customerId: "", grossAmount: 100, discountAmount: 0, billType: "zero_rated", payments: [{ accountId: cashId, amount: 100 }] }, // no mode, as before modes existed
+    ]);
+    const shown = await paymentModesByInvoice(org.tenantId, [made[0].invoiceId, made[1].invoiceId]);
+    expect(shown[made[0].invoiceId]).toEqual(["Fonepay", "Cash"]);
+    expect(shown[made[1].invoiceId]).toEqual(["Cash"]); // the account's name
+    expect(await paymentModesByInvoice(org.tenantId, ["00000000-0000-0000-0000-000000000000"])).toEqual({});
+
+    // taking a payment back (as an edit or a void does) leaves no trace in the list: not the reversal's receivable line either
+    const [receipt] = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceId, made[1].invoiceId), eq(journalEntries.sourceType, "receipt")));
+    await reverseJournalEntry(org.tenantId, receipt.id, org.userId);
+    expect(await paymentModesByInvoice(org.tenantId, [made[1].invoiceId])).toEqual({});
   });
 
   it("a wrong mode and account pair is refused before anything is posted", async () => {
