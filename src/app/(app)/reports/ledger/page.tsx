@@ -45,9 +45,13 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
         fiscal={fiscal}
         ledger={
           ledger && {
+            accountId: ledger.account.id,
             accountLabel: `${ledger.account.code} — ${ledger.account.name}`,
             openingBalance: ledger.openingBalance,
             lines: ledger.lines.map((l) => ({
+              entryId: l.entryId,
+              isReversed: l.isReversed,
+              reversalOfId: l.reversalOfId,
               entryDate: l.entryDate,
               referenceNumber: l.referenceNumber,
               memo: l.memo,

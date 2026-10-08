@@ -279,6 +279,9 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
 
   const rows = await db
     .select({
+      entryId: journalEntries.id,
+      isReversed: journalEntries.isReversed,
+      reversalOfId: journalEntries.reversalOfId,
       entryDate: journalEntries.entryDate,
       referenceNumber: journalEntries.referenceNumber,
       memo: journalEntries.memo,
@@ -298,7 +301,7 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
         lte(journalEntries.entryDate, toDateStr(periodEnd))
       )
     )
-    .orderBy(journalEntries.entryDate);
+    .orderBy(journalEntries.entryDate, journalEntries.createdAt);
 
   const normal = NORMAL_BALANCE[account.category];
 

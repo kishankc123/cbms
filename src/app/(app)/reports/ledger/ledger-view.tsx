@@ -1,15 +1,19 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { DateCells, DateDisplayControl, DateHead, dateColumnCount, useDateDisplay } from "@/components/calendar/report-dates";
 import { exportDateColumns, exportDateHeaders, type DateRange } from "@/lib/calendar";
 import { D } from "@/components/calendar/date-text";
-import Link from "next/link";
-import { resolveSourceLink } from "@/lib/ledger/source-link";
+import { EntryPopup } from "./entry-popup";
+import { visibleLedgerLines } from "@/lib/ledger/ledger-lines";
 
 type Account = { id: string; code: string; name: string; subCategory: string | null };
 type Line = {
+  entryId: string;
+  isReversed: boolean;
+  reversalOfId: string | null;
   entryDate: string;
   referenceNumber: string | null;
   memo: string | null;
@@ -17,8 +21,6 @@ type Line = {
   debit: number;
   credit: number;
   runningBalance: number;
-  sourceType: string | null;
-  sourceId: string | null;
 };
 
 const isCashOrBank = (a: Account) => /cash|bank/i.test(`${a.subCategory ?? ""} ${a.name}`);
@@ -38,12 +40,17 @@ export function LedgerView({
   from: string;
   to: string;
   fiscal: DateRange | null;
-  ledger: { accountLabel: string; openingBalance: number; lines: Line[] } | null;
+  ledger: { accountId: string; accountLabel: string; openingBalance: number; lines: Line[] } | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [mode, setMode] = useDateDisplay();
+  // The transaction whose pop-up is open.
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+  // Entries that were reversed (a void or an edit), and the entries that reversed them, are hidden unless asked for.
+  const [showReversed, setShowReversed] = useState(false);
+  const shown = useMemo(() => (ledger ? visibleLedgerLines(ledger.lines, ledger.openingBalance, showReversed) : null), [ledger, showReversed]);
 
   function pickAccount(id: string) {
     const next = new URLSearchParams(params.toString());
@@ -57,7 +64,8 @@ export function LedgerView({
   function exportCsv() {
     if (!ledger) return;
     const header = [...exportDateHeaders(mode), "Reference", "Description", "Debit", "Credit", "Balance"];
-    const rows = ledger.lines.map((l) => [
+    const opening = [...exportDateColumns(mode, from), "", "Opening balance", "", "", fmt(ledger.openingBalance)];
+    const rows = (shown?.lines ?? ledger.lines).map((l) => [
       ...exportDateColumns(mode, l.entryDate),
       l.referenceNumber ?? "",
       l.description ?? l.memo ?? "",
@@ -65,7 +73,7 @@ export function LedgerView({
       l.credit ? fmt(l.credit) : "",
       fmt(l.runningBalance),
     ]);
-    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const csv = [header, opening, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
@@ -77,8 +85,8 @@ export function LedgerView({
   const cashBank = accounts.filter(isCashOrBank);
   const other = accounts.filter((a) => !isCashOrBank(a));
   const cols = dateColumnCount(mode);
-  const totalDebit = ledger?.lines.reduce((s, l) => s + l.debit, 0) ?? 0;
-  const totalCredit = ledger?.lines.reduce((s, l) => s + l.credit, 0) ?? 0;
+  const totalDebit = shown?.lines.reduce((s, l) => s + l.debit, 0) ?? 0;
+  const totalCredit = shown?.lines.reduce((s, l) => s + l.credit, 0) ?? 0;
 
   return (
     <div className="space-y-4">
@@ -116,9 +124,16 @@ export function LedgerView({
             <h2 className="text-lg font-medium text-gray-900">
               {ledger.accountLabel} <span className="text-sm text-gray-500"><D value={from} /> – <D value={to} /></span>
             </h2>
-            <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
-              Export CSV
-            </button>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" checked={showReversed} onChange={(e) => setShowReversed(e.target.checked)} />
+                Show reversed and voided entries
+                {!showReversed && shown && shown.hiddenPairs > 0 && <span className="text-xs text-gray-400">({shown.hiddenPairs} hidden)</span>}
+              </label>
+              <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+                Export CSV
+              </button>
+            </div>
           </div>
           <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
             <thead className="bg-gray-50 text-left text-gray-500">
@@ -126,55 +141,64 @@ export function LedgerView({
                 <DateHead mode={mode} />
                 <th className="px-4 py-2 font-medium">Reference</th>
                 <th className="px-4 py-2 font-medium">Description</th>
-                <th className="px-4 py-2 font-medium text-right">Debit</th>
-                <th className="px-4 py-2 font-medium text-right">Credit</th>
-                <th className="px-4 py-2 font-medium text-right">Balance</th>
-                <th className="px-4 py-2 font-medium">Source</th>
+                <th className="px-4 py-2 font-medium text-center">Debit</th>
+                <th className="px-4 py-2 font-medium text-center">Credit</th>
+                <th className="px-4 py-2 font-medium text-center">Balance</th>
               </tr>
             </thead>
             <tbody>
+              {/* The balance brought in, dated the first day of the period, with its amount in the Balance column. */}
               <tr className="border-t border-gray-100 bg-gray-50/50">
-                <td className="px-4 py-2 text-gray-500" colSpan={cols + 5}>Opening balance</td>
-                <td className="px-4 py-2 text-right">{fmt(ledger.openingBalance)}</td>
+                <DateCells mode={mode} value={from} />
+                <td className="px-4 py-2" />
+                <td className="px-4 py-2 text-gray-500">Opening balance</td>
+                <td className="px-4 py-2" />
+                <td className="px-4 py-2" />
+                <td className="px-4 py-2 text-center tabular-nums">{fmt(ledger.openingBalance)}</td>
               </tr>
-              {ledger.lines.map((l, i) => {
-                const source = resolveSourceLink(l.sourceType);
-                return (
-                  <tr key={i} className="border-t border-gray-100">
-                    <DateCells mode={mode} value={l.entryDate} />
-                    <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
-                    <td className="px-4 py-2">{l.description ?? l.memo ?? ""}</td>
-                    <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
-                    <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
-                    <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
-                    <td className="px-4 py-2">
-                      {source ? (
-                        <Link href={source.href} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
-                          {source.label}
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {ledger.lines.length === 0 && (
+              {(shown?.lines ?? []).map((l, i) => (
+                <tr
+                  key={i}
+                  tabIndex={0}
+                  role="button"
+                  title="Click to see this transaction"
+                  onClick={() => setOpenEntry(l.entryId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setOpenEntry(l.entryId);
+                    }
+                  }}
+                  className={`cursor-pointer border-t border-gray-100 hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none ${l.isReversed || l.reversalOfId ? "text-gray-400" : ""}`}
+                >
+                  <DateCells mode={mode} value={l.entryDate} />
+                  <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
+                  <td className="px-4 py-2">
+                    {l.description ?? l.memo ?? ""}
+                    {l.isReversed && <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">Reversed</span>}
+                    {l.reversalOfId && <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">Reversal</span>}
+                  </td>
+                  <td className="px-4 py-2 text-center tabular-nums">{l.debit ? fmt(l.debit) : ""}</td>
+                  <td className="px-4 py-2 text-center tabular-nums">{l.credit ? fmt(l.credit) : ""}</td>
+                  <td className="px-4 py-2 text-center tabular-nums">{fmt(l.runningBalance)}</td>
+                </tr>
+              ))}
+              {(shown?.lines.length ?? 0) === 0 && (
                 <tr>
-                  <td colSpan={cols + 6} className="px-4 py-6 text-center text-gray-400">
+                  <td colSpan={cols + 5} className="px-4 py-6 text-center text-gray-400">
                     No transactions in this period
                   </td>
                 </tr>
               )}
               <tr className="border-t-2 border-gray-300 font-medium">
                 <td className="px-4 py-2" colSpan={cols + 2}>Totals</td>
-                <td className="px-4 py-2 text-right">{fmt(totalDebit)}</td>
-                <td className="px-4 py-2 text-right">{fmt(totalCredit)}</td>
-                <td className="px-4 py-2 text-right">{fmt(ledger.lines.at(-1)?.runningBalance ?? ledger.openingBalance)}</td>
-                <td className="px-4 py-2"></td>
+                <td className="px-4 py-2 text-center tabular-nums">{fmt(totalDebit)}</td>
+                <td className="px-4 py-2 text-center tabular-nums">{fmt(totalCredit)}</td>
+                <td className="px-4 py-2 text-center tabular-nums">{fmt(shown?.lines.at(-1)?.runningBalance ?? ledger.openingBalance)}</td>
               </tr>
             </tbody>
           </table>
+          {openEntry && <EntryPopup entryId={openEntry} highlightAccountId={ledger.accountId} onClose={() => setOpenEntry(null)} />}
         </>
       )}
     </div>
