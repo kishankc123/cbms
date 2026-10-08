@@ -102,13 +102,13 @@ export const NEPAL: CountryConfig = {
     {
       key: "excise_return",
       name: "Excise Return",
-      description: "Monthly excise return for excise-registered organizations, due by the 25th of the following month. Not yet verified.",
+      description: "Monthly excise return, only for organizations that manufacture or import excisable goods. Switched off for now (not shown in the app); due by the 25th of the following month. Not yet verified.",
       categoryKey: "tax",
       taxTypeKey: "excise",
       frequency: "monthly",
       applicability: { fact: "registered_tax_types", op: "includes", value: "excise" },
       dueRule: { period: "month", monthsAfterEnd: 1, dayOfMonth: 25 },
-      isActive: true,
+      isActive: false,
       isVerified: false,
     },
     {

@@ -610,6 +610,13 @@
       "when": 1791452128887,
       "tag": "0086_compliance_catchup",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1791453487709,
+      "tag": "0087_switch_off_excise_returns",
+      "breakpoints": true
     }
   ]
 }

@@ -46,8 +46,8 @@ describe("the compliance checklist", () => {
     ]);
     const v = await loadCatchup(org.tenantId, TODAY);
     expect(v.ready).toBe(true);
-    expect(v.streams.map((s) => s.key)).toEqual(["income_tax", "vat", "excise_return", "excise_permit"]); // no TDS: nothing withheld
-    expect(v.unanswered).toBe(4);
+    expect(v.streams.map((s) => s.key)).toEqual(["income_tax", "vat", "excise_permit"]); // no TDS: nothing withheld; excise returns are switched off
+    expect(v.unanswered).toBe(3);
     expect(v.streams[0].options.map((o) => o.label)).toEqual(["FY 2078/79", "FY 2079/80", "FY 2080/81", "FY 2081/82", "FY 2082/83"]);
     expect(v.streams[1].options[0].label).toBe("Magh 2080"); // VAT starts with its effective-from month
     expect(v.streams[1].options[v.streams[1].options.length - 1].label).toBe("Bhadra 2083"); // Ashwin is still running
@@ -66,7 +66,7 @@ describe("the compliance checklist", () => {
   });
 
   it("income tax and everything else filed through Ashadh 2083: the history is built and marked filed, the rest is owed", async () => {
-    expect(await saveCatchup(org.tenantId, org.userId, { income_tax: ASHADH_2083, vat: ASHADH_2083, excise_return: ASHADH_2083, excise_permit: ASHADH_2083 }, TODAY)).toEqual({ ok: true });
+    expect(await saveCatchup(org.tenantId, org.userId, { income_tax: ASHADH_2083, vat: ASHADH_2083, excise_permit: ASHADH_2083 }, TODAY)).toEqual({ ok: true });
 
     const months = await vat();
     expect(months[0].label).toBe("Magh 2080");
@@ -79,7 +79,7 @@ describe("the compliance checklist", () => {
 
     const income = await items("income_tax");
     expect(income.map((i) => [i.label, i.status])).toEqual([["2078/79", "filed"], ["2079/80", "filed"], ["2080/81", "filed"], ["2081/82", "filed"], ["2082/83", "filed"], ["2083/84", "pending"]].map(([l, s]) => [expect.stringContaining(l), s]));
-    expect((await items("excise")).filter((i) => i.label.startsWith("Magh 2078"))).toHaveLength(1); // the excise return starts with the permit month
+    expect((await items("excise")).filter((i) => i.label.startsWith("Magh 2078"))).toHaveLength(0); // no excise returns are tracked
   });
 
   it("the excise permit is renewed through the year, so only the current one is late", async () => {

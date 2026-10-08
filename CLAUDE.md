@@ -3,7 +3,7 @@
 # Development Context (for continuing in a new session)
 
 Last updated: 2026-10-08, as of commit `13cbba8` on `main` (working tree clean at that point — still run
-`git status` first thing in a new session). Migrations in the repo run through `0086`; **Vercel's database
+`git status` first thing in a new session). Migrations in the repo run through `0087`; **Vercel's database
 only has what was run on it by hand — deploys do not run migrations** (see "Operations" below).
 
 ## What this app is
@@ -75,7 +75,7 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   company registration date. Registrations have ONE date ("Effective from"; the old registration date column
   was dropped). Recurring items cover every period since Shrawan 1 of the current fiscal year; the **catch-up
   checklist** (`lib/compliance/catchup*.ts`, `/compliance/catch-up`) asks "filed up to which year/month" per
-  stream (income tax, VAT, TDS, excise return, excise permit), builds full history from the start dates and
+  stream (income tax, VAT, TDS, excise permit), builds full history from the start dates and
   marks earlier periods `filed_before_system` (no fines, settled in the VAT worksheet). Unanswered streams
   show the current fiscal year only, on purpose (no flood of overdue items).
 - **Excise permit** (`lib/compliance/excise-permit*.ts`, Tax Compliance → Excise): valid per fiscal year to the
@@ -86,8 +86,10 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 - **Platform fines and penalties** (`/admin/compliance/penalties`, `lib/compliance/penalty-admin.ts`,
   `penalty-types.ts`): versions per fiscal year (start on Shrawan 1) for VAT, TDS and excise permit renewal;
   started versions are immutable, verification + source editable, audit-logged; organizations see the rates
-  read-only on Fines & Penalties. The excise permit bands and the income-tax / excise-return templates
-  (activated in migration 0086) are **unverified** figures supplied by the business.
+  read-only on Fines & Penalties. The excise permit bands and the income-tax template (activated in migration
+  0086) are **unverified** figures supplied by the business. **Excise returns are switched off** (migration
+  0087; only for companies that manufacture or import excisable goods): the template stays in the config, inactive,
+  and nothing about them shows in the app.
 - Build **phase by phase**, verify live in the browser (built-in Browser pane) plus `npx tsc --noEmit`,
   `npx eslint`, `npx vitest run` and the integration tests, then **pause for the user's explicit go-ahead**
   before the next phase. **Only commit/push when explicitly asked.**
@@ -141,7 +143,7 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 
 ## Operations / things only the user can do
 
-- Run migrations **0065–0086** (and any later ones) on the Vercel database by hand, and make sure its host
+- Run migrations **0065–0087** (and any later ones) on the Vercel database by hand, and make sure its host
   matches `.env.local` (compare the host of the production `DATABASE_URL` with the local one; if they are the
   same database nothing needs running). Commands for a manual run: set `$env:DATABASE_URL` in PowerShell to the
   production URL, check the host, back up in Neon, then `node ./node_modules/drizzle-kit/bin.cjs migrate`.
