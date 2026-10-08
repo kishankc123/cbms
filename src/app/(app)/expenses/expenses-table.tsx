@@ -49,6 +49,15 @@ const STATUS_OPTIONS = [
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+// How the expense was paid: the mode of each payment (Cash, Fonepay, ...). A void expense says so; one with nothing paid yet says Unpaid.
+function paidBy(e: ExpenseRow, modes: string[] | undefined) {
+  if (e.status === "void") return "Void";
+  return modes && modes.length > 0 ? modes.join(", ") : "Unpaid";
+}
+
+type SortKey = "number" | "date" | "category" | "net" | "total";
+type SortDir = "asc" | "desc";
+
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -59,6 +68,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 export function ExpensesTable({
+  paymentModes,
   expenses,
   vendors,
   categoryAccounts,
@@ -68,6 +78,7 @@ export function ExpensesTable({
 }: {
   expenses: ExpenseRow[];
   vendors: Vendor[];
+  paymentModes: Record<string, string[]>;
   categoryAccounts: CategoryAccount[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
@@ -88,6 +99,9 @@ export function ExpensesTable({
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Sorted by expense number to begin with; a click on a heading sorts by it, a second click reverses.
+  const [sortKey, setSortKey] = useState<SortKey>("number");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const today = useMemo(() => todayIso(), []);
 
@@ -114,6 +128,40 @@ export function ExpensesTable({
       return true;
     });
   }, [expenses, search, dateFrom, dateTo, categoryFilter, statusFilter]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      let cmp: number;
+      switch (sortKey) {
+        case "date":
+          cmp = a.expenseDate < b.expenseDate ? -1 : a.expenseDate > b.expenseDate ? 1 : 0;
+          break;
+        case "category":
+          cmp = a.category.localeCompare(b.category, undefined, { numeric: true });
+          break;
+        case "net":
+          cmp = a.subtotal - b.subtotal;
+          break;
+        case "total":
+          cmp = a.total - b.total;
+          break;
+        default:
+          cmp = a.expenseNumber.localeCompare(b.expenseNumber, undefined, { numeric: true });
+      }
+      // Equal values fall back to the expense number, so the order never jumps about.
+      return (cmp || a.expenseNumber.localeCompare(b.expenseNumber, undefined, { numeric: true })) * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+  }
+  const arrow = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+  const sortable = "px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700";
 
   async function openEdit(id: string) {
     try {
@@ -171,7 +219,7 @@ export function ExpensesTable({
         </button>
         <button
           type="button"
-          onClick={() => exportCsv(filtered, exportDates)}
+          onClick={() => exportCsv(sorted, exportDates, paymentModes)}
           className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5"
         >
           Export
@@ -228,20 +276,30 @@ export function ExpensesTable({
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Expense #</th>
-            <th className="px-4 py-2 font-medium">Date</th>
+            <th className={sortable} onClick={() => toggleSort("number")}>
+              Expense #{arrow("number")}
+            </th>
+            <th className={sortable} onClick={() => toggleSort("date")}>
+              Date{arrow("date")}
+            </th>
             <th className="px-4 py-2 font-medium">Supplier</th>
-            <th className="px-4 py-2 font-medium">Category</th>
+            <th className={sortable} onClick={() => toggleSort("category")}>
+              Category{arrow("category")}
+            </th>
             <th className="px-4 py-2 font-medium">Description</th>
-            <th className="px-4 py-2 font-medium">Net amount</th>
+            <th className={sortable} onClick={() => toggleSort("net")}>
+              Net amount{arrow("net")}
+            </th>
             <th className="px-4 py-2 font-medium">Tax</th>
-            <th className="px-4 py-2 font-medium">Total</th>
-            <th className="px-4 py-2 font-medium">Status</th>
+            <th className={sortable} onClick={() => toggleSort("total")}>
+              Total{arrow("total")}
+            </th>
+            <th className="px-4 py-2 font-medium">Mode of payment</th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
         <tbody>
-          {filtered.map((e) => (
+          {sorted.map((e) => (
             <tr key={e.id} className="border-t border-gray-100">
               <td className="px-4 py-2 font-mono">{e.expenseNumber}</td>
               <td className="px-4 py-2"><D value={e.expenseDate} /></td>
@@ -251,7 +309,7 @@ export function ExpensesTable({
               <td className="px-4 py-2">{fmt(e.subtotal)}</td>
               <td className="px-4 py-2">{fmt(e.tax)}</td>
               <td className="px-4 py-2">{fmt(e.total)}</td>
-              <td className={`px-4 py-2 capitalize ${(e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "font-medium text-red-600" : ""}`}>{((e.status === "unpaid" || e.status === "partially_paid") && e.dueDate && e.dueDate < today ? "overdue" : e.status).replace("_", " ")}</td>
+              <td className={`px-4 py-2 ${e.status === "void" ? "text-gray-400" : paymentModes[e.id]?.length ? "" : "text-gray-500"}`}>{paidBy(e, paymentModes[e.id])}</td>
               <td className="px-4 py-2 text-right whitespace-nowrap">
                 <RowMenu
                   items={[
@@ -381,10 +439,10 @@ function toInitial(data: ExpenseEditData): InitialExpense {
   return { ...data };
 }
 
-function exportCsv(rows: ExpenseRow[], dateMode: DateDisplayMode) {
-  const header = ["Expense #", ...exportDateHeaders(dateMode), "Supplier", "Category", "Description", "Net amount", "Tax", "Total", "Status"];
+function exportCsv(rows: ExpenseRow[], dateMode: DateDisplayMode, paymentModes: Record<string, string[]>) {
+  const header = ["Expense #", ...exportDateHeaders(dateMode), "Supplier", "Category", "Description", "Net amount", "Tax", "Total", "Mode of payment", "Status"];
   const lines = rows.map((e) =>
-    [e.expenseNumber, ...exportDateColumns(dateMode, e.expenseDate), e.payee, e.category, e.description, e.subtotal, e.tax, e.total, e.status]
+    [e.expenseNumber, ...exportDateColumns(dateMode, e.expenseDate), e.payee, e.category, e.description, e.subtotal, e.tax, e.total, paidBy(e, paymentModes[e.id]), e.status]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );

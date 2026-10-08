@@ -7,6 +7,7 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getExpenseTaxDefaults } from "./actions";
 import { ExpensesTable } from "./expenses-table";
+import { paymentModesByExpense } from "@/lib/expenses/payment-modes";
 import { ExpensesTabs } from "./expenses-tabs";
 
 export default async function ExpensesPage() {
@@ -58,6 +59,7 @@ export default async function ExpensesPage() {
     }
   }
 
+  const paymentModes = await paymentModesByExpense(session.tenantId, expenseRows.map((e) => e.id));
   const vendorNameById = Object.fromEntries(vendorList.map((v) => [v.id, v.name]));
 
   const rows = expenseRows.map((e) => ({
@@ -85,6 +87,7 @@ export default async function ExpensesPage() {
       <ExpensesTabs canImport={can(session, "expenses", "create")}>
       <ExpensesTable
         expenses={rows}
+        paymentModes={paymentModes}
         vendors={vendorList}
         categoryAccounts={categoryAccounts}
         cashBankAccounts={cashBankAccounts}

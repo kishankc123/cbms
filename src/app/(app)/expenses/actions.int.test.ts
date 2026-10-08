@@ -117,6 +117,33 @@ describe("expenses", () => {
   });
 });
 
+describe("how each expense was paid (the Mode of payment column)", () => {
+  it("shows the mode of a payment made when the expense was entered and of one made later; an unpaid one shows nothing; a voided one shows nothing", async () => {
+    const { listPaymentModes } = await import("@/lib/payment-modes");
+    const { paymentModesByExpense } = await import("@/lib/expenses/payment-modes");
+    const cashMode = (await listPaymentModes(org.tenantId)).find((m) => m.name === "Cash")!.id;
+    const before = new Set((await rows()).map((r) => r.id));
+    await createExpense({ ...base(), billType: "no_bill", description: "Paid now", vatAmount: 0, taxableAmount: 120, invoiceNumber: "", payments: [{ accountId: cashId, amount: 120, modeId: cashMode }] });
+    await createExpense({ ...base(), billType: "no_bill", description: "Paid old style", vatAmount: 0, taxableAmount: 80, invoiceNumber: "", payments: [{ accountId: cashId, amount: 80 }] });
+    await createExpense({ ...base(), billType: "no_bill", description: "Paid later", vatAmount: 0, taxableAmount: 300, invoiceNumber: "", payments: [] });
+    const made = (await rows()).filter((r) => !before.has(r.id));
+    const byDesc = (d: string) => made.find((r) => r.description === d)!;
+    await recordExpensePayment({ expenseId: byDesc("Paid later").id, payments: [{ accountId: cashId, amount: 100, modeId: cashMode }], paymentDate: "2026-09-02" });
+
+    const shown = await paymentModesByExpense(org.tenantId, made.map((r) => r.id));
+    expect(shown[byDesc("Paid now").id]).toEqual(["Cash"]);
+    expect(shown[byDesc("Paid old style").id]).toEqual(["Cash"]); // no mode saved: the account's name
+    expect(shown[byDesc("Paid later").id]).toEqual(["Cash"]); // part-paid later
+    expect(Object.keys(shown)).toHaveLength(3);
+
+    const { voidExpense } = await import("./actions");
+    const fd = new FormData();
+    fd.set("expenseId", byDesc("Paid now").id);
+    await voidExpense(fd);
+    expect((await paymentModesByExpense(org.tenantId, [byDesc("Paid now").id]))[byDesc("Paid now").id]).toBeUndefined();
+  });
+});
+
 describe("editing an expense", () => {
   it("any expense can be edited: one paid when it was entered is edited with its payment", async () => {
     await createExpense({ ...base(), billType: "no_bill", description: "Paid rent", vatAmount: 0, taxableAmount: 300, payments: [{ accountId: cashId, amount: 300 }] });
