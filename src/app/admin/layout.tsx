@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/organizations", label: "Organizations" },
   { href: "/admin/compliance", label: "Compliance Configuration" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/email-log", label: "Sent mail" },
   { href: "/admin/billing", label: "Billing" },
   { href: "/admin/audit-log", label: "Platform Audit Log" },
 ];

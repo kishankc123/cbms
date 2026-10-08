@@ -7,7 +7,7 @@ import type { AccountLookup } from "@/lib/org-members";
 import { addUser, findAccount, inviteUser, type AddUserData } from "../actions";
 import { settingsButton, settingsInput, settingsLabel } from "../../ui";
 
-type Done = { text: string; link?: string };
+type Done = { text: string; link?: string; /** The email did not go: shown as a warning, not a success. */ warning?: boolean };
 
 export function AddUserForm({ data }: { data: AddUserData }) {
   const { report, reportError, dialog } = useProblem();
@@ -40,7 +40,11 @@ export function AddUserForm({ data }: { data: AddUserData }) {
     try {
       const r = await addUser({ email, roleId, status });
       if (!r.ok) return report(r.error, '[data-field="role"]');
-      setDone({ text: `${r.name} was added as ${role?.name}. They'll see a notice and get an email.` });
+      setDone(
+        r.emailProblem
+          ? { text: `${r.name} was added as ${role?.name}, but the email telling them could not be sent (${r.emailProblem}). They will still see a notice the next time they sign in.`, warning: true }
+          : { text: `${r.name} was added as ${role?.name}. They'll see a notice and get an email.` }
+      );
       setChecked(null);
       setEmail("");
     } catch (err) {
@@ -55,7 +59,11 @@ export function AddUserForm({ data }: { data: AddUserData }) {
     try {
       const r = await inviteUser({ email, roleId });
       if (!r.ok) return report(r.error, '[data-field="role"]');
-      setDone({ text: `Invitation sent to ${email.trim()}.`, link: r.devLink });
+      setDone(
+        r.emailProblem
+          ? { text: `The invitation to ${email.trim()} was saved, but the email could not be sent (${r.emailProblem}). Send them the link below yourself.`, link: r.devLink, warning: true }
+          : { text: `Invitation sent to ${email.trim()}.`, link: r.devLink }
+      );
       setChecked(null);
       setEmail("");
     } catch (err) {
@@ -91,11 +99,11 @@ export function AddUserForm({ data }: { data: AddUserData }) {
   return (
     <div className="max-w-lg space-y-4">
       {done && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className={`rounded-lg border px-4 py-3 text-sm ${done.warning ? "border-amber-300 bg-amber-50 text-amber-900" : "border-green-200 bg-green-50 text-green-800"}`}>
           <p>{done.text}</p>
           {done.link && (
             <p className="mt-1 break-all text-xs text-gray-600">
-              Email service not configured (dev only) — invitation link:{" "}
+              {done.warning ? "Invitation link (valid 7 days):" : "Email service not configured (dev only) — invitation link:"}{" "}
               <a href={done.link} className="text-[var(--color-primary)] underline">
                 {done.link}
               </a>

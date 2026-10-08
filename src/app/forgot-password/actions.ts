@@ -19,7 +19,7 @@ export async function requestPasswordReset(email: string): Promise<{ ok: true }>
   const [user] = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
   if (user && user.status === "active") {
     const token = await createAuthToken(user.id, "password_reset", TOKEN_TTL_MS);
-    await sendEmail({ to: user.email, ...passwordResetEmail(`${appUrl()}/reset-password/${token}`) });
+    await sendEmail({ to: user.email, kind: "password_reset", ...passwordResetEmail(`${appUrl()}/reset-password/${token}`) });
   }
   return { ok: true };
 }

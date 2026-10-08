@@ -9,6 +9,7 @@ import { OrgSwitcher } from "./org-switcher";
 import { FiscalYearSwitcher } from "./fiscal-year-switcher";
 import { getActiveFiscalYear, listFiscalYears } from "@/lib/fiscal";
 import { VerifyBanner } from "./verify-banner";
+import { verificationEmailProblem } from "@/lib/email-log";
 import { AddNoticeBanner } from "@/components/add-notice-banner";
 import { listAddNotices } from "@/lib/org-members";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
@@ -245,7 +246,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
       <main className="flex-1 p-8">
         <AddNoticeBanner notices={notices} activeTenantId={session.tenantId} />
-        {!user.emailVerifiedAt && <VerifyBanner />}
+        {!user.emailVerifiedAt && <VerifyBanner emailProblem={await verificationEmailProblem(user.email)} />}
         {children}
       </main>
     </div>

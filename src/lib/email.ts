@@ -7,32 +7,85 @@
 // With no RESEND_API_KEY the message is printed to the server console instead,
 // so every email flow still works locally.
 
-export const appUrl = () => (process.env.APP_URL ?? "http://localhost:3100").replace(/\/$/, "");
+export const appUrl = () => (process.env.APP_URL ?? "http://localhost:3100").replace(/\/+$/, "");
 export const isEmailConfigured = () => Boolean(process.env.RESEND_API_KEY);
 
-export async function sendEmail(input: { to: string; subject: string; html: string; text: string }): Promise<{ delivered: boolean }> {
+export type EmailKind = "verification" | "password_reset" | "invitation" | "added_to_organization" | "other";
+export type EmailStatus = "sent" | "failed" | "not_configured";
+export type SendResult = { delivered: boolean; status: EmailStatus; /** Why it was not delivered, in words a person can act on. */ error?: string };
+
+/**
+ * An email that did not go: the provider or the network refused it, or (on the live site) no provider is set up. With no provider
+ * set up in development the message is just printed, which is not a problem.
+ */
+export const isDeliveryFailure = (status: string) => status === "failed" || (status === "not_configured" && process.env.NODE_ENV === "production");
+
+/** A short, plain reason from a provider's error reply. */
+function reasonFrom(status: number, body: string): string {
+  try {
+    const j = JSON.parse(body) as { message?: string };
+    if (j.message) return `${j.message} (${status})`.slice(0, 300);
+  } catch {
+    /* not JSON */
+  }
+  return `The email service refused the message (${status}).`;
+}
+
+/**
+ * Sends one email and records the attempt in the sent-mail log (who, what kind, the outcome; never the body or its links).
+ * It never throws: a failure comes back as `delivered: false` with a reason, so the caller can tell the person.
+ */
+export async function sendEmail(input: { to: string; subject: string; html: string; text: string; kind?: EmailKind; tenantId?: string | null }): Promise<SendResult> {
+  const result = await attempt(input);
+  try {
+    // Imported here so this file stays loadable where there is no database (the pure template helpers below).
+    const { db } = await import("@/db");
+    const { emailLog } = await import("@/db/schema");
+    await db.insert(emailLog).values({ tenantId: input.tenantId ?? null, toEmail: input.to.trim().toLowerCase(), kind: input.kind ?? "other", subject: input.subject, status: result.status, error: result.error ?? null, providerId: result.providerId ?? null });
+  } catch (e) {
+    console.error("could not write the sent-mail log", e);
+  }
+  return { delivered: result.delivered, status: result.status, error: result.error };
+}
+
+async function attempt(input: { to: string; subject: string; html: string; text: string }): Promise<SendResult & { providerId?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.log(`\n[email not configured] To: ${input.to}\nSubject: ${input.subject}\n${input.text}\n`);
-    return { delivered: false };
+    console.log(`
+[email not configured] To: ${input.to}
+Subject: ${input.subject}
+${input.text}
+`);
+    return { delivered: false, status: "not_configured", error: "No email service is set up on this server." };
   }
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? "Client Books <onboarding@resend.dev>",
-      to: [input.to],
-      subject: input.subject,
-      html: input.html,
-      text: input.text,
-    }),
-  });
-  if (!res.ok) {
-    console.error("Resend error", res.status, await res.text().catch(() => ""));
-    return { delivered: false };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM ?? "Client Books <onboarding@resend.dev>",
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+      }),
+    });
+    const body = await res.text().catch(() => "");
+    if (!res.ok) {
+      console.error("Resend error", res.status, body);
+      return { delivered: false, status: "failed", error: reasonFrom(res.status, body) };
+    }
+    let providerId: string | undefined;
+    try {
+      providerId = (JSON.parse(body) as { id?: string }).id;
+    } catch {
+      /* the id is only for lookups */
+    }
+    return { delivered: true, status: "sent", providerId };
+  } catch (e) {
+    console.error("Email send failed", e);
+    return { delivered: false, status: "failed", error: e instanceof Error ? `Could not reach the email service: ${e.message}`.slice(0, 300) : "Could not reach the email service." };
   }
-  return { delivered: true };
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);

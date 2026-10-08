@@ -6,7 +6,7 @@ import { authTokens, users } from "@/db/schema";
 import { hashToken, createAuthToken } from "@/lib/tokens";
 import { requireUserSession } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
-import { sendEmail, verificationEmail, appUrl } from "@/lib/email";
+import { sendEmail, verificationEmail, appUrl, isDeliveryFailure } from "@/lib/email";
 import { logAuditEvent } from "@/lib/audit";
 
 export async function verifyEmail(token: string): Promise<{ ok: boolean; error?: string }> {
@@ -29,6 +29,7 @@ export async function resendVerification(): Promise<{ ok: boolean; error?: strin
   if (!rateLimit(`verify:${user.id}`, 3, 60 * 60 * 1000)) return { ok: false, error: "Too many requests. Try again later." };
 
   const token = await createAuthToken(user.id, "email_verification", 24 * 60 * 60 * 1000);
-  await sendEmail({ to: user.email, ...verificationEmail(user.name, `${appUrl()}/verify-email/${token}`) });
+  const sent = await sendEmail({ to: user.email, kind: "verification", ...verificationEmail(user.name, `${appUrl()}/verify-email/${token}`) });
+  if (isDeliveryFailure(sent.status)) return { ok: false, error: `We could not send the email: ${sent.error ?? "unknown reason"} Try again in a few minutes, or contact support.` };
   return { ok: true };
 }

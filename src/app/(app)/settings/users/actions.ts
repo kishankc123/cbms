@@ -9,7 +9,7 @@ import { addExistingAccount, listMembersPage, lookupAccount, memberCode, type Ac
 import { requireTenantSession, requireUserSession, type AppSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import { generateToken, hashToken } from "@/lib/tokens";
-import { sendEmail, invitationEmail, appUrl, isEmailConfigured } from "@/lib/email";
+import { sendEmail, invitationEmail, appUrl, isDeliveryFailure } from "@/lib/email";
 import { isEmail } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAuditEvent } from "@/lib/audit";
@@ -118,7 +118,7 @@ export async function getMemberForEdit(userId: string) {
 }
 export type MemberForEdit = NonNullable<Awaited<ReturnType<typeof getMemberForEdit>>>;
 
-export async function inviteUser(input: { email: string; roleId: string }): Promise<{ ok: true; devLink?: string } | { ok: false; error: string }> {
+export async function inviteUser(input: { email: string; roleId: string }): Promise<{ ok: true; devLink?: string; /** Set when the invitation email did not go: why, in words a person can act on. */ emailProblem?: string } | { ok: false; error: string }> {
   const session = await requireOrgAdmin();
   const me = await requireUserSession();
   if (!me.emailVerifiedAt) return { ok: false, error: "Verify your own email address before inviting others." };
@@ -155,13 +155,12 @@ export async function inviteUser(input: { email: string; roleId: string }): Prom
 
   const [tenant] = await db.select({ name: tenants.companyName }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const link = `${appUrl()}/accept-invite/${token}`;
-  await sendEmail({ to: email, ...invitationEmail(tenant.name, me.name, role.name, link) });
+  const sent = await sendEmail({ to: email, kind: "invitation", tenantId: session.tenantId, ...invitationEmail(tenant.name, me.name, role.name, link) });
   await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "user_invited", entityType: "invitation", entityId: invite.id, after: { email, role: role.name } });
 
   revalidatePath("/settings/users");
-  // Without an email provider (local development only) show the link so the
-  // flow can still be tested.
-  return { ok: true, devLink: !isEmailConfigured() && process.env.NODE_ENV !== "production" ? link : undefined };
+  // When the email did not go (no provider in development, or a real failure), show the link so the invitation can still be passed on.
+  return { ok: true, devLink: sent.delivered ? undefined : link, emailProblem: isDeliveryFailure(sent.status) ? sent.error : undefined };
 }
 
 export async function revokeInvitation(invitationId: string) {

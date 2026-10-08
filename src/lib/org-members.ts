@@ -2,7 +2,7 @@ import { and, asc, count, eq, ilike, isNotNull, isNull, or, sql, type SQL } from
 import { db } from "@/db";
 import { memberships, roles, tenants, users } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { addedToOrganizationEmail, appUrl, sendEmail } from "@/lib/email";
+import { addedToOrganizationEmail, appUrl, isDeliveryFailure, sendEmail } from "@/lib/email";
 import { isEmail } from "@/lib/password";
 import { roleLabel } from "@/lib/roles";
 import type { RoleRow } from "@/lib/role-store";
@@ -92,7 +92,7 @@ export async function lookupAccount(tenantId: string, email: string): Promise<Ac
   return { state: "none" };
 }
 
-export type AddResult = { ok: true; name: string } | { ok: false; error: string };
+export type AddResult = { ok: true; name: string; /** Set when the email telling them did not go: why. They are added either way. */ emailProblem?: string } | { ok: false; error: string };
 
 /** Adds an existing, verified account to the organization at once, tells them by email, and leaves the in-app notice for next sign-in. */
 export async function addExistingAccount(tenantId: string, adder: { userId: string; name: string }, input: { email: string; role: RoleRow; status: "active" | "suspended" }): Promise<AddResult> {
@@ -118,8 +118,8 @@ export async function addExistingAccount(tenantId: string, adder: { userId: stri
   }
 
   const [tenant] = await db.select({ name: tenants.companyName }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  await sendEmail({ to: email, ...addedToOrganizationEmail(tenant?.name ?? "an organization", adder.name, input.role.name, `${appUrl()}/select-organization`) }).catch(() => {});
-  return { ok: true, name: user.name };
+  const sent = await sendEmail({ to: email, kind: "added_to_organization", tenantId, ...addedToOrganizationEmail(tenant?.name ?? "an organization", adder.name, input.role.name, `${appUrl()}/select-organization`) });
+  return { ok: true, name: user.name, emailProblem: isDeliveryFailure(sent.status) ? sent.error : undefined };
 }
 
 // ---- the person's side: being told, and being able to leave

@@ -14,6 +14,6 @@ export async function registerUserAccount(input: UserAccountInput): Promise<{ ok
   if (!created.ok) return created;
 
   const token = await createAuthToken(created.userId, "email_verification", 24 * 60 * 60 * 1000);
-  await sendEmail({ to: created.email, ...verificationEmail(created.name, `${appUrl()}/verify-email/${token}`) });
+  await sendEmail({ to: created.email, kind: "verification", ...verificationEmail(created.name, `${appUrl()}/verify-email/${token}`) });
   return { ok: true };
 }

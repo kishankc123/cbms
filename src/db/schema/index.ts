@@ -16,3 +16,4 @@ export * from "./tax-rates";
 export * from "./fiscal";
 export * from "./assets";
 export * from "./payment-modes";
+export * from "./email-log";

@@ -59,7 +59,7 @@ export async function registerOrganization(input: RegisterInput): Promise<{ ok: 
 
   const token = await createAuthToken(user.id, "email_verification", 24 * 60 * 60 * 1000);
   const mail = verificationEmail(user.name, `${appUrl()}/verify-email/${token}`);
-  await sendEmail({ to: email, ...mail });
+  await sendEmail({ to: email, kind: "verification", ...mail });
 
   return { ok: true };
 }

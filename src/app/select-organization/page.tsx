@@ -5,6 +5,7 @@ import { listActiveMemberships } from "@/lib/memberships";
 import { switchOrganization } from "./actions";
 import { SignOutLink } from "./sign-out-link";
 import { VerifyEmailNotice } from "./verify-email-notice";
+import { verificationEmailProblem } from "@/lib/email-log";
 import { AddNoticeBanner } from "@/components/add-notice-banner";
 import { listAddNotices } from "@/lib/org-members";
 
@@ -24,7 +25,7 @@ export default async function SelectOrganizationPage() {
         </div>
 
         <AddNoticeBanner notices={notices} activeTenantId={null} />
-        {!user.emailVerifiedAt && <VerifyEmailNotice />}
+        {!user.emailVerifiedAt && <VerifyEmailNotice emailProblem={await verificationEmailProblem(user.email)} />}
 
         {orgs.length === 0 ? (
           <div className="space-y-3 text-sm text-gray-600">
