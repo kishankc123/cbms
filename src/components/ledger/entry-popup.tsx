@@ -4,24 +4,25 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { D } from "@/components/calendar/date-text";
 import type { EntryDetail } from "@/lib/ledger/entry-detail";
-import { getLedgerEntry } from "./actions";
+import { getReportEntry } from "@/app/(app)/reports/entry-actions";
+import type { EntryScope } from "@/lib/ledger/entry-access";
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
 /** The transaction behind a ledger line: the whole entry, with the line that was clicked picked out. */
-export function EntryPopup({ entryId, highlightAccountId, onClose }: { entryId: string; highlightAccountId: string | null; onClose: () => void }) {
+export function EntryPopup({ entryId, scope, highlightAccountId, onClose }: { entryId: string; scope: EntryScope; highlightAccountId?: string | null; onClose: () => void }) {
   const [entry, setEntry] = useState<EntryDetail | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    getLedgerEntry(entryId)
+    getReportEntry(entryId, scope)
       .then((e) => live && setEntry(e))
       .catch((e) => live && setError(e instanceof Error ? e.message : "Could not load the transaction."));
     return () => {
       live = false;
     };
-  }, [entryId]);
+  }, [entryId, scope]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

@@ -1,10 +1,14 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { D } from "@/components/calendar/date-text";
 import type { DateRange } from "@/lib/calendar";
 import type { StatementRow } from "@/lib/ledger/party-statement";
+import { EntryPopup } from "@/components/ledger/entry-popup";
+import { ReversalTags, ReversedToggle } from "@/components/ledger/reversal-ui";
+import { visibleLedgerLines } from "@/lib/ledger/ledger-lines";
 
 type Customer = { id: string; name: string };
 
@@ -29,6 +33,15 @@ export function CustomerStatementView({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+  // Voided or edited entries (and the entries that reversed them) are hidden unless asked for; the balance is worked out again without them.
+  const [showReversed, setShowReversed] = useState(false);
+  const shown = useMemo(() => {
+    if (!statement) return null;
+    const lines = statement.rows.map((r, i) => ({ ...r, entryId: r.entryId ?? "row-" + i, isReversed: Boolean(r.isReversed), reversalOfId: r.reversalOfId ?? null, runningBalance: r.balance }));
+    const v = visibleLedgerLines(lines, statement.openingBalance, showReversed);
+    return { rows: v.lines.map((l) => ({ ...l, balance: l.runningBalance })), hiddenPairs: v.hiddenPairs };
+  }, [statement, showReversed]);
 
   function pickCustomer(id: string) {
     const next = new URLSearchParams(params.toString());
@@ -42,7 +55,7 @@ export function CustomerStatementView({
   function exportCsv() {
     if (!statement) return;
     const header = ["Date", "Details", "Debit", "Credit", "Balance"];
-    const rows = statement.rows.map((r) => [r.date, r.details, r.debit ? fmt(r.debit) : "", r.credit ? fmt(r.credit) : "", fmt(r.balance)]);
+    const rows = (shown?.rows ?? statement.rows).map((r) => [r.date, r.details, r.debit ? fmt(r.debit) : "", r.credit ? fmt(r.credit) : "", fmt(r.balance)]);
     const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -76,9 +89,12 @@ export function CustomerStatementView({
             <h2 className="text-lg font-medium text-gray-900">
               {statement.customerName} <span className="text-sm text-gray-500"><D value={from} /> – <D value={to} /></span>
             </h2>
-            <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
-              Export CSV
-            </button>
+            <div className="flex items-center gap-4">
+              <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shown?.hiddenPairs ?? 0} />
+              <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+                Export CSV
+              </button>
+            </div>
           </div>
           <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
             <thead className="bg-gray-50 text-left text-gray-500">
@@ -95,18 +111,34 @@ export function CustomerStatementView({
                 <td className="px-4 py-2 text-gray-500" colSpan={4}>Opening balance</td>
                 <td className="px-4 py-2 text-right">{fmt(statement.openingBalance)}</td>
               </tr>
-              {statement.rows.map((r, i) => (
-                <tr key={i} className="border-t border-gray-100">
+              {(shown?.rows ?? []).map((r, i) => (
+                <tr
+                  key={i}
+                  tabIndex={r.entryId ? 0 : undefined}
+                  role={r.entryId ? "button" : undefined}
+                  title={r.entryId ? "Click to see this transaction" : undefined}
+                  onClick={() => r.entryId && setOpenEntry(r.entryId)}
+                  onKeyDown={(e) => {
+                    if (r.entryId && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      setOpenEntry(r.entryId);
+                    }
+                  }}
+                  className={`border-t border-gray-100 ${r.entryId ? "cursor-pointer hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none" : ""} ${r.isReversed || r.isReversal ? "text-gray-400" : ""}`}
+                >
                   <td className="px-4 py-2 whitespace-nowrap">
                     <D value={r.date} />
                   </td>
-                  <td className="px-4 py-2">{r.details}</td>
+                  <td className="px-4 py-2">
+                    {r.details}
+                    <ReversalTags isReversed={r.isReversed} isReversal={false} />
+                  </td>
                   <td className="px-4 py-2 text-right">{r.debit ? fmt(r.debit) : ""}</td>
                   <td className="px-4 py-2 text-right">{r.credit ? fmt(r.credit) : ""}</td>
                   <td className="px-4 py-2 text-right">{fmt(r.balance)}</td>
                 </tr>
               ))}
-              {statement.rows.length === 0 && (
+              {(shown?.rows.length ?? 0) === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                     No transactions in this period
@@ -115,10 +147,11 @@ export function CustomerStatementView({
               )}
               <tr className="border-t-2 border-gray-300 font-medium">
                 <td className="px-4 py-2" colSpan={4}>Closing balance</td>
-                <td className="px-4 py-2 text-right">{fmt(statement.closingBalance)}</td>
+                <td className="px-4 py-2 text-right">{fmt(shown?.rows.at(-1)?.balance ?? statement.openingBalance)}</td>
               </tr>
             </tbody>
           </table>
+          {openEntry && <EntryPopup entryId={openEntry} scope="sales" onClose={() => setOpenEntry(null)} />}
         </>
       )}
     </div>

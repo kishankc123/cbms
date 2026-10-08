@@ -12,6 +12,8 @@ export async function getPartyLines(tenantId: string, accountIds: string[]): Pro
   const rows = await db
     .select({
       accountId: journalLines.accountId,
+      entryId: journalEntries.id,
+      isReversed: journalEntries.isReversed,
       date: journalEntries.entryDate,
       debit: journalLines.debitAmount,
       credit: journalLines.creditAmount,
@@ -25,7 +27,7 @@ export async function getPartyLines(tenantId: string, accountIds: string[]): Pro
     .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds)))
     .orderBy(asc(journalEntries.entryDate), asc(journalEntries.createdAt));
   for (const r of rows) {
-    out.get(r.accountId)!.push({ date: r.date, debit: Number(r.debit), credit: Number(r.credit), sourceType: r.sourceType, reference: r.reference || null, memo: r.memo || null, isReversal: r.reversalOfId !== null });
+    out.get(r.accountId)!.push({ date: r.date, debit: Number(r.debit), credit: Number(r.credit), sourceType: r.sourceType, reference: r.reference || null, memo: r.memo || null, isReversal: r.reversalOfId !== null, entryId: r.entryId, isReversed: r.isReversed, reversalOfId: r.reversalOfId });
   }
   return out;
 }

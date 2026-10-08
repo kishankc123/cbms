@@ -498,6 +498,9 @@ export async function transactionRegister(
 }
 
 export type CashBookLine = {
+  entryId: string;
+  isReversed: boolean;
+  reversalOfId: string | null;
   entryDate: string;
   referenceNumber: string | null;
   memo: string | null;
@@ -529,6 +532,9 @@ export async function cashBook(tenantId: string, periodStart: Date, periodEnd: D
   const rows = await db
     .select({
       accountId: journalLines.accountId,
+      entryId: journalEntries.id,
+      isReversed: journalEntries.isReversed,
+      reversalOfId: journalEntries.reversalOfId,
       entryDate: journalEntries.entryDate,
       referenceNumber: journalEntries.referenceNumber,
       memo: journalEntries.memo,
@@ -566,6 +572,9 @@ export async function cashBook(tenantId: string, periodStart: Date, periodEnd: D
     running = Math.round((running + debit - credit) * 100) / 100;
     const acc = accountById.get(r.accountId);
     return {
+      entryId: r.entryId,
+      isReversed: r.isReversed,
+      reversalOfId: r.reversalOfId,
       entryDate: r.entryDate,
       referenceNumber: r.referenceNumber,
       memo: r.memo,

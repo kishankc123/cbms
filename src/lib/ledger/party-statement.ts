@@ -13,6 +13,11 @@ export type PartyLine = {
   reference: string | null;
   memo: string | null;
   isReversal: boolean;
+  /** The journal entry behind the line, and whether a later entry reversed it (a void or an edit). */
+  entryId?: string;
+  isReversed?: boolean;
+  /** The entry this one reverses, when it is the reversal of a void or an edit. */
+  reversalOfId?: string | null;
 };
 
 /** "debit" for customers (receivable), "credit" for suppliers (payable). */
@@ -70,7 +75,7 @@ export function partyBuckets(lines: readonly PartyLine[], normal: Normal) {
   return out;
 }
 
-export type StatementRow = { date: string; details: string; debit: number; credit: number; balance: number };
+export type StatementRow = { date: string; details: string; debit: number; credit: number; balance: number; entryId?: string; isReversed?: boolean; isReversal?: boolean; reversalOfId?: string | null };
 
 /**
  * The party's ledger for a period: an opening balance (the opening-balance entry plus everything
@@ -90,7 +95,7 @@ export function buildStatement(lines: readonly PartyLine[], normal: Normal, rang
   for (const l of lines) {
     if (lineKind(l.sourceType) === "opening" || !inRange(l.date)) continue;
     running = round2(running + effect(l, normal));
-    rows.push({ date: l.date, details: describeLine(l), debit: l.debit, credit: l.credit, balance: running });
+    rows.push({ date: l.date, details: describeLine(l), debit: l.debit, credit: l.credit, balance: running, entryId: l.entryId, isReversed: l.isReversed, isReversal: l.isReversal, reversalOfId: l.reversalOfId ?? null });
   }
   return { openingBalance: opening, closingBalance: running, rows };
 }

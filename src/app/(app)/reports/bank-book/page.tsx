@@ -48,6 +48,9 @@ export default async function BankBookPage({ searchParams }: { searchParams: Pro
             accountLabel: `${ledger.account.code} — ${ledger.account.name}`,
             openingBalance: ledger.openingBalance,
             lines: ledger.lines.map((l) => ({
+              entryId: l.entryId,
+              isReversed: l.isReversed,
+              reversalOfId: l.reversalOfId,
               entryDate: l.entryDate,
               referenceNumber: l.referenceNumber,
               memo: l.memo,
@@ -55,8 +58,6 @@ export default async function BankBookPage({ searchParams }: { searchParams: Pro
               debit: l.debit,
               credit: l.credit,
               runningBalance: l.runningBalance,
-              sourceType: l.sourceType,
-              sourceId: l.sourceId,
             })),
           }
         }

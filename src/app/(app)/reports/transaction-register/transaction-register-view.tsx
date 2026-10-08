@@ -1,11 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { D } from "@/components/calendar/date-text";
+import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
-import { resolveSourceLink } from "@/lib/ledger/source-link";
+import { EntryPopup } from "@/components/ledger/entry-popup";
+import { ReversedToggle } from "@/components/ledger/reversal-ui";
+import { visibleEntryPairs } from "@/lib/ledger/ledger-lines";
 import type { DateRange } from "@/lib/calendar";
 import type { TransactionRegisterEntry } from "@/lib/ledger/reports";
 
@@ -38,7 +40,7 @@ const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` 
 type Entry = TransactionRegisterEntry & { fiscalYearCode: string | null };
 
 export function TransactionRegisterView({
-  entries,
+  entries: allEntries,
   truncated,
   from,
   to,
@@ -59,6 +61,11 @@ export function TransactionRegisterView({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+  // Reversed (voided or edited) entries, with the entries that reversed them, are hidden unless asked for.
+  const [showReversed, setShowReversed] = useState(false);
+  const shownPairs = useMemo(() => visibleEntryPairs(allEntries, showReversed), [allEntries, showReversed]);
+  const entries = shownPairs.entries;
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
@@ -126,9 +133,12 @@ export function TransactionRegisterView({
           <D value={from} /> – <D value={to} /> · {entries.length} transaction{entries.length === 1 ? "" : "s"}
           {truncated && <span className="ml-2 text-amber-600">· showing the most recent 1000 — narrow the date range to see everything</span>}
         </p>
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
-          Export CSV
-        </button>
+        <div className="flex items-center gap-4">
+          <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shownPairs.hiddenPairs} />
+          <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -142,15 +152,13 @@ export function TransactionRegisterView({
             <th className="px-4 py-2 font-medium text-right">Amount</th>
             <th className="px-4 py-2 font-medium">Created By</th>
             <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium">Source</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((e) => {
             const status = e.isReversed ? "Reversed" : e.reversalOfId ? "Reversal" : "Posted";
-            const source = resolveSourceLink(e.sourceType);
             return (
-              <tr key={e.id} className={`border-t border-gray-100 ${e.isReversed ? "opacity-60" : ""}`}>
+              <tr key={e.id} tabIndex={0} role="button" title="Click to see this transaction" onClick={() => setOpenEntry(e.id)} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setOpenEntry(e.id); } }} className={`cursor-pointer border-t border-gray-100 hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none ${e.isReversed ? "opacity-60" : ""}`}>
                 {showFiscalYearColumn && <td className="px-4 py-2 whitespace-nowrap text-gray-500">{e.fiscalYearCode ?? "—"}</td>}
                 <td className="px-4 py-2 whitespace-nowrap">
                   <D value={e.entryDate} />
@@ -163,21 +171,12 @@ export function TransactionRegisterView({
                 <td className="px-4 py-2">
                   <StatusPill tone={status === "Posted" ? "success" : status === "Reversed" ? "critical" : "pending"}>{status}</StatusPill>
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {source ? (
-                    <Link href={source.href} className="text-xs text-[var(--color-primary)] hover:underline">
-                      {source.label}
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
-                </td>
               </tr>
             );
           })}
           {entries.length === 0 && (
             <tr>
-              <td colSpan={showFiscalYearColumn ? 9 : 8} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={showFiscalYearColumn ? 8 : 7} className="px-4 py-6 text-center text-gray-400">
                 No transactions in this period
               </td>
             </tr>
@@ -190,11 +189,12 @@ export function TransactionRegisterView({
                 Total
               </td>
               <td className="px-4 py-2 text-right">{fmt(total)}</td>
-              <td className="px-4 py-2" colSpan={3}></td>
+              <td className="px-4 py-2" colSpan={2}></td>
             </tr>
           </tfoot>
         )}
       </table>
+      {openEntry && <EntryPopup entryId={openEntry} scope="ledger" onClose={() => setOpenEntry(null)} />}
     </div>
   );
 }

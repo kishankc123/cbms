@@ -47,3 +47,24 @@ export function visibleLedgerLines<T extends LedgerLineLike>(lines: T[], opening
   }
   return { lines: out, hiddenPairs: showReversed ? 0 : pairs.size };
 }
+
+export type EntryLike = { id: string; isReversed: boolean; reversalOfId: string | null };
+
+/**
+ * For a list of whole entries (the Transaction Register, the Journal Report): with showReversed off, an original and the entry that
+ * reversed it are both left out, but only when both are in the list (the lists are capped, and a pair split by the cap stays).
+ */
+export function visibleEntryPairs<T extends EntryLike>(entries: T[], showReversed: boolean): { entries: T[]; hiddenPairs: number } {
+  if (showReversed) return { entries, hiddenPairs: 0 };
+  const ids = new Set(entries.map((e) => e.id));
+  const hidden = new Set<string>();
+  let pairs = 0;
+  for (const e of entries) {
+    if (e.reversalOfId && ids.has(e.reversalOfId)) {
+      hidden.add(e.id);
+      hidden.add(e.reversalOfId);
+      pairs++;
+    }
+  }
+  return { entries: entries.filter((e) => !hidden.has(e.id)), hiddenPairs: pairs };
+}

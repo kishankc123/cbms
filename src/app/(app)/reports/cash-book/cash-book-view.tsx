@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { D } from "@/components/calendar/date-text";
-import { resolveSourceLink } from "@/lib/ledger/source-link";
+import { EntryPopup } from "@/components/ledger/entry-popup";
+import { ReversalTags, ReversedToggle } from "@/components/ledger/reversal-ui";
+import { visibleLedgerLines } from "@/lib/ledger/ledger-lines";
 import type { DateRange } from "@/lib/calendar";
 import type { CashBookLine } from "@/lib/ledger/reports";
 
@@ -26,12 +28,16 @@ export function CashBookView({
   fiscal: DateRange | null;
 }) {
   const showAccountColumn = accountLabels.length > 1;
-  const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
-  const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+  // Reversed (voided or edited) entries are hidden unless asked for; the balance is worked out again without them.
+  const [showReversed, setShowReversed] = useState(false);
+  const shown = useMemo(() => visibleLedgerLines(lines, openingBalance, showReversed), [lines, openingBalance, showReversed]);
+  const totalDebit = shown.lines.reduce((s, l) => s + l.debit, 0);
+  const totalCredit = shown.lines.reduce((s, l) => s + l.credit, 0);
 
   function exportCsv() {
     const header = ["Date", "Reference", "Description", ...(showAccountColumn ? ["Account"] : []), "Debit", "Credit", "Balance"];
-    const rows = lines.map((l) => [
+    const rows = shown.lines.map((l) => [
       l.entryDate,
       l.referenceNumber ?? "",
       l.description ?? l.memo ?? "",
@@ -57,9 +63,12 @@ export function CashBookView({
         <p className="text-sm text-gray-500">
           {accountLabels.join(", ") || "No cash account found"} · <D value={from} /> – <D value={to} />
         </p>
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
-          Export CSV
-        </button>
+        <div className="flex items-center gap-4">
+          <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shown.hiddenPairs} />
+          <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -72,43 +81,45 @@ export function CashBookView({
             <th className="px-4 py-2 font-medium text-right">Debit</th>
             <th className="px-4 py-2 font-medium text-right">Credit</th>
             <th className="px-4 py-2 font-medium text-right">Balance</th>
-            <th className="px-4 py-2 font-medium">Source</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-t border-gray-100 bg-gray-50/50">
             <td className="px-4 py-2 text-gray-500" colSpan={showAccountColumn ? 6 : 5}>Opening balance</td>
             <td className="px-4 py-2 text-right">{fmt(openingBalance)}</td>
-            <td className="px-4 py-2"></td>
           </tr>
-          {lines.map((l, i) => {
-            const source = resolveSourceLink(l.sourceType);
-            return (
-              <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-2 whitespace-nowrap">
-                  <D value={l.entryDate} />
-                </td>
-                <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
-                <td className="px-4 py-2">{l.description ?? l.memo ?? ""}</td>
-                {showAccountColumn && <td className="px-4 py-2 whitespace-nowrap">{l.accountCode} — {l.accountName}</td>}
-                <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
-                <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
-                <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
-                <td className="px-4 py-2">
-                  {source ? (
-                    <Link href={source.href} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
-                      {source.label}
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-          {lines.length === 0 && (
+          {shown.lines.map((l, i) => (
+            <tr
+              key={i}
+              tabIndex={0}
+              role="button"
+              title="Click to see this transaction"
+              onClick={() => setOpenEntry(l.entryId)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setOpenEntry(l.entryId);
+                }
+              }}
+              className={`cursor-pointer border-t border-gray-100 hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none ${l.isReversed || l.reversalOfId ? "text-gray-400" : ""}`}
+            >
+              <td className="px-4 py-2 whitespace-nowrap">
+                <D value={l.entryDate} />
+              </td>
+              <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
+              <td className="px-4 py-2">
+                {l.description ?? l.memo ?? ""}
+                <ReversalTags isReversed={l.isReversed} isReversal={Boolean(l.reversalOfId)} />
+              </td>
+              {showAccountColumn && <td className="px-4 py-2 whitespace-nowrap">{l.accountCode} — {l.accountName}</td>}
+              <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
+              <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
+              <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
+            </tr>
+          ))}
+          {shown.lines.length === 0 && (
             <tr>
-              <td colSpan={showAccountColumn ? 8 : 7} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={showAccountColumn ? 7 : 6} className="px-4 py-6 text-center text-gray-400">
                 No cash transactions in this period
               </td>
             </tr>
@@ -117,11 +128,11 @@ export function CashBookView({
             <td className="px-4 py-2" colSpan={showAccountColumn ? 4 : 3}>Totals</td>
             <td className="px-4 py-2 text-right">{fmt(totalDebit)}</td>
             <td className="px-4 py-2 text-right">{fmt(totalCredit)}</td>
-            <td className="px-4 py-2 text-right">{fmt(lines.at(-1)?.runningBalance ?? openingBalance)}</td>
-            <td className="px-4 py-2"></td>
+            <td className="px-4 py-2 text-right">{fmt(shown.lines.at(-1)?.runningBalance ?? openingBalance)}</td>
           </tr>
         </tbody>
       </table>
+      {openEntry && <EntryPopup entryId={openEntry} scope="bank" onClose={() => setOpenEntry(null)} />}
     </div>
   );
 }

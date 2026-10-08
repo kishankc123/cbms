@@ -6,7 +6,8 @@ import { ReportFilter } from "@/components/calendar/report-filter";
 import { DateCells, DateDisplayControl, DateHead, dateColumnCount, useDateDisplay } from "@/components/calendar/report-dates";
 import { exportDateColumns, exportDateHeaders, type DateRange } from "@/lib/calendar";
 import { D } from "@/components/calendar/date-text";
-import { EntryPopup } from "./entry-popup";
+import { EntryPopup } from "@/components/ledger/entry-popup";
+import { ReversalTags, ReversedToggle } from "@/components/ledger/reversal-ui";
 import { visibleLedgerLines } from "@/lib/ledger/ledger-lines";
 
 type Account = { id: string; code: string; name: string; subCategory: string | null };
@@ -125,11 +126,7 @@ export function LedgerView({
               {ledger.accountLabel} <span className="text-sm text-gray-500"><D value={from} /> – <D value={to} /></span>
             </h2>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input type="checkbox" checked={showReversed} onChange={(e) => setShowReversed(e.target.checked)} />
-                Show reversed and voided entries
-                {!showReversed && shown && shown.hiddenPairs > 0 && <span className="text-xs text-gray-400">({shown.hiddenPairs} hidden)</span>}
-              </label>
+              <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shown?.hiddenPairs ?? 0} />
               <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
                 Export CSV
               </button>
@@ -175,8 +172,7 @@ export function LedgerView({
                   <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
                   <td className="px-4 py-2">
                     {l.description ?? l.memo ?? ""}
-                    {l.isReversed && <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">Reversed</span>}
-                    {l.reversalOfId && <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">Reversal</span>}
+                    <ReversalTags isReversed={l.isReversed} isReversal={Boolean(l.reversalOfId)} />
                   </td>
                   <td className="px-4 py-2 text-center tabular-nums">{l.debit ? fmt(l.debit) : ""}</td>
                   <td className="px-4 py-2 text-center tabular-nums">{l.credit ? fmt(l.credit) : ""}</td>
@@ -198,7 +194,7 @@ export function LedgerView({
               </tr>
             </tbody>
           </table>
-          {openEntry && <EntryPopup entryId={openEntry} highlightAccountId={ledger.accountId} onClose={() => setOpenEntry(null)} />}
+          {openEntry && <EntryPopup entryId={openEntry} scope="ledger" highlightAccountId={ledger.accountId} onClose={() => setOpenEntry(null)} />}
         </>
       )}
     </div>

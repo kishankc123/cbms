@@ -38,3 +38,24 @@ describe("hiding reversed and voided entries", () => {
     expect(visibleLedgerLines(plain, 0, false).lines).toEqual(plain);
   });
 });
+
+import { visibleEntryPairs } from "./ledger-lines";
+
+describe("hiding reversed entries in a list of whole entries", () => {
+  const e = (id: string, over: { isReversed?: boolean; reversalOfId?: string | null } = {}) => ({ id, isReversed: false, reversalOfId: null, ...over });
+
+  it("hides an original and the entry that reversed it, and counts the pair", () => {
+    const list = [e("C"), e("R", { reversalOfId: "A" }), e("B"), e("A", { isReversed: true })];
+    const r = visibleEntryPairs(list, false);
+    expect(r.entries.map((x) => x.id)).toEqual(["C", "B"]);
+    expect(r.hiddenPairs).toBe(1);
+  });
+  it("shows everything when asked", () => {
+    const list = [e("R", { reversalOfId: "A" }), e("A", { isReversed: true })];
+    expect(visibleEntryPairs(list, true)).toEqual({ entries: list, hiddenPairs: 0 });
+  });
+  it("keeps a pair split by the cap on the list: both halves have to be there", () => {
+    const list = [e("R", { reversalOfId: "A" }), e("X")]; // the original is outside the list
+    expect(visibleEntryPairs(list, false).entries).toHaveLength(2);
+  });
+});
