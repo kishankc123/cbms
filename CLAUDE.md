@@ -2,8 +2,8 @@
 
 # Development Context (for continuing in a new session)
 
-Last updated: 2026-10-06, as of commit `b78be66` on `main` (working tree clean at that point — still run
-`git status` first thing in a new session). Migrations in the repo run through `0076`; **Vercel's database
+Last updated: 2026-10-08, as of commit `13cbba8` on `main` (working tree clean at that point — still run
+`git status` first thing in a new session). Migrations in the repo run through `0086`; **Vercel's database
 only has what was run on it by hand — deploys do not run migrations** (see "Operations" below).
 
 ## What this app is
@@ -47,13 +47,47 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   `tenantId` null.
 - **Close/reopen pattern** (accounting periods, bank reconciliations, fiscal years): closing is a routine
   action gated on `edit`; reopening is admin-only, requires a reason, always audit-logged.
-- **Imports follow one shape** (Sales, Purchases): Upload → Review → Done; columns and AD/BS dates detected
+- **Imports follow one shape** (Sales, Purchases, Expenses): Upload → Review → Done; columns and AD/BS dates detected
   automatically; unknown customers/suppliers grouped and decided once (tick to create, never auto-created);
   remembered matches and column mappings; typed row corrections ("overrides"); Check only; undo per import
   (batch id on the invoices/bills). The server re-reads and re-checks the file at every step and never trusts
   the browser's decisions. Pure rules are in `lib/*/import/{fields,values,checks,amounts,paste}.ts` (unit
-  tested); DB work in `service.ts`. Purchases posts in slices (prepare → chunks → finish) with a progress bar
-  because each bill does many queries; Sales still posts in one request.
+  tested); DB work in `service.ts`. Purchases and Expenses post in slices (prepare → chunks → finish) with a
+  progress bar because each document does many queries; Sales still posts in one request. Every import's
+  upload screen shows a **column guide** (`lib/sales/import/column-guide.ts`, also written into each template's
+  "Columns" sheet).
+- **Payment modes** (Cash, Cheque, Bank transfer, Fonepay, Card, Wallet; `lib/payment-modes.ts`,
+  `lib/payment-mode-rules.ts`): a mode links to **lowest-level** accounts of the chart (a group with
+  sub-groups is never linked, its sub-groups are); one account can serve **many** modes. Every screen that
+  moves money uses `components/payment-mode-select.tsx` (mode heading, accounts beneath) and passes `modeId`
+  with each payment line; the mode is **saved** on the journal line (`journal_lines.payment_mode_id/name`) and
+  on the payment record. The server validates the pair (`modeNamesForLines`, `resolvePaymentMode`) in the one
+  posting choke point. `getCashBankAccounts()` includes mode-linked accounts, so balances, reports and guards
+  see wallet accounts. Import cells accept an account or a mode with one account. Not yet on: recurring-expense
+  "expected payment account", inter-transfers.
+- **Revenue account on invoices**: `sales_invoices.revenue_account_id`; chosen on Single Invoice (overrides the
+  items' accounts), each Multi-Invoice row, and the Sales import (column + default). Only lowest-level income
+  accounts (`lib/sales/revenue-accounts.ts`); blank = Sales Revenue (4000) as before.
+- **Compliance starts from a profile gate** (`lib/compliance/profile*.ts`): nothing is generated until entity
+  type, PAN/VAT number and company registration date are set, plus VAT effective-from + filing basis when
+  VAT-registered and the permit date when excise-registered. Start dates (`engine/start-dates.ts`): VAT from
+  the VAT registration's single **Effective from** date, excise from the permit date, everything else from the
+  company registration date. Registrations have ONE date ("Effective from"; the old registration date column
+  was dropped). Recurring items cover every period since Shrawan 1 of the current fiscal year; the **catch-up
+  checklist** (`lib/compliance/catchup*.ts`, `/compliance/catch-up`) asks "filed up to which year/month" per
+  stream (income tax, VAT, TDS, excise return, excise permit), builds full history from the start dates and
+  marks earlier periods `filed_before_system` (no fines, settled in the VAT worksheet). Unanswered streams
+  show the current fiscal year only, on purpose (no flood of overdue items).
+- **Excise permit** (`lib/compliance/excise-permit*.ts`, Tax Compliance → Excise): valid per fiscal year to the
+  end of Ashadh; renewal window Shrawan 1–30; after that "penalty mode" with a fine that is a share of the
+  company's own standard renewal fee by months late (bands are platform data). Renewal items appear in Tax
+  Compliance; an alert banner shows on the compliance pages. The excisable-item flag and sales block were
+  skipped on purpose.
+- **Platform fines and penalties** (`/admin/compliance/penalties`, `lib/compliance/penalty-admin.ts`,
+  `penalty-types.ts`): versions per fiscal year (start on Shrawan 1) for VAT, TDS and excise permit renewal;
+  started versions are immutable, verification + source editable, audit-logged; organizations see the rates
+  read-only on Fines & Penalties. The excise permit bands and the income-tax / excise-return templates
+  (activated in migration 0086) are **unverified** figures supplied by the business.
 - Build **phase by phase**, verify live in the browser (built-in Browser pane) plus `npx tsc --noEmit`,
   `npx eslint`, `npx vitest run` and the integration tests, then **pause for the user's explicit go-ahead**
   before the next phase. **Only commit/push when explicitly asked.**
@@ -94,18 +128,24 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   unlock, force sign-out, disable/enable, grant/revoke platform admin) and Organizations (list, detail,
   suspend with reason / reactivate). `lib/platform-admin.ts`. Still placeholders: Platform Audit Log, Billing,
   Compliance Configuration.
-- **Import Sales / Import Purchases** — tabs on Sales → Add new and Purchases → Consumable purchase. One row
-  per invoice/bill (consumable purchases only; stockable purchases need item lines). Paste from Excel, template
-  download, fix rows in place, Check only, "Fix and import the remaining rows", undo. Tables:
-  `sales_imports`, `purchase_imports`, `customer_aliases`, `supplier_aliases`, `import_column_mappings`.
-  Server-action body limit raised to 4 MB in `next.config.ts` for these screens.
-- **Dashboard** (`/dashboard`) now has KPIs, a revenue/expense chart and cash/bank balances; the original
-  full spec was never re-checked against it.
+- **Import Sales / Purchases / Expenses** — tabs on Sales → Add new, Purchases → Consumable purchase and the
+  Expenses page. One row per invoice/bill/expense (consumable purchases only; stockable purchases need item
+  lines). Paste from Excel, template download, fix rows in place, Check only, "Fix and import the remaining
+  rows", undo. Tables: `sales_imports`, `purchase_imports`, `expense_imports`, `customer_aliases`,
+  `supplier_aliases`, `import_column_mappings`. Server-action body limit raised to 4 MB in `next.config.ts`.
+  Expenses post through `lib/expenses/expense-records.ts` (`createExpenseCore`).
+- **Settings → Payment modes** (list, add, edit, delete; owner/admin only). Customers and suppliers: PAN / VAT
+  number is **optional** (still 9 digits when typed); the company's own PAN stays mandatory.
+- **Dashboard** (`/dashboard`) has a greeting by Nepal time ("Good morning, <name>"), KPIs, a
+  revenue/expense chart and cash/bank balances; the original full spec was never re-checked against it.
 
 ## Operations / things only the user can do
 
-- Run migrations **0065–0076** (and any later ones) on the Vercel database by hand, and make sure its host
-  matches `.env.local`. Without 0073/0074/0075/0076 the Roles, Users, Import screens will error there.
+- Run migrations **0065–0086** (and any later ones) on the Vercel database by hand, and make sure its host
+  matches `.env.local` (compare the host of the production `DATABASE_URL` with the local one; if they are the
+  same database nothing needs running). Commands for a manual run: set `$env:DATABASE_URL` in PowerShell to the
+  production URL, check the host, back up in Neon, then `node ./node_modules/drizzle-kit/bin.cjs migrate`.
+  Without them Roles, Users, Imports, Payment modes, revenue accounts and the compliance screens error there.
 - `lib/rate-limit.ts` is in-memory per server instance — ineffective on Vercel's serverless; needs a shared
   store. Email needs a real provider in production (dev prints invitation links).
 - Import Sales posts in a single request; a very large file could exceed Vercel's time limit (Purchases
@@ -122,10 +162,19 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 - Recurring Expenses feature: see the saved memory note for its phase status (not re-checked recently).
 - Global UI redesign: postponed on purpose (plan saved in memory).
 - Possible next imports: line-item layout for Sales, Stockable purchases, customers/suppliers/opening
-  balances/items/expenses/assets.
+  balances/items/assets.
+- Compliance leftovers: "Annual Company Compliance" has no due rule so no catch-up stream; an excisable-item
+  flag and sales block; a "receipts by mode" report; posting the money for an excise renewal automatically.
+  The platform admin has no screen yet for tax rates or requirement templates (only fines and penalties).
 
 ## Known data quirks (don't mistake these for bugs)
 
+- DS Finance also carries demo compliance data (company registered 2078/10/20, VAT effective 2080/10/20 monthly,
+  an excise permit with renewals through 2082/83, a saved checklist through Ashadh 2083) and payment modes
+  Cash / Bank transfer linked to its accounts.
+- Integration tests that fail on a clean checkout too (not caused by recent work): "stock that has already been
+  sold can't be taken back out by voiding", the sales/purchase **returns** tests, and the assets cash-flow
+  depreciation add-back test.
 - The primary demo tenant is **"DS Finance group"** — its inventory-vs-ledger difference on the Stock Summary
   report is **intentional test-data leftover**. It also holds many **voided/reversed test records** from live
   verification (voided test invoices/bills incl. `ZZ-B1/B2/B4`, voided test assets, reversed depreciation
