@@ -582,6 +582,13 @@
       "when": 1791396349751,
       "tag": "0082_journal_lines_payment_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1791443411324,
+      "tag": "0083_tax_registration_single_effective_date",
+      "breakpoints": true
     }
   ]
 }

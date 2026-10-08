@@ -57,7 +57,7 @@ const FIELD_LABEL: Record<string, string> = {
   companyStatusNote: "Status note",
   status: "Status",
   registrationNumber: "Registration number",
-  effectiveDate: "Effective date",
+  effectiveDate: "Effective from",
   deregistrationDate: "Deregistration date",
   authorityKey: "Tax authority",
   supportingDocument: "Supporting document",

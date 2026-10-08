@@ -18,10 +18,9 @@ const STATUS_LABEL: Record<RegistrationStatus, string> = { active: "Active", ina
 
 // Which field a message from the server is about, so the cursor can be put there after the message is read.
 const SERVER_RULES: FieldRules = [
-  [/filing basis|effective from/i, "#rg-filing-from"],
+  [/filing basis/i, "#rg-filing-from"],
   [/deregistration/i, "#rg-dereg"],
   [/effective/i, "#rg-effective"],
-  [/registration date|valid registration/i, "#rg-regdate"],
   [/status/i, '[data-field="rgStatus"]'],
   [/number/i, '[data-field="rgNumber"]'],
 ];
@@ -29,7 +28,6 @@ const SERVER_RULES: FieldRules = [
 const blank = (taxTypeKey: string, authorityKey: string): RegistrationInput => ({
   taxTypeKey,
   registrationNumber: "",
-  registrationDate: "",
   effectiveDate: "",
   deregistrationDate: "",
   status: "active",
@@ -56,7 +54,6 @@ export function RegistrationsTable({ data }: { data: Data }) {
         id: r.id,
         taxTypeKey: r.taxTypeKey,
         registrationNumber: r.numberIsShared ? "" : r.number,
-        registrationDate: r.registrationDate,
         effectiveDate: r.effectiveDate,
         deregistrationDate: r.deregistrationDate,
         status: r.status,
@@ -114,8 +111,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
           <tr>
             <th className="px-4 py-2 font-medium">Tax</th>
             <th className="px-4 py-2 font-medium">Registration number</th>
-            <th className="px-4 py-2 font-medium">Registered</th>
-            <th className="px-4 py-2 font-medium">Effective</th>
+            <th className="px-4 py-2 font-medium">Effective from</th>
             <th className="px-4 py-2 font-medium">Filing basis</th>
             <th className="px-4 py-2 font-medium">Authority</th>
             <th className="px-4 py-2 font-medium">Status</th>
@@ -127,7 +123,6 @@ export function RegistrationsTable({ data }: { data: Data }) {
             <tr key={r.id} className="border-t border-gray-100">
               <td className="px-4 py-2 font-medium text-gray-900">{r.taxTypeName}</td>
               <td className="px-4 py-2">{r.number || <span className="text-gray-400">—</span>}</td>
-              <td className="px-4 py-2">{r.registrationDate ? <D value={r.registrationDate} /> : "—"}</td>
               <td className="px-4 py-2">
                 {r.effectiveDate ? <D value={r.effectiveDate} /> : "—"}
                 {r.deregistrationDate && (
@@ -214,11 +209,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Registration date</label>
-              <DatePicker id="rg-regdate" value={editing.form.registrationDate} onChange={(v) => set("registrationDate", v)} disabled={!data.canEdit} className={input} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Effective date</label>
+              <label className="block text-xs text-gray-500 mb-1">Effective from</label>
               <DatePicker id="rg-effective" value={editing.form.effectiveDate} onChange={(v) => set("effectiveDate", v)} disabled={!data.canEdit} className={input} />
             </div>
             {editing.form.status === "deregistered" && (
@@ -242,7 +233,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
                 </div>
                 {editing.form.filingFrequency && (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Effective from</label>
+                    <label className="block text-xs text-gray-500 mb-1">Filing basis from</label>
                     <DatePicker id="rg-filing-from" value={editing.form.filingFrequencyEffectiveFrom} onChange={(v) => set("filingFrequencyEffectiveFrom", v)} disabled={!data.canEdit} className={input} />
                   </div>
                 )}

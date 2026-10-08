@@ -44,7 +44,6 @@ export async function listTaxRegistrations() {
         // PAN and VAT share the organization's single PAN/VAT number.
         number: shared ? tenant.panVatNumber ?? "" : r.registrationNumber ?? "",
         numberIsShared: shared,
-        registrationDate: r.registrationDate ?? "",
         effectiveDate: r.effectiveDate ?? "",
         deregistrationDate: r.deregistrationDate ?? "",
         status: r.status as RegistrationStatus,
@@ -74,7 +73,7 @@ export type RegistrationInput = {
   id?: string;
   taxTypeKey: string;
   registrationNumber: string;
-  registrationDate: string;
+  /** When the registration takes effect (for VAT: from the date the VAT registration was applied for and granted). */
   effectiveDate: string;
   deregistrationDate: string;
   status: RegistrationStatus;
@@ -93,12 +92,12 @@ export async function saveTaxRegistration(input: RegistrationInput): Promise<Sav
   const session = await requireTenantSession();
   if (!can(session, "compliance", input.id ? "edit" : "create")) return { ok: false, error: "You don't have permission to change tax registrations." };
   if (!STATUSES.includes(input.status)) return { ok: false, error: "Unknown status" };
-  for (const [label, v] of [["registration", input.registrationDate], ["effective", input.effectiveDate], ["deregistration", input.deregistrationDate], ["filing basis effective", input.filingFrequencyEffectiveFrom]] as const) {
+  for (const [label, v] of [["registration effective", input.effectiveDate], ["deregistration", input.deregistrationDate], ["filing basis", input.filingFrequencyEffectiveFrom]] as const) {
     if (v && !validateADDate(v)) return { ok: false, error: `Enter a valid ${label} date` };
   }
   if (input.status === "deregistered" && !input.deregistrationDate) return { ok: false, error: "Enter the deregistration date" };
   if (input.filingFrequency && !FILING_FREQUENCIES.includes(input.filingFrequency)) return { ok: false, error: "Unknown filing basis" };
-  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) return { ok: false, error: "Enter the date the filing basis takes effect (the \"Effective from\" field)." };
+  if (input.filingFrequency && !input.filingFrequencyEffectiveFrom) return { ok: false, error: "Enter the date the filing basis takes effect (the \"Filing basis from\" field)." };
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   const [type] = await db
@@ -113,7 +112,6 @@ export async function saveTaxRegistration(input: RegistrationInput): Promise<Sav
 
   const values = {
     registrationNumber: shared ? null : input.registrationNumber.trim() || null,
-    registrationDate: input.registrationDate || null,
     effectiveDate: input.effectiveDate || null,
     deregistrationDate: input.status === "deregistered" ? input.deregistrationDate : null,
     status: input.status,

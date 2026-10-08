@@ -173,7 +173,7 @@ export const tenantTaxRegistrations = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     taxTypeKey: text("tax_type_key").notNull(),
     registrationNumber: text("registration_number"),
-    registrationDate: date("registration_date"),
+    /** When the registration takes effect. (The company's own registration date is kept in Company details.) */
     effectiveDate: date("effective_date"),
     deregistrationDate: date("deregistration_date"),
     status: registrationStatusEnum("status").notNull().default("active"),
