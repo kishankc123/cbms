@@ -12,6 +12,8 @@ export type PurchaseImportSettings = {
   paidMode: "file" | "unpaid" | "full";
   /** Used when money was paid and the file doesn't name the account. */
   defaultAccountId: string | null;
+  /** The payment mode of the default account, when one was picked. */
+  defaultModeId?: string | null;
   /** Used when the file has no category, or the cell is blank. */
   defaultCategoryId: string | null;
 };

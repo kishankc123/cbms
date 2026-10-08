@@ -13,7 +13,7 @@ import { todayIso } from "@/lib/calendar";
 import { createAssetPurchase, type AssetPurchaseFormData } from "../actions";
 import { METHOD_LABEL, money } from "../shared";
 
-type PaymentLine = { accountId: string; amount: number };
+type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 type Method = "straight_line" | "declining_balance" | "none";
 
 const BILL_TYPES = [

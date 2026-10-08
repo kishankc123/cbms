@@ -16,7 +16,7 @@ import { todayIso } from "@/lib/calendar";
 type Customer = { id: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type InvoiceNumbering = { prefix: string; suffix: string; format: string; nextSequence: number };
-type PaymentLine = { accountId: string; amount: number };
+type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
 type Row = {
   invoiceDate: string;

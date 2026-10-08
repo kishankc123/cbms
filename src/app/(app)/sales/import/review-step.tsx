@@ -1,5 +1,6 @@
 "use client";
 
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { IMPORT_FIELDS, type SalesColumnMapping } from "@/lib/sales/import/fields";
@@ -202,14 +203,11 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Money received into{needsAccount ? " *" : ""}</label>
-          <select className={`${field} w-full`} value={settings.defaultAccountId ?? ""} onChange={(e) => onSettings({ ...settings, defaultAccountId: e.target.value || null })}>
-            <option value="">{needsAccount ? "Choose account" : "— when the file names none —"}</option>
-            {(setup?.accounts ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <PaymentModeSelect
+            value={{ modeId: settings.defaultModeId ?? "", accountId: settings.defaultAccountId ?? "" }}
+            onChange={(v) => onSettings({ ...settings, defaultAccountId: v.accountId || null, defaultModeId: v.modeId || null })}
+            className={`${field} w-full`}
+          />
         </div>
       </div>
       {settings.amountsIncludeVat && review && <p className="mt-2 text-xs text-[var(--text-secondary)]">Each amount is taken as the invoice total after any discount; the VAT is worked back out of it.</p>}

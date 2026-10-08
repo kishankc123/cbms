@@ -5,6 +5,7 @@ import { customers } from "./sales";
 import { vendors } from "./purchases";
 import { employees, payrollRuns } from "./payroll";
 import { journalEntries } from "./ledger";
+import { paymentModes } from "./payment-modes";
 
 // Unified Payment module — the single source of truth for every money
 // movement into or out of the business (spec: "Payment module records the
@@ -81,6 +82,10 @@ export const payments = pgTable("payments_ledger", {
   categoryAccountId: uuid("category_account_id").references(() => accounts.id),
 
   paymentMethod: paymentMethodEnum("payment_method").notNull().default("cash"),
+  // The payment mode picked (Cash, Cheque, Fonepay, ...). The name is kept too, so history still reads right after a mode is
+  // renamed or deleted. Blank on payments recorded before modes existed.
+  paymentModeId: uuid("payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
+  paymentModeName: text("payment_mode_name"),
   chequeNumber: text("cheque_number"),
   chequeDate: date("cheque_date"),
   chequeBank: text("cheque_bank"),

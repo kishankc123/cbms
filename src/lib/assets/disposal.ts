@@ -40,6 +40,8 @@ export type AssetDisposalInput = {
   taxable?: boolean;
   salePrice?: number;
   receivedAccountId?: string | null;
+  /** The payment mode the money came in by. */
+  receivedModeId?: string | null;
   // disposal / write-off
   reason?: string;
 };
@@ -137,7 +139,7 @@ export async function disposeAsset(tenantId: string, userId: string, calendar: C
     const label = `${asset.assetCode} ${VERB[input.kind]}`;
     const lines: PostLineInput[] = [];
     if (accumulated > 0) lines.push({ accountId: accumAccount.id, debitAmount: accumulated, description: label });
-    if (input.kind === "sale" && total > 0) lines.push({ accountId: input.receivedAccountId!, debitAmount: total, description: label });
+    if (input.kind === "sale" && total > 0) lines.push({ accountId: input.receivedAccountId!, paymentModeId: input.receivedModeId, debitAmount: total, description: label });
     if (lossAccount) lines.push({ accountId: lossAccount.id, debitAmount: round2(-gainLoss), description: `Loss on ${label}` });
     lines.push({ accountId: costAccount.id, creditAmount: cost, description: label });
     if (taxPayableId) lines.push({ accountId: taxPayableId, creditAmount: vat, description: `VAT on ${label}` });

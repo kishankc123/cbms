@@ -18,7 +18,6 @@ import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
-import { listModeOptions } from "@/lib/payment-modes";
 import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
@@ -213,13 +212,6 @@ export type SingleInvoiceEditLine = {
 };
 
 /** The revenue accounts an invoice can be booked to (lowest level only), for the pickers on the invoice forms. */
-/** The payment modes with their accounts, for the Record payment dialog. */
-export async function getPaymentModeOptions() {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "create") && !can(session, "sales", "edit")) throw new Error("Not permitted");
-  return listModeOptions(session.tenantId);
-}
-
 export async function getRevenueAccountOptions() {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create") && !can(session, "sales", "edit")) throw new Error("Not permitted");
@@ -274,7 +266,7 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, receiptEntry.id));
     payments = lines
       .filter((l) => Number(l.debitAmount) > 0)
-      .map((l) => ({ accountId: l.accountId, amount: Number(l.debitAmount) }));
+      .map((l) => ({ accountId: l.accountId, amount: Number(l.debitAmount), modeId: l.paymentModeId }));
   }
 
   const storedLines = (invoice.lineItems ?? []) as LineItem[];
@@ -444,6 +436,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
     const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
       accountId: p.accountId,
+      paymentModeId: p.modeId,
       debitAmount: p.amount,
       description: `Payment received for ${invoiceNumber}`,
     }));
@@ -470,7 +463,8 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
       paid,
       paymentLines[0].accountId,
       receiptEntry.id,
-      invoiceNumber
+      invoiceNumber,
+      paymentLines[0].modeId
     );
   }
 
@@ -491,7 +485,7 @@ export type SingleInvoiceLine = {
   discount: number;
 };
 
-export type SingleInvoicePayment = { accountId: string; amount: number };
+export type SingleInvoicePayment = { accountId: string; amount: number; modeId?: string | null };
 
 export type SingleInvoiceInput = {
   invoiceNumber: string;
@@ -630,6 +624,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
       const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
         accountId: p.accountId,
+        paymentModeId: p.modeId,
         debitAmount: p.amount,
         description: `Payment received for ${invoiceNumber}`,
       }));
@@ -656,7 +651,8 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
         paid,
         paymentLines[0].accountId,
         receiptEntry.id,
-        invoiceNumber
+        invoiceNumber,
+        paymentLines[0].modeId
       );
     }
   } catch (e) {

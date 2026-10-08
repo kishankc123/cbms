@@ -161,7 +161,7 @@ describe("consumable purchases", () => {
 
     // The supplier's unpaid balance is not mistaken for a payment when the bill is opened for editing.
     const edit = await getCashPurchaseForEdit(part.id);
-    expect(edit.payments).toEqual([{ accountId: cashId, amount: 90 }]);
+    expect(edit.payments).toEqual([{ accountId: cashId, amount: 90, modeId: null }]);
     expect((await getCashPurchaseForEdit(none.id)).payments).toEqual([]);
   });
 

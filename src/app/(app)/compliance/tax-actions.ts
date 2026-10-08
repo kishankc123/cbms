@@ -216,6 +216,7 @@ export type ObligationPaymentInput = {
   amount: number;
   paymentDate: string;
   accountId: string;
+  paymentModeId?: string | null;
   paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other";
   referenceNumber: string;
   chequeNumber?: string;
@@ -239,6 +240,7 @@ export async function recordObligationPayment(input: ObligationPaymentInput) {
     paymentDate: input.paymentDate,
     partyType: "none",
     accountId: input.accountId,
+    paymentModeId: input.paymentModeId,
     paymentMethod: input.paymentMethod,
     chequeNumber: input.chequeNumber || null,
     referenceNumber: input.referenceNumber.trim() || null,

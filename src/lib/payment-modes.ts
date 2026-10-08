@@ -3,6 +3,10 @@ import { and, asc, eq, inArray, notExists, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, paymentModeAccounts, paymentModes } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
+import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
+import { methodForMode, type PaymentMethod } from "@/lib/payment-mode-rules";
+
+export { methodForMode };
 
 // Payment modes (Cash, Cheque, Bank transfer, Fonepay, Card, Wallet, ...): a mode is linked to the lowest-level accounts of
 // the Chart of Accounts that hold that kind of money. A group that has sub-groups is never linked itself: each of its
@@ -207,3 +211,88 @@ export async function listModeOptions(tenantId: string): Promise<ModeOption[]> {
 export async function modeAccountIds(tenantId: string): Promise<Set<string>> {
   return new Set((await listModeOptions(tenantId)).flatMap((m) => m.accounts.map((a) => a.id)));
 }
+
+export type ResolvedMode = { paymentModeId: string | null; paymentModeName: string | null; paymentMethod: PaymentMethod };
+
+/**
+ * What to store on a payment record for the mode the person picked. No mode (older screens, imports that name only an
+ * account) keeps the record as it was: no mode, method "cash". A mode must be this organization's, active, and linked to the
+ * account used, otherwise the payment is refused: the browser is never trusted for this.
+ */
+export async function resolvePaymentMode(tenantId: string, modeId: string | null | undefined, accountId: string): Promise<ResolvedMode> {
+  if (!modeId) return { paymentModeId: null, paymentModeName: null, paymentMethod: "cash" };
+  const [row] = await db
+    .select({ id: paymentModes.id, name: paymentModes.name })
+    .from(paymentModes)
+    .innerJoin(paymentModeAccounts, eq(paymentModeAccounts.modeId, paymentModes.id))
+    .where(and(eq(paymentModes.id, modeId), eq(paymentModes.tenantId, tenantId), eq(paymentModes.isActive, true), eq(paymentModeAccounts.accountId, accountId)))
+    .limit(1);
+  if (!row) throw new Error("That account is not available under the chosen payment mode. Choose the mode and account again.");
+  return { paymentModeId: row.id, paymentModeName: row.name, paymentMethod: methodForMode(row.name) };
+}
+
+/**
+ * For the lines of a journal entry that name a payment mode: checks each (mode, account) pair is real for this organization
+ * and returns the mode names to store with the lines. Lines without a mode are left alone.
+ */
+export async function modeNamesForLines(tenantId: string, lines: { accountId: string; paymentModeId?: string | null }[]): Promise<Map<string, string>> {
+  const pairs = lines.filter((l) => l.paymentModeId).map((l) => ({ modeId: l.paymentModeId as string, accountId: l.accountId }));
+  const names = new Map<string, string>();
+  if (pairs.length === 0) return names;
+  const modeIds = [...new Set(pairs.map((p) => p.modeId))];
+  const rows = await db
+    .select({ id: paymentModes.id, name: paymentModes.name, accountId: paymentModeAccounts.accountId })
+    .from(paymentModes)
+    .innerJoin(paymentModeAccounts, eq(paymentModeAccounts.modeId, paymentModes.id))
+    .where(and(eq(paymentModes.tenantId, tenantId), inArray(paymentModes.id, modeIds)));
+  const linked = new Set(rows.map((r) => `${r.id}|${r.accountId}`));
+  for (const p of pairs) {
+    if (!linked.has(`${p.modeId}|${p.accountId}`)) throw new Error("That account is not available under the chosen payment mode. Choose the mode and account again.");
+  }
+  for (const r of rows) names.set(r.id, r.name);
+  return names;
+}
+
+export type PayAccount = { id: string; code: string; name: string };
+export type AccountPick = { accountId: string; modeId: string | null };
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * What an import file can mean by a payment cell: an account (by name or code), or a payment mode. An account that belongs to
+ * exactly one mode is recorded under that mode; a mode with a single account resolves to that account; a mode with several
+ * accounts is ambiguous (the file has to name the account). Every cash/bank/wallet account of the organization is covered.
+ */
+export async function buildPaymentResolver(tenantId: string) {
+  const [groups, modes] = await Promise.all([getCashBankAccounts(tenantId), listModeOptions(tenantId)]);
+  const accountsById = new Map<string, PayAccount>();
+  for (const g of groups) for (const a of g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]) accountsById.set(a.id, a);
+  for (const m of modes) for (const a of m.accounts) accountsById.set(a.id, a);
+
+  const byText = new Map<string, string>();
+  for (const a of accountsById.values()) {
+    byText.set(norm(a.name), a.id);
+    byText.set(norm(a.code), a.id);
+  }
+  const modesOf = new Map<string, string[]>();
+  for (const m of modes) for (const a of m.accounts) modesOf.set(a.id, [...(modesOf.get(a.id) ?? []), m.id]);
+  const modeByName = new Map(modes.map((m) => [norm(m.name), m]));
+
+  return {
+    accounts: [...accountsById.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    modes,
+    /** The account (and mode) a cell means; "ambiguous" with the mode's account names when a mode has several; null when unknown. */
+    resolve(text: string): AccountPick | { ambiguous: string[] } | null {
+      const key = norm(text);
+      const accountId = byText.get(key);
+      if (accountId) {
+        const m = modesOf.get(accountId) ?? [];
+        return { accountId, modeId: m.length === 1 ? m[0] : null };
+      }
+      const mode = modeByName.get(key);
+      if (mode) return mode.accounts.length === 1 ? { accountId: mode.accounts[0].id, modeId: mode.id } : { ambiguous: mode.accounts.map((a) => a.name) };
+      return null;
+    },
+  };
+}
+export type PaymentResolver = Awaited<ReturnType<typeof buildPaymentResolver>>;

@@ -15,6 +15,8 @@ import {
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
+import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { methodForMode } from "@/lib/payment-mode-rules";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
@@ -69,9 +71,10 @@ export function NewPaymentModal({
   const [paymentType, setPaymentType] = useState(fixedDirection === "money_out" ? "supplier_payment" : "customer_payment");
   const [paymentDate, setPaymentDate] = useState(today());
   const [accountId, setAccountId] = useState("");
+  const [paymentModeId, setPaymentModeId] = useState("");
+  const [paymentModeName, setPaymentModeName] = useState("");
   const [transferToAccountId, setTransferToAccountId] = useState("");
   const [categoryAccountId, setCategoryAccountId] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeDate, setChequeDate] = useState("");
   const [chequeBank, setChequeBank] = useState("");
@@ -102,6 +105,8 @@ export function NewPaymentModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
+  // The payment method on the record follows the mode picked (Cheque brings the cheque fields).
+  const paymentMethod = paymentModeName ? methodForMode(paymentModeName) : "cash";
   const config = typeConfig(paymentType);
   const flatAccounts = useMemo(() => flattenAccounts(formOptions.cashBankAccounts), [formOptions.cashBankAccounts]);
   // Moving money between the business's own accounts now lives in
@@ -182,7 +187,7 @@ export function NewPaymentModal({
       first.push({ message, target });
     };
     if (!paymentDate) bad("paymentDate", "Please enter the payment date.", "#pay-date");
-    if (!accountId) bad("accountId", "Select the account the money moves through.", '[data-field="account"]');
+    if (!accountId) bad("accountId", "Select the payment mode and the account the money moves through.", '[data-field="account"]');
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
@@ -207,6 +212,7 @@ export function NewPaymentModal({
         vendorId: config.needsVendor || config.optionalVendor ? vendorId || null : null,
         partyOtherName: config.optionalOtherParty ? partyOtherName || null : null,
         accountId,
+        paymentModeId: paymentModeId || null,
         transferToAccountId: config.showTransferTo ? transferToAccountId : null,
         categoryAccountId: config.showCategoryAccount ? categoryAccountId || null : null,
         paymentMethod: paymentMethod as never,
@@ -298,15 +304,18 @@ export function NewPaymentModal({
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">{config.showTransferTo ? "From Account" : "Account"}</label>
-              <select data-field="account" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={fieldErrors.accountId ? inputErrCls : inputCls}>
-                <option value="">Select account</option>
-                {flatAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-xs text-gray-500 mb-1">{config.showTransferTo ? "From Account" : "Mode and Account"}</label>
+              <div data-field="account">
+                <PaymentModeSelect
+                  value={{ modeId: paymentModeId, accountId, modeName: paymentModeName }}
+                  onChange={(v) => {
+                    setPaymentModeId(v.modeId);
+                    setPaymentModeName(v.modeName ?? "");
+                    setAccountId(v.accountId);
+                  }}
+                  className={fieldErrors.accountId ? inputErrCls : inputCls}
+                />
+              </div>
             </div>
 
             {config.showTransferTo && (
@@ -323,17 +332,7 @@ export function NewPaymentModal({
               </div>
             )}
 
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Payment Method</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={inputCls}>
-                {PAYMENT_METHOD_OPTIONS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
+            
             {paymentMethod === "cheque" && (
               <>
                 <div>

@@ -85,7 +85,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentI
                   ["Direction", detail.direction === "money_in" ? "Money In" : "Money Out"],
                   ["Type", PAYMENT_TYPE_LABELS[detail.paymentType] ?? detail.paymentType],
                   ["Party", detail.party],
-                  ["Payment Method", detail.paymentMethod.replace("_", " ")],
+                  ["Payment Mode", detail.paymentModeName ?? detail.paymentMethod.replace("_", " ")],
                   ["Account", detail.accountName],
                   ...(detail.transferToAccountName ? [["To Account", detail.transferToAccountName] as [string, string]] : []),
                   ["Reference", detail.referenceNumber ?? "—"],

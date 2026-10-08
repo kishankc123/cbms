@@ -27,7 +27,7 @@ export function RecordExpensePaymentModal({
 }) {
   const router = useRouter();
   const [payDate, setPayDate] = useState(todayIso());
-  const [pending, setPending] = useState<{ accountId: string; amount: number }[] | null>(null);
+  const [pending, setPending] = useState<{ accountId: string; amount: number; modeId?: string | null }[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { EXPENSE_FIELDS, expenseMappingComplete, type ExpenseColumnMapping } from "@/lib/expenses/import/fields";
@@ -208,14 +209,11 @@ function Defaults({ settings, onSettings, setup, mapping }: Props) {
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Paid from{needsAccount ? " *" : ""}</label>
-          <select className={`${field} w-full`} value={settings.defaultAccountId ?? ""} onChange={(e) => onSettings({ ...settings, defaultAccountId: e.target.value || null })}>
-            <option value="">{needsAccount ? "Choose account" : "— when the file names none —"}</option>
-            {(setup?.accounts ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <PaymentModeSelect
+            value={{ modeId: settings.defaultModeId ?? "", accountId: settings.defaultAccountId ?? "" }}
+            onChange={(v) => onSettings({ ...settings, defaultAccountId: v.accountId || null, defaultModeId: v.modeId || null })}
+            className={`${field} w-full`}
+          />
         </div>
       </div>
     </section>

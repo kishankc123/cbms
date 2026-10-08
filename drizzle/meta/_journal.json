@@ -568,6 +568,20 @@
       "when": 1791395780281,
       "tag": "0080_payment_modes_many_to_many",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791396274870,
+      "tag": "0081_payments_record_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791396349751,
+      "tag": "0082_journal_lines_payment_mode",
+      "breakpoints": true
     }
   ]
 }

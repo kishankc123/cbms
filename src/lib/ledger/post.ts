@@ -6,6 +6,7 @@ import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertFiscalYearOpen, resolveFiscalYearId } from "@/lib/fiscal";
 import { assertBankPeriodOpen } from "./reconciliation-guards";
+import { modeNamesForLines } from "@/lib/payment-modes";
 
 import { todayIso } from "@/lib/calendar";
 export class UnbalancedEntryError extends Error {
@@ -21,6 +22,8 @@ export type PostLineInput = {
   debitAmount?: number;
   creditAmount?: number;
   description?: string;
+  /** The payment mode of a cash/bank/wallet line, if one was picked. */
+  paymentModeId?: string | null;
 };
 
 export type PostJournalEntryInput = {
@@ -97,6 +100,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
 
   await assertAccountsUsable(input.tenantId, input.lines.map((l) => l.accountId));
   await assertBankPeriodOpen(input.tenantId, input.entryDate, input.lines.map((l) => l.accountId));
+  const modeNames = await modeNamesForLines(input.tenantId, input.lines);
   const fiscalYearId = await resolveFiscalYearId(input.tenantId, input.entryDate);
 
   const posted = await db.transaction(async (tx) => {
@@ -121,6 +125,8 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
         debitAmount: (l.debitAmount ?? 0).toFixed(2),
         creditAmount: (l.creditAmount ?? 0).toFixed(2),
         description: l.description,
+        paymentModeId: l.paymentModeId || null,
+        paymentModeName: l.paymentModeId ? modeNames.get(l.paymentModeId) ?? null : null,
       }))
     );
 
@@ -184,6 +190,8 @@ export async function reverseJournalEntry(
         debitAmount: l.creditAmount,
         creditAmount: l.debitAmount,
         description: l.description ? `Reversal: ${l.description}` : "Reversal",
+        paymentModeId: l.paymentModeId,
+        paymentModeName: l.paymentModeName,
       }))
     );
 

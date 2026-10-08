@@ -104,7 +104,7 @@ describe("whether a row can be imported", () => {
   it("needs an account when money was received, from the file or the default", () => {
     expect(check({ paid: { value: 1130, invalid: false } }).issues).toEqual(["account"]);
     expect(check({ paid: { value: 1130, invalid: false } }, { hasDefaultAccount: true }).status).toBe("ready");
-    expect(check({ paid: { value: 1130, invalid: false }, account: "unknown", accountText: "Petty" }).messages[0]).toMatch(/isn't one of your cash or bank/);
+    expect(check({ paid: { value: 1130, invalid: false }, account: "unknown", accountText: "Petty" }).messages[0]).toMatch(/isn't one of your cash, bank or wallet/);
   });
   it("refuses more paid than the invoice total", () => {
     expect(check({ paid: { value: 2000, invalid: false }, account: "ok" }).issues).toEqual(["paid"]);

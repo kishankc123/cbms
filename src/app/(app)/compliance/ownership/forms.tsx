@@ -1,5 +1,7 @@
 "use client";
 
+import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { methodForMode } from "@/lib/payment-mode-rules";
 import { useState } from "react";
 import * as actions from "../ownership-actions";
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -317,11 +319,13 @@ export function PaidUpForm({ holders, cashBank, currency, presetId, ...c }: Comm
   const [holderId, setHolderId] = useState(presetId ?? "");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(cashBank[0]?.id ?? "");
-  const [method, setMethod] = useState<"cash" | "bank_transfer" | "cheque" | "card" | "online" | "other">("bank_transfer");
+  const [modeId, setModeId] = useState("");
+  const [modeName, setModeName] = useState("");
+  const method = modeName ? methodForMode(modeName) : "bank_transfer";
   const holder = holders.find((h) => h.id === holderId);
 
   async function run() {
-    const r = await actions.recordPaidUpIncrease({ ...meta, shareholderId: holderId, amount: num(amount), accountId, paymentMethod: method });
+    const r = await actions.recordPaidUpIncrease({ ...meta, shareholderId: holderId, amount: num(amount), accountId, paymentModeId: modeId || null, paymentMethod: method });
     if (r.duplicateWarning) {
       if (!window.confirm("A very similar payment was recorded recently. Record this one anyway?")) throw new Error("Cancelled");
       await actions.recordPaidUpIncrease({ ...meta, shareholderId: holderId, amount: num(amount), accountId, paymentMethod: method, confirmDuplicate: true });
@@ -334,23 +338,16 @@ export function PaidUpForm({ holders, cashBank, currency, presetId, ...c }: Comm
       <Field label={`Amount (${currency})`} hint={holder ? `Unpaid on their shares: ${money(holder.unpaid)}` : undefined}>
         <input type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
-      <Field label="Received into">
-        <select className={input} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          {cashBank.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.code} — {a.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Method">
-        <select className={input} value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
-          <option value="bank_transfer">Bank transfer</option>
-          <option value="cash">Cash</option>
-          <option value="cheque">Cheque</option>
-          <option value="online">Online</option>
-          <option value="other">Other</option>
-        </select>
+      <Field label="Received into (mode and account)">
+        <PaymentModeSelect
+          value={{ modeId, accountId, modeName }}
+          onChange={(v) => {
+            setModeId(v.modeId);
+            setModeName(v.modeName ?? "");
+            setAccountId(v.accountId);
+          }}
+          className={input}
+        />
       </Field>
       <p className="col-span-2 text-xs text-gray-400">This is recorded as a Money In payment (capital introduced), credited to the shareholder&apos;s capital account.</p>
       <MetaFields meta={meta} set={setMeta} dateLabel="Date received" />

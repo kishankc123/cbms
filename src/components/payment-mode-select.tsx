@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPaymentModeOptions } from "@/app/(app)/sales/actions";
+import { getPaymentModeOptions } from "@/app/(app)/payment-mode-actions";
 
 type Option = Awaited<ReturnType<typeof getPaymentModeOptions>>[number];
-export type ModeAccount = { modeId: string; accountId: string };
+export type ModeAccount = { modeId: string; accountId: string; /** The mode name, filled in when a choice is made. */ modeName?: string };
 
 /**
  * Picks how money was received or paid: each payment mode is a heading with the accounts linked to it beneath, and the
@@ -26,6 +26,13 @@ export function PaymentModeSelect({ value, onChange, className }: { value: ModeA
 
   const modeFor = (accountId: string) => options?.find((m) => m.accounts.some((a) => a.id === accountId))?.id ?? "";
   const modeId = value.modeId || (value.accountId ? modeFor(value.accountId) : "");
+
+  // A line that starts with an account only (the default, or an invoice being edited) takes the mode it shows under, so the
+  // mode is recorded whether or not the person touches the picker.
+  useEffect(() => {
+    if (options && value.accountId && !value.modeId && modeId) onChange({ modeId, accountId: value.accountId, modeName: options.find((o) => o.id === modeId)?.name });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, value.accountId, value.modeId]);
   const selected = value.accountId && modeId ? `${modeId}|${value.accountId}` : "";
 
   return (
@@ -33,7 +40,7 @@ export function PaymentModeSelect({ value, onChange, className }: { value: ModeA
       value={selected}
       onChange={(e) => {
         const [m, a] = e.target.value.split("|");
-        onChange({ modeId: m ?? "", accountId: a ?? "" });
+        onChange({ modeId: m ?? "", accountId: a ?? "", modeName: options?.find((o) => o.id === m)?.name });
       }}
       className={className}
     >

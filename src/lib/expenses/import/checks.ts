@@ -21,6 +21,8 @@ export type ExpenseRowInput = {
   paid: { value: number | null; invalid: boolean };
   account: "none" | "ok" | "unknown";
   accountText?: string;
+  /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
+  accountNote?: string;
   supplier: SupplierState;
   category: CategoryState;
   categoryText?: string;
@@ -109,7 +111,7 @@ export function checkExpenseRow(i: ExpenseRowInput): ExpenseRowCheck {
     }
     if (paid > payable + 0.004) flag("paid", `The paid amount (${paid.toFixed(2)}) is more than the amount payable (${payable.toFixed(2)}).`);
     if (paid > 0) {
-      if (i.account === "unknown") flag("account", `"${i.accountText ?? ""}" isn't one of your cash or bank accounts.`);
+      if (i.account === "unknown") flag("account", i.accountNote ?? `"${i.accountText ?? ""}" isn't one of your cash, bank or wallet accounts, or payment modes.`);
       else if (i.account === "none" && !i.settings.hasDefaultAccount) flag("account", "Choose the account the money was paid from.");
     }
     // Only a fully paid expense can go without a supplier: otherwise the unpaid part has nobody to be owed to.

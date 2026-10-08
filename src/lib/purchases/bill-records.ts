@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { payments, paymentAllocations, purchaseBills } from "@/db/schema";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { reverseAllActiveEntriesForSource } from "@/lib/ledger/post";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 
 // Records every kind of supplier bill shares (Consumable, Stockable and Asset purchases): the embedded payment row, the
 // per-supplier bill number rule, and the clean-up of a bill that failed to save. Kept out of the "use server" action
@@ -38,8 +39,10 @@ export async function insertEmbeddedSupplierPayment(
   amount: number,
   accountId: string,
   journalEntryId: string,
-  referenceNumber: string
+  referenceNumber: string,
+  modeId?: string | null
 ) {
+  const mode = await resolvePaymentMode(tenantId, modeId, accountId);
   const [row] = await withPaymentNumber(tenantId, "money_out", (paymentNumber) =>
     db
     .insert(payments)
@@ -52,7 +55,9 @@ export async function insertEmbeddedSupplierPayment(
       partyType: vendorId ? "supplier" : "none",
       vendorId,
       accountId,
-      paymentMethod: "cash",
+      paymentMethod: mode.paymentMethod,
+      paymentModeId: mode.paymentModeId,
+      paymentModeName: mode.paymentModeName,
       referenceNumber,
       amount: amount.toFixed(2),
       description: `Payment for ${referenceNumber}`,

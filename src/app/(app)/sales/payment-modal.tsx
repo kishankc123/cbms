@@ -34,14 +34,14 @@ export function PaymentModal({
   allCustomers: Customer[];
   customerBalances: Record<string, number>;
   initialCustomerId: string;
-  initialLines?: { accountId: string; amount: number }[];
+  initialLines?: { accountId: string; amount: number; modeId?: string | null }[];
   saving: boolean;
   onCancel: () => void;
-  onConfirm: (payments: { accountId: string; amount: number }[], customerId: string) => void;
+  onConfirm: (payments: { accountId: string; amount: number; modeId?: string | null }[], customerId: string) => void;
 }) {
   const [lines, setLines] = useState<PaymentLine[]>(() =>
     initialLines && initialLines.length > 0
-      ? initialLines.map((l) => ({ modeId: "", accountId: l.accountId, amount: String(l.amount) }))
+      ? initialLines.map((l) => ({ modeId: l.modeId ?? "", accountId: l.accountId, amount: String(l.amount) }))
       : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }]
   );
   const [customerId, setCustomerId] = useState(initialCustomerId);
@@ -68,7 +68,7 @@ export function PaymentModal({
     if (customerRequired) return;
     const payments = lines
       .filter((l) => l.accountId && (parseFloat(l.amount) || 0) > 0)
-      .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0 }));
+      .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: l.modeId || null }));
     onConfirm(payments, customerId);
   }
 

@@ -125,7 +125,7 @@ describe("editing an expense", () => {
 
     const data = await getExpenseForEdit(e.id);
     expect(data.detailsOnly).toBe(false);
-    expect(data.payments).toEqual([{ accountId: cashId, amount: 300 }]);
+    expect(data.payments).toEqual([{ accountId: cashId, amount: 300, modeId: null }]);
 
     await updateExpense({ ...data, taxableAmount: 400, payments: [{ accountId: cashId, amount: 400 }] });
     const after = (await rows()).find((r) => r.id === e.id)!;

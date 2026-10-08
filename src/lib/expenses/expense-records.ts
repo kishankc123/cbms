@@ -16,7 +16,7 @@ import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type ExpenseTaxTreatment = "taxable" | "exempt" | "zero_rated";
-export type ExpensePaymentLine = { accountId: string; amount: number };
+export type ExpensePaymentLine = { accountId: string; amount: number; modeId?: string | null };
 export type ExpenseBillType = "vat" | "pan" | "estimate" | "challan" | "no_bill";
 
 export type ExpenseInput = {
@@ -123,7 +123,7 @@ export async function buildPostingLines(
   }
 
   for (const p of payments.filter((p) => p.accountId && p.amount > 0)) {
-    lines.push({ accountId: p.accountId, creditAmount: round2(p.amount), description: `Expense ${expenseNumber}` });
+    lines.push({ accountId: p.accountId, paymentModeId: p.modeId, creditAmount: round2(p.amount), description: `Expense ${expenseNumber}` });
   }
 
   return lines;

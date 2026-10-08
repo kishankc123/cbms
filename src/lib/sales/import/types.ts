@@ -13,6 +13,8 @@ export type ImportSettings = {
   paidMode: "file" | "unpaid" | "full";
   /** Used when money was received and the file doesn't name the account. */
   defaultAccountId: string | null;
+  /** The payment mode of the default account, when one was picked. */
+  defaultModeId?: string | null;
   /** Used when the file names no revenue account; blank means Sales Revenue. */
   defaultRevenueAccountId?: string | null;
 };

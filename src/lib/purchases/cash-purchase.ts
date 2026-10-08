@@ -20,7 +20,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type CashBillType = "vat" | "pan" | "estimate" | "challan" | "no_bill";
 
-export type CashPaymentLine = { accountId: string; amount: number };
+export type CashPaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
 // One line of a Consumable purchase: what was bought, and the purchase category it is booked to.
 export type CashPurchaseLine = { description: string; categoryId: string; rate: number; quantity: number; discount: number };
@@ -91,7 +91,7 @@ export function cashPurchaseEntryLines(
   if (claimTax) lines.push({ accountId: taxReceivableId, debitAmount: tax, description: `Tax on bill ${billNumber}` });
   if (payable && payable.amount > 0) lines.push({ accountId: payable.accountId, creditAmount: payable.amount, description: `Bill ${billNumber}` });
   for (const payment of paymentList.filter((p) => p.accountId && p.amount > 0)) {
-    lines.push({ accountId: payment.accountId, creditAmount: round2(payment.amount), description: `Bill ${billNumber}` });
+    lines.push({ accountId: payment.accountId, paymentModeId: payment.modeId, creditAmount: round2(payment.amount), description: `Bill ${billNumber}` });
   }
   return lines;
 }
@@ -170,7 +170,7 @@ export async function createCashPurchaseCore(
     });
     if (prepared.paid > 0) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-      await insertEmbeddedSupplierPayment(tenantId, userId, vendorId, bill.id, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber);
+      await insertEmbeddedSupplierPayment(tenantId, userId, vendorId, bill.id, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber, paymentLines[0].modeId);
     }
   } catch (e) {
     await discardBill(tenantId, bill.id, userId);

@@ -30,7 +30,7 @@ export const salesColumnGuide = (): ColumnGuideRow[] =>
     billType: { accepts: "Taxable or Zero rated. Blank uses the default you choose.", example: "Taxable" },
     revenue: { accepts: "The name or code of a revenue account (lowest level only: a group that has sub-groups can't be used). Blank uses the default you choose.", example: "Sales Revenue" },
     paid: { accepts: `${MONEY} Not more than the invoice total.`, example: "11300" },
-    account: { accepts: "The name or code of one of your cash or bank accounts. Needed only when money was received.", example: "Cash" },
+    account: { accepts: "The name or code of one of your cash, bank or wallet accounts, or a payment mode that has just one account (Cash). Needed only when money was received.", example: "Cash" },
   });
 
 export const purchaseColumnGuide = (): ColumnGuideRow[] =>
@@ -44,7 +44,7 @@ export const purchaseColumnGuide = (): ColumnGuideRow[] =>
     discount: { accepts: `${MONEY} Not more than the amount.`, example: "100" },
     billType: { accepts: "VAT, PAN, Estimate, Challan or No bill. Only a VAT bill carries VAT.", example: "VAT" },
     paid: { accepts: `${MONEY} Not more than the bill total.`, example: "0" },
-    account: { accepts: "The name or code of one of your cash or bank accounts. Needed only when money was paid.", example: "Cash" },
+    account: { accepts: "The name or code of one of your cash, bank or wallet accounts, or a payment mode that has just one account (Cash). Needed only when money was paid.", example: "Cash" },
   });
 
 export const expenseColumnGuide = (): ColumnGuideRow[] =>
@@ -60,7 +60,7 @@ export const expenseColumnGuide = (): ColumnGuideRow[] =>
     vat: { accepts: `${MONEY} Only with a VAT bill. Blank: worked out at the VAT rate.`, example: "2600" },
     tds: { accepts: `${MONEY} Withheld from the payee, so not more than the total.`, example: "1000" },
     paid: { accepts: `${MONEY} Not more than the amount payable (after TDS).`, example: "0" },
-    account: { accepts: "The name or code of one of your cash or bank accounts. Needed only when money was paid.", example: "Cash" },
+    account: { accepts: "The name or code of one of your cash, bank or wallet accounts, or a payment mode that has just one account (Cash). Needed only when money was paid.", example: "Cash" },
   });
 
 /** The rows of the "Columns" sheet in a template. */

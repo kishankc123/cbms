@@ -1,5 +1,6 @@
 "use client";
 
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -48,6 +49,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
   const [price, setPrice] = useState("");
   const [taxable, setTaxable] = useState(true);
   const [accountId, setAccountId] = useState("");
+  const [modeId, setModeId] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
     if (!assetId) return report("Choose the asset.", '[data-field="asset"]');
     setSaving(true);
     try {
-      const r = await createAssetDisposal({ assetId, kind, disposalDate: date, customerId: customerId || null, invoiceNumber: invoice, taxable, salePrice: proceeds, receivedAccountId: accountId || null, reason });
+      const r = await createAssetDisposal({ assetId, kind, disposalDate: date, customerId: customerId || null, invoiceNumber: invoice, taxable, salePrice: proceeds, receivedAccountId: accountId || null, receivedModeId: modeId || null, reason });
       if (!r.ok) return report(r.error, SERVER_RULES.find(([re]) => re.test(r.error))?.[1] ?? null);
       setDone(`${r.reference} was recorded. ${r.gainLoss === 0 ? "There is no gain or loss." : `${r.gainLoss > 0 ? "Gain" : "Loss"} on disposal: ${money(Math.abs(r.gainLoss))}.`}`);
       setAssetId("");
@@ -148,24 +150,9 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
               )}
               <div className="sm:col-span-2">
                 <label className={label}>Money received into *</label>
-                <select data-field="account" className={input} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                  <option value="">Select cash or bank account</option>
-                  {data.cashBankAccounts.map((g) =>
-                    g.children.length === 0 ? (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ) : (
-                      <optgroup key={g.id} label={g.name}>
-                        {g.children.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )
-                  )}
-                </select>
+                <div data-field="account">
+                  <PaymentModeSelect value={{ modeId, accountId }} onChange={(v) => { setModeId(v.modeId); setAccountId(v.accountId); }} className={input} />
+                </div>
               </div>
             </>
           ) : (

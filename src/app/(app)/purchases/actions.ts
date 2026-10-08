@@ -155,7 +155,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
   });
   if (prepared.paid > 0) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber);
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber, paymentLines[0].modeId);
   }
   if (vendorId) await autoApplyAdvance(session.tenantId, session.userId, "supplier", vendorId);
 
@@ -195,7 +195,7 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
   const [supplier] = bill.vendorId ? await db.select({ payableAccountId: vendors.payableAccountId }).from(vendors).where(eq(vendors.id, bill.vendorId)).limit(1) : [];
   const payments = entryLines
     .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== supplier?.payableAccountId)
-    .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount) }));
+    .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
 
   const stored = (bill.lineItems ?? []).filter((l) => l.categoryId);
   let lines: CashPurchaseLine[];
@@ -253,7 +253,7 @@ export async function voidBill(formData: FormData) {
   await recalculateAfter(session.tenantId, (bill.lineItems ?? []).map((l) => l.itemId), session.userId, `Void of bill ${bill.billNumber}`);
 }
 
-export type PurchaseInvoicePayment = { accountId: string; amount: number };
+export type PurchaseInvoicePayment = { accountId: string; amount: number; modeId?: string | null };
 
 function computeInvoiceLine(line: PurchaseLineItem, vatRate: number) {
   const gross = round2(line.rate * line.quantity);
@@ -311,7 +311,7 @@ async function buildInvoiceJournalLines(
   }
 
   for (const p of payments.filter((p) => p.accountId && p.amount > 0)) {
-    lines.push({ accountId: p.accountId, creditAmount: round2(p.amount), description: `Invoice ${invoiceLabel}` });
+    lines.push({ accountId: p.accountId, paymentModeId: p.modeId, creditAmount: round2(p.amount), description: `Invoice ${invoiceLabel}` });
   }
 
   return lines;
@@ -417,7 +417,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
 
     if (paid > 0) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber);
+      await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, bill.id, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
     }
   } catch (e) {
     if (stockApplied) await unwindStock(session.tenantId, { date: input.invoiceDate, sourceType: "purchase", sourceId: bill.id, userId: session.userId }, { allowNegative: true }).catch(() => {});
@@ -467,7 +467,7 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
 
   const payments = lines
     .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== apId)
-    .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount) }));
+    .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
 
   return {
     billId: bill.id,
@@ -575,7 +575,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
 
   if (paid > 0) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber);
+    await insertEmbeddedSupplierPayment(session.tenantId, session.userId, input.vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
   }
 
   revalidatePath("/purchases/stockable");

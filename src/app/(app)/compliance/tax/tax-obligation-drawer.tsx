@@ -1,5 +1,7 @@
 "use client";
 
+import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { methodForMode } from "@/lib/payment-mode-rules";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -359,12 +361,14 @@ function PaymentPanel({
   options: Options;
   busy: boolean;
   onCancel: () => void;
-  onSubmit: (v: { amount: number; paymentDate: string; accountId: string; paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other"; referenceNumber: string; chequeNumber?: string }) => void;
+  onSubmit: (v: { amount: number; paymentDate: string; accountId: string; paymentModeId?: string | null; paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other"; referenceNumber: string; chequeNumber?: string }) => void;
 }) {
   const [amount, setAmount] = useState(balance > 0 ? balance.toFixed(2) : "");
   const [paymentDate, setPaymentDate] = useState(todayIso());
   const [accountId, setAccountId] = useState(options.cashBank[0]?.id ?? "");
-  const [method, setMethod] = useState<"cash" | "bank_transfer" | "cheque" | "card" | "online" | "other">("bank_transfer");
+  const [modeId, setModeId] = useState("");
+  const [modeName, setModeName] = useState("");
+  const method = modeName ? methodForMode(modeName) : "bank_transfer";
   const [reference, setReference] = useState("");
   const [cheque, setCheque] = useState("");
   const value = Number(amount);
@@ -383,25 +387,16 @@ function PaymentPanel({
           <DatePicker value={paymentDate} onChange={setPaymentDate} className={input} />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Paid from</label>
-          <select className={input} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-            {options.cashBank.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.code} — {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Method</label>
-          <select className={input} value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="cash">Cash</option>
-            <option value="cheque">Cheque</option>
-            <option value="online">Online</option>
-            <option value="card">Card</option>
-            <option value="other">Other</option>
-          </select>
+          <label className="block text-xs text-gray-500 mb-1">Paid from (mode and account)</label>
+          <PaymentModeSelect
+            value={{ modeId, accountId, modeName }}
+            onChange={(v) => {
+              setModeId(v.modeId);
+              setModeName(v.modeName ?? "");
+              setAccountId(v.accountId);
+            }}
+            className={input}
+          />
         </div>
         {method === "cheque" && (
           <div>
@@ -421,7 +416,7 @@ function PaymentPanel({
         <button
           type="button"
           disabled={busy || !(value > 0) || !accountId || !paymentDate}
-          onClick={() => onSubmit({ amount: value, paymentDate, accountId, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
+          onClick={() => onSubmit({ amount: value, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
           className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
         >
           {busy ? "Recording..." : "Record payment"}

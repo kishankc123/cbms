@@ -13,6 +13,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
 import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
 import { withPaymentNumber } from "@/lib/payment-number";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 import {
   assertSupplierIfUnpaid,
   buildPostingLines,
@@ -79,7 +80,7 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
     payments = lines
       .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id)
-      .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount) }));
+      .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
   }
 
   return {
@@ -248,7 +249,7 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
     { accountId: expensePayable.id, debitAmount: paidNow, description: `Payment for expense ${expense.expenseNumber}` },
   ];
   for (const p of input.payments.filter((p) => p.accountId && p.amount > 0)) {
-    lines.push({ accountId: p.accountId, creditAmount: round2(p.amount), description: `Payment for expense ${expense.expenseNumber}` });
+    lines.push({ accountId: p.accountId, paymentModeId: p.modeId, creditAmount: round2(p.amount), description: `Payment for expense ${expense.expenseNumber}` });
   }
 
   const entry = await postJournalEntry({
@@ -269,6 +270,7 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
     await db.update(expenses).set({ amountPaid: newPaid.toFixed(2), status: newStatus }).where(eq(expenses.id, expense.id));
 
     const primaryLine = input.payments.filter((p) => p.accountId && p.amount > 0)[0];
+    const mode = await resolvePaymentMode(session.tenantId, primaryLine.modeId, primaryLine.accountId);
     const [paymentRow] = await withPaymentNumber(session.tenantId, "money_out", (paymentNumber) =>
       db
       .insert(payments)
@@ -282,7 +284,9 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
         vendorId: expense.vendorId,
         partyOtherName: expense.vendorId ? null : expense.payeeName,
         accountId: primaryLine.accountId,
-        paymentMethod: "cash",
+        paymentMethod: mode.paymentMethod,
+        paymentModeId: mode.paymentModeId,
+        paymentModeName: mode.paymentModeName,
         referenceNumber: expense.expenseNumber,
         amount: paidNow.toFixed(2),
         description: `Payment for expense ${expense.expenseNumber}`,

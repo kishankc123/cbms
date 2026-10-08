@@ -1,3 +1,4 @@
+import { buildPaymentResolver, resolvePaymentMode } from "@/lib/payment-modes";
 import * as XLSX from "xlsx";
 import { purchaseColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -8,7 +9,6 @@ import { resolveImportDates } from "@/lib/banking/import-dates";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
-import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
 import { createCashPurchaseCore } from "@/lib/purchases/cash-purchase";
 import { headerSignature } from "@/lib/sales/import/fields";
@@ -76,12 +76,11 @@ export async function analyzePurchaseFile(tenantId: string, input: { fileName: s
 
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; discount: number; accountId: string | null; billNumber: string; description: string };
+type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; discount: number; accountId: string | null; modeId: string | null; billNumber: string; description: string };
 type Category = { id: string; code: string; name: string };
 
 async function cashBankAccountList(tenantId: string) {
-  const groups = await getCashBankAccounts(tenantId);
-  return groups.flatMap((g) => (g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]));
+  return (await buildPaymentResolver(tenantId)).accounts;
 }
 
 /** Puts the corrections typed in the review over the file's cells; a field the file has no column for gets one of its own. */
@@ -128,21 +127,16 @@ async function buildRows(
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
   const dates = datesFor(parsed, mapping, dateOptions);
-  const [supplierList, aliasRows, accountList, categoryList] = await Promise.all([
+  const [supplierList, aliasRows, categoryList] = await Promise.all([
     db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId)),
     db.select({ alias: supplierAliases.alias, vendorId: supplierAliases.vendorId }).from(supplierAliases).where(eq(supplierAliases.tenantId, tenantId)),
-    cashBankAccountList(tenantId),
     getCogsSubGroups(tenantId),
   ]);
   const byName = new Map<string, { id: string; name: string }>();
   for (const s of supplierList) if (!byName.has(normalizeName(s.name))) byName.set(normalizeName(s.name), s);
   const byAlias = new Map(aliasRows.map((a) => [a.alias, a.vendorId]));
   const supplierById = new Map(supplierList.map((s) => [s.id, s]));
-  const accountByText = new Map<string, string>();
-  for (const a of accountList) {
-    accountByText.set(normalizeName(a.name), a.id);
-    accountByText.set(normalizeName(a.code), a.id);
-  }
+  const payResolver = await buildPaymentResolver(tenantId);
   const categoryByText = new Map<string, Category>();
   for (const c of categoryList) {
     categoryByText.set(normalizeName(c.name), c);
@@ -221,7 +215,10 @@ async function buildRows(
     }
 
     const accountText = cell(r, "account");
-    const accountId = accountText ? accountByText.get(normalizeName(accountText)) ?? null : null;
+    const accountPick = accountText ? payResolver.resolve(accountText) : null;
+    const picked = accountPick && "accountId" in accountPick ? accountPick : null;
+    const accountId = picked?.accountId ?? null;
+    const accountNote = accountPick && "ambiguous" in accountPick ? `"${accountText}" has more than one account (${accountPick.ambiguous.join(", ")}). Write the account name instead.` : undefined;
     const amount = parseAmountCell(cell(r, "amount"));
     const discount = parseAmountCell(cell(r, "discount"));
     const paid = parseAmountCell(cell(r, "paid"));
@@ -240,6 +237,7 @@ async function buildRows(
       paid,
       account: accountText === "" ? "none" : accountId ? "ok" : "unknown",
       accountText,
+      accountNote,
       supplier,
       category,
       categoryText,
@@ -292,6 +290,7 @@ async function buildRows(
       gross: check.computed?.gross ?? 0,
       discount: check.computed?.discount ?? 0,
       accountId: accountId ?? settings.defaultAccountId,
+      modeId: picked ? picked.modeId : accountText ? null : settings.defaultModeId ?? null,
       billNumber,
       description: cell(r, "description"),
     });
@@ -411,6 +410,13 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
   const signature = headerSignature(parsed.headers);
 
   if (input.settings.defaultAccountId && !(await cashBankAccountList(tenantId)).some((a) => a.id === input.settings.defaultAccountId)) return { ok: false, error: "Choose a cash or bank account of this organization." };
+  if (input.settings.defaultAccountId && input.settings.defaultModeId) {
+    try {
+      await resolvePaymentMode(tenantId, input.settings.defaultModeId, input.settings.defaultAccountId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Choose the payment mode and account again." };
+    }
+  }
   const v = await validDecisions(tenantId, input);
   if (!v.defaultCategoryOk) return { ok: false, error: "Choose a purchase category of this organization." };
 
@@ -471,7 +477,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
           vendorId: r.vendorId ?? "",
           billType: r.billType ?? input.settings.defaultBillType,
           lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: r.discount }],
-          payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid }] : [],
+          payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid, modeId: r.modeId }] : [],
         },
         { importId: input.importId, takenNumbers: taken }
       );
@@ -549,6 +555,8 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Purchase categories"], ...categoryList.map((c) => [c.name])]), "Categories");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
+  const payModes = (await buildPaymentResolver(tenantId)).modes;
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(purchaseColumnGuide()));
   guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, guideData, "Columns");

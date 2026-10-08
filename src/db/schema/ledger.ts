@@ -10,6 +10,7 @@ import {
   AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
+import { paymentModes } from "./payment-modes";
 import { accounts } from "./accounts";
 import { fiscalYears } from "./fiscal";
 
@@ -73,4 +74,8 @@ export const journalLines = pgTable("journal_lines", {
   debitAmount: numeric("debit_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   creditAmount: numeric("credit_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   description: text("description"),
+  // On a cash/bank/wallet line: how the money moved (Cash, Cheque, Fonepay, ...). The name is kept so history still reads right
+  // if the mode is renamed or deleted. Blank on everything posted before modes existed.
+  paymentModeId: uuid("payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
+  paymentModeName: text("payment_mode_name"),
 });

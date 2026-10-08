@@ -22,6 +22,8 @@ export type RowCheckInput = {
   /** The account named in the file: none given, found, or named but not a cash/bank account. */
   account: "none" | "ok" | "unknown";
   accountText?: string;
+  /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
+  accountNote?: string;
   /** The revenue account named in the file: none given, found, or named but not one that can be chosen. */
   revenue?: "none" | "ok" | "unknown";
   revenueText?: string;
@@ -95,7 +97,7 @@ export function checkRow(i: RowCheckInput): RowCheck {
       flag("paid", `The paid amount (${paid.toFixed(2)}) is more than the invoice total (${t.total.toFixed(2)}).`);
     }
     if (paid > 0) {
-      if (i.account === "unknown") flag("account", `"${i.accountText ?? ""}" isn't one of your cash or bank accounts.`);
+      if (i.account === "unknown") flag("account", i.accountNote ?? `"${i.accountText ?? ""}" isn't one of your cash, bank or wallet accounts, or payment modes.`);
       else if (i.account === "none" && !i.settings.hasDefaultAccount) flag("account", "Choose the account the money was received into.");
     }
     // Only a fully paid invoice can go without a customer: otherwise the unpaid part has nobody to be owed by.

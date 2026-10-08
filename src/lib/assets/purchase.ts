@@ -43,7 +43,7 @@ export type AssetPurchaseInput = {
   usefulLifeMonths: number | null;
   residualValue: number;
   depreciationStartDate: string | null;
-  payments: { accountId: string; amount: number }[];
+  payments: { accountId: string; amount: number; modeId?: string | null }[];
 };
 export type AssetPurchaseResult = { ok: true; assetId: string; assetCode: string; billId: string } | { ok: false; error: string };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
@@ -193,7 +193,7 @@ async function recordAssetPurchaseUnchecked(tenantId: string, userId: string, in
     const lines: PostLineInput[] = [{ accountId: costAccount.id, debitAmount: capitalizedCost, description: label }];
     if (taxReceivableId) lines.push({ accountId: taxReceivableId, debitAmount: vat, description: `Tax on ${label}` });
     if (payableId && remaining > 0) lines.push({ accountId: payableId, creditAmount: remaining, description: label });
-    for (const p of input.payments.filter((p) => p.accountId && p.amount > 0)) lines.push({ accountId: p.accountId, creditAmount: round2(p.amount), description: label });
+    for (const p of input.payments.filter((p) => p.accountId && p.amount > 0)) lines.push({ accountId: p.accountId, paymentModeId: p.modeId, creditAmount: round2(p.amount), description: label });
 
     const entry = await postJournalEntry({
       tenantId,
@@ -207,7 +207,7 @@ async function recordAssetPurchaseUnchecked(tenantId: string, userId: string, in
     });
     if (paid > 0) {
       const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
-      await insertEmbeddedSupplierPayment(tenantId, userId, input.vendorId, bill.id, input.purchaseDate, paid, paymentLines[0].accountId, entry.id, billNumber);
+      await insertEmbeddedSupplierPayment(tenantId, userId, input.vendorId, bill.id, input.purchaseDate, paid, paymentLines[0].accountId, entry.id, billNumber, paymentLines[0].modeId);
     }
 
     // 3. The asset goes live, with its timeline.

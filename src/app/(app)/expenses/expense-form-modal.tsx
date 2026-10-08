@@ -16,7 +16,7 @@ type Vendor = { id: string; name: string };
 // Only lowest-level accounts are offered; `group` is the account they sit under, if any.
 type CategoryAccount = { id: string; code: string; name: string; group?: string | null };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
-type PaymentLine = { accountId: string; amount: number };
+type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
 const TAX_TREATMENTS: { value: ExpenseTaxTreatment; label: string }[] = [
   { value: "taxable", label: "Taxable" },

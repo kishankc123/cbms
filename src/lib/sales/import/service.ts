@@ -1,3 +1,4 @@
+import { buildPaymentResolver, resolvePaymentMode } from "@/lib/payment-modes";
 import * as XLSX from "xlsx";
 import { salesColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
@@ -7,7 +8,6 @@ import { logAuditEvent } from "@/lib/audit";
 import { resolveImportDates } from "@/lib/banking/import-dates";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { PartialBatchError, postSalesBatch, type BatchInvoiceRow } from "@/lib/sales/invoice-records";
 import { assertRevenueAccount, getRevenueAccounts } from "@/lib/sales/revenue-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
@@ -61,11 +61,10 @@ export async function analyzeSalesFile(tenantId: string, input: { fileName: stri
 
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; discount: number; accountId: string | null; revenueAccountId: string | null };
+type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; discount: number; accountId: string | null; modeId: string | null; revenueAccountId: string | null };
 
 async function cashBankAccountList(tenantId: string) {
-  const groups = await getCashBankAccounts(tenantId);
-  return groups.flatMap((g) => (g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]));
+  return (await buildPaymentResolver(tenantId)).accounts;
 }
 
 /**
@@ -105,10 +104,9 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
   const dates = datesFor(parsed, mapping, dateOptions);
-  const [customerList, aliasRows, accountList, revenueList] = await Promise.all([
+  const [customerList, aliasRows, revenueList] = await Promise.all([
     db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId)),
     db.select({ alias: customerAliases.alias, customerId: customerAliases.customerId }).from(customerAliases).where(eq(customerAliases.tenantId, tenantId)),
-    cashBankAccountList(tenantId),
     getRevenueAccounts(tenantId),
   ]);
   const revenueByText = new Map<string, string>();
@@ -122,11 +120,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
   // A sale with no customer is posted to the "Cash Sale" customer, so that is who an existing invoice would be under.
   const cashSaleId = byName.get("cash sale")?.id ?? null;
   const customerById = new Map(customerList.map((c) => [c.id, c]));
-  const accountByText = new Map<string, string>();
-  for (const a of accountList) {
-    accountByText.set(normalizeName(a.name), a.id);
-    accountByText.set(normalizeName(a.code), a.id);
-  }
+  const payResolver = await buildPaymentResolver(tenantId);
 
   const lockedByDate = new Map<string, boolean>();
   const vatByDate = new Map<string, number>();
@@ -179,7 +173,10 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
     if (skipRows.has(rowNumber)) state = "skipped";
 
     const accountText = cell(r, "account");
-    const accountId = accountText ? accountByText.get(normalizeName(accountText)) ?? null : null;
+    const accountPick = accountText ? payResolver.resolve(accountText) : null;
+    const picked = accountPick && "accountId" in accountPick ? accountPick : null;
+    const accountId = picked?.accountId ?? null;
+    const accountNote = accountPick && "ambiguous" in accountPick ? `"${accountText}" has more than one account (${accountPick.ambiguous.join(", ")}). Write the account name instead.` : undefined;
     const revenueText = cell(r, "revenue");
     const revenueId = revenueText ? revenueByText.get(normalizeName(revenueText)) ?? null : null;
     const amount = parseAmountCell(cell(r, "amount"));
@@ -200,6 +197,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
       paid,
       account: accountText === "" ? "none" : accountId ? "ok" : "unknown",
       accountText,
+      accountNote,
       revenue: revenueText === "" ? "none" : revenueId ? "ok" : "unknown",
       revenueText,
       customer: state,
@@ -235,6 +233,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
       gross: check.computed?.gross ?? 0,
       discount: check.computed?.discount ?? 0,
       accountId: accountId ?? settings.defaultAccountId,
+      modeId: picked ? picked.modeId : accountText ? null : settings.defaultModeId ?? null,
       revenueAccountId: revenueId ?? (settings.defaultRevenueAccountId && revenueList.some((a) => a.id === settings.defaultRevenueAccountId) ? settings.defaultRevenueAccountId : null),
     });
   });
@@ -334,6 +333,13 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
     const accountList = await cashBankAccountList(tenantId);
     if (!accountList.some((a) => a.id === input.settings.defaultAccountId)) return { ok: false, error: "Choose a cash or bank account of this organization." };
   }
+  if (input.settings.defaultAccountId && input.settings.defaultModeId) {
+    try {
+      await resolvePaymentMode(tenantId, input.settings.defaultModeId, input.settings.defaultAccountId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Choose the payment mode and account again." };
+    }
+  }
   if (input.settings.defaultRevenueAccountId) {
     try {
       await assertRevenueAccount(tenantId, input.settings.defaultRevenueAccountId);
@@ -387,7 +393,7 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
       discountAmount: r.discount,
       billType: r.billType ?? input.settings.defaultBillType,
       revenueAccountId: r.revenueAccountId,
-      payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid }] : [],
+      payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid, modeId: r.modeId }] : [],
     }));
     try {
       const made = await postSalesBatch({ tenantId, userId }, batch, { importId: imp.id });
@@ -473,6 +479,8 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Customers (copy names from here)"], ...customerList.map((c) => [c.name])]), "Customers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Revenue accounts"], ...revenueList.map((a) => [a.name])]), "Revenue accounts");
+  const payModes = (await buildPaymentResolver(tenantId)).modes;
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(salesColumnGuide()));
   guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, guideData, "Columns");

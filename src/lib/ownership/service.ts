@@ -453,6 +453,7 @@ export type PaidUpInput = Meta & {
   amount: number;
   /** The cash or bank account the money was received into. */
   accountId: string;
+  paymentModeId?: string | null;
   paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other";
   chequeNumber?: string;
   confirmDuplicate?: boolean;
@@ -485,6 +486,7 @@ export async function recordPaidUpIncrease(tenantId: string, userId: string, inp
     partyType: "other",
     partyOtherName: h.name,
     accountId: input.accountId,
+    paymentModeId: input.paymentModeId,
     categoryAccountId: h.capitalAccountId,
     paymentMethod: input.paymentMethod,
     chequeNumber: input.chequeNumber || null,

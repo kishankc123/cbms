@@ -24,6 +24,7 @@ import {
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
 import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts } from "./account-guards";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 import { getCustomerBalances } from "./customer-balances";
 import { getSupplierBalances } from "./supplier-balances";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
@@ -96,6 +97,8 @@ export type CreatePaymentInput = {
   employeeId?: string | null;
   partyOtherName?: string | null;
   accountId: string;
+  /** The payment mode picked (Cash, Cheque, Fonepay, ...). When given it decides the payment method. */
+  paymentModeId?: string | null;
   transferToAccountId?: string | null;
   categoryAccountId?: string | null;
   paymentMethod: PaymentMethod;
@@ -166,8 +169,8 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
   // Money-in: Dr the account. Money-out: Cr the account. (Transfers handle
   // both legs themselves below.)
   const primaryLine: PostLineInput = isIn
-    ? { accountId: input.accountId, debitAmount: amount, description: label }
-    : { accountId: input.accountId, creditAmount: amount, description: label };
+    ? { accountId: input.accountId, paymentModeId: input.paymentModeId, debitAmount: amount, description: label }
+    : { accountId: input.accountId, paymentModeId: input.paymentModeId, creditAmount: amount, description: label };
 
   const allocations = input.allocations ?? [];
   const allocatedTotal = round2(allocations.reduce((s, a) => s + a.allocatedAmount, 0));
@@ -644,6 +647,7 @@ export async function createPayment(
   await validateSalaryPayment(tenantId, input);
   await validateStaffAdvance(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
+  const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
 
   if (!input.confirmDuplicate && (await checkDuplicate(tenantId, input))) {
@@ -673,7 +677,9 @@ export async function createPayment(
           accountId: input.accountId,
           transferToAccountId: input.transferToAccountId || null,
           categoryAccountId: input.categoryAccountId || null,
-          paymentMethod: input.paymentMethod,
+          paymentMethod: mode.paymentModeId ? mode.paymentMethod : input.paymentMethod,
+          paymentModeId: mode.paymentModeId,
+          paymentModeName: mode.paymentModeName,
           chequeNumber: input.chequeNumber || null,
           chequeDate: input.chequeDate || null,
           chequeBank: input.chequeBank || null,

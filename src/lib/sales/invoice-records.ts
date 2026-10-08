@@ -11,6 +11,7 @@ import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount } from "@/lib/sales/revenue-accounts";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 import { assertCashBankAccounts } from "@/lib/ledger/account-guards";
 
 // The records every way of creating a sales invoice shares (the Single and Multi-Invoice forms, and Import Sales): the
@@ -20,7 +21,7 @@ import { assertCashBankAccounts } from "@/lib/ledger/account-guards";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type SalesBillType = "taxable" | "zero_rated";
-export type BatchPaymentLine = { accountId: string; amount: number };
+export type BatchPaymentLine = { accountId: string; amount: number; /** The payment mode picked, if any. */ modeId?: string | null };
 export type BatchInvoiceRow = {
   invoiceDate: string;
   customerId: string;
@@ -76,8 +77,10 @@ export async function insertEmbeddedCustomerPayment(
   amount: number,
   accountId: string,
   journalEntryId: string,
-  referenceNumber: string
+  referenceNumber: string,
+  modeId?: string | null
 ) {
+  const mode = await resolvePaymentMode(tenantId, modeId, accountId);
   const [row] = await withPaymentNumber(tenantId, "money_in", (paymentNumber) =>
     db
       .insert(payments)
@@ -90,7 +93,9 @@ export async function insertEmbeddedCustomerPayment(
         partyType: "customer",
         customerId,
         accountId,
-        paymentMethod: "cash",
+        paymentMethod: mode.paymentMethod,
+        paymentModeId: mode.paymentModeId,
+        paymentModeName: mode.paymentModeName,
         referenceNumber,
         amount: amount.toFixed(2),
         description: `Payment received for ${referenceNumber}`,
@@ -285,6 +290,7 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
           const paymentLines = row.payments.filter((p) => p.accountId && p.amount > 0);
           const receiptLines: PostLineInput[] = paymentLines.map((p) => ({
             accountId: p.accountId,
+            paymentModeId: p.modeId,
             debitAmount: p.amount,
             description: `Payment received for ${invoiceNumber}`,
           }));
@@ -302,7 +308,7 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
           });
 
           await ensureBankAccount(tenantId, paymentLines[0].accountId);
-          await insertEmbeddedCustomerPayment(tenantId, userId, customerId, invoice.id, row.invoiceDate, paid, paymentLines[0].accountId, receiptEntry.id, invoiceNumber);
+          await insertEmbeddedCustomerPayment(tenantId, userId, customerId, invoice.id, row.invoiceDate, paid, paymentLines[0].accountId, receiptEntry.id, invoiceNumber, paymentLines[0].modeId);
         }
       } catch (e) {
         await discardInvoice(tenantId, invoice.id, userId);
