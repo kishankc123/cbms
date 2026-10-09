@@ -15,7 +15,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { listOrgUsers } from "@/lib/org-users";
 import { generateObligations } from "@/lib/compliance/engine/generate";
 import { migrateLegacyCalendarItems } from "@/lib/compliance/engine/legacy-migration";
-import { effectiveStatus, summarize, type ObligationStatus } from "@/lib/compliance/engine/status";
+import { DUE_SOON_DAYS, effectiveStatus, summarize, type ObligationStatus } from "@/lib/compliance/engine/status";
 import { ensureTaxPayableStructure } from "@/lib/compliance/tax-accounts";
 import {
   getSalesRegister,
@@ -29,7 +29,8 @@ import {
   type ComplianceReportType,
 } from "@/lib/compliance/reports";
 
-import { todayIso, monthRange } from "@/lib/calendar";
+import { todayIso, addMonths, addDays } from "@/lib/calendar";
+import { getFiscalRange } from "@/lib/fiscal";
 import { validateADDate } from "@/lib/calendar";
 async function logAudit(input: {
   tenantId: string;
@@ -109,19 +110,25 @@ export async function getComplianceDashboard() {
     return { pending: items.length, overdue: items.filter((i) => i.dueDate < today).length };
   };
 
-  // This month's activity, folded in here rather than a separate Reports page — informational, and never what
+  // Everything already past its due date, plus what falls due within the next month — not the whole year ahead.
+  const horizon = addMonths(session.calendar, today, 1);
+  const pendingOrSoon = open.filter((i) => i.dueDate <= horizon);
+  // The "Upcoming" card counts the same thing the list shows: not yet due, but falling due within the next month.
+  const upcomingWithinMonth = open.filter((i) => i.dueDate > addDays(today, DUE_SOON_DAYS) && i.dueDate <= horizon).length;
+
+  // This fiscal year's activity, folded in here rather than a separate Reports page — informational, and never what
   // decides a compliance deadline (that always comes from the obligations above).
-  const thisMonthRange = monthRange("AD", today);
-  const thisMonth = await getMonthlyComplianceReport(session.tenantId, thisMonthRange.from, thisMonthRange.to);
+  const fiscalRange = await getFiscalRange(session.tenantId);
+  const thisYear = await getMonthlyComplianceReport(session.tenantId, fiscalRange.from, fiscalRange.to);
 
   return {
     company: { name: tenant.companyName, country: country?.name ?? tenant.countryCode, entityType: entityType?.name ?? null },
-    summary: { due: counts.dueSoon, upcoming: counts.upcoming, completed: counts.completed, overdue: counts.overdue, exceptions: openExceptions.length },
+    summary: { due: counts.dueSoon, upcoming: upcomingWithinMonth, completed: counts.completed, overdue: counts.overdue, exceptions: openExceptions.length },
     categories: [
       { key: "tax", name: "Tax Compliance", href: "/compliance/tax", ...byCategory(["tax"]) },
       { key: "statutory", name: "Statutory Compliance", href: "/compliance/statutory", ...byCategory(["statutory", "ownership", "company"]) },
     ],
-    upcoming: open.slice(0, 8).map((i) => ({
+    upcoming: pendingOrSoon.map((i) => ({
       id: i.id,
       name: i.name,
       period: i.periodLabel,
@@ -130,13 +137,13 @@ export async function getComplianceDashboard() {
       href: i.categoryKey === "tax" ? "/compliance/tax" : "/compliance/statutory",
       responsibleUserName: i.responsibleUserId ? nameById[i.responsibleUserId] ?? "—" : "—",
     })),
-    thisMonth: {
-      salesTotal: thisMonth.salesTotal,
-      purchasesTotal: thisMonth.purchasesTotal,
-      vatPayable: thisMonth.vatReturn.netVatPayable,
-      tdsWithheld: thisMonth.tds.totalTds,
-      vatOutstanding: thisMonth.vatPayableBalance,
-      tdsOutstanding: thisMonth.tdsPayableBalance,
+    thisYear: {
+      salesTotal: thisYear.salesTotal,
+      purchasesTotal: thisYear.purchasesTotal,
+      vatPayable: thisYear.vatReturn.netVatPayable,
+      tdsWithheld: thisYear.tds.totalTds,
+      vatOutstanding: thisYear.vatPayableBalance,
+      tdsOutstanding: thisYear.tdsPayableBalance,
     },
   };
 }
