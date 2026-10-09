@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createPayment,
+  updatePayment,
+  getPaymentDetail,
   getOutstandingInvoicesForCustomer,
   getOutstandingBillsForSupplier,
   getOutstandingExpenses,
@@ -23,6 +25,8 @@ import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { D } from "@/components/calendar/date-text";
 type FormOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
+/** A payment being edited: the detail the drawer shows, which carries everything the form needs. */
+export type EditingPayment = Awaited<ReturnType<typeof getPaymentDetail>>;
 type Direction = "money_in" | "money_out";
 
 const today = () => todayIso();
@@ -61,39 +65,42 @@ export function NewPaymentModal({
   onDone,
   onCancel,
   fixedDirection,
+  editing,
 }: {
   formOptions: FormOptions;
   onDone: () => void;
   onCancel: () => void;
   fixedDirection?: Direction;
+  /** When given, the form edits this payment (its kind cannot change) instead of recording a new one. */
+  editing?: EditingPayment;
 }) {
-  const [direction, setDirection] = useState<Direction>(fixedDirection ?? "money_in");
-  const [paymentType, setPaymentType] = useState(fixedDirection === "money_out" ? "supplier_payment" : "customer_payment");
-  const [paymentDate, setPaymentDate] = useState(today());
-  const [accountId, setAccountId] = useState("");
-  const [paymentModeId, setPaymentModeId] = useState("");
-  const [paymentModeName, setPaymentModeName] = useState("");
-  const [transferToAccountId, setTransferToAccountId] = useState("");
-  const [categoryAccountId, setCategoryAccountId] = useState("");
-  const [chequeNumber, setChequeNumber] = useState("");
-  const [chequeDate, setChequeDate] = useState("");
-  const [chequeBank, setChequeBank] = useState("");
-  const [referenceNumber, setReferenceNumber] = useState("");
-  const [customerId, setCustomerId] = useState("");
-  const [vendorId, setVendorId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
+  const [direction, setDirection] = useState<Direction>(editing?.direction ?? fixedDirection ?? "money_in");
+  const [paymentType, setPaymentType] = useState<string>(editing?.paymentType ?? (fixedDirection === "money_out" ? "supplier_payment" : "customer_payment"));
+  const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? today());
+  const [accountId, setAccountId] = useState(editing?.accountId ?? "");
+  const [paymentModeId, setPaymentModeId] = useState(editing?.paymentModeId ?? "");
+  const [paymentModeName, setPaymentModeName] = useState(editing?.paymentModeName ?? "");
+  const [transferToAccountId, setTransferToAccountId] = useState(editing?.transferToAccountId ?? "");
+  const [categoryAccountId, setCategoryAccountId] = useState(editing?.categoryAccountId ?? "");
+  const [chequeNumber, setChequeNumber] = useState(editing?.chequeNumber ?? "");
+  const [chequeDate, setChequeDate] = useState(editing?.chequeDate ?? "");
+  const [chequeBank, setChequeBank] = useState(editing?.chequeBank ?? "");
+  const [referenceNumber, setReferenceNumber] = useState(editing?.referenceNumber ?? "");
+  const [customerId, setCustomerId] = useState(editing?.customerId ?? "");
+  const [vendorId, setVendorId] = useState(editing?.vendorId ?? "");
+  const [employeeId, setEmployeeId] = useState(editing?.employeeId ?? "");
   const [owed, setOwed] = useState<number | null>(null);
   // A staff advance is taken against a payroll month of the organization's calendar; it opens on the current month.
   const calendar = useCalendar();
   const currentMonth = ymdOf(calendar, todayIso()) ?? ymdOf("AD", todayIso())!;
-  const [advMonth, setAdvMonth] = useState(currentMonth.month);
-  const [advYear, setAdvYear] = useState(currentMonth.year);
+  const [advMonth, setAdvMonth] = useState(editing?.advanceMonth?.month ?? currentMonth.month);
+  const [advYear, setAdvYear] = useState(editing?.advanceMonth?.year ?? currentMonth.year);
   const [advInfo, setAdvInfo] = useState<{ outstanding: number; basic: number } | null>(null);
-  const [partyOtherName, setPartyOtherName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [partyOtherName, setPartyOtherName] = useState(editing?.partyOtherName ?? "");
+  const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [notes, setNotes] = useState(editing?.notes ?? "");
+  const [attachmentUrl, setAttachmentUrl] = useState(editing?.attachmentUrl ?? "");
 
   const [refundable, setRefundable] = useState<{ credit: number; advance: number; total: number } | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
@@ -106,7 +113,7 @@ export function NewPaymentModal({
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
   // The payment method on the record follows the mode picked (Cheque brings the cheque fields).
-  const paymentMethod = paymentModeName ? methodForMode(paymentModeName) : "cash";
+  const paymentMethod = paymentModeName ? methodForMode(paymentModeName) : editing ? editing.paymentMethod : "cash";
   const config = typeConfig(paymentType);
   const flatAccounts = useMemo(() => flattenAccounts(formOptions.cashBankAccounts), [formOptions.cashBankAccounts]);
   // Moving money between the business's own accounts now lives in
@@ -114,6 +121,7 @@ export function NewPaymentModal({
   const typeOptions = direction === "money_in" ? MONEY_IN_TYPE_OPTIONS : MONEY_OUT_TYPE_OPTIONS.filter((t) => !TRANSFER_TYPES.includes(t.value));
 
   useEffect(() => {
+    if (editing) return; // an edit keeps the kind of payment it has
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");
     setCustomerId("");
     setVendorId("");
@@ -125,18 +133,27 @@ export function NewPaymentModal({
   useEffect(() => {
     setOutstanding([]);
     setAllocated({});
+    // Back on the party the payment was recorded for, an edit starts with what it already settles ticked.
+    const seedOwn = () => {
+      if (editing && customerId === (editing.customerId ?? "") && vendorId === (editing.vendorId ?? "")) {
+        setAllocated(Object.fromEntries(editing.allocations.map((a) => [a.targetId, fmt(a.allocatedAmount)])));
+      }
+    };
     if (paymentType === "customer_payment" && customerId) {
-      getOutstandingInvoicesForCustomer(customerId).then((rows) =>
-        setOutstanding(rows.map((r) => ({ id: r.id, label: r.invoiceNumber, date: r.invoiceDate, outstanding: r.outstanding })))
-      );
+      getOutstandingInvoicesForCustomer(customerId, editing?.id).then((rows) => {
+        setOutstanding(rows.map((r) => ({ id: r.id, label: r.invoiceNumber, date: r.invoiceDate, outstanding: r.outstanding })));
+        seedOwn();
+      });
     } else if (paymentType === "supplier_payment" && vendorId) {
-      getOutstandingBillsForSupplier(vendorId).then((rows) =>
-        setOutstanding(rows.map((r) => ({ id: r.id, label: r.billNumber, date: r.billDate, outstanding: r.outstanding })))
-      );
+      getOutstandingBillsForSupplier(vendorId, editing?.id).then((rows) => {
+        setOutstanding(rows.map((r) => ({ id: r.id, label: r.billNumber, date: r.billDate, outstanding: r.outstanding })));
+        seedOwn();
+      });
     } else if (paymentType === "expense_payment") {
-      getOutstandingExpenses(vendorId || null).then((rows) =>
-        setOutstanding(rows.map((r) => ({ id: r.id, label: r.expenseNumber, date: r.expenseDate, outstanding: r.outstanding })))
-      );
+      getOutstandingExpenses(vendorId || null, editing?.id).then((rows) => {
+        setOutstanding(rows.map((r) => ({ id: r.id, label: r.expenseNumber, date: r.expenseDate, outstanding: r.outstanding })));
+        seedOwn();
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType, customerId, vendorId]);
@@ -201,11 +218,9 @@ export function NewPaymentModal({
 
     setSaving(true);
     try {
-      const result = await createPayment({
-        direction,
-        paymentType: paymentType as never,
+      const fields = {
         paymentDate,
-        partyType: config.needsEmployee ? "employee" : config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none",
+        partyType: (config.needsEmployee ? "employee" : config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none") as "customer" | "supplier" | "employee" | "other" | "none",
         customerId: config.needsCustomer ? customerId : null,
         employeeId: config.needsEmployee ? employeeId : null,
         advanceMonth: config.needsAdvanceMonth ? { calendar, month: advMonth, year: advYear } : null,
@@ -225,9 +240,23 @@ export function NewPaymentModal({
         notes: notes || null,
         attachmentUrl: attachmentUrl || null,
         allocations: config.showAllocation ? allocations : undefined,
-        confirmDuplicate: confirmDup,
-      });
+      };
 
+      if (editing) {
+        // A payment type with no allocation section here (a tax payment) keeps what it settles.
+        const result = await updatePayment(editing.id, {
+          ...fields,
+          allocations: config.showAllocation ? allocations : editing.allocations.map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount })),
+        });
+        if (!result.changed) {
+          report("Nothing was changed, so there is nothing to save.", null);
+          return;
+        }
+        onDone();
+        return;
+      }
+
+      const result = await createPayment({ ...fields, direction, paymentType: paymentType as never, confirmDuplicate: confirmDup });
       if ("duplicateWarning" in result) {
         setConfirmDuplicate(true);
         return;
@@ -260,13 +289,13 @@ export function NewPaymentModal({
 
       <div className="relative w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">New Payment{fixedDirection ? ` — ${fixedDirection === "money_in" ? "Money In" : "Money Out"}` : ""}</h2>
+          <h2 className="text-base font-semibold text-gray-900">{editing ? `Edit Payment ${editing.paymentNumber}` : `New Payment${fixedDirection ? ` — ${fixedDirection === "money_in" ? "Money In" : "Money Out"}` : ""}`}</h2>
           <button type="button" onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600">
             ✕
           </button>
         </div>
 
-        {!fixedDirection && (
+        {!fixedDirection && !editing && (
           <div className="inline-flex rounded-full bg-gray-100 p-1">
             {(["money_in", "money_out"] as const).map((d) => (
               <button
@@ -290,11 +319,11 @@ export function NewPaymentModal({
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Payment Number</label>
-              <input value="Auto-generated on save" disabled className="w-full rounded bg-gray-50 px-2 py-1.5 text-sm text-gray-400" />
+              <input value={editing ? editing.paymentNumber : "Auto-generated on save"} disabled className="w-full rounded bg-gray-50 px-2 py-1.5 text-sm text-gray-400" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Payment Type</label>
-              <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className={inputCls}>
+              <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} disabled={Boolean(editing)} title={editing ? "The kind of payment cannot be changed in an edit" : undefined} className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-500`}>
                 {typeOptions.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
@@ -548,7 +577,7 @@ export function NewPaymentModal({
             disabled={saving}
             className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50"
           >
-            {saving ? "Posting..." : "Post Payment"}
+            {saving ? (editing ? "Saving..." : "Posting...") : editing ? "Save changes" : "Post Payment"}
           </button>
         </div>
       </div>

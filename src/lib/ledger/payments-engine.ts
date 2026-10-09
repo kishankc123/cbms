@@ -22,6 +22,7 @@ import {
   type paymentAllocationTargetEnum,
 } from "@/db/schema";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
+import { logAuditEvent } from "@/lib/audit";
 import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts } from "./account-guards";
 import { resolvePaymentMode } from "@/lib/payment-modes";
@@ -358,7 +359,8 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
 
 // Checked before anything is posted: a payment may only settle tax compliance items that
 // belong to this organization and are still owed, and never more than their balance.
-async function validateTaxAllocations(tenantId: string, input: CreatePaymentInput) {
+// `credit` is what the payment being edited already settles on each item (by id): free again for the new version.
+async function validateTaxAllocations(tenantId: string, input: CreatePaymentInput, credit: Map<string, number> = new Map()) {
   const linked = (input.allocations ?? []).filter((a) => a.targetType === "tax_obligation");
   if (linked.length === 0) return;
   if (input.paymentType !== "tax_payment") throw new Error("Only a tax payment can settle a compliance item.");
@@ -373,7 +375,7 @@ async function validateTaxAllocations(tenantId: string, input: CreatePaymentInpu
     if (!ob) throw new Error("Compliance item not found");
     if (ob.categoryKey !== "tax") throw new Error(`"${ob.name}" is not a tax item`);
     if (ob.status === "not_applicable") throw new Error(`"${ob.name}" is marked not applicable`);
-    const balance = amounts.get(id)!.balance;
+    const balance = round2(amounts.get(id)!.balance + (credit.get(id) ?? 0));
     if (value > balance + 0.005) throw new Error(`The allocation exceeds the balance of ${ob.name} (${ob.periodLabel}): ${balance.toFixed(2)}`);
   }
 }
@@ -513,7 +515,7 @@ const EXPECTED_TARGET: Partial<Record<PaymentType, PaymentAllocationTarget>> = {
 
 // Checked before anything is posted: every allocation must point at a live document of the right kind that belongs
 // to the party being paid, and no document may be allocated more than it still owes.
-async function validateAllocations(tenantId: string, input: CreatePaymentInput) {
+async function validateAllocations(tenantId: string, input: CreatePaymentInput, credit: Map<string, number> = new Map()) {
   const allocations = input.allocations ?? [];
   if (allocations.length === 0) return;
   const expected = EXPECTED_TARGET[input.paymentType];
@@ -534,7 +536,7 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput) 
       if (!inv) throw new Error("Invoice not found");
       if (inv.status === "void") throw new Error(`Invoice ${inv.invoiceNumber} is cancelled`);
       if (inv.customerId !== input.customerId) throw new Error(`Invoice ${inv.invoiceNumber} belongs to a different customer`);
-      if (value > round2(Number(inv.total) - Number(inv.amountPaid)) + 0.005) throw new Error(`The allocation exceeds invoice ${inv.invoiceNumber}'s outstanding balance`);
+      if (value > round2(Number(inv.total) - Number(inv.amountPaid) + (credit.get(id) ?? 0)) + 0.005) throw new Error(`The allocation exceeds invoice ${inv.invoiceNumber}'s outstanding balance`);
     }
   } else if (expected === "purchase_bill") {
     const rows = await db.select().from(purchaseBills).where(and(eq(purchaseBills.tenantId, tenantId), inArray(purchaseBills.id, ids)));
@@ -543,7 +545,7 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput) 
       if (!bill) throw new Error("Bill not found");
       if (bill.status === "void") throw new Error(`Bill ${bill.billNumber} is cancelled`);
       if (bill.vendorId !== input.vendorId) throw new Error(`Bill ${bill.billNumber} belongs to a different supplier`);
-      if (value > round2(Number(bill.total) - Number(bill.amountPaid)) + 0.005) throw new Error(`The allocation exceeds bill ${bill.billNumber}'s outstanding balance`);
+      if (value > round2(Number(bill.total) - Number(bill.amountPaid) + (credit.get(id) ?? 0)) + 0.005) throw new Error(`The allocation exceeds bill ${bill.billNumber}'s outstanding balance`);
     }
   } else if (expected === "expense") {
     const rows = await db.select().from(expenses).where(and(eq(expenses.tenantId, tenantId), inArray(expenses.id, ids)));
@@ -552,19 +554,20 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput) 
       if (!ex) throw new Error("Expense not found");
       if (ex.status === "void") throw new Error(`Expense ${ex.expenseNumber} is void`);
       if (input.vendorId && ex.vendorId && ex.vendorId !== input.vendorId) throw new Error(`Expense ${ex.expenseNumber} belongs to a different supplier`);
-      if (value > round2(Number(ex.amountPayable) - Number(ex.amountPaid)) + 0.005) throw new Error(`The allocation exceeds expense ${ex.expenseNumber}'s outstanding balance`);
+      if (value > round2(Number(ex.amountPayable) - Number(ex.amountPaid) + (credit.get(id) ?? 0)) + 0.005) throw new Error(`The allocation exceeds expense ${ex.expenseNumber}'s outstanding balance`);
     }
   }
 }
 
 // Paying a customer back can't be more than we owe them: the credit on their account (for example after a sales
 // return) plus any advance they have paid us.
-async function validateRefund(tenantId: string, input: CreatePaymentInput) {
+// `ownAmount`: when a refund is being edited, what it already paid back counts as still available.
+async function validateRefund(tenantId: string, input: CreatePaymentInput, ownAmount = 0) {
   if (input.paymentType !== "customer_refund") return;
   const balance = (await getCustomerBalances(tenantId))[input.customerId!] ?? 0; // negative = we owe the customer
   const credit = round2(Math.max(-balance, 0));
   const advance = round2(Math.max(await getCustomerAdvanceBalance(tenantId, input.customerId!), 0));
-  const refundable = round2(credit + advance);
+  const refundable = round2(credit + advance + ownAmount);
   if (round2(input.amount) > refundable + 0.005) {
     throw new Error(
       refundable > 0
@@ -575,9 +578,9 @@ async function validateRefund(tenantId: string, input: CreatePaymentInput) {
 }
 
 // A salary payment settles what the employee is owed (their Salary Payable balance), so it can't be more than that.
-async function validateSalaryPayment(tenantId: string, input: CreatePaymentInput) {
+async function validateSalaryPayment(tenantId: string, input: CreatePaymentInput, ownAmount = 0) {
   if (input.paymentType !== "salary_payment") return;
-  const owed = Math.max(await getEmployeePayableBalance(tenantId, input.employeeId!), 0);
+  const owed = round2(Math.max(await getEmployeePayableBalance(tenantId, input.employeeId!), 0) + ownAmount);
   if (round2(input.amount) > owed + 0.005) {
     throw new Error(
       owed > 0
@@ -803,4 +806,332 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
     .update(payments)
     .set({ status: "voided", voidReason: reason, voidedBy: userId, voidedAt: new Date() })
     .where(eq(payments.id, paymentId));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Editing a payment
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** What an edit may change. The kind of payment (and so its direction) is fixed: a different kind is a different payment. */
+export type UpdatePaymentInput = Omit<CreatePaymentInput, "direction" | "paymentType" | "origin" | "confirmDuplicate">;
+
+export type UpdatePaymentResult = { changed: false } | { changed: true; changes: PaymentChange[] };
+export type PaymentChange = { field: string; before: string; after: string };
+
+type PaymentRow = typeof payments.$inferSelect;
+type AllocationRow = typeof paymentAllocations.$inferSelect;
+
+const blank = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+/**
+ * A payment as people read it (names, not ids), so an edit can say what changed: used for the before and after of the audit
+ * log. One entry per thing a person can change.
+ */
+async function describePayment(tenantId: string, p: PaymentRow, allocs: { targetType: PaymentAllocationTarget; targetId: string; allocatedAmount: string }[], advanceMonth?: string | null): Promise<Record<string, string>> {
+  const accountIds = [p.accountId, p.transferToAccountId, p.categoryAccountId].filter(Boolean) as string[];
+  const [accountRows, customer, vendor, employee] = await Promise.all([
+    accountIds.length ? db.select({ id: accounts.id, code: accounts.code, name: accounts.name }).from(accounts).where(and(eq(accounts.tenantId, tenantId), inArray(accounts.id, accountIds))) : [],
+    p.customerId ? db.select({ name: customers.name }).from(customers).where(eq(customers.id, p.customerId)).limit(1) : [],
+    p.vendorId ? db.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, p.vendorId)).limit(1) : [],
+    p.employeeId ? db.select({ name: employees.fullName }).from(employees).where(eq(employees.id, p.employeeId)).limit(1) : [],
+  ]);
+  const accountName = (id: string | null) => {
+    const a = accountRows.find((r) => r.id === id);
+    return a ? `${a.code} — ${a.name}` : "—";
+  };
+
+  const byType = (t: PaymentAllocationTarget) => allocs.filter((a) => a.targetType === t);
+  const [invoices, bills, expenseRows, obligations] = await Promise.all([
+    byType("sales_invoice").length ? db.select({ id: salesInvoices.id, n: salesInvoices.invoiceNumber }).from(salesInvoices).where(inArray(salesInvoices.id, byType("sales_invoice").map((a) => a.targetId))) : [],
+    byType("purchase_bill").length ? db.select({ id: purchaseBills.id, n: purchaseBills.billNumber }).from(purchaseBills).where(inArray(purchaseBills.id, byType("purchase_bill").map((a) => a.targetId))) : [],
+    byType("expense").length ? db.select({ id: expenses.id, n: expenses.expenseNumber }).from(expenses).where(inArray(expenses.id, byType("expense").map((a) => a.targetId))) : [],
+    byType("tax_obligation").length ? db.select({ id: complianceObligations.id, n: complianceObligations.name, period: complianceObligations.periodLabel }).from(complianceObligations).where(inArray(complianceObligations.id, byType("tax_obligation").map((a) => a.targetId))) : [],
+  ]);
+  const docName = (a: { targetType: PaymentAllocationTarget; targetId: string }) => {
+    if (a.targetType === "sales_invoice") return invoices.find((r) => r.id === a.targetId)?.n ?? "invoice";
+    if (a.targetType === "purchase_bill") return bills.find((r) => r.id === a.targetId)?.n ?? "bill";
+    if (a.targetType === "expense") return expenseRows.find((r) => r.id === a.targetId)?.n ?? "expense";
+    const o = obligations.find((r) => r.id === a.targetId);
+    return o ? `${o.n} ${o.period}` : "tax item";
+  };
+  const allocationText = allocs.length
+    ? allocs
+        .map((a) => `${docName(a)}: ${Number(a.allocatedAmount).toFixed(2)}`)
+        .sort()
+        .join("; ")
+    : "—";
+
+  return {
+    "Payment date": blank(p.paymentDate),
+    Party: blank(customer[0]?.name ?? vendor[0]?.name ?? employee[0]?.name ?? p.partyOtherName),
+    Account: accountName(p.accountId),
+    "To account": accountName(p.transferToAccountId),
+    "Classification account": accountName(p.categoryAccountId),
+    Mode: blank(p.paymentModeName),
+    Amount: Number(p.amount).toFixed(2),
+    "Cheque number": blank(p.chequeNumber),
+    "Cheque date": blank(p.chequeDate),
+    "Cheque bank": blank(p.chequeBank),
+    Reference: blank(p.referenceNumber),
+    Description: blank(p.description),
+    Notes: blank(p.notes),
+    Attachment: blank(p.attachmentUrl),
+    "Settles": allocationText,
+    ...(advanceMonth ? { "Advance for month": advanceMonth } : {}),
+  };
+}
+
+const monthLabelOf = (m: { calendar: string; month: number; year: number } | null | undefined) => (m ? `${m.year}-${String(m.month).padStart(2, "0")} (${m.calendar})` : null);
+
+/** Rebuilds the input a payment was recorded with, from what is stored, so the old entry can be posted again if an edit fails. */
+function inputFromRow(p: PaymentRow, allocs: AllocationRow[], advance: typeof staffAdvances.$inferSelect | null): CreatePaymentInput {
+  return {
+    direction: p.direction,
+    paymentType: p.paymentType,
+    paymentDate: p.paymentDate,
+    partyType: p.partyType,
+    customerId: p.customerId,
+    vendorId: p.vendorId,
+    employeeId: p.employeeId,
+    partyOtherName: p.partyOtherName,
+    accountId: p.accountId,
+    paymentModeId: p.paymentModeId,
+    transferToAccountId: p.transferToAccountId,
+    categoryAccountId: p.categoryAccountId,
+    paymentMethod: p.paymentMethod,
+    chequeNumber: p.chequeNumber,
+    chequeDate: p.chequeDate,
+    chequeBank: p.chequeBank,
+    referenceNumber: p.referenceNumber,
+    amount: Number(p.amount),
+    description: p.description,
+    notes: p.notes,
+    attachmentUrl: p.attachmentUrl,
+    allocations: allocs.map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: Number(a.allocatedAmount) })),
+    advanceMonth: advance ? { calendar: advance.forCalendar as CalendarSystem, month: advance.forMonth, year: advance.forYear } : null,
+  };
+}
+
+/**
+ * Edits a payment recorded in the Payment module (money in or money out). The kind of payment stays; everything a person
+ * typed can change: date, party, account, mode, cheque details, amount, what it settles, notes. The books are corrected the way
+ * every other edit in the system is: the old journal entry is reversed and a new one is posted, under the same payment number,
+ * and the invoices, bills and expenses it settled are put right. Everything that could refuse the edit is checked BEFORE
+ * anything changes (a payment matched in a bank reconciliation, one recorded by an invoice or bill, a closed period, an
+ * advance already used up, a balance that would no longer cover the payment); if a step still fails, the earlier steps are
+ * taken back so the payment is left as it was. What changed is written to the audit log.
+ */
+export async function updatePayment(tenantId: string, userId: string, paymentId: string, edit: UpdatePaymentInput): Promise<UpdatePaymentResult> {
+  const [payment] = await db.select().from(payments).where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId))).limit(1);
+  if (!payment) throw new Error("Payment not found");
+  if (payment.status === "voided") throw new Error("A voided payment can't be edited");
+  if (payment.status !== "posted") throw new Error("Only a posted payment can be edited");
+  if (payment.origin === "embedded") throw new Error("This payment was recorded automatically by Sales/Purchases — edit the source invoice/bill instead.");
+  if (payment.journalEntryId && (await isReconciled(payment.journalEntryId))) {
+    throw new Error("This payment has been matched in a bank reconciliation — undo that match before editing it");
+  }
+
+  const oldAllocs = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+  const [oldAdvance] = payment.paymentType === "staff_advance" ? await db.select().from(staffAdvances).where(eq(staffAdvances.paymentId, paymentId)).limit(1) : [];
+  if (oldAdvance) {
+    const [rec] = await db.select({ id: staffAdvanceRecoveries.id }).from(staffAdvanceRecoveries).where(eq(staffAdvanceRecoveries.advanceId, oldAdvance.id)).limit(1);
+    if (rec) throw new Error("Part of this advance has already been recovered through payroll — reverse that payroll run first, then edit the advance");
+  }
+  // The advance a payment put on a customer's or supplier's account can't be changed once it has been applied or refunded.
+  await assertAdvanceStillThere(tenantId, payment, round2(oldAllocs.reduce((s, a) => s + Number(a.allocatedAmount), 0)));
+
+  const input: CreatePaymentInput = { ...edit, direction: payment.direction, paymentType: payment.paymentType, origin: "standalone" };
+  const oldInput = inputFromRow(payment, oldAllocs, oldAdvance ?? null);
+
+  // ---- everything that can refuse the edit, before anything is touched ----
+  validateInput(input);
+  await validateOwnership(tenantId, input);
+  await assertAccountActive(tenantId, input.accountId);
+  if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
+  const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
+  await validateStaffAdvance(tenantId, input);
+  await assertPeriodOpen(tenantId, payment.paymentDate);
+  await assertPeriodOpen(tenantId, input.paymentDate);
+  await assertPeriodOpen(tenantId, todayIso()); // the old entry is reversed today
+
+  // What this payment itself already uses up is free again for the new version.
+  const credit = new Map<string, number>();
+  for (const a of oldAllocs) credit.set(a.targetId, round2((credit.get(a.targetId) ?? 0) + Number(a.allocatedAmount)));
+  await validateTaxAllocations(tenantId, input, credit);
+  await validateAllocations(tenantId, input, credit);
+  const sameParty = (a: string | null | undefined, b: string | null | undefined) => Boolean(a) && a === b;
+  await validateRefund(tenantId, input, sameParty(payment.customerId, input.customerId) ? Number(payment.amount) : 0);
+  await validateSalaryPayment(tenantId, input, sameParty(payment.employeeId, input.employeeId) ? Number(payment.amount) : 0);
+
+  // ---- what changed (nothing to do if nothing did) ----
+  const newAllocsAsRows = (input.allocations ?? []).map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }));
+  const draftRow: PaymentRow = {
+    ...payment,
+    paymentDate: input.paymentDate,
+    partyType: input.partyType,
+    customerId: input.customerId || null,
+    vendorId: input.vendorId || null,
+    employeeId: input.employeeId || null,
+    partyOtherName: input.partyOtherName || null,
+    accountId: input.accountId,
+    transferToAccountId: input.transferToAccountId || null,
+    categoryAccountId: input.categoryAccountId || null,
+    paymentMethod: mode.paymentModeId ? mode.paymentMethod : input.paymentMethod,
+    paymentModeId: mode.paymentModeId,
+    paymentModeName: mode.paymentModeName,
+    chequeNumber: input.chequeNumber || null,
+    chequeDate: input.chequeDate || null,
+    chequeBank: input.chequeBank || null,
+    referenceNumber: input.referenceNumber || null,
+    amount: input.amount.toFixed(2),
+    description: input.description || null,
+    notes: input.notes || null,
+    attachmentUrl: input.attachmentUrl || null,
+  };
+  const [beforeText, afterText] = await Promise.all([
+    describePayment(tenantId, payment, oldAllocs, monthLabelOf(oldInput.advanceMonth)),
+    describePayment(tenantId, draftRow, newAllocsAsRows, monthLabelOf(input.advanceMonth)),
+  ]);
+  const changes: PaymentChange[] = Object.keys(afterText)
+    .filter((k) => beforeText[k] !== afterText[k])
+    .map((k) => ({ field: k, before: beforeText[k] ?? "—", after: afterText[k] }));
+  if (changes.length === 0) return { changed: false };
+
+  // ---- make the change, taking it back if a step fails ----
+  const progress = { allocsReverted: false, oldReversed: false, newEntryId: null as string | null, rowUpdated: false, newApplied: [] as AllocationInput[] };
+  try {
+    for (const a of oldAllocs) await revertAllocationOnTarget(tenantId, a);
+    progress.allocsReverted = true;
+    if (payment.journalEntryId) {
+      await reverseJournalEntry(tenantId, payment.journalEntryId, userId, `Edit of payment ${payment.paymentNumber}`);
+    }
+    progress.oldReversed = true;
+    await db.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+
+    const lines = await buildLines(tenantId, input);
+    const entry = await postJournalEntry({
+      tenantId,
+      entryDate: input.paymentDate,
+      sourceType: payment.direction === "money_in" ? "receipt" : "payment",
+      referenceNumber: payment.paymentNumber,
+      memo: `${payment.paymentNumber} — ${payment.paymentType.replace(/_/g, " ")} (edited)`,
+      createdBy: userId,
+      lines,
+    });
+    progress.newEntryId = entry.id;
+
+    await db
+      .update(payments)
+      .set({
+        paymentDate: draftRow.paymentDate,
+        partyType: draftRow.partyType,
+        customerId: draftRow.customerId,
+        vendorId: draftRow.vendorId,
+        employeeId: draftRow.employeeId,
+        partyOtherName: draftRow.partyOtherName,
+        accountId: draftRow.accountId,
+        transferToAccountId: draftRow.transferToAccountId,
+        categoryAccountId: draftRow.categoryAccountId,
+        paymentMethod: draftRow.paymentMethod,
+        paymentModeId: draftRow.paymentModeId,
+        paymentModeName: draftRow.paymentModeName,
+        chequeNumber: draftRow.chequeNumber,
+        chequeDate: draftRow.chequeDate,
+        chequeBank: draftRow.chequeBank,
+        referenceNumber: draftRow.referenceNumber,
+        amount: draftRow.amount,
+        description: draftRow.description,
+        notes: draftRow.notes,
+        attachmentUrl: draftRow.attachmentUrl,
+        journalEntryId: entry.id,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, paymentId));
+    progress.rowUpdated = true;
+
+    if (payment.paymentType === "staff_advance") {
+      const m = input.advanceMonth!;
+      await db
+        .update(staffAdvances)
+        .set({ advanceDate: input.paymentDate, forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })!, amount: input.amount.toFixed(2) })
+        .where(eq(staffAdvances.paymentId, paymentId));
+    }
+
+    const allocations = input.allocations ?? [];
+    if (allocations.length > 0) {
+      await db.insert(paymentAllocations).values(allocations.map((a) => ({ paymentId, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) })));
+      for (const a of allocations) {
+        await applyAllocationToTarget(tenantId, a);
+        progress.newApplied.push(a);
+      }
+    }
+  } catch (e) {
+    await restoreAfterFailedEdit(tenantId, userId, payment, oldAllocs, oldAdvance ?? null, oldInput, progress);
+    throw e;
+  }
+
+  await logAuditEvent({
+    tenantId,
+    userId,
+    action: "payment_edited",
+    entityType: "payment",
+    entityId: paymentId,
+    before: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.before])) },
+    after: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.after])) },
+  });
+  return { changed: true, changes };
+}
+
+// Puts a payment back exactly as it was after an edit failed part-way: whatever the edit did is undone, then the old entry is
+// posted again and the documents it settled are put back as they were.
+async function restoreAfterFailedEdit(
+  tenantId: string,
+  userId: string,
+  old: PaymentRow,
+  oldAllocs: AllocationRow[],
+  oldAdvance: typeof staffAdvances.$inferSelect | null,
+  oldInput: CreatePaymentInput,
+  progress: { allocsReverted: boolean; oldReversed: boolean; newEntryId: string | null; rowUpdated: boolean; newApplied: AllocationInput[] }
+) {
+  try {
+    for (const a of progress.newApplied) {
+      await revertAllocationOnTarget(tenantId, { targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), paymentId: old.id });
+    }
+    await db.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, old.id));
+    if (progress.newEntryId) await reverseJournalEntry(tenantId, progress.newEntryId, userId, `Edit of payment ${old.paymentNumber} could not be completed`);
+
+    let entryId = old.journalEntryId;
+    if (progress.oldReversed) {
+      const entry = await postJournalEntry({
+        tenantId,
+        entryDate: old.paymentDate,
+        sourceType: old.direction === "money_in" ? "receipt" : "payment",
+        referenceNumber: old.paymentNumber,
+        memo: `${old.paymentNumber} — ${old.paymentType.replace(/_/g, " ")} (restored)`,
+        createdBy: userId,
+        lines: await buildLines(tenantId, oldInput),
+      });
+      entryId = entry.id;
+    }
+    if (progress.allocsReverted) {
+      for (const a of oldAllocs) {
+        await applyAllocationToTarget(tenantId, { targetType: a.targetType, targetId: a.targetId, allocatedAmount: Number(a.allocatedAmount) });
+      }
+    }
+    if (oldAllocs.length > 0) {
+      await db.insert(paymentAllocations).values(oldAllocs.map((a) => ({ paymentId: old.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount })));
+    }
+    const { id: _id, tenantId: _tenant, ...oldValues } = old;
+    void _id;
+    void _tenant;
+    await db.update(payments).set({ ...oldValues, journalEntryId: entryId }).where(eq(payments.id, old.id));
+    if (oldAdvance) {
+      const { id: _aid, ...advanceValues } = oldAdvance;
+      void _aid;
+      await db.update(staffAdvances).set(advanceValues).where(eq(staffAdvances.paymentId, old.id));
+    }
+  } catch (restoreError) {
+    console.error(`Could not fully restore payment ${old.paymentNumber} after a failed edit — check it in Payments and the journal`, restoreError);
+  }
 }

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { requireTenantSession } from "@/lib/session";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getInterTransferDetail } from "../actions";
+import { listEditHistory } from "@/lib/audit-history";
+import { DT } from "@/components/calendar/date-text";
 import { VoidButton } from "./void-button";
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -12,9 +14,10 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const denied = await guardView("payments");
   if (denied) return denied;
   const { id } = await params;
-  await requireTenantSession();
+  const session = await requireTenantSession();
   const t = await getInterTransferDetail(id);
   if (!t) notFound();
+  const history = await listEditHistory(session.tenantId, "inter_transfer", id);
 
   const rows: [string, string][] = [
     ["Transfer No.", t.transferNumber],
@@ -91,6 +94,39 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         </div>
         {t.status === "voided" && <p className="text-xs text-gray-500">This entry has been reversed by the void.</p>}
       </section>
+
+      {history.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-900">Edit history</h2>
+          <div className="space-y-3">
+            {history.map((h) => (
+              <div key={h.id} className="rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                <p className="text-xs text-gray-500">
+                  Edited by {h.userName} on <DT value={h.at} />
+                </p>
+                <table className="mt-1.5 w-full text-xs">
+                  <thead className="text-left text-gray-500">
+                    <tr>
+                      <th className="pr-2 py-0.5 font-medium">Field</th>
+                      <th className="pr-2 py-0.5 font-medium">Was</th>
+                      <th className="py-0.5 font-medium">Now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h.changes.map((c) => (
+                      <tr key={c.field} className="border-t border-gray-100 align-top">
+                        <td className="pr-2 py-0.5 text-gray-600">{c.field}</td>
+                        <td className="pr-2 py-0.5 text-gray-500 break-words">{c.before}</td>
+                        <td className="py-0.5 text-gray-900 break-words">{c.after}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <Link href="/payments/inter-transfer" className="text-sm text-gray-500 hover:text-gray-700">← Back to transfers</Link>
     </div>

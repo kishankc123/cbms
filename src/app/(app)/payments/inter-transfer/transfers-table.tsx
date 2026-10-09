@@ -117,8 +117,11 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
                 <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{fmt(r.amount)}</td>
                 <td className="px-3 py-2 text-gray-500">{r.reference ?? "—"}</td>
                 <td className="px-3 py-2"><StatusPill tone={r.status === "posted" ? "success" : "critical"}>{r.status}</StatusPill></td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right whitespace-nowrap">
                   <Link href={`/payments/inter-transfer/${r.id}`} className="text-xs text-[var(--color-primary)] hover:underline">View</Link>
+                  {r.status === "posted" && (
+                    <Link href={`/payments/inter-transfer/${r.id}/edit`} className="ml-3 text-xs text-[var(--color-primary)] hover:underline">Edit</Link>
+                  )}
                 </td>
               </tr>
             ))}

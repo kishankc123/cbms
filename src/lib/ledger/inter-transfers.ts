@@ -6,6 +6,7 @@ import { assertEntryNotReconciled } from "./reconciliation-guards";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
+import { logAuditEvent } from "@/lib/audit";
 
 import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -116,12 +117,39 @@ export async function createTransfer(tenantId: string, userId: string, input: Tr
 
 // Editing reverses the old entry and posts a fresh one, then re-points the
 // transfer at it — so exactly one entry is ever in force for the transfer.
-export async function updateTransfer(tenantId: string, userId: string, transferId: string, input: TransferInput) {
+export type TransferChange = { field: string; before: string; after: string };
+
+export async function updateTransfer(tenantId: string, userId: string, transferId: string, input: TransferInput): Promise<{ changed: false } | { changed: true; changes: TransferChange[] }> {
   const [existing] = await db.select().from(interTransfers).where(and(eq(interTransfers.id, transferId), eq(interTransfers.tenantId, tenantId))).limit(1);
   if (!existing) throw new Error("Transfer not found");
   if (existing.status === "voided") throw new Error("A voided transfer cannot be edited.");
 
   await validate(tenantId, input);
+
+  // What changed, in words (account names, not ids). Nothing to do when nothing did.
+  const labels = new Map((await getTransferAccountOptions(tenantId)).map((a) => [a.id, a.label]));
+  const text = (v: string | null | undefined) => (v && v.trim() ? v.trim() : "—");
+  const before = {
+    "Transfer date": existing.transferDate,
+    "From account": labels.get(existing.fromAccountId) ?? "—",
+    "To account": labels.get(existing.toAccountId) ?? "—",
+    Amount: Number(existing.amount).toFixed(2),
+    Reference: text(existing.reference),
+    Description: text(existing.description),
+    Attachment: text(existing.attachmentUrl),
+  };
+  const after = {
+    "Transfer date": input.transferDate,
+    "From account": labels.get(input.fromAccountId) ?? "—",
+    "To account": labels.get(input.toAccountId) ?? "—",
+    Amount: round2(input.amount).toFixed(2),
+    Reference: text(input.reference),
+    Description: text(input.description),
+    Attachment: text(input.attachmentUrl),
+  };
+  const changes = (Object.keys(after) as (keyof typeof after)[]).filter((k) => before[k] !== after[k]).map((k) => ({ field: k, before: before[k], after: after[k] }));
+  if (changes.length === 0) return { changed: false };
+
   // Check every period the edit touches up front so it can't half-apply.
   await assertPeriodOpen(tenantId, existing.transferDate);
   await assertPeriodOpen(tenantId, input.transferDate);
@@ -154,6 +182,17 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
       updatedAt: new Date(),
     })
     .where(eq(interTransfers.id, transferId));
+
+  await logAuditEvent({
+    tenantId,
+    userId,
+    action: "inter_transfer_edited",
+    entityType: "inter_transfer",
+    entityId: transferId,
+    before: { transferNumber: existing.transferNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.before])) },
+    after: { transferNumber: existing.transferNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.after])) },
+  });
+  return { changed: true, changes };
 }
 
 export async function voidTransfer(tenantId: string, userId: string, transferId: string, reason: string) {

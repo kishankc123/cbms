@@ -17,6 +17,7 @@ import {
   journalLines,
   bankReconciliationMatchJournalLines,
   complianceObligations,
+  staffAdvances,
 } from "@/db/schema";
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
@@ -27,9 +28,12 @@ import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
 import { getCustomerAdvanceBalance } from "@/lib/ledger/advance-accounts";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { listEditHistory } from "@/lib/audit-history";
 import {
   createPayment as createPaymentEngine,
   voidPayment as voidPaymentEngine,
+  updatePayment as updatePaymentEngine,
+  type UpdatePaymentInput,
   MONEY_IN_TYPES,
   MONEY_OUT_TYPES,
   ALLOCATABLE_TYPES,
@@ -60,34 +64,58 @@ export async function getPaymentFormOptions() {
   return { customers: customerList, vendors: vendorList, employees: employeeList, cashBankAccounts, incomeAccounts, expenseAccounts, taxAccounts };
 }
 
-export async function getOutstandingInvoicesForCustomer(customerId: string) {
+// When a payment is being edited, what it already settles counts as still open on each document (and a document it settled in
+// full is offered again), so the form can show it as it was.
+async function ownAllocations(tenantId: string, paymentId: string | undefined): Promise<Map<string, number>> {
+  if (!paymentId) return new Map();
+  const rows = await db
+    .select({ targetId: paymentAllocations.targetId, amount: paymentAllocations.allocatedAmount })
+    .from(paymentAllocations)
+    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+    .where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId)));
+  return new Map(rows.map((r) => [r.targetId, Number(r.amount)]));
+}
+
+export async function getOutstandingInvoicesForCustomer(customerId: string, forPaymentId?: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  const own = await ownAllocations(session.tenantId, forPaymentId);
+  const open = inArray(salesInvoices.status, ["sent", "partially_paid", "overdue"]);
   const rows = await db
     .select({ id: salesInvoices.id, invoiceNumber: salesInvoices.invoiceNumber, invoiceDate: salesInvoices.invoiceDate, total: salesInvoices.total, amountPaid: salesInvoices.amountPaid, status: salesInvoices.status })
     .from(salesInvoices)
-    .where(and(eq(salesInvoices.tenantId, session.tenantId), eq(salesInvoices.customerId, customerId), inArray(salesInvoices.status, ["sent", "partially_paid", "overdue"])))
+    .where(and(eq(salesInvoices.tenantId, session.tenantId), eq(salesInvoices.customerId, customerId), own.size > 0 ? or(open, inArray(salesInvoices.id, [...own.keys()])) : open))
     .orderBy(asc(salesInvoices.invoiceDate));
 
-  return rows.map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid)) })).filter((r) => r.outstanding > 0.005);
+  return rows
+    .filter((r) => r.status !== "void")
+    .map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) }))
+    .filter((r) => r.outstanding > 0.005);
 }
 
-export async function getOutstandingBillsForSupplier(vendorId: string) {
+export async function getOutstandingBillsForSupplier(vendorId: string, forPaymentId?: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  const own = await ownAllocations(session.tenantId, forPaymentId);
+  const open = inArray(purchaseBills.status, ["open", "partially_paid", "overdue"]);
   const rows = await db
     .select({ id: purchaseBills.id, billNumber: purchaseBills.billNumber, billDate: purchaseBills.billDate, total: purchaseBills.total, amountPaid: purchaseBills.amountPaid, status: purchaseBills.status })
     .from(purchaseBills)
-    .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.vendorId, vendorId), inArray(purchaseBills.status, ["open", "partially_paid", "overdue"])))
+    .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.vendorId, vendorId), own.size > 0 ? or(open, inArray(purchaseBills.id, [...own.keys()])) : open))
     .orderBy(asc(purchaseBills.billDate));
 
-  return rows.map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid)) })).filter((r) => r.outstanding > 0.005);
+  return rows
+    .filter((r) => r.status !== "void")
+    .map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) }))
+    .filter((r) => r.outstanding > 0.005);
 }
 
-export async function getOutstandingExpenses(vendorId?: string | null) {
+export async function getOutstandingExpenses(vendorId?: string | null, forPaymentId?: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  const conditions = [eq(expenses.tenantId, session.tenantId), inArray(expenses.status, ["unpaid", "partially_paid"])];
+  const own = await ownAllocations(session.tenantId, forPaymentId);
+  const open = inArray(expenses.status, ["unpaid", "partially_paid"]);
+  const conditions = [eq(expenses.tenantId, session.tenantId), own.size > 0 ? or(open, inArray(expenses.id, [...own.keys()]))! : open];
   if (vendorId) conditions.push(eq(expenses.vendorId, vendorId));
 
   const rows = await db
@@ -96,7 +124,7 @@ export async function getOutstandingExpenses(vendorId?: string | null) {
     .where(and(...conditions))
     .orderBy(asc(expenses.expenseDate));
 
-  return rows.map((r) => ({ ...r, outstanding: round2(Number(r.amountPayable) - Number(r.amountPaid)) })).filter((r) => r.outstanding > 0.005);
+  return rows.map((r) => ({ ...r, outstanding: round2(Number(r.amountPayable) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) })).filter((r) => r.outstanding > 0.005);
 }
 
 // What could be paid back to a customer: the credit on their account (for example after a sales return) and any
@@ -146,6 +174,29 @@ export async function createPayment(input: CreatePaymentActionInput) {
   revalidatePath("/expenses");
   revalidatePath("/customers");
   revalidatePath("/suppliers");
+  return result;
+}
+
+export type UpdatePaymentActionInput = Omit<UpdatePaymentInput, "allocations"> & {
+  allocations?: (PaymentAllocationInput | { targetType: "tax_obligation"; targetId: string; allocatedAmount: number })[];
+};
+
+// Editing needs the Payments "edit" permission. The kind of payment cannot change; what changed is written to the audit log.
+export async function updatePayment(paymentId: string, input: UpdatePaymentActionInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "payments", "edit")) throw new Error("Not permitted");
+
+  const result = await updatePaymentEngine(session.tenantId, session.userId, paymentId, input);
+
+  revalidatePath("/payments");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  revalidatePath("/sales");
+  revalidatePath("/purchases/stockable");
+  revalidatePath("/expenses");
+  revalidatePath("/customers");
+  revalidatePath("/suppliers");
+  revalidatePath("/compliance", "layout");
   return result;
 }
 
@@ -386,8 +437,15 @@ export async function getPaymentDetail(paymentId: string) {
     reconciliationStatus = reconciledSet.has(payment.journalEntryId) ? "reconciled" : "unreconciled";
   }
 
+  const [advance] = payment.paymentType === "staff_advance" ? await db.select().from(staffAdvances).where(eq(staffAdvances.paymentId, paymentId)).limit(1) : [];
+  const history = await listEditHistory(session.tenantId, "payment", paymentId);
+
   return {
     ...payment,
+    // Only a posted payment recorded here, and not yet matched in a bank reconciliation, can be edited.
+    canEdit: can(session, "payments", "edit") && payment.status === "posted" && payment.origin === "standalone" && reconciliationStatus !== "reconciled",
+    advanceMonth: advance ? { calendar: advance.forCalendar as "AD" | "BS", month: advance.forMonth, year: advance.forYear } : null,
+    history,
     amount: Number(payment.amount),
     party: partyNameFor(payment),
     accountName: accountNameById[payment.accountId] ?? "—",

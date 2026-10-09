@@ -9,7 +9,7 @@ import { useFormatDate, useFormatDateTime } from "@/components/calendar/calendar
 type Detail = Awaited<ReturnType<typeof getPaymentDetail>>;
 const fmt = (n: number) => n.toFixed(2);
 
-export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentId: string; onClose: () => void; onVoided: () => void }) {
+export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { paymentId: string; onClose: () => void; onVoided: () => void; onEdit: (detail: Detail) => void }) {
   const fmtDT = useFormatDateTime();
   const fmtDate = useFormatDate();
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -161,12 +161,46 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentI
               </section>
             )}
 
+            {detail.history.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-900">Edit history</h3>
+                <div className="space-y-3">
+                  {detail.history.map((h) => (
+                    <div key={h.id} className="rounded-lg border border-gray-200 p-3 text-sm">
+                      <p className="text-xs text-gray-500">
+                        Edited by {h.userName} on {fmtDT(h.at)}
+                      </p>
+                      <table className="mt-1.5 w-full text-xs">
+                        <thead className="text-left text-gray-500">
+                          <tr>
+                            <th className="pr-2 py-0.5 font-medium">Field</th>
+                            <th className="pr-2 py-0.5 font-medium">Was</th>
+                            <th className="py-0.5 font-medium">Now</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {h.changes.map((c) => (
+                            <tr key={c.field} className="border-t border-gray-100 align-top">
+                              <td className="pr-2 py-0.5 text-gray-600">{c.field}</td>
+                              <td className="pr-2 py-0.5 text-gray-500 break-words">{c.before}</td>
+                              <td className="py-0.5 text-gray-900 break-words">{c.after}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="space-y-1">
               <h3 className="text-sm font-semibold text-gray-900">Audit Trail</h3>
               <DetailGrid
                 rows={[
                   ["Created", fmtDT(detail.createdAt)],
                   ...(detail.postedAt ? [["Posted", fmtDT(detail.postedAt)] as [string, string]] : []),
+                  ...(detail.updatedAt ? [["Last edited", fmtDT(detail.updatedAt)] as [string, string]] : []),
                   ...(detail.voidedAt ? [["Voided", `${fmtDT(detail.voidedAt)} — ${detail.voidReason ?? ""}`] as [string, string]] : []),
                 ]}
               />
@@ -179,6 +213,11 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided }: { paymentI
             )}
 
             <div className="flex items-center justify-end gap-3 pt-2">
+              {detail.canEdit && (
+                <button type="button" onClick={() => onEdit(detail)} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
+                  Edit
+                </button>
+              )}
               {detail.origin === "standalone" && detail.status === "posted" && (
                 <button type="button" onClick={() => setShowVoid(true)} className="rounded border border-red-300 text-red-600 hover:bg-red-50 text-sm px-4 py-1.5">
                   Void

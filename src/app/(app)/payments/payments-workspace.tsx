@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listPayments, getPaymentSummary, exportPaymentsCsv, getPaymentFormOptions, type PaymentListFilters } from "./actions";
 import { PAYMENT_TYPE_LABELS, MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, STATUS_FILTER_OPTIONS } from "./payment-types";
-import { NewPaymentModal } from "./new-payment-modal";
+import { NewPaymentModal, type EditingPayment } from "./new-payment-modal";
 import { PaymentDetailDrawer } from "./payment-detail-drawer";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 
@@ -76,6 +76,8 @@ export function PaymentsWorkspace({
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  // The payment being edited (opened from its detail), shown in the same form as a new payment.
+  const [editing, setEditing] = useState<EditingPayment | null>(null);
 
   const typeOptions = direction === "money_out" ? MONEY_OUT_TYPE_OPTIONS : direction === "money_in" ? MONEY_IN_TYPE_OPTIONS : [...MONEY_IN_TYPE_OPTIONS, ...MONEY_OUT_TYPE_OPTIONS];
 
@@ -338,10 +340,25 @@ export function PaymentsWorkspace({
       </div>
 
       {showNew && <NewPaymentModal formOptions={formOptions} onDone={onSaved} onCancel={() => setShowNew(false)} fixedDirection={fixedDirection} />}
+      {editing && (
+        <NewPaymentModal
+          formOptions={formOptions}
+          editing={editing}
+          onDone={() => {
+            setEditing(null);
+            onSaved();
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
       {detailId && (
         <PaymentDetailDrawer
           paymentId={detailId}
           onClose={() => setDetailId(null)}
+          onEdit={(d) => {
+            setDetailId(null);
+            setEditing(d);
+          }}
           onVoided={() => {
             setDetailId(null);
             refresh();
