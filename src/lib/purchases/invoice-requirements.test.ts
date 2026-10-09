@@ -10,9 +10,15 @@ describe("what a stockable purchase invoice must carry", () => {
   it("needs both for a VAT bill, even when paid in full", () => {
     expect(invoiceRequirements({ billType: "vat", total: 1130, paid: 1130 })).toMatchObject({ supplierRequired: true, numberRequired: true, reason: expect.stringMatching(/VAT bill/) });
   });
-  it("needs both when the payment does not clear the invoice", () => {
-    expect(invoiceRequirements({ billType: "no_bill", total: 1000, paid: 400 })).toMatchObject({ fullyPaid: false, supplierRequired: true, numberRequired: true, reason: expect.stringMatching(/balance is owed/) });
-    expect(invoiceRequirements({ billType: "pan", total: 1000, paid: 0 })).toMatchObject({ supplierRequired: true, numberRequired: true });
+  it("needs both when the payment does not clear a PAN or Challan invoice", () => {
+    expect(invoiceRequirements({ billType: "pan", total: 1000, paid: 0 })).toMatchObject({ fullyPaid: false, supplierRequired: true, numberRequired: true, reason: expect.stringMatching(/balance is owed/) });
+    expect(invoiceRequirements({ billType: "challan", total: 1000, paid: 400 })).toMatchObject({ supplierRequired: true, numberRequired: true });
+  });
+  it("never needs an invoice number for a No bill or Estimate, though an unpaid balance still needs the supplier", () => {
+    for (const billType of ["no_bill", "estimate"]) {
+      expect(invoiceRequirements({ billType, total: 1000, paid: 400 })).toMatchObject({ fullyPaid: false, supplierRequired: true, numberRequired: false, reason: expect.stringMatching(/balance is owed/) });
+      expect(invoiceRequirements({ billType, total: 1000, paid: 0 })).toMatchObject({ supplierRequired: true, numberRequired: false });
+    }
   });
   it("treats rounding dust as paid in full, and an empty invoice as not paid", () => {
     expect(invoiceRequirements({ billType: "no_bill", total: 1000, paid: 999.996 }).fullyPaid).toBe(true);
