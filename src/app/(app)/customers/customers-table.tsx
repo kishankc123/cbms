@@ -66,6 +66,16 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
       });
   }, [rows, search, sortField, sortDir]);
 
+  // The cards add up the customers shown below, for the date range chosen.
+  const totals = useMemo(
+    () => ({
+      sales: filtered.reduce((s, c) => s + c.sales, 0),
+      paid: filtered.reduce((s, c) => s + c.paid, 0),
+      outstanding: filtered.reduce((s, c) => s + c.outstanding, 0),
+    }),
+    [filtered]
+  );
+
   function toggleSort(field: SortField) {
     if (field === sortField) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -79,6 +89,19 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
 
   return (
     <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          { label: "Total sales", value: totals.sales },
+          { label: "Total payment received", value: totals.paid },
+          { label: "Total outstanding", value: totals.outstanding, emphasis: true },
+        ].map((c) => (
+          <div key={c.label} className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-xs text-gray-500">{c.label}</p>
+            <p className={`mt-1 text-xl font-semibold ${c.emphasis && c.value > 0.005 ? "text-amber-700" : "text-gray-900"}`}>{fmt(c.value)}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <input
           value={search}
