@@ -89,7 +89,7 @@ describe("the compliance checklist", () => {
     expect((await loadPermit(org.tenantId, TODAY))!.status).toMatchObject({ state: "expired", coveredThrough: "2082/83", monthsLate: 2 });
   });
 
-  it("a period filed before the system never calculates a fine, and is settled", async () => {
+  it("a period filed before the system is settled and owes nothing", async () => {
     // 30 periods are marked filed before the system. The worksheet shows one fiscal year at a time (the earliest is the cheapest
     // to work out, and the year in which all of those periods start), so check that year's rows.
     const vatRows = await db.select({ start: complianceObligations.periodStart, flagged: complianceObligations.filedBeforeSystem }).from(complianceObligations).where(and(eq(complianceObligations.tenantId, org.tenantId), eq(complianceObligations.taxTypeKey, "vat")));
@@ -101,7 +101,7 @@ describe("the compliance checklist", () => {
     expect(sheet.rows.every((r) => r.periodStart! >= earliest.from && r.periodStart! <= earliest.to)).toBe(true); // only that year
     const old = sheet.rows.filter((r) => r.filedBeforeSystem);
     expect(old.length).toBeGreaterThan(0);
-    expect(old.every((r) => r.finesAndPenalties === 0 && r.daysDelayed === 0 && r.pendingVat === 0)).toBe(true);
+    expect(old.every((r) => r.pendingVat === 0)).toBe(true);
     expect(sheet.openingCredit).toBe(0); // nothing is brought forward into the first year
   }, 240_000);
 

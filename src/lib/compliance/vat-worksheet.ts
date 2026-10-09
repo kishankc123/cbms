@@ -1,16 +1,13 @@
 // The VAT worksheet, shown one fiscal year at a time (the year is chosen from a drop-down). One row per filing period (whatever
 // period the organization's VAT obligations were generated at — monthly or quarterly). Only a VAT receivable (credit) is carried
 // forward — from period to period and from one fiscal year to the next — and is netted off against a later period's VAT payable.
-// VAT payable is never carried: what is unpaid stays with its own period and accrues interest and fines there. Fines & penalties
-// are the real, calculated late-filing/payment charge, using the same engine and rule data as the standalone Fines & Penalties
-// calculator, so the two can never disagree.
+// VAT payable is never carried: what is unpaid stays with its own period (fines and penalties are on the Fines & Penalties screen,
+// not here). Sales and purchase figures are already net of returns (see getVatReturn).
 import { and, asc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { complianceObligations, tenants } from "@/db/schema";
+import { complianceObligations } from "@/db/schema";
 import { obligationAmounts } from "./tax-amounts";
 import { getVatReturn } from "./reports";
-import { getPenaltyRule } from "./penalty-rules";
-import { calculatePenalty, type VatPenaltyParams } from "./penalty-engine";
 import { bsFiscalYearOf, yearRange, todayIso, type IsoDate } from "@/lib/calendar";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -21,11 +18,15 @@ export type VatWorksheetRow = {
   periodStart: string | null;
   periodEnd: string | null;
   dueDate: string;
-  grossSales: number;
+  /** Sales less sales returns (taxable value). */
+  netSales: number;
+  /** VAT on sales, less VAT on sales returns. */
   salesVat: number;
+  /** Purchases (and VAT-bearing expenses) less purchase returns (taxable value). */
   netPurchase: number;
+  /** VAT on purchases, less VAT on purchase returns. */
   purchaseVat: number;
-  /** Output VAT - input VAT for the period. Negative = a receivable (credit) for the period. */
+  /** VAT on sales - VAT on purchases for the period. Negative = a receivable (credit) for the period. */
   netPay: number;
   /** VAT receivable brought forward into this period (from earlier periods and earlier fiscal years). */
   creditOpening: number;
@@ -36,14 +37,9 @@ export type VatWorksheetRow = {
   /** VAT payable for the period after the receivable has been netted off. */
   netPayable: number;
   paid: number;
-  /** VAT payable still unpaid. Not carried forward — it stays with this period and accrues fines. */
+  /** VAT payable still unpaid. Not carried forward — it stays with this period. */
   pendingVat: number;
-  daysDelayed: number;
-  finesAndPenalties: number;
-  penaltyNote: string | null;
-  /** Unpaid VAT + fines & penalties for this period. */
-  totalPayable: number;
-  /** Filed (and settled) before the organization started using the system: no fine is calculated and nothing is owed. */
+  /** Filed (and settled) before the organization started using the system: nothing is owed. */
   filedBeforeSystem: boolean;
 };
 
@@ -54,10 +50,10 @@ export type VatWorksheet = {
   years: VatWorksheetYear[];
   selectedKey: string | null;
   rows: VatWorksheetRow[];
-  /** VAT receivable carried in from earlier years at the start of the selected year. */
+  /** VAT receivable carried in from earlier years at the start of the selected year (the "opening balance b/f" row). */
   openingCredit: number;
-  /** Unpaid VAT and fines still owing from periods before the selected year — shown for information, never carried into it. */
-  earlierUnpaid: number;
+  /** VAT payable still unpaid: this year's periods plus periods of earlier years (payable is never carried, so it is added here). */
+  payableVat: number;
 };
 
 function fiscalYearOfDate(iso: string): VatWorksheetYear {
@@ -69,8 +65,6 @@ function fiscalYearOfDate(iso: string): VatWorksheetYear {
 
 export async function getVatWorksheet(tenantId: string, requestedKey?: string | null): Promise<VatWorksheet> {
   const today = todayIso();
-  const [tenant] = await db.select({ countryCode: tenants.countryCode }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  if (!tenant) throw new Error("Organization not found");
 
   const obligations = await db
     .select()
@@ -95,70 +89,48 @@ export async function getVatWorksheet(tenantId: string, requestedKey?: string | 
 
   // The receivable chain runs through every period from the start, so the selected year opens with the right brought-forward credit.
   let credit = 0;
-  const chain = upTo.map(({ o, year }, i) => {
-    const netPay = returns[i].netVatPayable;
+  const all = upTo.map(({ o, year }, i) => {
+    const ret = returns[i];
+    const netPay = ret.netVatPayable;
     const creditOpening = credit;
     const creditUsed = Math.min(creditOpening, Math.max(0, netPay));
     const creditClosing = round2(creditOpening - creditUsed + Math.max(0, -netPay));
     const netPayable = round2(Math.max(0, netPay) - creditUsed);
     credit = creditClosing;
-    return { o, ret: returns[i], netPay, creditOpening, creditUsed, creditClosing, netPayable, year };
-  });
-
-  const buildRow = async (c: (typeof chain)[number]): Promise<VatWorksheetRow> => {
-    const { o, ret, netPay, netPayable } = c;
     // A period filed before the system was settled outside it, so what it came to counts as paid.
     const paid = o.filedBeforeSystem ? netPayable : amounts.get(o.id)?.paid ?? 0;
-    const actualDate = o.filedBeforeSystem ? null : o.paymentDate ?? o.filingDate ?? (today > o.dueDate ? today : null);
-    let daysDelayed = 0;
-    let finesAndPenalties = 0;
-    let penaltyNote: string | null = null;
-    if (actualDate) {
-      const rule = await getPenaltyRule(tenant.countryCode, "vat", o.dueDate);
-      if (rule) {
-        const breakdown = calculatePenalty("vat", netPayable, o.dueDate, actualDate, rule.params as VatPenaltyParams, null, o.frequency === "quarterly" ? "quarterly" : "monthly");
-        daysDelayed = breakdown.daysDelayed;
-        finesAndPenalties = round2(breakdown.filingPenalty + breakdown.paymentPenalty + breakdown.interest);
-        penaltyNote = breakdown.lines.find((l) => l.label === "Applied filing penalty")?.note ?? null;
-      }
-    }
     const pendingVat = round2(Math.max(0, netPayable - paid));
-    return {
+    const row: VatWorksheetRow = {
       obligationId: o.id,
       periodLabel: o.periodLabel,
       periodStart: o.periodStart,
       periodEnd: o.periodEnd,
       dueDate: o.dueDate,
-      grossSales: ret.salesTaxable,
+      netSales: ret.salesTaxable,
       salesVat: ret.outputVat,
       netPurchase: ret.purchasesTaxable,
       purchaseVat: ret.inputVat,
       netPay,
-      creditOpening: c.creditOpening,
-      creditUsed: c.creditUsed,
-      creditClosing: c.creditClosing,
+      creditOpening,
+      creditUsed,
+      creditClosing,
       netPayable,
       paid,
       pendingVat,
-      daysDelayed,
-      finesAndPenalties,
-      penaltyNote,
-      totalPayable: round2(pendingVat + finesAndPenalties),
       filedBeforeSystem: o.filedBeforeSystem,
     };
-  };
+    return { row, year };
+  });
 
-  const inYear = chain.filter((c) => selected && c.year.key === selected.key);
-  // Earlier years are only summarised: a period with nothing unpaid owes nothing, so its fines need not be worked out.
-  const before = chain.filter((c) => selected && c.year.key < selected.key && !c.o.filedBeforeSystem && c.netPayable > (amounts.get(c.o.id)?.paid ?? 0));
-  const [rows, earlierRows] = await Promise.all([Promise.all(inYear.map(buildRow)), Promise.all(before.map(buildRow))]);
+  const inYear = all.filter((c) => selected && c.year.key === selected.key).map((c) => c.row);
+  const earlier = all.filter((c) => selected && c.year.key < selected.key).map((c) => c.row);
 
   return {
     today,
     years,
     selectedKey: selected?.key ?? null,
-    rows,
+    rows: inYear,
     openingCredit: inYear[0]?.creditOpening ?? 0,
-    earlierUnpaid: round2(earlierRows.reduce((sum, r) => sum + r.totalPayable, 0)),
+    payableVat: round2([...earlier, ...inYear].reduce((sum, r) => sum + r.pendingVat, 0)),
   };
 }
