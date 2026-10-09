@@ -30,7 +30,7 @@ import {
 } from "@/lib/compliance/reports";
 
 import { todayIso, addMonths, addDays } from "@/lib/calendar";
-import { getFiscalRange } from "@/lib/fiscal";
+import { fiscalYearOfDate } from "@/lib/compliance/vat-worksheet";
 import { validateADDate } from "@/lib/calendar";
 async function logAudit(input: {
   tenantId: string;
@@ -72,7 +72,9 @@ async function ensureCompliance(tenantId: string) {
 
 // ---------- Dashboard ----------
 
-export async function getComplianceDashboard() {
+// fiscalYearKey is the start date (AD) of the fiscal year picked in the filter; blank or unknown = the current year. The counts and
+// category cards follow it; the pending / upcoming list does not.
+export async function getComplianceDashboard(fiscalYearKey?: string | null) {
   const session = await requireTenantSession();
   if (!can(session, "compliance", "view")) throw new Error("Not permitted");
   const today = todayIso();
@@ -101,10 +103,17 @@ export async function getComplianceDashboard() {
 
   const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
-  const counts = summarize(obligations, today);
+  // The fiscal years that have compliance items (an item belongs to the year its period starts in, else the year it falls due in).
+  const yearOf = (i: (typeof obligations)[number]) => fiscalYearOfDate(i.periodStart ?? i.dueDate);
+  const years = Array.from(new Map(obligations.filter((i) => i.status !== "not_applicable").map((i) => [yearOf(i).key, yearOf(i)])).values()).sort((a, b) => (a.key < b.key ? -1 : 1));
+  const currentKey = fiscalYearOfDate(today).key;
+  const selectedYear = years.find((y) => y.key === fiscalYearKey) ?? years.find((y) => y.key === currentKey) ?? years[years.length - 1] ?? null;
+  const inYear = obligations.filter((i) => selectedYear && yearOf(i).key === selectedYear.key);
+  const counts = summarize(inYear, today);
 
-  // Per-category "what needs attention": open items, and how many of those are overdue.
-  const open = obligations.filter((i) => i.status !== "not_applicable" && i.status !== "filed" && i.status !== "paid");
+  const isOpen = (i: (typeof obligations)[number]) => i.status !== "not_applicable" && i.status !== "filed" && i.status !== "paid";
+  // Per-category "what needs attention" (for the selected year): open items, and how many of those are overdue.
+  const open = inYear.filter(isOpen);
   const byCategory = (keys: string[]) => {
     const items = open.filter((i) => keys.includes(i.categoryKey));
     return { pending: items.length, overdue: items.filter((i) => i.dueDate < today).length };
@@ -112,17 +121,14 @@ export async function getComplianceDashboard() {
 
   // Everything already past its due date, plus what falls due within the next month — not the whole year ahead.
   const horizon = addMonths(session.calendar, today, 1);
-  const pendingOrSoon = open.filter((i) => i.dueDate <= horizon);
+  const pendingOrSoon = obligations.filter((i) => isOpen(i) && i.dueDate <= horizon); // every year: this list is not filtered
   // The "Upcoming" card counts the same thing the list shows: not yet due, but falling due within the next month.
   const upcomingWithinMonth = open.filter((i) => i.dueDate > addDays(today, DUE_SOON_DAYS) && i.dueDate <= horizon).length;
 
-  // This fiscal year's activity, folded in here rather than a separate Reports page — informational, and never what
-  // decides a compliance deadline (that always comes from the obligations above).
-  const fiscalRange = await getFiscalRange(session.tenantId);
-  const thisYear = await getMonthlyComplianceReport(session.tenantId, fiscalRange.from, fiscalRange.to);
-
   return {
     company: { name: tenant.companyName, country: country?.name ?? tenant.countryCode, entityType: entityType?.name ?? null },
+    fiscalYears: years.map((y) => ({ key: y.key, label: y.label })),
+    selectedFiscalYear: selectedYear?.key ?? null,
     summary: { due: counts.dueSoon, upcoming: upcomingWithinMonth, completed: counts.completed, overdue: counts.overdue, exceptions: openExceptions.length },
     categories: [
       { key: "tax", name: "Tax Compliance", href: "/compliance/tax", ...byCategory(["tax"]) },
@@ -137,14 +143,6 @@ export async function getComplianceDashboard() {
       href: i.categoryKey === "tax" ? "/compliance/tax" : "/compliance/statutory",
       responsibleUserName: i.responsibleUserId ? nameById[i.responsibleUserId] ?? "—" : "—",
     })),
-    thisYear: {
-      salesTotal: thisYear.salesTotal,
-      purchasesTotal: thisYear.purchasesTotal,
-      vatPayable: thisYear.vatReturn.netVatPayable,
-      tdsWithheld: thisYear.tds.totalTds,
-      vatOutstanding: thisYear.vatPayableBalance,
-      tdsOutstanding: thisYear.tdsPayableBalance,
-    },
   };
 }
 

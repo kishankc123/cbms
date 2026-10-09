@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { getComplianceDashboard } from "./actions";
 import { ObligationStatusPill } from "@/components/compliance/status-pill";
 import { D } from "@/components/calendar/date-text";
 
 type Data = Awaited<ReturnType<typeof getComplianceDashboard>>;
-
-const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone?: "bad" | "warn" | "good" }) {
   return (
@@ -21,19 +20,38 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 // Focused on what needs attention: who the company is, four counts, where the
 // open items are, and what is coming up. Detail lives on each section's page.
 export function ComplianceDashboard({ data }: { data: Data }) {
+  const router = useRouter();
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-lg font-semibold text-gray-900">{data.company.name}</p>
-        <p className="mt-1 text-sm text-gray-500">
-          {data.company.country}
-          <span className="mx-2 text-gray-300">|</span>
-          {data.company.entityType ?? (
-            <Link href="/compliance/company" className="text-amber-700 underline">
-              Set your company type
-            </Link>
-          )}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <div>
+          <p className="text-lg font-semibold text-gray-900">{data.company.name}</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {data.company.country}
+            <span className="mx-2 text-gray-300">|</span>
+            {data.company.entityType ?? (
+              <Link href="/compliance/company" className="text-amber-700 underline">
+                Set your company type
+              </Link>
+            )}
+          </p>
+        </div>
+        {data.fiscalYears.length > 0 && (
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Fiscal year
+            <select
+              value={data.selectedFiscalYear ?? ""}
+              onChange={(e) => router.replace("/compliance?fy=" + e.target.value)}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+            >
+              {data.fiscalYears.map((y) => (
+                <option key={y.key} value={y.key}>
+                  {y.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="grid grid-cols-4 gap-4">
@@ -113,28 +131,6 @@ export function ComplianceDashboard({ data }: { data: Data }) {
           </Link>
         </p>
       )}
-
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-900">This fiscal year</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs text-gray-500">Sales / Purchases</p>
-            <p className="mt-1 text-sm text-gray-900">
-              {fmt(data.thisYear.salesTotal)} / {fmt(data.thisYear.purchasesTotal)}
-            </p>
-          </div>
-          <Link href="/compliance/tax" className="rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50/60">
-            <p className="text-xs text-gray-500">VAT payable this fiscal year</p>
-            <p className="mt-1 text-sm text-gray-900">{fmt(data.thisYear.vatPayable)}</p>
-            <p className="text-xs text-gray-400">Outstanding: {fmt(data.thisYear.vatOutstanding)}</p>
-          </Link>
-          <Link href="/compliance/tax" className="rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50/60">
-            <p className="text-xs text-gray-500">TDS withheld this fiscal year</p>
-            <p className="mt-1 text-sm text-gray-900">{fmt(data.thisYear.tdsWithheld)}</p>
-            <p className="text-xs text-gray-400">Outstanding: {fmt(data.thisYear.tdsOutstanding)}</p>
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }
