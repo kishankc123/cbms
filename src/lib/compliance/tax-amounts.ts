@@ -2,6 +2,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { complianceObligations, complianceTaxAssessments, complianceTaxTypes, paymentAllocations, payments, tenants } from "@/db/schema";
 import { getTdsReport, getVatReturn } from "./reports";
+import { savedVatNetPayables } from "./vat-worksheet";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -70,10 +71,16 @@ export async function obligationAmounts(tenantId: string, obligations: Obligatio
     .groupBy(paymentAllocations.targetId);
   const paidBy = new Map(paidRows.map((r) => [r.id, { total: Number(r.total), last: r.last }]));
 
+  // A VAT month whose year has a saved worksheet takes its amount due from that worksheet (its closing balance: the VAT payable after
+  // the carried receivable is netted off), so the Overview and the worksheet always agree. Other months are worked out from the books.
+  const hasVatReturnSource = obligations.some((o) => o.taxTypeKey && sourceOf.get(o.taxTypeKey) === "vat_return");
+  const fromWorksheet = hasVatReturnSource ? await savedVatNetPayables(tenantId) : new Map<string, number>();
+
   for (const o of obligations) {
     const source = o.taxTypeKey ? sourceOf.get(o.taxTypeKey) : null;
     const compute = source ? AMOUNT_SOURCES[source] : undefined;
-    const computedDue = compute && o.periodStart && o.periodEnd ? round2(await compute(tenantId, o.periodStart, o.periodEnd)) : null;
+    const saved = source === "vat_return" ? fromWorksheet.get(o.id) : undefined;
+    const computedDue = saved !== undefined ? saved : compute && o.periodStart && o.periodEnd ? round2(await compute(tenantId, o.periodStart, o.periodEnd)) : null;
     const entered = o.amountDue !== null && o.amountDue !== undefined ? Number(o.amountDue) : null;
     const assessedTotal = round2(assessed.get(o.id) ?? 0);
     const due = round2((computedDue ?? entered ?? 0) + assessedTotal);

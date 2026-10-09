@@ -7,9 +7,9 @@
 // Working the figures out from the books is the slow part, so it is done only when the person loads the worksheet, and the result
 // is saved (see vat-worksheet-store.ts). Showing a worksheet needs no ledger reads: the receivable chain inside the year is plain
 // arithmetic on the saved figures, and what has been paid is read live from the payments.
-import { and, asc, eq, gt, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { complianceObligations, journalEntries, paymentAllocations, payments } from "@/db/schema";
+import { complianceObligations, journalEntries, paymentAllocations, payments, vatWorksheets } from "@/db/schema";
 import type { VatWorksheetFigures, VatWorksheetPeriodFigures } from "@/db/schema/vat-worksheet";
 import { getVatReturn } from "./reports";
 import { bsFiscalYearOf, yearRange, todayIso } from "@/lib/calendar";
@@ -40,6 +40,8 @@ export type VatWorksheetRow = {
   creditClosing: number;
   /** VAT payable for the period after the receivable has been netted off. */
   netPayable: number;
+  /** The period's closing balance: positive = VAT payable (booked for the period, never carried), negative = VAT receivable (carried to the next period). */
+  closing: number;
   paid: number;
   /** VAT payable still unpaid. Not carried forward — it stays with this period. */
   pendingVat: number;
@@ -133,6 +135,31 @@ export async function paidByObligation(tenantId: string, obligationIds: string[]
   return new Map(rows.map((r) => [r.id, round2(Number(r.total))]));
 }
 
+/** The receivable chain over a year's frozen figures: what each period nets off, owes and carries. Plain arithmetic, no database. */
+export function chainPeriods(figures: VatWorksheetFigures) {
+  let credit = figures.openingCredit;
+  return figures.periods.map((p) => {
+    const netPay = round2(p.salesVat - p.purchaseVat);
+    const creditOpening = credit;
+    const creditUsed = Math.min(creditOpening, Math.max(0, netPay));
+    const creditClosing = round2(creditOpening - creditUsed + Math.max(0, -netPay));
+    const netPayable = round2(Math.max(0, netPay) - creditUsed);
+    credit = creditClosing;
+    return { p, netPay, creditOpening, creditUsed, creditClosing, netPayable };
+  });
+}
+
+/**
+ * VAT payable of each period of every SAVED worksheet, after the carried receivable is netted off (obligation id -> amount). The
+ * Overview uses it so that a month's amount due is its worksheet closing balance; a year that has not been saved is not in it.
+ */
+export async function savedVatNetPayables(tenantId: string): Promise<Map<string, number>> {
+  const rows = await db.select({ data: vatWorksheets.data }).from(vatWorksheets).where(and(eq(vatWorksheets.tenantId, tenantId), isNotNull(vatWorksheets.data)));
+  const out = new Map<string, number>();
+  for (const r of rows) for (const c of chainPeriods(r.data!)) out.set(c.p.obligationId, c.netPayable);
+  return out;
+}
+
 /** The worksheet as shown: frozen sales and purchase figures, with the receivable chain and what has been paid worked out on the spot. */
 export async function buildVatWorksheet(tenantId: string, figures: VatWorksheetFigures): Promise<VatWorksheet> {
   const ids = [...figures.periods.map((p) => p.obligationId), ...figures.earlierPayable.map((p) => p.obligationId)];
@@ -142,14 +169,7 @@ export async function buildVatWorksheet(tenantId: string, figures: VatWorksheetF
   ]);
   const filedBefore = new Map(obligations.map((o) => [o.id, o.filedBeforeSystem]));
 
-  let credit = figures.openingCredit;
-  const rows: VatWorksheetRow[] = figures.periods.map((p) => {
-    const netPay = round2(p.salesVat - p.purchaseVat);
-    const creditOpening = credit;
-    const creditUsed = Math.min(creditOpening, Math.max(0, netPay));
-    const creditClosing = round2(creditOpening - creditUsed + Math.max(0, -netPay));
-    const netPayable = round2(Math.max(0, netPay) - creditUsed);
-    credit = creditClosing;
+  const rows: VatWorksheetRow[] = chainPeriods(figures).map(({ p, netPay, creditOpening, creditUsed, creditClosing, netPayable }) => {
     const filedBeforeSystem = filedBefore.get(p.obligationId) ?? false;
     // A period filed before the system was settled outside it, so what it came to counts as paid.
     const paidAmount = filedBeforeSystem ? netPayable : paid.get(p.obligationId) ?? 0;
@@ -168,6 +188,7 @@ export async function buildVatWorksheet(tenantId: string, figures: VatWorksheetF
       creditUsed,
       creditClosing,
       netPayable,
+      closing: netPayable > 0 ? netPayable : creditClosing > 0 ? round2(-creditClosing) : 0,
       paid: paidAmount,
       pendingVat: round2(Math.max(0, netPayable - paidAmount)),
       filedBeforeSystem,

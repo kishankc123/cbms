@@ -1,6 +1,10 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { complianceObligations } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { getVatPeriodDetails } from "@/lib/compliance/vat-period-details";
 import { discardVatWorksheetDraft, getVatWorksheetState, loadVatWorksheet, saveVatWorksheet } from "@/lib/compliance/vat-worksheet-store";
 
 // yearKey is the start date (AD) of the fiscal year picked in the drop-down; blank = the current year. Seeing the worksheet needs
@@ -34,4 +38,17 @@ export async function discardVatWorksheetLoad(yearKey: string) {
   if (!can(session, "compliance", "edit")) return { ok: false as const, error: "You don't have permission to change the worksheet." };
   await discardVatWorksheetDraft(session.tenantId, yearKey);
   return { ok: true as const };
+}
+
+// The documents behind a month's Net sales and Net purchase (shown when the month is hovered). Needs compliance view.
+export async function getVatPeriodDetailsView(obligationId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
+  const [o] = await db
+    .select({ periodStart: complianceObligations.periodStart, periodEnd: complianceObligations.periodEnd })
+    .from(complianceObligations)
+    .where(and(eq(complianceObligations.id, obligationId), eq(complianceObligations.tenantId, session.tenantId), eq(complianceObligations.taxTypeKey, "vat")))
+    .limit(1);
+  if (!o?.periodStart || !o.periodEnd) throw new Error("That VAT period was not found.");
+  return getVatPeriodDetails(session.tenantId, o.periodStart, o.periodEnd);
 }

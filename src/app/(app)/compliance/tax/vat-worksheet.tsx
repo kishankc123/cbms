@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { discardVatWorksheetLoad, getVatWorksheetView, loadVatWorksheetFromBooks, saveVatWorksheetDraft } from "./vat-worksheet-actions";
-import { PeriodLabel } from "@/components/calendar/date-text";
+import { VatPeriodHover } from "./vat-period-hover";
 
 type State = Awaited<ReturnType<typeof getVatWorksheetView>>;
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+// A receivable is shown as a negative amount in green; a payable (or nothing) in the normal colour.
+const closingClass = (n: number) => (n < 0 ? "text-green-600" : "text-gray-900");
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 export function VatWorksheet() {
@@ -146,7 +148,7 @@ export function VatWorksheet() {
             </div>
             <div className="rounded border border-gray-200 p-3">
               <p className="text-xs text-gray-500">Closing balance</p>
-              <p className="text-lg font-semibold text-gray-900">{fmt(closingCredit)}</p>
+              <p className={`text-lg font-semibold ${closingClass(-closingCredit)}`}>{fmt(-closingCredit || 0)}</p>
             </div>
             <div className="rounded border border-gray-200 p-3">
               <p className="text-xs text-gray-500">Payable VAT</p>
@@ -165,7 +167,6 @@ export function VatWorksheet() {
                   <th className="py-2 pr-3 text-right">VAT on purchase</th>
                   <th className="py-2 pr-3 text-right">Net payable</th>
                   <th className="py-2 pr-3 text-right">Opening balance</th>
-                  <th className="py-2 pr-3 text-right">VAT paid</th>
                   <th className="py-2 pl-3 text-right">Closing balance</th>
                 </tr>
               </thead>
@@ -174,13 +175,12 @@ export function VatWorksheet() {
                   <td className="py-2 pr-3">Opening balance b/f</td>
                   <td className="py-2 pr-3" colSpan={5}></td>
                   <td className="py-2 pr-3 text-right">{fmt(sheet.openingCredit)}</td>
-                  <td className="py-2 pr-3"></td>
                   <td className="py-2 pl-3"></td>
                 </tr>
                 {rows.map((r) => (
                   <tr key={r.obligationId} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 pr-3 text-gray-900">
-                      <PeriodLabel start={r.periodStart} end={r.periodEnd} fallback={r.periodLabel} />
+                      <VatPeriodHover row={r} />
                     </td>
                     <td className="py-2 pr-3 text-right text-gray-700">{fmt(r.netSales)}</td>
                     <td className="py-2 pr-3 text-right text-gray-700">{fmt(r.salesVat)}</td>
@@ -188,8 +188,7 @@ export function VatWorksheet() {
                     <td className="py-2 pr-3 text-right text-gray-700">{fmt(r.purchaseVat)}</td>
                     <td className="py-2 pr-3 text-right font-medium text-gray-900">{fmt(r.netPay)}</td>
                     <td className="py-2 pr-3 text-right text-gray-700">{fmt(r.creditOpening)}</td>
-                    <td className="py-2 pr-3 text-right text-gray-700">{fmt(r.paid)}</td>
-                    <td className="py-2 pl-3 text-right font-semibold text-gray-900">{fmt(r.creditClosing)}</td>
+                    <td className={`py-2 pl-3 text-right font-semibold ${closingClass(r.closing)}`}>{fmt(r.closing)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -202,7 +201,6 @@ export function VatWorksheet() {
                   <td className="py-2 pr-3 text-right">{fmt(sum(rows.map((r) => r.purchaseVat)))}</td>
                   <td className="py-2 pr-3 text-right">{fmt(sum(rows.map((r) => r.netPay)))}</td>
                   <td className="py-2 pr-3"></td>
-                  <td className="py-2 pr-3 text-right">{fmt(sum(rows.map((r) => r.paid)))}</td>
                   <td className="py-2 pl-3"></td>
                 </tr>
               </tfoot>
