@@ -6,7 +6,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { generateObligations } from "./engine/generate";
 import { loadCatchup, saveCatchup } from "./catchup";
 import { loadPermit } from "./excise-permit";
-import { getVatWorksheet } from "./vat-worksheet";
+import { discardVatWorksheetDraft, getVatWorksheetState, loadVatWorksheet, saveVatWorksheet } from "./vat-worksheet-store";
 import { bsFiscalYearOf } from "@/lib/calendar";
 
 // 2026-10-08 is 22 Ashwin 2083. The company was registered on 20 Magh 2078 (3 Feb 2022); VAT took effect on 20 Magh 2080
@@ -95,8 +95,22 @@ describe("the compliance checklist", () => {
     const vatRows = await db.select({ start: complianceObligations.periodStart, flagged: complianceObligations.filedBeforeSystem }).from(complianceObligations).where(and(eq(complianceObligations.tenantId, org.tenantId), eq(complianceObligations.taxTypeKey, "vat")));
     expect(vatRows.filter((r) => r.flagged).length).toBe(30);
     const earliest = bsFiscalYearOf(vatRows.map((r) => r.start!).filter(Boolean).sort()[0])!;
-    const sheet = await getVatWorksheet(org.tenantId, earliest.from);
-    expect(sheet.selectedKey).toBe(earliest.from);
+    // Nothing is worked out until the worksheet is loaded; loading keeps a draft, saving makes it the saved worksheet.
+    expect((await getVatWorksheetState(org.tenantId, earliest.from)).saved).toBeNull();
+    expect((await saveVatWorksheet(org.tenantId, org.userId, earliest.from)).ok).toBe(false); // nothing loaded yet
+    await loadVatWorksheet(org.tenantId, org.userId, earliest.from);
+    const loaded = await getVatWorksheetState(org.tenantId, earliest.from);
+    expect(loaded.saved).toBeNull();
+    expect(loaded.draft).not.toBeNull();
+    await discardVatWorksheetDraft(org.tenantId, earliest.from);
+    expect((await getVatWorksheetState(org.tenantId, earliest.from)).draft).toBeNull();
+    await loadVatWorksheet(org.tenantId, org.userId, earliest.from);
+    expect(await saveVatWorksheet(org.tenantId, org.userId, earliest.from)).toEqual({ ok: true });
+    const state = await getVatWorksheetState(org.tenantId, earliest.from);
+    expect(state.draft).toBeNull();
+    expect(state.selectedKey).toBe(earliest.from);
+    const sheet = state.saved!.sheet;
+    expect(state.saved!.booksChanged).toBe(false);
     expect(sheet.rows.length).toBeGreaterThan(0);
     expect(sheet.rows.every((r) => r.periodStart! >= earliest.from && r.periodStart! <= earliest.to)).toBe(true); // only that year
     const old = sheet.rows.filter((r) => r.filedBeforeSystem);

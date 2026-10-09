@@ -3,12 +3,16 @@
 // forward — from period to period and from one fiscal year to the next — and is netted off against a later period's VAT payable.
 // VAT payable is never carried: what is unpaid stays with its own period (fines and penalties are on the Fines & Penalties screen,
 // not here). Sales and purchase figures are already net of returns (see getVatReturn).
-import { and, asc, eq, ne } from "drizzle-orm";
+//
+// Working the figures out from the books is the slow part, so it is done only when the person loads the worksheet, and the result
+// is saved (see vat-worksheet-store.ts). Showing a worksheet needs no ledger reads: the receivable chain inside the year is plain
+// arithmetic on the saved figures, and what has been paid is read live from the payments.
+import { and, asc, eq, gt, inArray, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { complianceObligations } from "@/db/schema";
-import { obligationAmounts } from "./tax-amounts";
+import { complianceObligations, journalEntries, paymentAllocations, payments } from "@/db/schema";
+import type { VatWorksheetFigures, VatWorksheetPeriodFigures } from "@/db/schema/vat-worksheet";
 import { getVatReturn } from "./reports";
-import { bsFiscalYearOf, yearRange, todayIso, type IsoDate } from "@/lib/calendar";
+import { bsFiscalYearOf, yearRange, todayIso } from "@/lib/calendar";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -26,7 +30,7 @@ export type VatWorksheetRow = {
   netPurchase: number;
   /** VAT on purchases, less VAT on purchase returns. */
   purchaseVat: number;
-  /** VAT on sales - VAT on purchases for the period. Negative = a receivable (credit) for the period. */
+  /** VAT on sales - VAT on purchases. Positive = VAT payable; negative = VAT receivable. */
   netPay: number;
   /** VAT receivable brought forward into this period (from earlier periods and earlier fiscal years). */
   creditOpening: number;
@@ -46,91 +50,146 @@ export type VatWorksheetRow = {
 export type VatWorksheetYear = { key: string; label: string; from: string; to: string };
 
 export type VatWorksheet = {
-  today: IsoDate;
-  years: VatWorksheetYear[];
-  selectedKey: string | null;
   rows: VatWorksheetRow[];
-  /** VAT receivable carried in from earlier years at the start of the selected year (the "opening balance b/f" row). */
+  /** VAT receivable carried in from earlier years at the start of the year (the "opening balance b/f" row). */
   openingCredit: number;
   /** VAT payable still unpaid: this year's periods plus periods of earlier years (payable is never carried, so it is added here). */
   payableVat: number;
 };
 
-function fiscalYearOfDate(iso: string): VatWorksheetYear {
+export function fiscalYearOfDate(iso: string): VatWorksheetYear {
   const fy = bsFiscalYearOf(iso);
   if (fy) return { key: fy.from, label: fy.label, from: fy.from, to: fy.to };
   const y = yearRange("AD", iso);
   return { key: y.from, label: y.from.slice(0, 4), from: y.from, to: y.to };
 }
 
-export async function getVatWorksheet(tenantId: string, requestedKey?: string | null): Promise<VatWorksheet> {
-  const today = todayIso();
-
+async function vatObligations(tenantId: string) {
   const obligations = await db
     .select()
     .from(complianceObligations)
     .where(and(eq(complianceObligations.tenantId, tenantId), eq(complianceObligations.categoryKey, "tax"), eq(complianceObligations.taxTypeKey, "vat"), ne(complianceObligations.status, "not_applicable")))
     .orderBy(asc(complianceObligations.periodStart), asc(complianceObligations.dueDate));
+  return obligations.filter((o) => o.periodStart && o.periodEnd); // hand-entered items with no period don't belong in the worksheet
+}
 
-  const withPeriods = obligations.filter((o) => o.periodStart && o.periodEnd); // hand-entered items with no period don't belong in the worksheet
-
-  // The years on offer come from the periods alone (no figures needed), so the year is chosen before the costly part.
-  const periodYears = withPeriods.map((o) => fiscalYearOfDate(o.periodStart!));
-  const years = Array.from(new Map(periodYears.map((y) => [y.key, y])).values()).sort((a, b) => (a.key < b.key ? -1 : 1));
-  const current = fiscalYearOfDate(today).key;
+/** The fiscal years that have VAT periods, and the one to open first (the current year, else the latest). Cheap: no ledger reads. */
+export async function listVatWorksheetYears(tenantId: string, requestedKey?: string | null) {
+  const periods = await vatObligations(tenantId);
+  const years = Array.from(new Map(periods.map((o) => fiscalYearOfDate(o.periodStart!)).map((y) => [y.key, y])).values()).sort((a, b) => (a.key < b.key ? -1 : 1));
+  const current = fiscalYearOfDate(todayIso()).key;
   const selected = years.find((y) => y.key === requestedKey) ?? years.find((y) => y.key === current) ?? years[years.length - 1] ?? null;
+  return { years, selected };
+}
 
-  // Figures are worked out only up to the end of the selected year: later years change nothing in it.
-  const upTo = withPeriods.map((o, i) => ({ o, year: periodYears[i] })).filter((p) => selected && p.year.key <= selected.key);
-  const [amounts, returns] = await Promise.all([
-    obligationAmounts(tenantId, obligations),
-    Promise.all(upTo.map((p) => getVatReturn(tenantId, p.o.periodStart!, p.o.periodEnd!))),
-  ]);
+/**
+ * Works the selected year's figures out from the books: every period up to the end of that year (the receivable chain needs the
+ * earlier ones). This is the slow part — it reads the VAT return of each period — so it runs only when the worksheet is loaded.
+ */
+export async function computeVatWorksheetFigures(tenantId: string, year: VatWorksheetYear): Promise<VatWorksheetFigures> {
+  const periods = await vatObligations(tenantId);
+  const upTo = periods.map((o) => ({ o, year: fiscalYearOfDate(o.periodStart!) })).filter((p) => p.year.key <= year.key);
+  const returns = await Promise.all(upTo.map((p) => getVatReturn(tenantId, p.o.periodStart!, p.o.periodEnd!)));
+  const paid = await paidByObligation(tenantId, upTo.map((p) => p.o.id));
 
-  // The receivable chain runs through every period from the start, so the selected year opens with the right brought-forward credit.
   let credit = 0;
-  const all = upTo.map(({ o, year }, i) => {
-    const ret = returns[i];
-    const netPay = ret.netVatPayable;
+  let openingCredit = 0;
+  const figures: VatWorksheetPeriodFigures[] = [];
+  const earlierPayable: VatWorksheetFigures["earlierPayable"] = [];
+  upTo.forEach(({ o, year: y }, i) => {
+    const netPay = returns[i].netVatPayable;
+    const used = Math.min(credit, Math.max(0, netPay));
+    const netPayable = round2(Math.max(0, netPay) - used);
+    if (y.key === year.key) {
+      if (figures.length === 0) openingCredit = credit;
+      figures.push({
+        obligationId: o.id,
+        periodLabel: o.periodLabel,
+        periodStart: o.periodStart!,
+        periodEnd: o.periodEnd!,
+        dueDate: o.dueDate,
+        netSales: returns[i].salesTaxable,
+        salesVat: returns[i].outputVat,
+        netPurchase: returns[i].purchasesTaxable,
+        purchaseVat: returns[i].inputVat,
+      });
+    } else if (!o.filedBeforeSystem && netPayable > (paid.get(o.id) ?? 0)) {
+      earlierPayable.push({ obligationId: o.id, netPayable });
+    }
+    credit = round2(credit - used + Math.max(0, -netPay));
+  });
+  return { openingCredit, periods: figures, earlierPayable };
+}
+
+/** What has been paid against each VAT obligation (voided payments excluded). */
+export async function paidByObligation(tenantId: string, obligationIds: string[]): Promise<Map<string, number>> {
+  if (obligationIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: paymentAllocations.targetId, total: sql<string>`sum(${paymentAllocations.allocatedAmount})` })
+    .from(paymentAllocations)
+    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+    .where(and(eq(payments.tenantId, tenantId), eq(paymentAllocations.targetType, "tax_obligation"), inArray(paymentAllocations.targetId, obligationIds), ne(payments.status, "voided")))
+    .groupBy(paymentAllocations.targetId);
+  return new Map(rows.map((r) => [r.id, round2(Number(r.total))]));
+}
+
+/** The worksheet as shown: frozen sales and purchase figures, with the receivable chain and what has been paid worked out on the spot. */
+export async function buildVatWorksheet(tenantId: string, figures: VatWorksheetFigures): Promise<VatWorksheet> {
+  const ids = [...figures.periods.map((p) => p.obligationId), ...figures.earlierPayable.map((p) => p.obligationId)];
+  const [paid, obligations] = await Promise.all([
+    paidByObligation(tenantId, ids),
+    ids.length ? db.select({ id: complianceObligations.id, filedBeforeSystem: complianceObligations.filedBeforeSystem }).from(complianceObligations).where(and(eq(complianceObligations.tenantId, tenantId), inArray(complianceObligations.id, ids))) : Promise.resolve([]),
+  ]);
+  const filedBefore = new Map(obligations.map((o) => [o.id, o.filedBeforeSystem]));
+
+  let credit = figures.openingCredit;
+  const rows: VatWorksheetRow[] = figures.periods.map((p) => {
+    const netPay = round2(p.salesVat - p.purchaseVat);
     const creditOpening = credit;
     const creditUsed = Math.min(creditOpening, Math.max(0, netPay));
     const creditClosing = round2(creditOpening - creditUsed + Math.max(0, -netPay));
     const netPayable = round2(Math.max(0, netPay) - creditUsed);
     credit = creditClosing;
+    const filedBeforeSystem = filedBefore.get(p.obligationId) ?? false;
     // A period filed before the system was settled outside it, so what it came to counts as paid.
-    const paid = o.filedBeforeSystem ? netPayable : amounts.get(o.id)?.paid ?? 0;
-    const pendingVat = round2(Math.max(0, netPayable - paid));
-    const row: VatWorksheetRow = {
-      obligationId: o.id,
-      periodLabel: o.periodLabel,
-      periodStart: o.periodStart,
-      periodEnd: o.periodEnd,
-      dueDate: o.dueDate,
-      netSales: ret.salesTaxable,
-      salesVat: ret.outputVat,
-      netPurchase: ret.purchasesTaxable,
-      purchaseVat: ret.inputVat,
+    const paidAmount = filedBeforeSystem ? netPayable : paid.get(p.obligationId) ?? 0;
+    return {
+      obligationId: p.obligationId,
+      periodLabel: p.periodLabel,
+      periodStart: p.periodStart,
+      periodEnd: p.periodEnd,
+      dueDate: p.dueDate,
+      netSales: p.netSales,
+      salesVat: p.salesVat,
+      netPurchase: p.netPurchase,
+      purchaseVat: p.purchaseVat,
       netPay,
       creditOpening,
       creditUsed,
       creditClosing,
       netPayable,
-      paid,
-      pendingVat,
-      filedBeforeSystem: o.filedBeforeSystem,
+      paid: paidAmount,
+      pendingVat: round2(Math.max(0, netPayable - paidAmount)),
+      filedBeforeSystem,
     };
-    return { row, year };
   });
+  const earlierPending = figures.earlierPayable.reduce((sum, e) => sum + Math.max(0, e.netPayable - (paid.get(e.obligationId) ?? 0)), 0);
+  return { rows, openingCredit: figures.openingCredit, payableVat: round2(earlierPending + rows.reduce((sum, r) => sum + r.pendingVat, 0)) };
+}
 
-  const inYear = all.filter((c) => selected && c.year.key === selected.key).map((c) => c.row);
-  const earlier = all.filter((c) => selected && c.year.key < selected.key).map((c) => c.row);
-
-  return {
-    today,
-    years,
-    selectedKey: selected?.key ?? null,
-    rows: inYear,
-    openingCredit: inYear[0]?.creditOpening ?? 0,
-    payableVat: round2([...earlier, ...inYear].reduce((sum, r) => sum + r.pendingVat, 0)),
-  };
+/** Whether sales, purchases or expenses were posted after `since` that fall in or before the year — so a saved worksheet is out of date. */
+export async function vatBooksChangedSince(tenantId: string, year: VatWorksheetYear, since: Date): Promise<boolean> {
+  const rows = await db
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.tenantId, tenantId),
+        inArray(journalEntries.sourceType, ["sale", "purchase", "expense", "sales_return", "purchase_return", "asset_purchase", "asset_disposal"]),
+        lte(journalEntries.entryDate, year.to),
+        gt(journalEntries.createdAt, since)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
 }
