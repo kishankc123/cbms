@@ -8,6 +8,7 @@ import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
+import { SavedDialog } from "./saved-dialog";
 import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -135,7 +136,8 @@ export function SingleInvoiceForm({
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, reportError, dialog } = useProblem();
-  const [savedMessage, setSavedMessage] = useState(false);
+  // Shown after every new invoice is saved, so it is clear it went in.
+  const [savedInfo, setSavedInfo] = useState<{ number: string; total: number } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
@@ -248,6 +250,8 @@ export function SingleInvoiceForm({
         await createSingleInvoice(payload);
       }
 
+      const savedNumber = invoiceNumber.trim();
+      const savedTotal = grandTotal;
       if (onDone) {
         onDone();
       } else {
@@ -258,8 +262,7 @@ export function SingleInvoiceForm({
         setRevenueAccountId("");
         setLines(Array.from({ length: MIN_LINES }, emptyLine));
         setPayments([]);
-        setSavedMessage(true);
-        setTimeout(() => setSavedMessage(false), 2500);
+        setSavedInfo({ number: savedNumber, total: savedTotal });
       }
       onDirtyChange?.(false);
       router.refresh();
@@ -497,7 +500,6 @@ export function SingleInvoiceForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
           data-field="pay"
@@ -542,6 +544,8 @@ export function SingleInvoiceForm({
           }}
         />
       )}
+
+      {savedInfo && <SavedDialog title="Invoice saved" lines={[`Invoice ${savedInfo.number} is saved.`, `Total ${fmt(savedInfo.total)}.`]} onClose={() => setSavedInfo(null)} />}
 
       {dialog}
     </div>

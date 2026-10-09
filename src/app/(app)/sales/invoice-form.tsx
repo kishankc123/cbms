@@ -8,6 +8,8 @@ import { useProblem } from "@/components/problem-dialog";
 import { recordSalesBatch, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
+import { SavedDialog } from "./saved-dialog";
+import { getPaymentModeOptions } from "@/app/(app)/payment-mode-actions";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
@@ -85,7 +87,10 @@ export function InvoiceForm({
   const [addCount, setAddCount] = useState("1");
   const [paymentRow, setPaymentRow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [savedMessage, setSavedMessage] = useState(false);
+  // Shown after every save, so it is clear the invoices went in.
+  const [savedInfo, setSavedInfo] = useState<{ count: number; total: number; paid: number } | null>(null);
+  // Payment mode names, for the settlement summary (a payment line keeps only the mode's id).
+  const [modes, setModes] = useState<Awaited<ReturnType<typeof getPaymentModeOptions>>>([]);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the row and field that need attention.
   const { report, dialog } = useProblem();
   const [contextMenu, setContextMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
@@ -100,6 +105,16 @@ export function InvoiceForm({
     window.addEventListener("keydown", (e) => e.key === "Escape" && close());
     return () => window.removeEventListener("click", close);
   }, [contextMenu]);
+
+  useEffect(() => {
+    let live = true;
+    getPaymentModeOptions()
+      .then((o) => live && setModes(o))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     onDirtyChange?.(rows.some(isRowTouched));
@@ -175,9 +190,8 @@ export function InvoiceForm({
           payments: r.payments,
         })),
       });
+      setSavedInfo({ count: validRows.length, total: validRows.reduce((s, r) => s + computeRow(r, vatRate).total, 0), paid: validRows.reduce((s, r) => s + paymentTotal(r), 0) });
       setRows(Array.from({ length: MIN_ROWS }, emptyRow));
-      setSavedMessage(true);
-      setTimeout(() => setSavedMessage(false), 2500);
       onDirtyChange?.(false);
       router.refresh();
     } catch (e) {
@@ -210,6 +224,11 @@ export function InvoiceForm({
   const grandTotal = computedRows.reduce((s, c) => s + c.total, 0);
   const totalPaid = completeRows.reduce((s, r) => s + paymentTotal(r), 0);
   const totalOutstanding = Math.max(grandTotal - totalPaid, 0);
+  // What was received, by payment mode (a line with no mode takes the mode its account is linked to).
+  const modeName = (p: PaymentLine) => modes.find((m) => m.id === p.modeId)?.name ?? modes.find((m) => m.accounts.some((a) => a.id === p.accountId))?.name ?? "Other";
+  const paidByMode = Array.from(
+    completeRows.flatMap((r) => r.payments).reduce((acc, p) => acc.set(modeName(p), (acc.get(modeName(p)) ?? 0) + p.amount), new Map<string, number>())
+  ).filter(([, amount]) => amount > 0);
 
   return (
     <div className="space-y-4">
@@ -385,8 +404,14 @@ export function InvoiceForm({
         <section className="w-72 rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="mb-2 text-sm font-semibold text-gray-900">Settlement Summary</h2>
           <div className="space-y-1 text-sm text-gray-900">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Paid</span>
+            {paidByMode.map(([name, amount]) => (
+              <div key={name} className="flex items-center justify-between">
+                <span className="text-gray-500">{name}</span>
+                <span>{fmt(amount)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
+              <span className="text-gray-500">Total paid</span>
               <span>{fmt(totalPaid)}</span>
             </div>
             <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-1.5">
@@ -398,7 +423,6 @@ export function InvoiceForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        {savedMessage && <span className="text-xs text-green-600">Saved</span>}
         <button
           type="button"
           onClick={performSave}
@@ -416,6 +440,17 @@ export function InvoiceForm({
           Reset
         </button>
       </div>
+
+      {savedInfo && (
+        <SavedDialog
+          title="Invoices saved"
+          lines={[
+            `${savedInfo.count} invoice${savedInfo.count === 1 ? "" : "s"} saved.`,
+            `Total ${fmt(savedInfo.total)}, received ${fmt(savedInfo.paid)}.`,
+          ]}
+          onClose={() => setSavedInfo(null)}
+        />
+      )}
 
       {confirmReset && (
         <ConfirmDialog
