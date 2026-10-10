@@ -20,6 +20,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function SalesEntryTabs({
+  draftScope,
   customers,
   items,
   vatRate,
@@ -28,6 +29,8 @@ export function SalesEntryTabs({
   invoiceNumbering,
   nextInvoiceNumber,
 }: {
+  /** Names this person's saved drafts (organization and user), so unsaved entries survive a reload. */
+  draftScope: string;
   customers: Customer[];
   items: Item[];
   vatRate: number;
@@ -82,6 +85,7 @@ export function SalesEntryTabs({
           customerBalances={customerBalances}
           vatRate={vatRate}
           nextInvoiceNumber={nextInvoiceNumber}
+          draftKey={draftScope}
           onDirtyChange={setDirty}
         />
       )}
@@ -93,6 +97,7 @@ export function SalesEntryTabs({
           cashBankAccounts={cashBankAccounts}
           customerBalances={customerBalances}
           invoiceNumbering={invoiceNumbering}
+          draftKey={draftScope}
           onDirtyChange={setDirty}
         />
       )}
@@ -101,7 +106,7 @@ export function SalesEntryTabs({
 
       {pendingTab && (
         <ConfirmDialog
-          message="You have unsaved changes on this tab. Switch tabs and discard them?"
+          message="You have unsaved changes on this tab. They stay saved as a draft in this browser, so you can restore them when you come back. Switch tabs?"
           onYes={confirmDiscardAndSwitch}
           onNo={() => setPendingTab(null)}
         />

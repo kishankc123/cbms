@@ -9,6 +9,10 @@ import { listOrgUsers } from "@/lib/org-users";
 import { isOrgAdmin } from "@/lib/roles";
 import { runComplianceScan } from "@/lib/compliance/exception-scan";
 import { logAuditEvent } from "@/lib/audit";
+import { exceptionDates } from "@/lib/compliance/exception-dates";
+import { fiscalYearOfDate } from "@/lib/compliance/fiscal-year-of";
+import { getActiveFiscalYear } from "@/lib/fiscal";
+import { todayIso } from "@/lib/calendar";
 
 // ---------- Period locking ----------
 
@@ -184,19 +188,27 @@ export type { RuleModule } from "@/lib/audit-rules";
 
 // ---------- Exception Centre ----------
 
-export async function listExceptions() {
+// The Exception Centre for one fiscal year (the key is the year's start date) or all of them ("all"); blank = the current year. An
+// exception belongs to the year of the thing it is about (see exception-dates.ts).
+export async function listExceptions(fiscalYearKey?: string | null) {
   const session = await requireTenantSession();
   if (!can(session, "audit", "view")) throw new Error("Not permitted");
-  const rows = await db
+  const all = await db
     .select()
     .from(complianceExceptions)
     .where(eq(complianceExceptions.tenantId, session.tenantId))
     .orderBy(desc(complianceExceptions.detectedDate));
+  const dates = await exceptionDates(session.tenantId, all);
+  const withYear = all.map((r) => ({ ...r, occurredOn: dates.get(r.id)!, year: fiscalYearOfDate(dates.get(r.id)!) }));
+
+  const currentKey = fiscalYearOfDate(todayIso()).key;
+  const years = Array.from(new Map([...withYear.map((r) => r.year), fiscalYearOfDate(todayIso())].map((y) => [y.key, { key: y.key, label: y.label }])).values()).sort((a, b) => (a.key < b.key ? 1 : -1));
+  const selectedKey = fiscalYearKey === "all" ? "all" : years.find((y) => y.key === fiscalYearKey)?.key ?? currentKey;
+  const rows = withYear.filter((r) => selectedKey === "all" || r.year.key === selectedKey);
 
   const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
-
-  return rows.map((r) => ({ ...r, assignedUserName: r.assignedUserId ? nameById[r.assignedUserId] ?? "—" : null }));
+  return { years, selectedKey, rows: rows.map(({ year, ...r }) => ({ ...r, fiscalYear: year.label, assignedUserName: r.assignedUserId ? nameById[r.assignedUserId] ?? "—" : null })) };
 }
 
 export async function listAssignableUsers() {
@@ -289,18 +301,28 @@ export async function getAuditOverview() {
   const session = await requireTenantSession();
   if (!can(session, "audit", "view")) throw new Error("Not permitted");
 
-  const [openExceptions, lockedPeriods, recentActivity] = await Promise.all([
+  // Exceptions are counted for the fiscal year in view in the sidebar (all of them when it is on All Time).
+  const activeYear = await getActiveFiscalYear(session.tenantId);
+  const range = "allTime" in activeYear ? null : { from: activeYear.startDate, to: activeYear.endDate, label: activeYear.code };
+  const [openExceptionRows, lockedPeriods, recentActivity] = await Promise.all([
     // "Open" here means still needs attention — not yet closed — matching the count Compliance shows for the same data.
     db.select().from(complianceExceptions).where(and(eq(complianceExceptions.tenantId, session.tenantId), ne(complianceExceptions.status, "closed"))),
     db.select().from(accountingPeriods).where(and(eq(accountingPeriods.tenantId, session.tenantId), eq(accountingPeriods.status, "closed"))),
     db.select().from(auditLog).where(eq(auditLog.tenantId, session.tenantId)).orderBy(desc(auditLog.timestamp)).limit(5),
   ]);
 
+  const exceptionDay = await exceptionDates(session.tenantId, openExceptionRows);
+  const openExceptions = openExceptionRows.filter((e) => {
+    const day = exceptionDay.get(e.id)!;
+    return !range || (day >= range.from && day <= range.to);
+  });
+
   const userList = await listOrgUsers(session.tenantId);
   const nameById = Object.fromEntries(userList.map((u) => [u.id, u.name]));
   const activeRules = await db.select({ id: complianceRules.id }).from(complianceRules).where(and(eq(complianceRules.tenantId, session.tenantId), eq(complianceRules.isActive, true)));
 
   return {
+    exceptionsFiscalYear: range?.label ?? null,
     openExceptionCount: openExceptions.length,
     blockingExceptionCount: openExceptions.filter((e) => e.severity === "blocking").length,
     lockedPeriodCount: lockedPeriods.length,

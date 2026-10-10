@@ -3,6 +3,7 @@ import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 import { vendors } from "./purchases";
 import { expenses } from "./expenses";
+import { paymentModes } from "./payment-modes";
 
 export const recurringExpenseFrequencyEnum = pgEnum("recurring_expense_frequency", ["monthly", "quarterly", "half_yearly", "yearly", "custom"]);
 export const recurringExpenseRecognitionRuleEnum = pgEnum("recurring_expense_recognition_rule", ["first_day", "last_day", "specific_day"]);
@@ -58,6 +59,9 @@ export const recurringExpenses = pgTable("recurring_expenses", {
   priority: recurringExpensePriorityEnum("priority").notNull().default("normal"),
   // The cash/bank account expected to fund payment — for planning only, never posted to directly.
   expectedPaymentAccountId: uuid("expected_payment_account_id").references(() => accounts.id),
+  // The payment mode expected for it (Cash, Cheque, ...), with its name kept; planning only, like the account.
+  expectedPaymentModeId: uuid("expected_payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
+  expectedPaymentModeName: text("expected_payment_mode_name"),
   notes: text("notes"),
 
   status: recurringExpenseStatusEnum("status").notNull().default("active"),

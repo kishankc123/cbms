@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { runScan, updateException, type listExceptions, type listAssignableUsers } from "../actions";
 
 import { DT } from "@/components/calendar/date-text";
-type Exception = Awaited<ReturnType<typeof listExceptions>>[number];
+type Exception = Awaited<ReturnType<typeof listExceptions>>["rows"][number];
 type AssignableUser = Awaited<ReturnType<typeof listAssignableUsers>>[number];
 
 const STATUS_FLOW = ["open", "assigned", "under_review", "resolved", "closed"] as const;
 
-export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: Exception[]; assignableUsers: AssignableUser[] }) {
+export function ExceptionsTable({ exceptions, years, selectedKey, assignableUsers }: { exceptions: Exception[]; years: { key: string; label: string }[]; selectedKey: string; assignableUsers: AssignableUser[] }) {
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -69,11 +69,25 @@ export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: E
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-3">
+      <div className="flex items-center justify-between gap-3">
+        {/* An exception belongs to the fiscal year of the thing it is about. */}
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          Fiscal year
+          <select value={selectedKey} onChange={(e) => router.replace(`/audit/exceptions?fy=${e.target.value}`)} className="rounded border border-gray-300 bg-white px-2 py-1 text-sm">
+            <option value="all">All years</option>
+            {years.map((y) => (
+              <option key={y.key} value={y.key}>
+                {y.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-center gap-3">
         {scanMessage && <span className="text-xs text-gray-500">{scanMessage}</span>}
         <button type="button" disabled={scanning} onClick={handleScan} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
           {scanning ? "Scanning..." : "Run Scan"}
         </button>
+        </div>
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -82,6 +96,7 @@ export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: E
             <th className="px-4 py-2 font-medium">Type</th>
             <th className="px-4 py-2 font-medium">Description</th>
             <th className="px-4 py-2 font-medium">Severity</th>
+            <th className="px-4 py-2 font-medium">Fiscal year</th>
             <th className="px-4 py-2 font-medium">Detected</th>
             <th className="px-4 py-2 font-medium">Assigned</th>
             <th className="px-4 py-2 font-medium">Status</th>
@@ -94,6 +109,7 @@ export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: E
               <td className="px-4 py-2 capitalize">{e.exceptionType.replace(/_/g, " ")}</td>
               <td className="px-4 py-2 max-w-[280px] truncate">{e.description}</td>
               <td className="px-4 py-2 capitalize">{e.severity.replace("_", " ")}</td>
+              <td className="px-4 py-2 whitespace-nowrap" title="The year of the thing this exception is about">{e.fiscalYear}</td>
               <td className="px-4 py-2"><DT value={e.detectedDate} dateOnly /></td>
               <td className="px-4 py-2">
                 <select
@@ -131,8 +147,8 @@ export function ExceptionsTable({ exceptions, assignableUsers }: { exceptions: E
           ))}
           {exceptions.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
-                No exceptions — run a scan to check for issues
+              <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+                {selectedKey === "all" ? "No exceptions — run a scan to check for issues" : "No exceptions in this fiscal year"}
               </td>
             </tr>
           )}

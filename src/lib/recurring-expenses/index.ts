@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { recurringExpenses } from "@/db/schema";
 import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { assertSupplierOwned, assertCashBankAccounts } from "@/lib/ledger/account-guards";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 import { intervalMonthsFor, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "./schedule";
 
 export * from "./schedule";
@@ -30,6 +31,8 @@ export type RecurringExpenseInput = {
   endDate: string | null;
   priority: RecurringPriority;
   expectedPaymentAccountId: string | null;
+  /** The mode expected with that account (Cash, Cheque, ...). Planning only. */
+  expectedPaymentModeId?: string | null;
   notes: string | null;
 };
 
@@ -59,6 +62,13 @@ async function validateRecurringExpenseInput(tenantId: string, input: RecurringE
   if (input.expectedPaymentAccountId) await assertCashBankAccounts(tenantId, [input.expectedPaymentAccountId]);
 }
 
+// The mode chosen with the expected account has to be a real mode of this organization that includes that account; its name is stored.
+async function expectedMode(tenantId: string, input: RecurringExpenseInput) {
+  if (!input.expectedPaymentModeId || !input.expectedPaymentAccountId) return { paymentModeId: null, paymentModeName: null };
+  const r = await resolvePaymentMode(tenantId, input.expectedPaymentModeId, input.expectedPaymentAccountId);
+  return { paymentModeId: r.paymentModeId, paymentModeName: r.paymentModeName };
+}
+
 export async function listRecurringExpenses(tenantId: string) {
   return db.select().from(recurringExpenses).where(eq(recurringExpenses.tenantId, tenantId)).orderBy(desc(recurringExpenses.createdAt));
 }
@@ -70,6 +80,7 @@ export async function getRecurringExpenseById(tenantId: string, id: string) {
 
 export async function createRecurringExpense(tenantId: string, userId: string, input: RecurringExpenseInput) {
   await validateRecurringExpenseInput(tenantId, input);
+  const mode = await expectedMode(tenantId, input);
   const [row] = await db
     .insert(recurringExpenses)
     .values({
@@ -90,6 +101,8 @@ export async function createRecurringExpense(tenantId: string, userId: string, i
       effectiveFrom: input.startDate,
       priority: input.priority,
       expectedPaymentAccountId: input.expectedPaymentAccountId,
+      expectedPaymentModeId: mode.paymentModeId,
+      expectedPaymentModeName: mode.paymentModeName,
       notes: input.notes?.trim() || null,
       createdBy: userId,
     })
@@ -101,6 +114,7 @@ export async function updateRecurringExpense(tenantId: string, userId: string, i
   const existing = await getRecurringExpenseById(tenantId, id);
   if (!existing) throw new Error("Recurring expense not found");
   await validateRecurringExpenseInput(tenantId, input);
+  const mode = await expectedMode(tenantId, input);
 
   const [row] = await db
     .update(recurringExpenses)
@@ -120,6 +134,8 @@ export async function updateRecurringExpense(tenantId: string, userId: string, i
       endDate: input.endDate,
       priority: input.priority,
       expectedPaymentAccountId: input.expectedPaymentAccountId,
+      expectedPaymentModeId: mode.paymentModeId,
+      expectedPaymentModeName: mode.paymentModeName,
       notes: input.notes?.trim() || null,
       updatedBy: userId,
       updatedAt: new Date(),

@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { memberships, roles, tenants, users } from "@/db/schema";
-import { hasPermission, type Permissions, type PermissionAction } from "@/lib/permissions";
-import { effectivePermissions, roleLabel, type OrgRole } from "@/lib/roles";
+import { hasPermission, type Permissions, type PermissionAction, type ExtraPermission } from "@/lib/permissions";
+import { defaultPermissions, roleLabel, type OrgRole } from "@/lib/roles";
 import { isSessionExpired } from "@/lib/session-expiry";
 import type { CalendarSystem } from "@/lib/calendar";
 
@@ -65,7 +65,7 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
   if (!user.activeTenantId) throw new TenantScopeError();
 
   const [row] = await db
-    .select({ role: memberships.role, permissions: memberships.permissions, roleName: roles.name, rolePermissions: roles.permissions, calendar: tenants.calendarSystem })
+    .select({ role: memberships.role, roleName: roles.name, rolePermissions: roles.permissions, calendar: tenants.calendarSystem })
     .from(memberships)
     .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
     .leftJoin(roles, eq(roles.id, memberships.roleId))
@@ -86,12 +86,12 @@ export const requireTenantSession = cache(async (): Promise<AppSession> => {
     role: row.role,
     roleName: row.roleName ?? roleLabel(row.role),
     // The member's role decides; a member not yet linked to a role record gets the standard role of their level.
-    permissions: row.rolePermissions ?? effectivePermissions(row.role, row.permissions),
+    permissions: row.rolePermissions ?? defaultPermissions(row.role),
     calendar: row.calendar === "BS" ? "BS" : "AD",
   };
 });
 
-export function can(session: AppSession, module: string, action: PermissionAction): boolean {
+export function can(session: AppSession, module: string, action: PermissionAction | ExtraPermission): boolean {
   return hasPermission(session.role, session.permissions, module, action);
 }
 

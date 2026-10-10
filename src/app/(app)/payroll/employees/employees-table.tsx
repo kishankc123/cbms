@@ -12,7 +12,7 @@ type Employee = {
   employmentStatus: string;
 };
 
-export function EmployeesTable({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> }) {
+export function EmployeesTable({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> | null }) {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -45,7 +45,7 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
             <th className="px-4 py-2 font-medium">Department</th>
             <th className="px-4 py-2 font-medium">Designation</th>
             <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium">Current Basic Salary</th>
+            {currentSalaries && <th className="px-4 py-2 font-medium">Current Basic Salary</th>}
             <th className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -57,9 +57,7 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
               <td className="px-4 py-2">{e.department ?? "—"}</td>
               <td className="px-4 py-2">{e.designation ?? "—"}</td>
               <td className="px-4 py-2 capitalize">{e.employmentStatus.replace("_", " ")}</td>
-              <td className="px-4 py-2">
-                {(currentSalaries[e.id] ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
+              {currentSalaries && <td className="px-4 py-2">{(currentSalaries[e.id] ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
               <td className="px-4 py-2 text-right">
                 <Link href={`/payroll/employees/${e.id}`} className="text-xs text-gray-600 hover:underline">
                   View profile

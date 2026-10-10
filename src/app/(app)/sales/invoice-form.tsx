@@ -9,6 +9,7 @@ import { recordSalesBatch, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { ConfirmDialog } from "./confirm-dialog";
 import { SavedDialog } from "./saved-dialog";
+import { DraftBanner, useDraft } from "@/components/use-draft";
 import { getPaymentModeOptions } from "@/app/(app)/payment-mode-actions";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { RevenueAccountSelect } from "@/components/revenue-account-select";
@@ -71,6 +72,7 @@ export function InvoiceForm({
   vatRate,
   cashBankAccounts,
   customerBalances,
+  draftKey,
   invoiceNumbering,
   onDirtyChange,
 }: {
@@ -79,11 +81,20 @@ export function InvoiceForm({
   cashBankAccounts: CashBankGroup[];
   customerBalances: Record<string, number>;
   invoiceNumbering: InvoiceNumbering;
+  /** Names this person's saved draft; blank rows are not kept. */
+  draftKey?: string;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [customers, addCustomer] = useWithAdded(customersProp);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: MIN_ROWS }, emptyRow));
+  // What is typed is kept in this browser as it goes, and offered back after a reload or a lost connection. Invoice numbers are not part of
+  // it (they are worked out from the next free number each time), so a restored draft never carries a number that has been used since.
+  const draft = useDraft<Row[]>(draftKey ? "cbms-draft:sales-multi:" + draftKey : null, rows, rows.some(isRowTouched));
+  function restoreDraft() {
+    const saved = draft.restore();
+    if (saved) setRows([...saved, ...Array.from({ length: Math.max(MIN_ROWS - saved.length, 0) }, emptyRow)]);
+  }
   const [addCount, setAddCount] = useState("1");
   const [paymentRow, setPaymentRow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -148,6 +159,7 @@ export function InvoiceForm({
   }
 
   function performReset() {
+    draft.clear();
     setRows(Array.from({ length: MIN_ROWS }, emptyRow));
     setConfirmReset(false);
   }
@@ -191,6 +203,7 @@ export function InvoiceForm({
         })),
       });
       setSavedInfo({ count: validRows.length, total: validRows.reduce((s, r) => s + computeRow(r, vatRate).total, 0), paid: validRows.reduce((s, r) => s + paymentTotal(r), 0) });
+      draft.clear();
       setRows(Array.from({ length: MIN_ROWS }, emptyRow));
       onDirtyChange?.(false);
       router.refresh();
@@ -232,6 +245,7 @@ export function InvoiceForm({
 
   return (
     <div className="space-y-4">
+      <DraftBanner draft={draft} what="invoices" summary={draft.pending ? `${(draft.pending.value as Row[]).filter(isRowTouched).length} row${(draft.pending.value as Row[]).filter(isRowTouched).length === 1 ? "" : "s"}` : undefined} onRestore={restoreDraft} />
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Sales Entries</h2>
 

@@ -57,6 +57,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Bank Book", href: "/reports/bank-book", built: true },
       { title: "Bank Reconciliation Report", href: "/reports/bank-reconciliation-report", built: true },
       { title: "Cash/Bank Movement", href: "/reports/cash-bank-movement", built: true },
+      { title: "Receipts & Payments by Mode", href: "/reports/receipts-by-mode", built: true },
     ],
   },
   {

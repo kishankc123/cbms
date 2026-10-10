@@ -55,6 +55,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         initialView={view === "new" ? "new" : "invoices"}
         addNew={
           <SalesEntryTabs
+            draftScope={`${session.tenantId}:${session.userId}`}
             customers={customerList}
             items={itemList}
             vatRate={vatRate}

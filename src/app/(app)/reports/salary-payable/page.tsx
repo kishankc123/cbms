@@ -11,7 +11,7 @@ const asIso = (v: string | string[] | undefined) => (typeof v === "string" && va
 
 export default async function SalaryPayablePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
-  if (!can(session, "payroll", "view")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view") || !can(session, "payroll", "view_salary")) throw new Error("Not permitted");
   const sp = await searchParams;
   const fiscal = await getFiscalRange(session.tenantId);
   const to = asIso(sp.to) ?? (await getReportDefaultAsOf(session.tenantId));

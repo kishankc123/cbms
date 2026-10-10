@@ -1,4 +1,4 @@
-import { guardView } from "@/components/page-guard";
+import { guardView, guardSalary } from "@/components/page-guard";
 import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, payrollRuns } from "@/db/schema";
@@ -6,7 +6,7 @@ import { requireTenantSession } from "@/lib/session";
 import { SalarySheetTabs } from "./salary-sheet-tabs";
 
 export default async function SalarySheetPage() {
-  const denied = await guardView("payroll");
+  const denied = (await guardView("payroll")) ?? (await guardSalary());
   if (denied) return denied;
   const session = await requireTenantSession();
 

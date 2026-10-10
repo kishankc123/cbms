@@ -8,6 +8,7 @@ import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { todayIso } from "@/lib/calendar";
 import { previewNextOccurrence, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "@/lib/recurring-expenses/schedule";
 import { createRecurringExpense, updateRecurringExpense } from "./actions";
@@ -33,6 +34,7 @@ export type InitialRecurringExpense = {
   endDate: string | null;
   priority: RecurringPriority;
   expectedPaymentAccountId: string | null;
+  expectedPaymentModeId: string | null;
   notes: string | null;
 };
 
@@ -117,6 +119,7 @@ export function RecurringExpenseFormModal({
 
   const [priority, setPriority] = useState<RecurringPriority>(initial?.priority ?? "normal");
   const [expectedPaymentAccountId, setExpectedPaymentAccountId] = useState(initial?.expectedPaymentAccountId ?? "");
+  const [expectedPaymentModeId, setExpectedPaymentModeId] = useState(initial?.expectedPaymentModeId ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const [saving, setSaving] = useState(false);
@@ -159,6 +162,7 @@ export function RecurringExpenseFormModal({
         endDate: noEndDate ? null : endDate || null,
         priority,
         expectedPaymentAccountId: expectedPaymentAccountId || null,
+        expectedPaymentModeId: expectedPaymentAccountId ? expectedPaymentModeId || null : null,
         notes: notes.trim() || null,
       };
       if (initial) await updateRecurringExpense(initial.id, input);
@@ -307,25 +311,15 @@ export function RecurringExpenseFormModal({
               </select>
             </div>
             <div>
-              <label className={labelClass}>Expected Payment Account (optional)</label>
-              <select value={expectedPaymentAccountId} onChange={(e) => setExpectedPaymentAccountId(e.target.value)} className={inputClass}>
-                <option value="">None</option>
-                {cashBankAccounts.map((g) =>
-                  g.children.length > 0 ? (
-                    <optgroup key={g.id} label={`${g.code} — ${g.name}`}>
-                      {g.children.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.code} — {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : (
-                    <option key={g.id} value={g.id}>
-                      {g.code} — {g.name}
-                    </option>
-                  )
-                )}
-              </select>
+              <label className={labelClass}>Expected payment mode and account (optional)</label>
+              <PaymentModeSelect
+                value={{ modeId: expectedPaymentModeId, accountId: expectedPaymentAccountId }}
+                onChange={(v) => {
+                  setExpectedPaymentModeId(v.modeId);
+                  setExpectedPaymentAccountId(v.accountId);
+                }}
+                className={inputClass}
+              />
             </div>
             <div className="col-span-2">
               <label className={labelClass}>Notes (optional)</label>

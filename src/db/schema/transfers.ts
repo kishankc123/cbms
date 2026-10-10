@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, date, numeric, pgEnum, uniqueIndex } fr
 import { tenants } from "./tenancy";
 import { accounts } from "./accounts";
 import { journalEntries } from "./ledger";
+import { paymentModes } from "./payment-modes";
 
 export const interTransferStatusEnum = pgEnum("inter_transfer_status", ["posted", "voided"]);
 
@@ -19,6 +20,12 @@ export const interTransfers = pgTable(
     fromAccountId: uuid("from_account_id").notNull().references(() => accounts.id),
     toAccountId: uuid("to_account_id").notNull().references(() => accounts.id),
     amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    // The payment mode each side moved through (Cash, Cheque, Bank transfer, ...). The names are kept too, so history still reads
+    // right after a mode is renamed or deleted. Blank on transfers recorded before modes were asked.
+    fromPaymentModeId: uuid("from_payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
+    fromPaymentModeName: text("from_payment_mode_name"),
+    toPaymentModeId: uuid("to_payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
+    toPaymentModeName: text("to_payment_mode_name"),
     reference: text("reference"),
     description: text("description"),
     // Reference only (URL/filename) — the app has no file-storage backend.

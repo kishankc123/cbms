@@ -32,6 +32,7 @@ export default async function AuditOverviewPage() {
         <p className="mt-0.5 text-sm text-gray-500">Exceptions, locked periods, rules and the audit trail — what keeps your records clean.</p>
       </div>
 
+      {data.exceptionsFiscalYear && <p className="text-xs text-gray-500">Exceptions are counted for fiscal year {data.exceptionsFiscalYear}, the one in view in the sidebar.</p>}
       <div className="grid grid-cols-4 gap-4">
         <SummaryCard label="Open exceptions" value={data.openExceptionCount} tone="warn" />
         <SummaryCard label="Blocking exceptions" value={data.blockingExceptionCount} tone="bad" />

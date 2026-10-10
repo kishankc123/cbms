@@ -64,3 +64,31 @@ describe("can()", () => {
     expect(can(custom, "payroll", "view")).toBe(false);
   });
 });
+
+describe("special permissions (See salary amounts)", () => {
+  it("sit under their module in the catalog", () => {
+    expect(PERMISSION_CATALOG.find((m) => m.key === "payroll")?.extras?.map((e) => e.key)).toEqual(["view_salary"]);
+  });
+
+  it("a role saved before it existed keeps what it had: it follows the module's View", () => {
+    expect(normalizePermissions({ payroll: { view: true, create: true } }).payroll).toMatchObject({ view: true, view_salary: true });
+    expect(normalizePermissions({ payroll: {} }).payroll).toMatchObject({ view: false, view_salary: false });
+    // and without being normalized at all
+    expect(hasPermission("staff", { payroll: { view: true } }, "payroll", "view_salary")).toBe(true);
+    expect(hasPermission("staff", { payroll: {} }, "payroll", "view_salary")).toBe(false);
+  });
+
+  it("can be switched off on its own, and switching it on brings View with it", () => {
+    expect(normalizePermissions({ payroll: { view: true, view_salary: false } }).payroll).toMatchObject({ view: true, view_salary: false });
+    expect(hasPermission("staff", { payroll: { view: true, view_salary: false } }, "payroll", "view_salary")).toBe(false);
+    expect(normalizePermissions({ payroll: { view_salary: true } }).payroll.view).toBe(true);
+  });
+
+  it("is on for the standard Accountant and Administrator, off for Staff, and Owner bypasses it", () => {
+    expect(defaultPermissionsFor("accountant").payroll.view_salary).toBe(true);
+    expect(defaultPermissionsFor("admin").payroll.view_salary).toBe(true);
+    expect(defaultPermissionsFor("staff").payroll.view_salary).toBe(false);
+    expect(fullAccessPermissions().payroll.view_salary).toBe(true);
+    expect(hasPermission("owner", {}, "payroll", "view_salary")).toBe(true);
+  });
+});

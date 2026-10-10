@@ -30,7 +30,8 @@ import {
 } from "@/lib/compliance/reports";
 
 import { todayIso, addMonths, addDays } from "@/lib/calendar";
-import { fiscalYearOfDate } from "@/lib/compliance/vat-worksheet";
+import { fiscalYearOfDate } from "@/lib/compliance/fiscal-year-of";
+import { exceptionDates } from "@/lib/compliance/exception-dates";
 import { validateADDate } from "@/lib/calendar";
 async function logAudit(input: {
   tenantId: string;
@@ -86,8 +87,8 @@ export async function getComplianceDashboard(fiscalYearKey?: string | null) {
     .where(eq(complianceObligations.tenantId, session.tenantId))
     .orderBy(asc(complianceObligations.dueDate));
 
-  const openExceptions = await db
-    .select({ id: complianceExceptions.id })
+  const openExceptionRows = await db
+    .select({ id: complianceExceptions.id, transactionType: complianceExceptions.transactionType, transactionId: complianceExceptions.transactionId, detectedDate: complianceExceptions.detectedDate })
     .from(complianceExceptions)
     .where(and(eq(complianceExceptions.tenantId, session.tenantId), ne(complianceExceptions.status, "closed")));
 
@@ -109,6 +110,12 @@ export async function getComplianceDashboard(fiscalYearKey?: string | null) {
   const currentKey = fiscalYearOfDate(today).key;
   const selectedYear = years.find((y) => y.key === fiscalYearKey) ?? years.find((y) => y.key === currentKey) ?? years[years.length - 1] ?? null;
   const inYear = obligations.filter((i) => selectedYear && yearOf(i).key === selectedYear.key);
+  // Open exceptions are counted for the year they are about (see exception-dates.ts), like everything else on this screen except the list.
+  const exceptionDay = await exceptionDates(session.tenantId, openExceptionRows);
+  const openExceptions = openExceptionRows.filter((e) => {
+    const day = exceptionDay.get(e.id)!;
+    return !selectedYear || (day >= selectedYear.from && day <= selectedYear.to);
+  });
   const counts = summarize(inYear, today);
 
   const isOpen = (i: (typeof obligations)[number]) => i.status !== "not_applicable" && i.status !== "filed" && i.status !== "paid";

@@ -18,7 +18,7 @@ export { templateInScope };
 
 type Template = typeof complianceRequirementTemplates.$inferSelect;
 
-function resolveCalendar(template: Template, statutory: CalendarSystem, org: CalendarSystem): CalendarSystem {
+export function resolveCalendar(template: Template, statutory: CalendarSystem, org: CalendarSystem): CalendarSystem {
   switch (template.periodCalendar) {
     case "org":
       return org;

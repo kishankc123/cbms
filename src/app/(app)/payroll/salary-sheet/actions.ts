@@ -62,6 +62,7 @@ export type GenerateRunInput = {
 export async function generatePayrollRun(input: GenerateRunInput) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const settings = await getOrCreateSettings(session.tenantId);
   const calendar: CalendarSystem = input.calendar ?? session.calendar;
@@ -217,6 +218,7 @@ const STATUS_FLOW = ["draft", "review", "approved", "finalized"] as const;
 export async function advanceRunStatus(input: { runId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const [run] = await db
     .select()
@@ -274,6 +276,7 @@ export async function advanceRunStatus(input: { runId: string }) {
 export async function reverseFinalizedRun(input: { runId: string; reason: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
   if (!input.reason.trim()) throw new Error("A reason is required to reverse a finalized payroll run");
 
   const [run] = await db
@@ -320,6 +323,7 @@ export async function reverseFinalizedRun(input: { runId: string; reason: string
 export async function revertRunToDraft(input: { runId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const [run] = await db
     .select()

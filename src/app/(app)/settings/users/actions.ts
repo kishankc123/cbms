@@ -13,6 +13,7 @@ import { sendEmail, invitationEmail, appUrl, isDeliveryFailure } from "@/lib/ema
 import { isEmail } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAuditEvent } from "@/lib/audit";
+import { transferOwnership } from "@/lib/org-ownership";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -94,6 +95,18 @@ export async function addUser(input: { email: string; roleId: string; status: "a
   const result = await addExistingAccount(session.tenantId, { userId: session.userId, name: me.name }, { email: input.email, role, status: input.status });
   if (result.ok) revalidatePath("/settings/users");
   return result;
+}
+
+/** The Owner hands the organization over to another member and steps down (see lib/org-ownership.ts). Needs the Owner's password. */
+export async function handOverOwnership(input: { toUserId: string; password: string; stepDownRoleId: string | null }) {
+  const session = await requireOrgAdmin();
+  if (session.role !== "owner") return { ok: false as const, error: "Only an Owner can hand the organization over." };
+  const r = await transferOwnership({ tenantId: session.tenantId, actingUserId: session.userId, toUserId: input.toUserId, password: input.password, stepDownRoleId: input.stepDownRoleId });
+  if (r.ok) {
+    revalidatePath("/settings", "layout");
+    revalidatePath("/settings/users");
+  }
+  return r;
 }
 
 export async function getMemberForEdit(userId: string) {
@@ -191,7 +204,7 @@ export async function changeMemberRole(userId: string, roleId: string) {
   const roleIds = await ensureSystemRoles(session.tenantId);
   const before = [...roleIds].find(([, id]) => id === m.roleId)?.[0] ?? m.role;
   // The role decides what the member can do, so any old per-member override is cleared.
-  await db.update(memberships).set({ role: role.baseRole, roleId: role.id, permissions: null }).where(eq(memberships.id, m.id));
+  await db.update(memberships).set({ role: role.baseRole, roleId: role.id }).where(eq(memberships.id, m.id));
   await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "role_changed", entityType: "membership", entityId: m.id, before: { role: before, roleId: m.roleId }, after: { role: role.name, roleId: role.id, userId } });
   revalidatePath("/settings/users");
 }

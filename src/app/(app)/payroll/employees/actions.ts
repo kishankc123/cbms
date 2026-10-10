@@ -70,6 +70,7 @@ const isUniqueViolation = (e: unknown) => {
 export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> & { employeeCode?: string; initialSalary: number }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const given = (input.employeeCode ?? "").trim();
   const fullName = input.fullName.trim();
@@ -221,6 +222,7 @@ export type SalaryChangeInput = {
 export async function addSalaryChange(input: SalaryChangeInput) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   if (!input.effectiveFrom) throw new Error("Effective from date is required");
   if (!input.reason.trim()) throw new Error("Reason is required");
@@ -286,6 +288,7 @@ export type BenefitInput = {
 export async function addBenefit(input: BenefitInput) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const benefitType = input.benefitType.trim();
   if (!benefitType) throw new Error("Benefit type is required");
@@ -333,6 +336,7 @@ export async function addBenefit(input: BenefitInput) {
 export async function deactivateBenefit(input: { benefitId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const [benefit] = await db
     .select()

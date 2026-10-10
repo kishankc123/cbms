@@ -30,7 +30,7 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ProfilePanel({ employee, currentSalary }: { employee: Employee; currentSalary: number }) {
+export function ProfilePanel({ employee, currentSalary }: { employee: Employee; currentSalary: number | null }) {
   const [editing, setEditing] = useState(false);
 
   return (
@@ -56,7 +56,7 @@ export function ProfilePanel({ employee, currentSalary }: { employee: Employee; 
         <Field label="Employment Status" value={employee.employmentStatus.replace("_", " ")} />
         <Field label="Bank Name" value={employee.bankName ?? ""} />
         <Field label="Bank Account Number" value={employee.bankAccountNumber ?? ""} />
-        <Field label="Current Basic Salary" value={currentSalary.toFixed(2)} />
+        {currentSalary !== null && <Field label="Current Basic Salary" value={currentSalary.toFixed(2)} />}
       </div>
 
       {editing && <EditEmployeeModal employee={employee} onClose={() => setEditing(false)} />}

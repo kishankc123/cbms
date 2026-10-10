@@ -2,7 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, salaryHistory, employeeBenefits, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { can, requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { listEmployeeAdvances } from "@/lib/payroll/staff-advances";
@@ -29,7 +29,11 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   const month = current.month;
   const year = current.year;
 
-  const [currentSalary, salaryRows, benefitRows, attendanceRows, payslipRows, advanceRows] = await Promise.all([
+  // Pay (salary, benefits, payslips, advances) is only read for a role that may see salary amounts; everyone with Payroll View gets the
+  // profile and attendance.
+  const seesPay = can(session, "payroll", "view_salary");
+  const loadPay = () =>
+    Promise.all([
     getCurrentSalary(session.tenantId, employeeId),
     db
       .select({
@@ -55,10 +59,6 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       .where(and(eq(employeeBenefits.tenantId, session.tenantId), eq(employeeBenefits.employeeId, employeeId)))
       .orderBy(desc(employeeBenefits.effectiveFrom)),
     db
-      .select()
-      .from(attendanceRecords)
-      .where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))),
-    db
       .select({
         id: payrollLines.id,
         calendarSystem: payrollRuns.calendarSystem,
@@ -77,7 +77,10 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       )
       .orderBy(desc(payrollRuns.periodStart)),
     listEmployeeAdvances(session.tenantId, employeeId),
-  ]);
+    ]);
+
+  const [attendanceRows, pay] = await Promise.all([db.select().from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))), seesPay ? loadPay() : Promise.resolve(null)]);
+  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows] = pay ?? [null, [], [], [], []];
 
   const attendanceMap: Record<string, AttendanceStatus> = {};
   for (const r of attendanceRows) attendanceMap[r.date] = r.status as AttendanceStatus;
@@ -91,7 +94,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
 
       <ProfileTabs
         employee={employee}
-        currentSalary={currentSalary ?? 0}
+        currentSalary={seesPay ? currentSalary ?? 0 : null}
         salaryRecords={salaryRows.map((r) => ({ ...r, createdByName: r.createdByName ?? "—", createdAt: r.createdAt.toISOString() }))}
         benefits={benefitRows}
         attendanceMonth={month}

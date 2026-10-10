@@ -12,7 +12,10 @@ import { db } from "@/db";
 import { complianceObligations, journalEntries, paymentAllocations, payments, vatWorksheets } from "@/db/schema";
 import type { VatWorksheetFigures, VatWorksheetPeriodFigures } from "@/db/schema/vat-worksheet";
 import { getVatReturn } from "./reports";
-import { bsFiscalYearOf, yearRange, todayIso } from "@/lib/calendar";
+import { todayIso } from "@/lib/calendar";
+import { fiscalYearOfDate } from "./fiscal-year-of";
+
+export { fiscalYearOfDate };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -58,13 +61,6 @@ export type VatWorksheet = {
   /** VAT payable still unpaid: this year's periods plus periods of earlier years (payable is never carried, so it is added here). */
   payableVat: number;
 };
-
-export function fiscalYearOfDate(iso: string): VatWorksheetYear {
-  const fy = bsFiscalYearOf(iso);
-  if (fy) return { key: fy.from, label: fy.label, from: fy.from, to: fy.to };
-  const y = yearRange("AD", iso);
-  return { key: y.from, label: y.from.slice(0, 4), from: y.from, to: y.to };
-}
 
 async function vatObligations(tenantId: string) {
   const obligations = await db

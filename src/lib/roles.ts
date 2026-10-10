@@ -20,7 +20,3 @@ export const isOrgAdmin = (role: OrgRole) => role === "owner" || role === "admin
 export function defaultPermissions(role: OrgRole): Permissions {
   return defaultPermissionsFor(role);
 }
-
-export function effectivePermissions(role: OrgRole, override: Permissions | null | undefined): Permissions {
-  return override && Object.keys(override).length > 0 ? override : defaultPermissions(role);
-}

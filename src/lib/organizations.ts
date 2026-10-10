@@ -1,6 +1,7 @@
 import { desc, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants, accounts, memberships, subscriptions, taxRates } from "@/db/schema";
+import { publishedVersionsFor } from "@/lib/compliance/platform-tax-rates";
 import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-accounts";
 import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
@@ -65,10 +66,16 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
         await tx.insert(subscriptions).values({ tenantId: t.id, plan: "trial", status: "trial", trialEndsAt: new Date(Date.now() + 30 * 86400000) });
         // Every tax rate a document could ever be taxed at must have a rate history behind it from day one — an
         // organization is never left relying on a fallback default with no versioned row to change from.
-        await tx.insert(taxRates).values([
-          { tenantId: t.id, taxTypeKey: "vat", rate: t.vatRate, effectiveFrom: "2000-01-01", createdBy: ownerUserId },
-          { tenantId: t.id, taxTypeKey: "tds", rate: t.tdsRate, effectiveFrom: "2000-01-01", createdBy: ownerUserId },
-        ]);
+        // When the platform has published rates for the country, the organization starts from those versions (so it is on the same rates
+        // from the same dates as everyone else); a tax type with none published starts at the default rate.
+        const published = await publishedVersionsFor(t.countryCode, tx);
+        const startingRates = (taxTypeKey: "vat" | "tds", fallback: string) => {
+          const versions = published.filter((p) => p.taxTypeKey === taxTypeKey);
+          return versions.length > 0
+            ? versions.map((p) => ({ tenantId: t.id, taxTypeKey, rate: p.rate, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo, source: "platform", createdBy: ownerUserId }))
+            : [{ tenantId: t.id, taxTypeKey, rate: fallback, effectiveFrom: "2000-01-01", createdBy: ownerUserId }];
+        };
+        await tx.insert(taxRates).values([...startingRates("vat", t.vatRate), ...startingRates("tds", t.tdsRate)]);
         return t;
       });
 

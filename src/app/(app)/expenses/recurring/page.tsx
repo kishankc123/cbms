@@ -58,6 +58,7 @@ export default async function RecurringExpensesPage() {
       endDate: r.endDate,
       priority: r.priority,
       expectedPaymentAccountId: r.expectedPaymentAccountId,
+      expectedPaymentModeId: r.expectedPaymentModeId,
       notes: r.notes,
     },
   }));

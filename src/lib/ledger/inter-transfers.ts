@@ -7,6 +7,7 @@ import { getCashBankAccounts } from "./cash-bank-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { logAuditEvent } from "@/lib/audit";
+import { resolvePaymentMode } from "@/lib/payment-modes";
 
 import { todayIso } from "@/lib/calendar";
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -46,6 +47,9 @@ export type TransferInput = {
   transferDate: string;
   fromAccountId: string;
   toAccountId: string;
+  /** The payment mode each side moves through (Cash, Cheque, Bank transfer, ...), chosen with its account. */
+  fromModeId?: string | null;
+  toModeId?: string | null;
   amount: number;
   reference?: string | null;
   description?: string | null;
@@ -69,13 +73,20 @@ function entryLines(input: TransferInput, transferNumber: string) {
   const amount = round2(input.amount);
   const memo = `Inter-Transfer ${transferNumber}`;
   return [
-    { accountId: input.toAccountId, debitAmount: amount, description: memo },
-    { accountId: input.fromAccountId, creditAmount: amount, description: memo },
+    { accountId: input.toAccountId, paymentModeId: input.toModeId || null, debitAmount: amount, description: memo },
+    { accountId: input.fromAccountId, paymentModeId: input.fromModeId || null, creditAmount: amount, description: memo },
   ];
+}
+
+// Each side's mode must be a real mode of this organization that includes that side's account; the names are stored with the transfer.
+async function resolveModes(tenantId: string, input: TransferInput) {
+  const [from, to] = await Promise.all([resolvePaymentMode(tenantId, input.fromModeId, input.fromAccountId), resolvePaymentMode(tenantId, input.toModeId, input.toAccountId)]);
+  return { from, to };
 }
 
 export async function createTransfer(tenantId: string, userId: string, input: TransferInput) {
   await validate(tenantId, input);
+  const modes = await resolveModes(tenantId, input);
   const transferNumber = await nextTransferNumber(tenantId);
 
   const entry = await postJournalEntry({
@@ -98,6 +109,10 @@ export async function createTransfer(tenantId: string, userId: string, input: Tr
         fromAccountId: input.fromAccountId,
         toAccountId: input.toAccountId,
         amount: round2(input.amount).toFixed(2),
+        fromPaymentModeId: modes.from.paymentModeId,
+        fromPaymentModeName: modes.from.paymentModeName,
+        toPaymentModeId: modes.to.paymentModeId,
+        toPaymentModeName: modes.to.paymentModeName,
         reference: input.reference?.trim() || null,
         description: input.description?.trim() || null,
         attachmentUrl: input.attachmentUrl?.trim() || null,
@@ -125,6 +140,7 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
   if (existing.status === "voided") throw new Error("A voided transfer cannot be edited.");
 
   await validate(tenantId, input);
+  const modes = await resolveModes(tenantId, input);
 
   // What changed, in words (account names, not ids). Nothing to do when nothing did.
   const labels = new Map((await getTransferAccountOptions(tenantId)).map((a) => [a.id, a.label]));
@@ -133,6 +149,8 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
     "Transfer date": existing.transferDate,
     "From account": labels.get(existing.fromAccountId) ?? "—",
     "To account": labels.get(existing.toAccountId) ?? "—",
+    "From mode": text(existing.fromPaymentModeName),
+    "To mode": text(existing.toPaymentModeName),
     Amount: Number(existing.amount).toFixed(2),
     Reference: text(existing.reference),
     Description: text(existing.description),
@@ -142,6 +160,8 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
     "Transfer date": input.transferDate,
     "From account": labels.get(input.fromAccountId) ?? "—",
     "To account": labels.get(input.toAccountId) ?? "—",
+    "From mode": text(modes.from.paymentModeName),
+    "To mode": text(modes.to.paymentModeName),
     Amount: round2(input.amount).toFixed(2),
     Reference: text(input.reference),
     Description: text(input.description),
@@ -174,6 +194,10 @@ export async function updateTransfer(tenantId: string, userId: string, transferI
       fromAccountId: input.fromAccountId,
       toAccountId: input.toAccountId,
       amount: round2(input.amount).toFixed(2),
+      fromPaymentModeId: modes.from.paymentModeId,
+      fromPaymentModeName: modes.from.paymentModeName,
+      toPaymentModeId: modes.to.paymentModeId,
+      toPaymentModeName: modes.to.paymentModeName,
       reference: input.reference?.trim() || null,
       description: input.description?.trim() || null,
       attachmentUrl: input.attachmentUrl?.trim() || null,

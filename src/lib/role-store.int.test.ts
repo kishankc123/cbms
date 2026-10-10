@@ -55,7 +55,7 @@ describe("custom roles", () => {
     const cashier = await byName("Cashier");
     expect(cashier).toMatchObject({ roleNumber: 5, baseRole: "staff", systemKey: null, isActive: true });
     expect(cashier.permissions.sales).toEqual({ view: true, create: false, edit: false, void: true, delete: false }); // void brought View with it
-    expect(cashier.permissions.payroll).toEqual({ view: false, create: false, edit: false, delete: false });
+    expect(cashier.permissions.payroll).toEqual({ view: false, create: false, edit: false, delete: false, view_salary: false });
 
     expect(await createRole(org.tenantId, org.userId, { name: "CASHIER", permissions: { sales: { view: true } } })).toMatchObject({ ok: false, error: expect.stringMatching(/already exists/) });
     expect(await createRole(org.tenantId, org.userId, { name: " ", permissions: { sales: { view: true } } })).toMatchObject({ ok: false, error: expect.stringMatching(/role name/) });

@@ -125,8 +125,8 @@ export function ComplianceDashboard({ data }: { data: Data }) {
 
       {data.summary.exceptions > 0 && (
         <p className="text-xs text-gray-500">
-          {data.summary.exceptions} open exception{data.summary.exceptions === 1 ? "" : "s"} —{" "}
-          <Link href="/audit/exceptions" className="text-[var(--color-primary)] hover:underline">
+          {data.summary.exceptions} open exception{data.summary.exceptions === 1 ? "" : "s"} in this fiscal year —{" "}
+          <Link href={`/audit/exceptions${data.selectedFiscalYear ? `?fy=${data.selectedFiscalYear}` : ""}`} className="text-[var(--color-primary)] hover:underline">
             open the Exception Centre
           </Link>
         </p>

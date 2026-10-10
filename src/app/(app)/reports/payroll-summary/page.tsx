@@ -12,7 +12,7 @@ const fmt = (n: number) => n.toFixed(2);
 
 export default async function PayrollSummaryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
-  if (!can(session, "payroll", "view")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view") || !can(session, "payroll", "view_salary")) throw new Error("Not permitted");
   const sp = await searchParams;
   const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);

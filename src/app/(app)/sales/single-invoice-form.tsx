@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
@@ -9,6 +9,7 @@ import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { SavedDialog } from "./saved-dialog";
+import { DraftBanner, useDraft } from "@/components/use-draft";
 import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -94,6 +95,7 @@ export function SingleInvoiceForm({
   vatRate,
   initial,
   nextInvoiceNumber,
+  draftKey,
   onDone,
   onDirtyChange,
 }: {
@@ -104,6 +106,8 @@ export function SingleInvoiceForm({
   vatRate: number;
   initial?: InitialSingleInvoice;
   nextInvoiceNumber?: string;
+  /** Names this person's saved draft of a new invoice (not used when editing). */
+  draftKey?: string;
   onDone?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
@@ -139,6 +143,27 @@ export function SingleInvoiceForm({
   // Shown after every new invoice is saved, so it is clear it went in.
   const [savedInfo, setSavedInfo] = useState<{ number: string; total: number } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  // What is typed is kept in this browser as it goes, and offered back after a reload or a lost connection. The invoice number is only
+  // kept when it was typed by hand: an automatic number is never saved, so a restored draft always takes the next free number, never one
+  // that has been used since (by this form, the Multi-Invoice tab or anyone else).
+  const draftValue = useMemo(
+    () => ({ invoiceDate, dueDate, customerId, billType, revenueAccountId, lines, payments, invoiceNumberOverride: invoiceNumberOverride && invoiceNumberOverride !== nextInvoiceNumber ? invoiceNumberOverride : null }),
+    [invoiceDate, dueDate, customerId, billType, revenueAccountId, lines, payments, invoiceNumberOverride, nextInvoiceNumber]
+  );
+  const draft = useDraft<typeof draftValue>(!initial && draftKey ? "cbms-draft:sales-single:" + draftKey : null, draftValue, Boolean(customerId || payments.length > 0 || lines.some(isLineTouched) || invoiceNumberOverride));
+  function restoreDraft() {
+    const d = draft.restore();
+    if (!d) return;
+    setInvoiceDate(d.invoiceDate || today());
+    setDueDate(d.dueDate);
+    setCustomerId(d.customerId);
+    setBillType(d.billType);
+    setRevenueAccountId(d.revenueAccountId);
+    setLines(d.lines.length > 0 ? d.lines : Array.from({ length: MIN_LINES }, emptyLine));
+    setPayments(d.payments);
+    setInvoiceNumberOverride(d.invoiceNumberOverride);
+  }
 
   useEffect(() => {
     if (!showPayment) return;
@@ -252,6 +277,7 @@ export function SingleInvoiceForm({
 
       const savedNumber = invoiceNumber.trim();
       const savedTotal = grandTotal;
+      draft.clear();
       if (onDone) {
         onDone();
       } else {
@@ -275,6 +301,7 @@ export function SingleInvoiceForm({
 
   return (
     <div className="space-y-4">
+      <DraftBanner draft={draft} what="an invoice" onRestore={restoreDraft} />
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Details</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">

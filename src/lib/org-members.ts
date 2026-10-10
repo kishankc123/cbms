@@ -48,6 +48,7 @@ export async function listMembersPage(tenantId: string, f: MemberFilters) {
         email: users.email,
         mobile: users.mobile,
         verified: users.emailVerifiedAt,
+        lastLogin: users.lastLogin,
         baseRole: memberships.role,
         roleId: memberships.roleId,
         roleName: roles.name,
@@ -66,7 +67,7 @@ export async function listMembersPage(tenantId: string, f: MemberFilters) {
     total,
     page,
     pageSize,
-    rows: rows.map((r) => ({ ...r, code: memberCode(r.number), verified: Boolean(r.verified), roleName: r.roleName ?? roleLabel(r.baseRole) })),
+    rows: rows.map((r) => ({ ...r, code: memberCode(r.number), verified: Boolean(r.verified), lastLogin: r.lastLogin?.toISOString() ?? null, roleName: r.roleName ?? roleLabel(r.baseRole) })),
   };
 }
 

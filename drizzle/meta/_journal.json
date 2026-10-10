@@ -631,6 +631,27 @@
       "when": 1791527454441,
       "tag": "0089_vat_worksheets",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1791618038654,
+      "tag": "0090_payment_modes_transfers_recurring",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1791618526728,
+      "tag": "0091_platform_tax_rates",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791619272302,
+      "tag": "0092_drop_member_permissions",
+      "breakpoints": true
     }
   ]
 }

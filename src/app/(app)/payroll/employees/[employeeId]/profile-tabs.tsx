@@ -22,7 +22,8 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function ProfileTabs(props: {
   employee: Parameters<typeof ProfilePanel>[0]["employee"];
-  currentSalary: number;
+  /** null when the person's role does not include seeing salary amounts: the pay tabs are then left out. */
+  currentSalary: number | null;
   salaryRecords: Parameters<typeof SalaryHistoryPanel>[0]["records"];
   benefits: Parameters<typeof BenefitsPanel>[0]["benefits"];
   attendanceMonth: number;
@@ -36,7 +37,7 @@ export function ProfileTabs(props: {
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-full bg-gray-100 p-1">
-        {TABS.map((t) => (
+        {TABS.filter((t) => props.currentSalary !== null || t.id === "profile" || t.id === "attendance").map((t) => (
           <button
             key={t.id}
             type="button"
@@ -51,7 +52,7 @@ export function ProfileTabs(props: {
       </div>
 
       {tab === "profile" && <ProfilePanel employee={props.employee} currentSalary={props.currentSalary} />}
-      {tab === "salary" && (
+      {tab === "salary" && props.currentSalary !== null && (
         <SalaryHistoryPanel employeeId={props.employee.id} currentSalary={props.currentSalary} records={props.salaryRecords} />
       )}
       {tab === "benefits" && <BenefitsPanel employeeId={props.employee.id} benefits={props.benefits} />}

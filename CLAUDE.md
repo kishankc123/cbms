@@ -2,8 +2,8 @@
 
 # Development Context (for continuing in a new session)
 
-Last updated: 2026-10-08, as of commit `13cbba8` on `main` (working tree clean at that point — still run
-`git status` first thing in a new session). Migrations in the repo run through `0087`; **Vercel's database
+Last updated: 2026-10-10, as of commit `d8e81f0` on `main` plus the uncommitted batch listed under "Latest batch" below
+(run `git status` first thing in a new session). Migrations in the repo run through `0092`; **Vercel's database
 only has what was run on it by hand — deploys do not run migrations** (see "Operations" below).
 
 ## What this app is
@@ -63,8 +63,11 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   with each payment line; the mode is **saved** on the journal line (`journal_lines.payment_mode_id/name`) and
   on the payment record. The server validates the pair (`modeNamesForLines`, `resolvePaymentMode`) in the one
   posting choke point. `getCashBankAccounts()` includes mode-linked accounts, so balances, reports and guards
-  see wallet accounts. Import cells accept an account or a mode with one account. Not yet on: recurring-expense
-  "expected payment account", inter-transfers.
+  see wallet accounts. Import cells accept an account or a mode with one account. Also on: Inter-Transfers (both sides,
+  saved on `inter_transfers.from/to_payment_mode_*`), the recurring-expense expected payment account
+  (`recurring_expenses.expected_payment_mode_*`, planning only) and the **Receipts & Payments by Mode** report
+  (`reports/receipts-by-mode`, `lib/ledger/cash-by-mode*.ts`; leaves out voided/edited entries and Inter-Transfers;
+  older lines with no mode show as "No mode recorded").
 - **Revenue account on invoices**: `sales_invoices.revenue_account_id`; chosen on Single Invoice (overrides the
   items' accounts), each Multi-Invoice row, and the Sales import (column + default). Only lowest-level income
   accounts (`lib/sales/revenue-accounts.ts`); blank = Sales Revenue (4000) as before.
@@ -120,16 +123,29 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   years (+ books start date), Users, Roles.
 - **Roles & permissions** — `roles` table (migration 0073), matrix editor at Settings → Roles (list | add new,
   duplicate, reset standard role, delete when unused). `lib/role-store.ts` lazily creates the standard roles
-  and links existing members.
+  and links existing members. **Special permissions** sit inside a module (`extras` in the catalog; today Payroll →
+  `view_salary`, "See salary amounts"): salary sheets, payroll setup, salary/benefit/payslip/advance data on an
+  employee, the salary column and the two payroll reports all need it (`guardSalary()`; actions check `can(session,
+  "payroll", "view_salary")`). A role saved before an extra existed follows the module's View, so nobody loses access.
+  `memberships.permissions` is gone (migration 0092); permissions come only from the role.
 - **User accounts & membership** — separate "Create a user account" and "Create a business account" on the
   login page; a signed-in person with no organization sees a landing screen. Settings → Users: list (member
   IDs `USR-0001`), Add new (exact email → if the account exists and its email is verified they are added
   **instantly**, with a notice banner + email and a Leave option; otherwise an invitation is offered), edit
-  role/status, remove. `lib/org-members.ts`.
+  role/status, remove, and "Make Owner…" (`lib/org-ownership.ts`: the Owner hands over and steps down in one step, needs
+  their own password, logged as `ownership_transferred`). The list shows each member's last sign-in. `lib/org-members.ts`.
 - **Platform administration** (`/admin`, platform-admin flag only): Overview counts, Users (list, detail,
   unlock, force sign-out, disable/enable, grant/revoke platform admin) and Organizations (list, detail,
-  suspend with reason / reactivate). `lib/platform-admin.ts`. Still placeholders: Platform Audit Log, Billing,
-  Compliance Configuration.
+  suspend with reason / reactivate). `lib/platform-admin.ts`. **Compliance Configuration** has three screens:
+  Fines and penalties, **Tax rates** (`/admin/compliance/tax-rates`, `lib/compliance/platform-tax-rates.ts`: publish a VAT/TDS
+  rate for a country from a date; it is written into every organization of that country as a `tax_rates` row with
+  source "platform", which the organization can then no longer change; organizations created later start from the
+  published versions; `platform_tax_rates` table, migration 0091) and **Requirement templates**
+  (`/admin/compliance/templates`, `lib/compliance/template-admin.ts` + `template-rules.ts`: edit name, active, verified,
+  dates, due-date rule, applicability; items already generated keep their dates unless "move open items" is ticked).
+  **Platform Audit Log** (`/admin/audit-log`, `lib/platform-audit.ts`) lists tenant-less audit events: sign-ins, failed
+  sign-ins and lockouts (`lib/credentials.ts` records `login_succeeded`/`login_failed`/`account_locked`), and what
+  platform admins changed. Still a placeholder: Billing.
 - **Import Sales / Purchases / Expenses** — tabs on Sales → Add new, Purchases → Consumable purchase and the
   Expenses page. One row per invoice/bill/expense (consumable purchases only; stockable purchases need item
   lines). Paste from Excel, template download, fix rows in place, Check only, "Fix and import the remaining
@@ -141,13 +157,37 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 - **Dashboard** (`/dashboard`) has a greeting by Nepal time ("Good morning, <name>"), KPIs, a
   revenue/expense chart and cash/bank balances; the original full spec was never re-checked against it.
 
+## Latest batch (all in the working tree, uncommitted at the time of writing)
+
+- Ledger-style reports (Ledger, Bank/Cash Book, Customer/Supplier Statement, Transaction Register, Journal Report): click a
+  line for the transaction pop-up (`reports/entry-actions.ts`, access limited per report scope), reversed/voided pairs hidden by
+  default with a toggle. Ledger Description shows the description typed on the document (`lib/ledger/recorded-description.ts`).
+- **VAT worksheet** (Compliance → Tax → VAT → Worksheet): one fiscal year at a time; **Load** works the figures out from the
+  books (slow) into a draft, **Save** keeps them (`vat_worksheets`, migration 0089, `lib/compliance/vat-worksheet*.ts`); the saved
+  sheet opens in ~2 s. Only a VAT receivable is carried between periods and years; payable stays with its period; closing is
+  signed (receivable negative, green). Hovering a month lists its sales/purchases/returns. The Overview's VAT amount due follows
+  the saved worksheet (`savedVatNetPayables`); an unsaved year still shows the old un-netted amount.
+- **Payments edit** (`updatePayment` in `lib/ledger/payments-engine.ts`): Money In/Out edit from the payment's detail; kind and number
+  stay, the old entry is reversed and a new one posted, settled documents put right, restore on failure; refuses voided,
+  invoice-recorded, reconciled, closed-period, applied-advance and recovered-staff-advance cases. What changed goes to the audit
+  log (`payment_edited`) and shows as Edit history (`lib/audit-history.ts`); Inter-Transfer edits log the same way.
+- Compliance Overview: Pending / upcoming list (everything pending plus due within a month), **fiscal-year filter** on the name
+  block drives the count and category cards, open exceptions count for the selected year. Exceptions belong to the year of the
+  thing they are about (`lib/compliance/exception-dates.ts`); the Exception Centre and Audit overview follow a fiscal year too.
+- Sales → Add new: "Invoices saved" dialog; settlement summary by mode; **drafts are remembered in the browser**
+  (`components/use-draft.tsx`; Multi-Invoice rows and a new Single invoice; offered back with Restore/Discard; invoice numbers are
+  never stored, so a restored draft always takes the next free number).
+- Purchases: invoice number never required for No bill / Estimate. Customers/Suppliers: summary cards. Email: sent-mail log.
+
 ## Operations / things only the user can do
 
-- Run migrations **0065–0087** (and any later ones) on the Vercel database by hand, and make sure its host
+- Run migrations **0065–0092** (and any later ones). **Deploy the code before running 0092** — it drops
+  `memberships.permissions`, which the previous release still reads on the Vercel database by hand, and make sure its host
   matches `.env.local` (compare the host of the production `DATABASE_URL` with the local one; if they are the
   same database nothing needs running). Commands for a manual run: set `$env:DATABASE_URL` in PowerShell to the
   production URL, check the host, back up in Neon, then `node ./node_modules/drizzle-kit/bin.cjs migrate`.
-  Without them Roles, Users, Imports, Payment modes, revenue accounts and the compliance screens error there.
+  Without them Roles, Users, Imports, Payment modes, revenue accounts, the saved VAT worksheet, platform tax rates and the
+  compliance screens error there.
 - `lib/rate-limit.ts` is in-memory per server instance — ineffective on Vercel's serverless; needs a shared
   store. Email needs a real provider in production (dev prints invitation links).
 - Import Sales posts in a single request; a very large file could exceed Vercel's time limit (Purchases
@@ -159,15 +199,14 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   for Staff — a role-configuration decision for the user (turn it off, or add a dashboard permission).
 - Fiscal Year Engine **Phase 6** (per-month period-lock polish) and wider fiscal-year integration; only the
   Transaction Register has the "All time" + FY column.
-- Login/failed-login audit events, a `transferOwnership()` action, `payroll.view_salary`-style sub-permissions.
-- `memberships.permissions` (per-member override) is unused now that roles exist; safe to drop in a cleanup.
+- A dashboard-financials special permission (the mechanism exists; Staff still sees the KPIs by default).
 - Recurring Expenses feature: see the saved memory note for its phase status (not re-checked recently).
 - Global UI redesign: postponed on purpose (plan saved in memory).
 - Possible next imports: line-item layout for Sales, Stockable purchases, customers/suppliers/opening
   balances/items/assets.
-- Compliance leftovers: "Annual Company Compliance" has no due rule so no catch-up stream; an excisable-item
-  flag and sales block; a "receipts by mode" report; posting the money for an excise renewal automatically.
-  The platform admin has no screen yet for tax rates or requirement templates (only fines and penalties).
+- Compliance leftovers: "Annual Company Compliance" has no due rule (an administrator can now set one under Requirement
+  templates) so no catch-up stream; an excisable-item flag and sales block; posting the money for an excise renewal
+  automatically. The Fines & Penalties calculator is not yet fed the worksheet's netted payable.
 
 ## Known data quirks (don't mistake these for bugs)
 

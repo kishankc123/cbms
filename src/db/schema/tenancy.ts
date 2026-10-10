@@ -162,8 +162,6 @@ export const memberships = pgTable(
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     role: orgRoleEnum("role").notNull(),
-    // Optional per-member override of the role's default permissions.
-    permissions: jsonb("permissions").$type<Permissions>(),
     // The role this member holds; its permissions are what the member can do. Null only until the standard roles have
     // been linked (the member then gets the standard role of their baseRole).
     roleId: uuid("role_id").references(() => roles.id),

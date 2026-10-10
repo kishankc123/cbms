@@ -20,13 +20,13 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export function EmployeesTabs({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> }) {
+export function EmployeesTabs({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> | null }) {
   const [tab, setTab] = useState<TabId>("employees");
 
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-full bg-gray-100 p-1">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== "add" || currentSalaries !== null).map((t) => (
           <button
             key={t.id}
             type="button"

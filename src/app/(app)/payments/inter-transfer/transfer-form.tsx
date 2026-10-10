@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createInterTransfer, updateInterTransfer, getSourceBalance } from "./actions";
+import { PaymentModeSelect } from "@/components/payment-mode-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -15,6 +16,8 @@ export type TransferInitial = {
   transferDate: string;
   fromAccountId: string;
   toAccountId: string;
+  fromModeId: string | null;
+  toModeId: string | null;
   amount: number;
   reference: string | null;
   description: string | null;
@@ -26,28 +29,14 @@ const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 
 const inputCls = "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 const errCls = "w-full rounded border border-red-400 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-red-400";
 
-function AccountSelect({ value, onChange, options, exclude, hasError }: { value: string; onChange: (v: string) => void; options: Option[]; exclude: string; hasError: boolean }) {
-  const cash = options.filter((o) => o.kind === "Cash");
-  const bank = options.filter((o) => o.kind === "Bank");
-  const render = (list: Option[]) => list.map((o) => (
-    <option key={o.id} value={o.id} disabled={o.id === exclude}>
-      {o.label}
-    </option>
-  ));
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={hasError ? errCls : inputCls}>
-      <option value="">Select account</option>
-      {cash.length > 0 && <optgroup label="Cash">{render(cash)}</optgroup>}
-      {bank.length > 0 && <optgroup label="Bank">{render(bank)}</optgroup>}
-    </select>
-  );
-}
-
 export function TransferForm({ options, initial }: { options: Option[]; initial?: TransferInitial }) {
   const router = useRouter();
   const [transferDate, setTransferDate] = useState(initial?.transferDate ?? today());
   const [fromAccountId, setFromAccountId] = useState(initial?.fromAccountId ?? "");
   const [toAccountId, setToAccountId] = useState(initial?.toAccountId ?? "");
+  // The payment mode each side moves through, chosen together with its account.
+  const [fromModeId, setFromModeId] = useState(initial?.fromModeId ?? "");
+  const [toModeId, setToModeId] = useState(initial?.toModeId ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [reference, setReference] = useState(initial?.reference ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -94,7 +83,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
     setSaving(true);
     setServerError(null);
     try {
-      const payload = { transferDate, fromAccountId, toAccountId, amount: amountNum, reference, description, attachmentUrl };
+      const payload = { transferDate, fromAccountId, toAccountId, fromModeId: fromModeId || null, toModeId: toModeId || null, amount: amountNum, reference, description, attachmentUrl };
       if (initial) {
         await updateInterTransfer(initial.id, payload);
         router.push(`/payments/inter-transfer/${initial.id}`);
@@ -152,14 +141,28 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
 
         <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[1fr_auto_1fr]">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">From Account</label>
-            <AccountSelect value={fromAccountId} onChange={setFromAccountId} options={options} exclude={toAccountId} hasError={!!errors.fromAccountId} />
+            <label className="block text-xs text-gray-500 mb-1">From mode and account</label>
+            <PaymentModeSelect
+              value={{ modeId: fromModeId, accountId: fromAccountId }}
+              onChange={(v) => {
+                setFromModeId(v.modeId);
+                setFromAccountId(v.accountId);
+              }}
+              className={errors.fromAccountId ? errCls : inputCls}
+            />
             {errors.fromAccountId && <p className="mt-1 text-xs text-red-600">{errors.fromAccountId}</p>}
           </div>
           <div className="hidden sm:flex h-full items-end pb-1.5 text-xl text-gray-400">→</div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">To Account</label>
-            <AccountSelect value={toAccountId} onChange={setToAccountId} options={options} exclude={fromAccountId} hasError={!!errors.toAccountId} />
+            <label className="block text-xs text-gray-500 mb-1">To mode and account</label>
+            <PaymentModeSelect
+              value={{ modeId: toModeId, accountId: toAccountId }}
+              onChange={(v) => {
+                setToModeId(v.modeId);
+                setToAccountId(v.accountId);
+              }}
+              className={errors.toAccountId ? errCls : inputCls}
+            />
             {errors.toAccountId && <p className="mt-1 text-xs text-red-600">{errors.toAccountId}</p>}
           </div>
         </div>

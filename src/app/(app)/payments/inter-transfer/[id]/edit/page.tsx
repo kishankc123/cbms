@@ -27,6 +27,8 @@ export default async function EditTransferPage({ params }: { params: Promise<{ i
           transferDate: detail.transferDate,
           fromAccountId: detail.fromAccountId,
           toAccountId: detail.toAccountId,
+          fromModeId: detail.fromPaymentModeId,
+          toModeId: detail.toPaymentModeId,
           amount: detail.amount,
           reference: detail.reference,
           description: detail.description,

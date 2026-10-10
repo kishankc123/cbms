@@ -20,6 +20,7 @@ const REPORT_MODULE: Record<string, string> = {
   "purchase-by-item": "purchases",
   "purchase-by-supplier": "purchases",
   "purchase-summary": "purchases",
+  "receipts-by-mode": "bank_reconciliation",
   "receivable-ageing": "sales",
   "salary-payable": "payroll",
   "sales-by-customer": "sales",
@@ -32,13 +33,17 @@ const REPORT_MODULE: Record<string, string> = {
   "trial-balance": "chart_of_accounts",
 };
 
+// Reports made of salary amounts also need "See salary amounts".
+const SALARY_REPORTS = ["payroll-summary", "salary-payable"];
+
 export default async function ReportsPage() {
   const session = await requireTenantSession();
   const categories = REPORT_CATALOG.map((c) => ({
     ...c,
     reports: c.reports.filter((r) => {
-      const needs = REPORT_MODULE[r.href.split("/")[2] ?? ""];
-      return !r.built || !needs || can(session, needs, "view");
+      const slug = r.href.split("/")[2] ?? "";
+      const needs = REPORT_MODULE[slug];
+      return !r.built || !needs || (can(session, needs, "view") && (!SALARY_REPORTS.includes(slug) || can(session, "payroll", "view_salary")));
     }),
   })).filter((c) => c.reports.length > 0);
 

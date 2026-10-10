@@ -1,5 +1,6 @@
-import { pgTable, uuid, text, numeric, date, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, numeric, date, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
+import { complianceCountries } from "./compliance-framework";
 
 // A tax rate that applied for a stretch of time. Rates are never edited in place: changing one closes the
 // currently-open row (effectiveTo = the day before) and opens a new row from the new effective date. A
@@ -31,4 +32,27 @@ export const taxRates = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("tax_rates_tenant_type_from").on(t.tenantId, t.taxTypeKey, t.effectiveFrom)]
+);
+
+// The rates a platform administrator publishes for a whole country: one timeline per country and tax type. Publishing a rate
+// also writes it into every organization of that country (a tax_rates row with source "platform"), and an organization created
+// later starts from these versions, so every organization is on the same rates from the same dates.
+export const platformTaxRates = pgTable(
+  "platform_tax_rates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    taxTypeKey: text("tax_type_key").notNull(), // "vat" | "tds"
+    rate: numeric("rate", { precision: 5, scale: 2 }).notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    /** null = still in force. Closed the day before the next version starts. */
+    effectiveTo: date("effective_to"),
+    /** Whether a compliance reviewer has confirmed the rate against current law. */
+    isVerified: boolean("is_verified").notNull().default(false),
+    /** Where the rate comes from (a Finance Act, a notice), for the record. */
+    source: text("source"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_tax_rates_country_type_from").on(t.countryCode, t.taxTypeKey, t.effectiveFrom)]
 );

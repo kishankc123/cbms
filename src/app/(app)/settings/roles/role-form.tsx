@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { ConfirmDialog } from "../../sales/confirm-dialog";
-import { ACTION_LABEL, PERMISSION_ACTIONS, type Permissions, type PermissionAction } from "@/lib/permissions";
+import { ACTION_LABEL, PERMISSION_ACTIONS, type ExtraPermission, type Permissions, type PermissionAction } from "@/lib/permissions";
 import { removeRole, resetRole, saveRole, type RoleEditor } from "./actions";
 import { settingsButton, settingsInput, settingsLabel } from "../ui";
 
@@ -26,7 +26,7 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | "reset" | null>(null);
 
-  const has = (m: string, a: PermissionAction) => Boolean(perms[m]?.[a]);
+  const has = (m: string, a: PermissionAction | ExtraPermission) => Boolean(perms[m]?.[a]);
 
   function set(module: string, action: PermissionAction, on: boolean) {
     setPerms((prev) => {
@@ -35,14 +35,27 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
       row[action] = on;
       // Any action needs View, and taking View away takes everything else with it.
       if (on && action !== "view" && def.actions.includes("view")) row.view = true;
-      if (!on && action === "view") for (const a of def.actions) row[a] = false;
+      if (!on && action === "view") {
+        for (const a of def.actions) row[a] = false;
+        for (const e of def.extras ?? []) row[e.key] = false;
+      }
+      return { ...prev, [module]: row };
+    });
+  }
+
+  // A special permission (such as seeing salary amounts) needs View, like any other action.
+  function setExtra(module: string, key: ExtraPermission, on: boolean) {
+    setPerms((prev) => {
+      const row = { ...(prev[module] ?? {}) };
+      row[key] = on;
+      if (on) row.view = true;
       return { ...prev, [module]: row };
     });
   }
 
   function setRow(module: string, on: boolean) {
     const def = editor.catalog.find((m) => m.key === module)!;
-    setPerms((prev) => ({ ...prev, [module]: Object.fromEntries(def.actions.map((a) => [a, on])) }));
+    setPerms((prev) => ({ ...prev, [module]: Object.fromEntries([...def.actions, ...(def.extras ?? []).map((e) => e.key)].map((a) => [a, on])) }));
   }
 
   function setColumn(action: PermissionAction, on: boolean) {
@@ -53,14 +66,17 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
         const row = { ...(next[m.key] ?? {}) };
         row[action] = on;
         if (on && action !== "view") row.view = true;
-        if (!on && action === "view") for (const a of m.actions) row[a] = false;
+        if (!on && action === "view") {
+          for (const a of m.actions) row[a] = false;
+          for (const e of m.extras ?? []) row[e.key] = false;
+        }
         next[m.key] = row;
       }
       return next;
     });
   }
 
-  const rowAll = (m: (typeof editor.catalog)[number]) => m.actions.every((a) => has(m.key, a));
+  const rowAll = (m: (typeof editor.catalog)[number]) => m.actions.every((a) => has(m.key, a)) && (m.extras ?? []).every((e) => has(m.key, e.key));
   const colAll = (a: PermissionAction) => editor.catalog.filter((m) => m.actions.includes(a)).every((m) => has(m.key, a));
 
   async function save() {
@@ -162,6 +178,12 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
                 <td className="px-4 py-2">
                   <p className="font-medium text-[var(--text-primary)]">{m.label}</p>
                   <p className="text-xs text-[var(--text-secondary)]">{m.description}</p>
+                  {(m.extras ?? []).map((e) => (
+                    <label key={e.key} className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-primary)]" title={e.help}>
+                      <input type="checkbox" disabled={readOnly} checked={has(m.key, e.key)} onChange={(ev) => setExtra(m.key, e.key, ev.target.checked)} aria-label={`${m.label}: ${e.label}`} />
+                      {e.label}
+                    </label>
+                  ))}
                 </td>
                 {PERMISSION_ACTIONS.map((a) => (
                   <td key={a} className="px-3 py-2 text-center">

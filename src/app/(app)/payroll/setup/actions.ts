@@ -28,6 +28,7 @@ export async function updateSettings(input: {
 }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "view")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
   if (input.weeklyHolidays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw new Error("Weekly holidays must be days of the week");
   if (input.publicHolidays.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) throw new Error("Public holidays must be valid dates");
@@ -54,6 +55,7 @@ export async function updateSettings(input: {
 export async function createComponent(input: { name: string; type: ComponentType; amount: number; taxable: boolean }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   const name = input.name.trim();
   if (!name) throw new Error("Component name is required");
@@ -75,6 +77,7 @@ export async function createComponent(input: { name: string; type: ComponentType
 export async function deleteComponent(input: { componentId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "delete")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
 
   await db
     .delete(payrollComponents)
