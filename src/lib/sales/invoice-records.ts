@@ -7,6 +7,7 @@ import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-a
 import { buildInvoiceNumber } from "@/lib/invoice-number";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
+import { CASH_SALE_CUSTOMER_NAME } from "@/lib/sales/cash-sale";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
 import { salesVatRate } from "@/lib/sales/vat";
@@ -119,11 +120,11 @@ export async function ensureCashCustomer(tenantId: string): Promise<string> {
   const [existing] = await db
     .select()
     .from(customers)
-    .where(and(eq(customers.tenantId, tenantId), eq(customers.name, "Cash Sale")))
+    .where(and(eq(customers.tenantId, tenantId), eq(customers.name, CASH_SALE_CUSTOMER_NAME)))
     .limit(1);
   if (existing) return existing.id;
 
-  const [created] = await db.insert(customers).values({ tenantId, name: "Cash Sale", openingBalance: "0" }).returning();
+  const [created] = await db.insert(customers).values({ tenantId, name: CASH_SALE_CUSTOMER_NAME, openingBalance: "0" }).returning();
   return created.id;
 }
 

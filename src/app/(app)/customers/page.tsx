@@ -5,6 +5,7 @@ import { customers } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCustomerLines } from "@/lib/ledger/customer-balances";
 import { partyBuckets } from "@/lib/ledger/party-statement";
+import { isCashSaleCustomer } from "@/lib/sales/cash-sale";
 import { CustomersTable } from "./customers-table";
 
 export default async function CustomersPage() {
@@ -18,7 +19,8 @@ export default async function CustomersPage() {
   ]);
 
   // Balances come from each customer's own ledger account, so a manual journal voucher posted to it is included.
-  const rows = customerList.map((c) => {
+  // Only real customers who buy on credit: the "Cash Sale" stand-in for walk-in buyers is left out (its sales are fully paid on the spot).
+  const rows = customerList.filter((c) => !isCashSaleCustomer(c.name)).map((c) => {
     const b = partyBuckets(lines.get(c.id) ?? [], "debit");
     return {
       id: c.id,
