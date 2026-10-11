@@ -92,15 +92,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Dashboard</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-            {greetingFor(new Date())}, {user.name}
-          </p>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            <D value={from} /> – <D value={to} />
-          </p>
-        </div>
+        {/* The greeting is the page heading. */}
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+          {greetingFor(new Date())}, {user.name}
+        </h1>
         {"allTime" in activeFiscalYear ? (
           <StatusPill tone="pending">All Time</StatusPill>
         ) : "suggested" in activeFiscalYear ? (
