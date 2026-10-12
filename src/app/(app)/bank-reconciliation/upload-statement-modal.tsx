@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
-import { previewStatementFile, previewStatementDates, confirmStatementImport, type StatementPreview, type DatePreview } from "./actions";
+import { downloadStatementTemplate, previewStatementFile,previewStatementDates, confirmStatementImport, type StatementPreview, type DatePreview } from "./actions";
 import type { ColumnMapping } from "@/lib/banking/normalize-rows";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -70,6 +70,21 @@ export function UploadStatementModal({
       report(e instanceof Error ? e.message : "Failed to read this file", null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function downloadSample() {
+    try {
+      const t = await downloadStatementTemplate();
+      const bytes = Uint8Array.from(atob(t.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = t.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not create the sample file", null);
     }
   }
 
@@ -154,6 +169,12 @@ export function UploadStatementModal({
               className="text-sm"
             />
             {loading && <p className="text-sm text-gray-400">Reading file...</p>}
+            <p className="text-xs text-gray-500">
+              Use your bank&apos;s file as it is and match its columns on the next screen. Need an example?{" "}
+              <button type="button" onClick={downloadSample} className="text-[var(--color-primary)] hover:underline">
+                Download sample file
+              </button>
+            </p>
           </div>
         ) : step === "map" && preview ? (
           <div className="space-y-4">
