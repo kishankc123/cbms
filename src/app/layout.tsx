@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { themeCookieName, parseTheme } from "@/lib/theme";
@@ -37,6 +38,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ErrorMessageBridge />
         <Providers>{children}</Providers>
+        <SpeedInsights />
       </body>
     </html>
   );

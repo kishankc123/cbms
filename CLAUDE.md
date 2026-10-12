@@ -97,9 +97,9 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   `npx eslint`, `npx vitest run` and the integration tests, then **pause for the user's explicit go-ahead**
   before the next phase. **Only commit/push when explicitly asked.**
 - Drizzle migrations: generate with
-  `node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs generate --name=<name>`, apply with
+  `node --env-file=.env ./node_modules/drizzle-kit/bin.cjs generate --name=<name>`, apply with
   `...migrate` (never the plain `npx drizzle-kit` shim). A data backfill can be hand-appended to a generated
-  `.sql`. Integration tests: `node --env-file=.env.local node_modules/vitest/vitest.mjs run -c
+  `.sql`. Integration tests: `node --env-file=.env node_modules/vitest/vitest.mjs run -c
   vitest.int.config.ts <path>` (they use throwaway `ZZ ...` organizations from `src/test/temp-org.ts`).
 
 ## What's built (all committed)
@@ -183,7 +183,7 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 
 - Run migrations **0065–0092** (and any later ones). **Deploy the code before running 0092** — it drops
   `memberships.permissions`, which the previous release still reads on the Vercel database by hand, and make sure its host
-  matches `.env.local` (compare the host of the production `DATABASE_URL` with the local one; if they are the
+  matches `.env` (compare the host of the production `DATABASE_URL` with the local one; if they are the
   same database nothing needs running). Commands for a manual run: set `$env:DATABASE_URL` in PowerShell to the
   production URL, check the host, back up in Neon, then `node ./node_modules/drizzle-kit/bin.cjs migrate`.
   Without them Roles, Users, Imports, Payment modes, revenue accounts, the saved VAT worksheet, platform tax rates and the
@@ -229,7 +229,7 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 ## Verification pattern to keep using
 
 For any DB-level check that can't go through the browser, write a throwaway script (repo root, e.g.
-`tmp-check-*.ts`, or an inline `node --env-file=.env.local -e` using the `postgres` package), run it with
-`node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs <file>`, then delete it — never commit temp
+`tmp-check-*.ts`, or an inline `node --env-file=.env -e` using the `postgres` package), run it with
+`node --env-file=.env ./node_modules/tsx/dist/cli.mjs <file>`, then delete it — never commit temp
 scripts. Test users created for live checks must be deleted afterwards (delete their `audit_log` rows first).
 Shell note: heredocs/`node -e` with apostrophes break in this Git Bash — write files with the Write tool.
