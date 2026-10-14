@@ -25,6 +25,7 @@ import { SYSTEM_ACCOUNT_CODES } from "@/lib/ledger/chart-rules";
 import { assessReconciliation } from "@/lib/banking/assess";
 import { todayIso } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
+import { buildStatementTemplate } from "@/lib/banking/statement-template";
 import { normalizeStatementRows, type ColumnMapping, type DateImportOptions } from "@/lib/banking/normalize-rows";
 import type { ImportDateResult } from "@/lib/banking/import-dates";
 import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching";
@@ -224,7 +225,13 @@ export type StatementPreview = {
   suggestedMapping: ColumnMapping | null;
 };
 
-const MAPPING_FIELDS = ["date", "description", "debit", "credit", "amount", "reference", "balance"] as const;
+export async function downloadStatementTemplate(): Promise<{ fileName: string; base64: string }> {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "create")) throw new Error("Not permitted");
+  return { fileName: "bank-statement-sample.xlsx", base64: buildStatementTemplate() };
+}
+
+const MAPPING_FIELDS =["date", "description", "debit", "credit", "amount", "reference", "balance"] as const;
 
 export async function previewStatementFile(input: { bankAccountId: string; fileName: string; base64: string }): Promise<StatementPreview> {
   const session = await requireTenantSession();
