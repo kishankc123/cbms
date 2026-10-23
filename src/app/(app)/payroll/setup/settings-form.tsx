@@ -101,7 +101,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Payroll end day</label>
             <input type="number" min="1" max="31" value={payrollEndDay} onChange={(e) => setPayrollEndDay(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
-            <p className="mt-1 text-xs text-gray-500">31 means "last day of month".</p>
+            <p className="mt-1 text-xs text-gray-500">31 means &quot;last day of month&quot;.</p>
           </div>
         </div>
       </section>
