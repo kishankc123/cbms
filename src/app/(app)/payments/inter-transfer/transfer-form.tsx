@@ -116,9 +116,10 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
           <Link href={`/payments/inter-transfer/${done.id}`} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
             View Transfer
           </Link>
-          <a href="/payments/inter-transfer/new" className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5">
+          {/* A full page load on purpose: it clears every field of the form for the next transfer. */}
+          <button type="button" onClick={() => window.location.assign("/payments/inter-transfer/new")} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5">
             New Transfer
-          </a>
+          </button>
         </div>
       </div>
     );
