@@ -652,6 +652,13 @@
       "when": 1791619272302,
       "tag": "0092_drop_member_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1792913864323,
+      "tag": "0093_opening_balance_date",
+      "breakpoints": true
     }
   ]
 }
