@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, auditLog, customers } from "@/db/schema";
+import { accounts, auditLog, bankAccounts, customers } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { ChartError, createAccountEntry, createSubGroupEntry, deleteAccountEntry, insertChildAccount, listAccountsWithBalances, updateAccountEntry } from "./chart";
 import { createSubAccount } from "./control-accounts";
@@ -20,6 +20,18 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await org.remove();
+});
+
+describe("a new account under Bank", () => {
+  it("is linked to Bank Reconciliation at once, and the link goes when the account is deleted", async () => {
+    const bank = await byCode("1010");
+    const kid = await createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: bank.id, name: "ZZ Test Bank" });
+    const linked = await db.select().from(bankAccounts).where(eq(bankAccounts.chartOfAccountsLink, kid.id));
+    expect(linked).toHaveLength(1);
+    expect(linked[0]).toMatchObject({ tenantId: org.tenantId, accountName: "ZZ Test Bank", openingBalance: "0.00", isActive: true });
+    await deleteAccountEntry(org.tenantId, org.userId, kid.id);
+    expect(await db.select().from(bankAccounts).where(eq(bankAccounts.chartOfAccountsLink, kid.id))).toHaveLength(0);
+  });
 });
 
 describe("chart of accounts (database)", () => {

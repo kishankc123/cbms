@@ -1,8 +1,9 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accountRoles, accounts, journalEntries, journalLines } from "@/db/schema";
+import { accountRoles, accounts, bankAccounts, journalEntries, journalLines } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
 import { logAuditEvent } from "@/lib/audit";
+import { ensureBankAccountFor } from "@/lib/banking/auto-link";
 import { categoryForSubCategory } from "./account-sub-categories";
 import { descendantIds, isSystemAccount, nextChildCode, rollUpBalances, validateTopLevelCode } from "./chart-rules";
 
@@ -124,6 +125,8 @@ export async function createSubGroupEntry(tenantId: string, userId: string, inpu
   if (!parent.isActive) throw new ChartError("The group is inactive");
   const created = await insertChildAccount(tenantId, parent, { name });
   await logAuditEvent({ tenantId, userId, action: "account_created", entityType: "chart_account", entityId: created.id, after: { code: created.code, name, parent: parent.code } });
+  // A new account under Bank is linked to Bank Reconciliation straight away.
+  await ensureBankAccountFor(tenantId, created);
   return created;
 }
 
@@ -204,7 +207,11 @@ export async function deleteAccountEntry(tenantId: string, userId: string, id: s
   if (child) throw new ChartError("This group has sub-groups and can't be deleted.");
 
   try {
-    await db.delete(accounts).where(and(eq(accounts.id, account.id), eq(accounts.tenantId, tenantId)));
+    // The bank account linked to it automatically goes with it; one with statements or reconciliations is refused by the database.
+    await db.transaction(async (tx) => {
+      await tx.delete(bankAccounts).where(and(eq(bankAccounts.chartOfAccountsLink, account.id), eq(bankAccounts.tenantId, tenantId)));
+      await tx.delete(accounts).where(and(eq(accounts.id, account.id), eq(accounts.tenantId, tenantId)));
+    });
   } catch (e) {
     // A customer, supplier, employee, shareholder, bank account or setting still points at it.
     if (isForeignKeyViolation(e)) throw new ChartError("This account is in use (for example by a customer, supplier, employee, shareholder or bank account) and can't be deleted. Deactivate it instead.");
