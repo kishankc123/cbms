@@ -26,7 +26,6 @@ import { getCurrentSalary } from "@/lib/payroll/salary";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
-import { getCustomerAdvanceBalance } from "@/lib/ledger/advance-accounts";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { listEditHistory } from "@/lib/audit-history";
 import {
@@ -76,40 +75,6 @@ async function ownAllocations(tenantId: string, paymentId: string | undefined): 
   return new Map(rows.map((r) => [r.targetId, Number(r.amount)]));
 }
 
-export async function getOutstandingInvoicesForCustomer(customerId: string, forPaymentId?: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  const own = await ownAllocations(session.tenantId, forPaymentId);
-  const open = inArray(salesInvoices.status, ["sent", "partially_paid", "overdue"]);
-  const rows = await db
-    .select({ id: salesInvoices.id, invoiceNumber: salesInvoices.invoiceNumber, invoiceDate: salesInvoices.invoiceDate, total: salesInvoices.total, amountPaid: salesInvoices.amountPaid, status: salesInvoices.status })
-    .from(salesInvoices)
-    .where(and(eq(salesInvoices.tenantId, session.tenantId), eq(salesInvoices.customerId, customerId), own.size > 0 ? or(open, inArray(salesInvoices.id, [...own.keys()])) : open))
-    .orderBy(asc(salesInvoices.invoiceDate));
-
-  return rows
-    .filter((r) => r.status !== "void")
-    .map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) }))
-    .filter((r) => r.outstanding > 0.005);
-}
-
-export async function getOutstandingBillsForSupplier(vendorId: string, forPaymentId?: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  const own = await ownAllocations(session.tenantId, forPaymentId);
-  const open = inArray(purchaseBills.status, ["open", "partially_paid", "overdue"]);
-  const rows = await db
-    .select({ id: purchaseBills.id, billNumber: purchaseBills.billNumber, billDate: purchaseBills.billDate, total: purchaseBills.total, amountPaid: purchaseBills.amountPaid, status: purchaseBills.status })
-    .from(purchaseBills)
-    .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.vendorId, vendorId), own.size > 0 ? or(open, inArray(purchaseBills.id, [...own.keys()])) : open))
-    .orderBy(asc(purchaseBills.billDate));
-
-  return rows
-    .filter((r) => r.status !== "void")
-    .map((r) => ({ ...r, outstanding: round2(Number(r.total) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) }))
-    .filter((r) => r.outstanding > 0.005);
-}
-
 export async function getOutstandingExpenses(vendorId?: string | null, forPaymentId?: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
@@ -127,15 +92,12 @@ export async function getOutstandingExpenses(vendorId?: string | null, forPaymen
   return rows.map((r) => ({ ...r, outstanding: round2(Number(r.amountPayable) - Number(r.amountPaid) + (own.get(r.id) ?? 0)) })).filter((r) => r.outstanding > 0.005);
 }
 
-// What could be paid back to a customer: the credit on their account (for example after a sales return) and any
-// advance they have paid us.
+// What could be paid back to a customer: the credit on their account (a sales return, or money they paid ahead).
 export async function getCustomerRefundable(customerId: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  const [balances, advance] = await Promise.all([getCustomerBalances(session.tenantId), getCustomerAdvanceBalance(session.tenantId, customerId)]);
-  const credit = round2(Math.max(-(balances[customerId] ?? 0), 0));
-  const adv = round2(Math.max(advance, 0));
-  return { credit, advance: adv, total: round2(credit + adv) };
+  const credit = round2(Math.max(-((await getCustomerBalances(session.tenantId))[customerId] ?? 0), 0));
+  return { credit, total: credit };
 }
 
 /** What an employee is owed and hasn't been paid — the limit of a salary payment. */
@@ -155,7 +117,7 @@ export async function getEmployeeAdvanceInfo(employeeId: string) {
 
 // ---------- Create / void ----------
 
-export type PaymentAllocationInput = { targetType: "sales_invoice" | "purchase_bill" | "expense"; targetId: string; allocatedAmount: number };
+export type PaymentAllocationInput = { targetType: "expense"; targetId: string; allocatedAmount: number };
 
 export type CreatePaymentActionInput = Omit<CreatePaymentInput, "allocations"> & { allocations?: PaymentAllocationInput[] };
 

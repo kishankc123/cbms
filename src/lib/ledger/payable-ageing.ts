@@ -18,7 +18,7 @@ export type PayableAgeingRow = {
   d61to90: number;
   d90plus: number;
   /** Part of the supplier's ledger balance not tied to any open bill (opening balance, manual journal
-   * vouchers, unapplied advances) — kept separate rather than silently dropped, so each row's total
+   * vouchers, money paid ahead of any bill) — kept separate rather than silently dropped, so each row's total
    * always ties to that supplier's actual payable sub-account balance. */
   unapplied: number;
   total: number;

@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { advanceApplications, creditApplications, paymentAllocations, payments, purchaseReturns, salesReturns, vendors } from "@/db/schema";
+import { paymentAllocations, payments, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { modeAccountIds } from "@/lib/payment-modes";
 import { getCogsSubGroups } from "./control-accounts";
@@ -30,48 +30,21 @@ export async function assertSupplierOwned(tenantId: string, vendorId: string) {
 }
 
 /**
- * A bill or invoice that has payments recorded against it in the Payments module can't be edited or
- * voided underneath them — the payment would be left pointing at something that changed. Those payments
- * have to be voided first (payments made when the bill was created belong to the bill and are handled with it).
+ * An expense that has payments recorded against it in the Payments module can't be edited or voided underneath them — the
+ * payment would be left pointing at something that changed. Those payments have to be voided first (payments made when the
+ * expense was created belong to it and are handled with it). Invoices and bills are different: what has been paid on them
+ * follows the customer's or supplier's ledger (party-settlement.ts), so only a reconciled bank line holds them.
  */
 export async function assertNoLaterPayments(tenantId: string, targetType: "purchase_bill" | "sales_invoice" | "expense", targetId: string, what: "bill" | "invoice" | "expense") {
-  const rows = await db
-    .select({ n: payments.paymentNumber })
-    .from(paymentAllocations)
-    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
-    .where(
-      and(
-        eq(payments.tenantId, tenantId),
-        eq(payments.origin, "standalone"),
-        eq(payments.status, "posted"),
-        eq(paymentAllocations.targetType, targetType),
-        inArray(paymentAllocations.targetId, [targetId])
-      )
-    );
-  // ...nor under an advance that has been applied to it.
-  const advances = await db
-    .select({ amount: advanceApplications.amount })
-    .from(advanceApplications)
-    .where(and(eq(advanceApplications.tenantId, tenantId), eq(advanceApplications.targetId, targetId), eq(advanceApplications.status, "applied")));
-  if (advances.length > 0) {
-    const total = advances.reduce((s, a) => s + Number(a.amount), 0);
-    throw new Error(`An advance of ${total.toFixed(2)} has been applied to this ${what} — take that back first`);
-  }
-  // ...nor under a return's credit that has been applied to it.
-  const applied = await db
-    .select({ returnId: creditApplications.returnId, kind: creditApplications.kind })
-    .from(creditApplications)
-    .where(and(eq(creditApplications.tenantId, tenantId), eq(creditApplications.targetId, targetId), eq(creditApplications.status, "applied")));
-  if (applied.length > 0) {
-    const ids = applied.map((a) => a.returnId);
-    const notes = [
-      ...(await db.select({ n: salesReturns.noteNumber }).from(salesReturns).where(inArray(salesReturns.id, ids))),
-      ...(await db.select({ n: purchaseReturns.noteNumber }).from(purchaseReturns).where(inArray(purchaseReturns.id, ids))),
-    ];
-    throw new Error(`Credit from ${notes.map((r) => r.n).join(", ") || "a return"} has been applied to this ${what} — take that back first`);
-  }
-  if (rows.length > 0) {
-    throw new Error(`This ${what} has payment ${[...new Set(rows.map((r) => r.n))].join(", ")} recorded in Payments — void ${rows.length > 1 ? "those payments" : "that payment"} first`);
+  if (targetType === "expense") {
+    const rows = await db
+      .select({ n: payments.paymentNumber })
+      .from(paymentAllocations)
+      .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+      .where(and(eq(payments.tenantId, tenantId), eq(payments.origin, "standalone"), eq(payments.status, "posted"), eq(paymentAllocations.targetType, targetType), inArray(paymentAllocations.targetId, [targetId])));
+    if (rows.length > 0) {
+      throw new Error(`This ${what} has payment ${[...new Set(rows.map((r) => r.n))].join(", ")} recorded in Payments — void ${rows.length > 1 ? "those payments" : "that payment"} first`);
+    }
   }
   // ...nor once one of its bank lines has been matched to a bank statement.
   await assertSourceNotReconciled(tenantId, targetId, what);

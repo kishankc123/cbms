@@ -9,7 +9,7 @@ import { withPaymentNumber } from "@/lib/payment-number";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { CASH_SALE_CUSTOMER_NAME } from "@/lib/sales/cash-sale";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
-import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount } from "@/lib/sales/revenue-accounts";
 import { resolvePaymentMode } from "@/lib/payment-modes";
@@ -156,7 +156,7 @@ export class PartialBatchError extends Error {
 
 /**
  * Writes a batch of one-row-per-invoice sales: each gets the next invoice number, its sale entry (and receipt entry when
- * paid), an embedded payment record, and any advance the customer already paid is applied. Rows are checked first
+ * paid), an embedded payment record, and what the customer already paid ahead settles it from their ledger. Rows are checked first
  * (dates in closed periods, accounts, customers needed for part-paid rows) so a bad batch is refused before anything is
  * saved. The index in each result is the row's position in `rows`.
  */
@@ -322,9 +322,9 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
     }
   }
 
-  // Any advance these customers have paid goes to their oldest open invoices first.
+  // Money these customers paid ahead settles their oldest invoices first (it is on their ledger).
   for (const id of new Set(computedRows.map((r) => r.customerId).filter(Boolean))) {
-    await autoApplyAdvance(tenantId, userId, "customer", id);
+    await resettleParty(tenantId, "customer", id);
   }
   return created;
 }

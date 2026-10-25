@@ -15,7 +15,7 @@ import { assertCashBankAccounts, assertSupplierOwned, assertNoLaterPayments } fr
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { todayIso } from "@/lib/calendar";
-import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment, nextAutoBillNumber } from "@/lib/purchases/bill-records";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import {
@@ -158,7 +158,7 @@ export async function updateCashPurchase(input: UpdateCashPurchaseInput) {
     const paymentLines = input.payments.filter((p) => p.accountId && p.amount > 0);
     await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.billDate, prepared.paid, paymentLines[0].accountId, entry.id, billNumber, paymentLines[0].modeId);
   }
-  if (vendorId) await autoApplyAdvance(session.tenantId, session.userId, "supplier", vendorId);
+  await resettleParty(session.tenantId, "supplier", vendorId);
 
   revalidatePath("/purchases/consumable");
   revalidatePath("/suppliers");
@@ -243,6 +243,7 @@ export async function voidBill(formData: FormData) {
   await unwindStock(session.tenantId, { date: todayIso(), sourceType: "purchase", sourceId: billId, userId: session.userId });
 
   await db.update(purchaseBills).set({ status: "void" }).where(eq(purchaseBills.id, billId));
+  await resettleParty(session.tenantId, "supplier", bill.vendorId);
 
   revalidatePath("/purchases/consumable");
   revalidatePath("/purchases/stockable");
@@ -432,8 +433,8 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
     throw e;
   }
 
-  // Any advance paid to this supplier goes to their oldest open bills first.
-  if (vendorId) await autoApplyAdvance(session.tenantId, session.userId, "supplier", vendorId);
+  // Money paid to the supplier ahead settles their oldest bills first (it is on their ledger).
+  await resettleParty(session.tenantId, "supplier", vendorId);
 
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
@@ -589,32 +590,12 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     await insertEmbeddedSupplierPayment(session.tenantId, session.userId, vendorId, input.billId, input.invoiceDate, paid, paymentLines[0].accountId, entry.id, invoiceNumber, paymentLines[0].modeId);
   }
 
+  await resettleParty(session.tenantId, "supplier", existing.vendorId);
+  await resettleParty(session.tenantId, "supplier", vendorId);
   revalidatePath("/purchases/stockable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
   await recalculateAfter(session.tenantId, [...validLines, ...(existing.lineItems ?? [])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
-}
-
-// ---- applying an advance paid to a supplier to one bill by hand (it is also applied automatically when a bill is created)
-
-export async function getBillAdvance(billId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
-  return getAdvanceInfo(session.tenantId, "supplier", billId);
-}
-
-export async function applyBillAdvance(billId: string, amount: number) {
-  const session = await requireTenantSession();
-  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
-  await applyAdvance(session.tenantId, session.userId, "supplier", billId, amount);
-  for (const p of ["/purchases/stockable", "/suppliers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
-}
-
-export async function removeBillAdvance(applicationId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
-  await unapplyAdvance(session.tenantId, session.userId, "supplier", applicationId);
-  for (const p of ["/purchases/stockable", "/suppliers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
 }

@@ -5,8 +5,6 @@ import {
   createPayment,
   updatePayment,
   getPaymentDetail,
-  getOutstandingInvoicesForCustomer,
-  getOutstandingBillsForSupplier,
   getOutstandingExpenses,
   getPaymentFormOptions,
   getCustomerRefundable,
@@ -102,7 +100,7 @@ export function NewPaymentModal({
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(editing?.attachmentUrl ?? "");
 
-  const [refundable, setRefundable] = useState<{ credit: number; advance: number; total: number } | null>(null);
+  const [refundable, setRefundable] = useState<{ credit: number; total: number } | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
   const [allocated, setAllocated] = useState<Record<string, string>>({});
 
@@ -139,17 +137,7 @@ export function NewPaymentModal({
         setAllocated(Object.fromEntries(editing.allocations.map((a) => [a.targetId, fmt(a.allocatedAmount)])));
       }
     };
-    if (paymentType === "customer_payment" && customerId) {
-      getOutstandingInvoicesForCustomer(customerId, editing?.id).then((rows) => {
-        setOutstanding(rows.map((r) => ({ id: r.id, label: r.invoiceNumber, date: r.invoiceDate, outstanding: r.outstanding })));
-        seedOwn();
-      });
-    } else if (paymentType === "supplier_payment" && vendorId) {
-      getOutstandingBillsForSupplier(vendorId, editing?.id).then((rows) => {
-        setOutstanding(rows.map((r) => ({ id: r.id, label: r.billNumber, date: r.billDate, outstanding: r.outstanding })));
-        seedOwn();
-      });
-    } else if (paymentType === "expense_payment") {
+    if (paymentType === "expense_payment") {
       getOutstandingExpenses(vendorId || null, editing?.id).then((rows) => {
         setOutstanding(rows.map((r) => ({ id: r.id, label: r.expenseNumber, date: r.expenseDate, outstanding: r.outstanding })));
         seedOwn();
@@ -171,7 +159,7 @@ export function NewPaymentModal({
   }, [paymentType, employeeId]);
 
   const allocations: PaymentAllocationInput[] = useMemo(() => {
-    const targetType = paymentType === "customer_payment" ? "sales_invoice" : paymentType === "supplier_payment" ? "purchase_bill" : "expense";
+    const targetType = "expense" as const;
     return Object.entries(allocated)
       .filter(([, v]) => (parseFloat(v) || 0) > 0)
       .map(([id, v]) => ({ targetType, targetId: id, allocatedAmount: parseFloat(v) || 0 }));
@@ -243,10 +231,11 @@ export function NewPaymentModal({
       };
 
       if (editing) {
-        // A payment type with no allocation section here (a tax payment) keeps what it settles.
+        // A tax payment (no allocation section here) keeps the compliance items it settles; an older customer or supplier payment's
+        // invoice links are dropped — what it settles now follows the party's ledger.
         const result = await updatePayment(editing.id, {
           ...fields,
-          allocations: config.showAllocation ? allocations : editing.allocations.map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount })),
+          allocations: config.showAllocation ? allocations : editing.allocations.filter((a) => a.targetType === "tax_obligation").map((a) => ({ targetType: "tax_obligation" as const, targetId: a.targetId, allocatedAmount: a.allocatedAmount })),
         });
         if (!result.changed) {
           report("Nothing was changed, so there is nothing to save.", null);
@@ -398,7 +387,7 @@ export function NewPaymentModal({
                 </select>
                 {paymentType === "customer_refund" && refundable && (
                   <p className="mt-1 text-xs text-gray-500">
-                    Can be refunded: {fmt(refundable.total)} (credit {fmt(refundable.credit)} + advance {fmt(refundable.advance)})
+                    Can be refunded: {fmt(refundable.total)}
                   </p>
                 )}
               </div>
@@ -498,15 +487,9 @@ export function NewPaymentModal({
 
         {config.showAllocation && (
           <section data-field="allocation" className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900">Accounting / Allocation Information</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Expense this payment settles</h3>
 
-            {((paymentType === "customer_payment" && !customerId) || (paymentType === "supplier_payment" && !vendorId)) && (
-              <p className="text-sm text-gray-400">Select a {paymentType === "customer_payment" ? "customer" : "supplier"} to see outstanding balances.</p>
-            )}
-
-            {outstanding.length === 0 && ((paymentType === "customer_payment" && customerId) || (paymentType === "supplier_payment" && vendorId) || paymentType === "expense_payment") && (
-              <p className="text-sm text-gray-400">No outstanding {paymentType === "expense_payment" ? "expenses" : paymentType === "customer_payment" ? "invoices" : "bills"} found.</p>
-            )}
+            {outstanding.length === 0 && <p className="text-sm text-gray-400">No outstanding expenses found.</p>}
 
             {outstanding.length > 0 && (
               <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -560,7 +543,7 @@ export function NewPaymentModal({
                 <span className="font-medium text-gray-900">{fmt(allocatedTotal)}</span>
               </div>
               <div>
-                <span className="text-gray-500">Unallocated {paymentType !== "expense_payment" && "(→ advance)"} </span>
+                <span className="text-gray-500">Unallocated </span>
                 <span className="font-medium text-gray-900">{fmt(unallocated)}</span>
               </div>
             </div>

@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, assetCategories, assetEvents, assets, journalEntries, journalLines, paymentAllocations, payments, purchaseBills, tenantTaxRegistrations, vendors } from "@/db/schema";
+import { accounts, assetCategories, assetEvents, assets, journalEntries, journalLines, payments, purchaseBills, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { getSupplierLines } from "@/lib/ledger/supplier-balances";
 import { lineKind } from "@/lib/ledger/party-statement";
+import { createPayment } from "@/lib/ledger/payments-engine";
 import { recordAssetPurchase, voidAssetPurchase, type AssetPurchaseInput } from "./purchase";
 import { ensureAssetSetup } from "./setup";
 
@@ -174,16 +175,11 @@ describe("asset purchase", () => {
     expect((blocked as { error: string }).error).toMatch(/depreciation/i);
   });
 
-  it("can't be voided under a payment made later in Payments", async () => {
+  it("can be voided although a payment was made later in Payments; the payment stays on the supplier's account", async () => {
     const r = await recordAssetPurchase(org.tenantId, org.userId, purchase({ name: "Unpaid chair", purchasePrice: 8000, billType: "no_bill", payments: [] }));
     if (!r.ok) throw new Error("setup failed");
-    const [p] = await db
-      .insert(payments)
-      .values({ tenantId: org.tenantId, paymentNumber: "MO-ASSET-1", direction: "money_out", paymentType: "supplier_payment", paymentDate: "2026-09-20", partyType: "supplier", vendorId: vendorA, accountId: cashId, amount: "1000.00", createdBy: org.userId })
-      .returning();
-    await db.insert(paymentAllocations).values({ paymentId: p.id, targetType: "purchase_bill", targetId: r.billId, allocatedAmount: "1000.00" });
-    const blocked = await voidAssetPurchase(org.tenantId, org.userId, r.assetId);
-    expect(blocked).toMatchObject({ ok: false });
-    expect((blocked as { error: string }).error).toMatch(/MO-ASSET-1/);
+    await createPayment(org.tenantId, org.userId, "TMP-ASSET", { direction: "money_out", paymentType: "supplier_payment", paymentDate: "2026-09-20", partyType: "supplier", vendorId: vendorA, accountId: cashId, paymentMethod: "cash", amount: 1000, confirmDuplicate: true });
+    expect(await voidAssetPurchase(org.tenantId, org.userId, r.assetId)).toEqual({ ok: true });
+    expect((await db.select().from(payments).where(and(eq(payments.tenantId, org.tenantId), eq(payments.vendorId, vendorA), eq(payments.status, "posted")))).length).toBeGreaterThan(0);
   });
 });

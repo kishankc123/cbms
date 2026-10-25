@@ -18,7 +18,7 @@ export type ReceivableAgeingRow = {
   d61to90: number;
   d90plus: number;
   /** Part of the customer's ledger balance not tied to any open invoice (opening balance, manual
-   * journal vouchers, unapplied advances) — kept separate rather than silently dropped, so each row's
+   * journal vouchers, money paid ahead of any invoice) — kept separate rather than silently dropped, so each row's
    * total always ties to that customer's actual receivable sub-account balance. */
   unapplied: number;
   total: number;
@@ -27,7 +27,7 @@ export type ReceivableAgeingRow = {
 /**
  * Every customer's open invoices, bucketed by how overdue they are as of `asOf` (due date, or invoice
  * date if none was set). Bucket amounts are today's outstanding balance per invoice (total - amountPaid,
- * kept live by every receipt/return/advance application) — this is the customer's AR sub-ledger open
+ * settled from the customer's ledger, oldest first — see party-settlement.ts) — this is the customer's AR sub-ledger open
  * items, the standard basis for an ageing report, not a replay of ledger history as of a past date.
  */
 export async function receivableAgeing(tenantId: string, asOf: Date) {

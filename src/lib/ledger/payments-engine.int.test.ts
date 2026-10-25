@@ -1,18 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accountingPeriods, accounts, customers, journalEntries, payments, purchaseReturns, salesInvoices, salesReturns, vendors } from "@/db/schema";
+import { accountingPeriods, accounts, customers, journalEntries, journalLines, payments, salesInvoices, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createPayment, voidPayment } from "./payments-engine";
 import { postJournalEntry } from "./post";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getCustomerBalances } from "./customer-balances";
 import { getSupplierBalances } from "./supplier-balances";
-import { applyCredit, assertNoAppliedCredit, getCreditInfo, unapplyCredit } from "./credit-applications";
-import { assertNoLaterPayments } from "./account-guards";
+import { resettleParty } from "./party-settlement";
 import { ensureSalesReturnsAccount } from "./return-accounts";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
-import { todayIso } from "@/lib/calendar";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let cashId: string;
@@ -23,8 +21,12 @@ let supplier: string;
 const acct = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
 const payList = () => db.select().from(payments).where(eq(payments.tenantId, org.tenantId));
 const entryCount = async () => (await db.select().from(journalEntries).where(eq(journalEntries.tenantId, org.tenantId))).length;
-const invoice = async (customerId: string, number: string, total: number) =>
-  (await db.insert(salesInvoices).values({ tenantId: org.tenantId, customerId, invoiceNumber: number, invoiceDate: "2026-09-01", subtotal: String(total), total: String(total), status: "sent" }).returning())[0];
+const invoice = async (customerId: string, number: string, total: number, date = "2026-09-01") => {
+  const [inv] = await db.insert(salesInvoices).values({ tenantId: org.tenantId, customerId, invoiceNumber: number, invoiceDate: date, subtotal: String(total), total: String(total), status: "sent" }).returning();
+  await postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "sale", sourceId: inv.id, createdBy: org.userId, lines: [{ accountId: await getOrCreateCustomerReceivableAccountId(org.tenantId, customerId), debitAmount: total }, { accountId: (await acct("4000")).id, creditAmount: total }] });
+  return inv;
+};
+const invoiceRow = async (id: string) => (await db.select().from(salesInvoices).where(eq(salesInvoices.id, id)))[0];
 const receipt = (over: Record<string, unknown>) => ({
   direction: "money_in" as const,
   paymentType: "customer_payment" as const,
@@ -49,18 +51,13 @@ afterAll(async () => {
 });
 
 describe("payments are checked before anything is posted", () => {
-  it("refuses an allocation that exceeds what the invoice still owes, leaving nothing behind", async () => {
+  it("takes no allocation to invoices on a customer payment: the money goes on the customer's own account", async () => {
     const inv = await invoice(custA, "P-1", 500);
     const before = { entries: await entryCount(), rows: (await payList()).length };
-    await expect(pay(receipt({ customerId: custA, amount: 800, allocations: [{ targetType: "sales_invoice", targetId: inv.id, allocatedAmount: 800 }] }) as never)).rejects.toThrow(/exceeds/);
+    await expect(pay(receipt({ customerId: custA, amount: 300, allocations: [{ targetType: "sales_invoice", targetId: inv.id, allocatedAmount: 300 }] }) as never)).rejects.toThrow(/can't settle that kind/);
     expect(await entryCount()).toBe(before.entries);
     expect((await payList()).length).toBe(before.rows);
-    expect(Number((await db.select().from(salesInvoices).where(eq(salesInvoices.id, inv.id)))[0].amountPaid)).toBe(0);
-  });
-
-  it("refuses to allocate to another customer's invoice", async () => {
-    const inv = await invoice(custB, "P-2", 300);
-    await expect(pay(receipt({ customerId: custA, amount: 300, allocations: [{ targetType: "sales_invoice", targetId: inv.id, allocatedAmount: 300 }] }) as never)).rejects.toThrow(/different customer/);
+    expect(Number((await invoiceRow(inv.id)).amountPaid)).toBe(0);
   });
 
   it("refuses an account that isn't a Cash or Bank account", async () => {
@@ -93,8 +90,10 @@ describe("payments are checked before anything is posted", () => {
 
 describe("voiding", () => {
   it("is refused up front when today is in a closed period, and changes nothing", async () => {
-    const inv = await invoice(custA, "P-3", 400);
-    const res = await pay(receipt({ customerId: custA, amount: 400, allocations: [{ targetType: "sales_invoice", targetId: inv.id, allocatedAmount: 400 }] }) as never);
+    // a customer of their own: money settles a customer's OLDEST invoice first, so older open ones would take it
+    const custV = (await db.insert(customers).values({ tenantId: org.tenantId, name: "Void Customer" }).returning())[0].id;
+    const inv = await invoice(custV, "P-3", 400);
+    const res = await pay(receipt({ customerId: custV, amount: 400 }) as never);
     if ("duplicateWarning" in res) throw new Error("unexpected");
     const [period] = await db.insert(accountingPeriods).values({ tenantId: org.tenantId, periodStart: "2000-01-01", periodEnd: "2100-12-31", label: "All (test)", status: "closed" }).returning();
     try {
@@ -140,34 +139,39 @@ describe("refunds and credits", () => {
     expect((await getSupplierBalances(org.tenantId))[supplier]).toBe(0);
   });
 
-  it("applies a return's credit to an invoice, keeps within what is left, and blocks changes underneath", async () => {
-    const [note] = await db.insert(salesReturns).values({ tenantId: org.tenantId, customerId: custB, noteNumber: "DN-A", noteDate: "2026-09-06", subtotal: "200", taxAmount: "0", total: "200" }).returning();
+  it("a credit note settles the customer's oldest invoice from their ledger, with nothing to apply by hand", async () => {
     const inv = await invoice(custB, "P-4", 500);
-
-    await expect(applyCredit(org.tenantId, org.userId, "sales_return", note.id, [{ targetId: inv.id, amount: 250 }])).rejects.toThrow(/Only 200.00 of credit/);
-    await applyCredit(org.tenantId, org.userId, "sales_return", note.id, [{ targetId: inv.id, amount: 150 }]);
-
-    const after = (await db.select().from(salesInvoices).where(eq(salesInvoices.id, inv.id)))[0];
+    const salesReturnsAcct = await ensureSalesReturnsAccount(org.tenantId);
+    await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-06", sourceType: "sales_return", createdBy: org.userId, lines: [{ accountId: salesReturnsAcct.id, debitAmount: 150 }, { accountId: await getOrCreateCustomerReceivableAccountId(org.tenantId, custB), creditAmount: 150 }] });
+    await resettleParty(org.tenantId, "customer", custB);
+    const after = await invoiceRow(inv.id);
     expect(Number(after.amountPaid)).toBe(150);
     expect(after.status).toBe("partially_paid");
-    expect((await getCreditInfo(org.tenantId, "sales_return", note.id)).available).toBe(50);
+  });
+});
 
-    await expect(assertNoAppliedCredit(org.tenantId, note.id, "DN-A")).rejects.toThrow(/take that back/);
-    await expect(assertNoLaterPayments(org.tenantId, "sales_invoice", inv.id, "invoice")).rejects.toThrow(/DN-A/);
+describe("money paid ahead", () => {
+  it("goes on the customer's own account, not an advance account, and covers an invoice made later", async () => {
+    const custC = (await db.insert(customers).values({ tenantId: org.tenantId, name: "Prepay" }).returning())[0].id;
+    const res = await pay(receipt({ customerId: custC, amount: 700 }) as never);
+    if ("duplicateWarning" in res) throw new Error("unexpected");
+    const lines = await db.select({ code: accounts.code, name: accounts.name, credit: journalLines.creditAmount }).from(journalLines).innerJoin(accounts, eq(accounts.id, journalLines.accountId)).innerJoin(payments, eq(payments.journalEntryId, journalLines.journalEntryId)).where(eq(payments.id, res.paymentId));
+    expect(lines.some((l) => /advance/i.test(l.name))).toBe(false);
+    expect((await getCustomerBalances(org.tenantId))[custC]).toBe(-700);
 
-    const info = await getCreditInfo(org.tenantId, "sales_return", note.id);
-    await unapplyCredit(org.tenantId, "sales_return", info.applications[0].id);
-    const restored = (await db.select().from(salesInvoices).where(eq(salesInvoices.id, inv.id)))[0];
-    expect(Number(restored.amountPaid)).toBe(0);
-    expect(restored.status).toBe("sent");
-    await assertNoAppliedCredit(org.tenantId, note.id, "DN-A");
+    const inv = await invoice(custC, "P-5", 400);
+    await resettleParty(org.tenantId, "customer", custC);
+    expect(await invoiceRow(inv.id)).toMatchObject({ status: "paid", amountPaid: "400.00" });
+    expect((await getCustomerBalances(org.tenantId))[custC]).toBe(-300);
   });
 
-  it("only applies a supplier's credit note to that supplier's bills", async () => {
-    const [note] = await db.insert(purchaseReturns).values({ tenantId: org.tenantId, vendorId: supplier, noteNumber: "CN-A", noteDate: "2026-09-06", subtotal: "100", taxAmount: "0", total: "100" }).returning();
-    const info = await getCreditInfo(org.tenantId, "purchase_return", note.id);
-    expect(info.available).toBe(100);
-    await expect(applyCredit(org.tenantId, org.userId, "purchase_return", note.id, [{ targetId: "00000000-0000-0000-0000-000000000000", amount: 50 }])).rejects.toThrow(/isn't open/);
-    expect(todayIso()).toBeTruthy();
+  it("puts the invoices back to unpaid when that payment is voided", async () => {
+    const custD = (await db.insert(customers).values({ tenantId: org.tenantId, name: "Void me" }).returning())[0].id;
+    const inv = await invoice(custD, "P-6", 250);
+    const res = await pay(receipt({ customerId: custD, amount: 250 }) as never);
+    if ("duplicateWarning" in res) throw new Error("unexpected");
+    expect((await invoiceRow(inv.id)).status).toBe("paid");
+    await voidPayment(org.tenantId, res.paymentId, org.userId, "test");
+    expect(await invoiceRow(inv.id)).toMatchObject({ status: "sent", amountPaid: "0.00" });
   });
 });
