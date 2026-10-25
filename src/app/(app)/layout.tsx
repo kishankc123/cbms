@@ -147,6 +147,7 @@ const NAV = [
       { href: "/settings/company", label: "Company details" },
       { href: "/settings/general", label: "General" },
       { href: "/settings/fiscal-years", label: "Fiscal years" },
+      { href: "/settings/opening-balances", label: "Opening balances" },
       { href: "/settings/users", label: "Users" },
       { href: "/settings/roles", label: "Roles" },
       { href: "/settings/payment-modes", label: "Payment modes" },
