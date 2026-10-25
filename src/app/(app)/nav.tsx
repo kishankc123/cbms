@@ -22,7 +22,7 @@ export function AppNav({ items }: { items: NavItem[] }) {
   );
 
   return (
-    <nav className="flex-1 px-2 py-3 space-y-1">
+    <nav className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-2 py-3 space-y-1">
       {items.map((item) => {
         if (!item.children) {
           const isActive = pathname === item.href;

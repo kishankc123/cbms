@@ -225,7 +225,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CalendarProvider calendar={session.calendar}>
     <InventoryProvider openingDate={inventoryOpeningDate}>
     <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
+      <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col sticky top-0 h-screen self-start">
         <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
           <OrgSwitcher
             orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: o.roleName }))}
