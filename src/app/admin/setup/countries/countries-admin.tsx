@@ -16,18 +16,18 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>(TABS[0]);
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function run(job: () => Promise<{ ok: true } | { ok: false; error: string }>, okText: string) {
+  // A failure is shown under the tabs until the next try or tab change; a success is announced in a pop-up that closes on OK.
+  async function run(job: () => Promise<{ ok: true } | { ok: false; error: string }>, onDone?: () => Promise<unknown>) {
     setBusy(true);
-    setMessage(null);
+    setError(null);
     try {
       const r = await job();
-      setMessage({ ok: r.ok, text: r.ok ? okText : r.error });
-      if (r.ok) {
-        setForm(blank);
-        router.refresh();
-      }
+      if (!r.ok) return setError(r.error);
+      setForm(blank);
+      router.refresh();
+      await onDone?.();
     } finally {
       setBusy(false);
     }
@@ -37,12 +37,15 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
     <div className="space-y-4">
       <div className="flex gap-1 border-b border-[var(--card-border)]">
         {TABS.map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 text-sm ${tab === t ? "border-b-2 border-[var(--color-primary)] font-medium text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
+          <button key={t} type="button" onClick={() => {
+              setTab(t);
+              setError(null);
+            }} className={`px-4 py-2 text-sm ${tab === t ? "border-b-2 border-[var(--color-primary)] font-medium text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
             {t}
           </button>
         ))}
       </div>
-      {message && <p className={`text-sm ${message.ok ? "text-green-700" : "text-red-600"}`}>{message.text}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {tab === TABS[0] ? (
         <div className={`${adminCard} overflow-x-auto`}>
@@ -70,7 +73,7 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
                       type="button"
                       disabled={busy || c.organizations > 0}
                       title={c.organizations > 0 ? "Organizations use this country" : undefined}
-                      onClick={async () => (await ask(`Remove ${c.name} from the countries organizations can choose?`, { confirmLabel: "Remove", danger: true })) && run(() => removeActiveCountry(c.code), `${c.name} removed.`)}
+                      onClick={async () => (await ask(`Remove ${c.name} from the countries organizations can choose?`, { confirmLabel: "Remove", danger: true })) && run(() => removeActiveCountry(c.code))}
                       className="text-sm text-red-600 disabled:text-gray-300"
                     >
                       Remove
@@ -85,7 +88,11 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => addNewCountry(form), "Country added.");
+            const name = data.available.find((c) => c.code === form.code)?.name;
+            run(() => addNewCountry(form), async () => {
+              setTab(TABS[0]);
+              await ask(`${name} has been added to the active countries list.`, { title: "Country added", confirmLabel: "OK", cancelLabel: "" });
+            });
           }}
           className={`${adminCard} grid gap-4 p-5 sm:grid-cols-3`}
         >
