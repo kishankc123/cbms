@@ -40,6 +40,22 @@ export function isUserFacingError(err: unknown): err is Error {
   return message.length > 0 && !/^failed query/i.test(message);
 }
 
+// What the framework or the network says when something unexpected went wrong. None of it means anything to the person.
+const HIDDEN_BY_FRAMEWORK = /^Minified React error #\d+|An error occurred in the Server Components render|a (server|client)-side exception has occurred/i;
+const NETWORK_PROBLEM = /^(Failed to fetch|NetworkError|Load failed|Network request failed)/i;
+
+/**
+ * The words to show for any failure: our own rule messages pass through unchanged; a framework placeholder ("Minified React
+ * error #441") or a network failure becomes a plain sentence. `reference` is the code the server logged for that error, so
+ * whoever looks into it can find the real cause.
+ */
+export function friendlyMessage(message: string, reference?: unknown): string {
+  if (NETWORK_PROBLEM.test(message)) return "We could not reach the server. Check your internet connection and try again.";
+  if (!HIDDEN_BY_FRAMEWORK.test(message)) return message;
+  const ref = typeof reference === "string" && reference && !reference.startsWith(PREFIX) ? ` Reference: ${reference}.` : "";
+  return `Something went wrong on our side, so this could not be completed. Please check whether it was saved, then try again. If it keeps happening, tell support.${ref}`;
+}
+
 type WithDigest = Error & { digest?: unknown };
 
 /** Server: give each user-facing error a digest that carries its message. Safe to call more than once. */
@@ -71,8 +87,9 @@ export function installClientErrorMessages() {
     },
     set(this: WithDigest, value: unknown) {
       Object.defineProperty(this, "digest", { value, writable: true, configurable: true, enumerable: true });
-      const message = decodeUserMessage(value);
-      if (message) {
+      // Our own message when the server sent one; otherwise a plain sentence in place of the framework's placeholder.
+      const message = decodeUserMessage(value) ?? friendlyMessage(this.message, value);
+      if (message !== this.message) {
         try {
           this.message = message;
           this.stack = `Error: ${message}`;
