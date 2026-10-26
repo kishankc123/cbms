@@ -13,14 +13,14 @@ let cleaningId: string;
 let acmeId: string;
 
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
-const SETTINGS: PurchaseImportSettings = { amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
+const SETTINGS: PurchaseImportSettings = { defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
 const CSV = [
   "Date,Supplier,Category,Bill number,Description,Amount,Bill type,Paid amount,Paid from",
-  "2026-09-10,Acme Traders,Stationery,B-1,Paper,10000,VAT,0,",
+  "2026-09-10,Acme Traders,Stationery,B-1,Paper,11300,VAT,0,",
   "2026-09-11,Acme Trader,Cleaning,B-2,Mops,2000,PAN,0,",
-  "2026-09-12,Brand New Supplies,Stationery,,Pens,500,VAT,0,",
+  "2026-09-12,Brand New Supplies,Stationery,,Pens,565,VAT,0,",
   "2026-09-13,,Stationery,,Tea,850,No bill,850,Cash",
-  "2026-09-14,Acme Traders,Stationary,B-5,Typo category,100,VAT,0,",
+  "2026-09-14,Acme Traders,Stationary,B-5,Typo category,113,VAT,0,",
   "2026-09-15,Acme Traders,Stationery,B-6,Bad amount,abc,VAT,0,",
 ].join("\n");
 
@@ -90,7 +90,7 @@ describe("the review", () => {
 
   it("a default category stands in when the file has none, and an amount that includes VAT is worked back", async () => {
     const text = "Date,Supplier,Amount,Bill type\n2026-09-10,Acme Traders,1130,VAT";
-    const r = await reviewPurchaseFile(org.tenantId, { ...base(text, { ...SETTINGS, amountsIncludeVat: true, defaultCategoryId: cleaningId }) });
+    const r = await reviewPurchaseFile(org.tenantId, { ...base(text, { ...SETTINGS, defaultCategoryId: cleaningId }) });
     expect(r.rows[0]).toMatchObject({ status: "ready", total: 1130, tax: 130, categoryName: "Cleaning" });
   });
 });

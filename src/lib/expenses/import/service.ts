@@ -208,7 +208,6 @@ async function buildRows(
       categoryText,
       duplicate: false,
       settings: {
-        amountsIncludeVat: settings.amountsIncludeVat,
         vatRate: iso ? vatByDate.get(iso) ?? 0 : 0,
         defaultBillType: settings.defaultBillType,
         paidMode: settings.paidMode,
@@ -538,6 +537,7 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Expenses sheet"],
       ["One row is one expense. Only Date and Amount are needed."],
+      ["Amount: what is paid, VAT included. The VAT is worked out from it (or taken from the VAT amount if you give one)."],
       ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your expense categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for an expense paid in full to no one in particular."],

@@ -33,7 +33,7 @@ export function ImportPurchases() {
   const [setup, setSetup] = useState<PurchaseImportSetup | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<PurchaseFile | null>(null);
-  const [settings, setSettings] = useState<PurchaseImportSettings>({ amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
+  const [settings, setSettings] = useState<PurchaseImportSettings>({ defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
   const [review, setReview] = useState<PurchaseReviewResult | null>(null);
   const [supplierDecisions, setSupplierDecisions] = useState<Record<string, SupplierDecision>>({});
   const [categoryDecisions, setCategoryDecisions] = useState<Record<string, CategoryDecision>>({});

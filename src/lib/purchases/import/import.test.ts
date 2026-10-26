@@ -39,14 +39,14 @@ describe("bill types", () => {
 const base: PurchaseRowInput = {
   dateIso: "2026-09-10",
   periodLocked: false,
-  amount: { value: 1000, invalid: false },
+  amount: { value: 1130, invalid: false },
   discount: { value: null, invalid: false },
   billType: undefined,
   pays: noPays,
   supplier: "matched",
   category: "ok",
   duplicate: false,
-  settings: { amountsIncludeVat: false, vatRate: 13, defaultBillType: "vat", paidMode: "file", hasDefaultAccount: false },
+  settings: { vatRate: 13, defaultBillType: "vat", paidMode: "file", hasDefaultAccount: false },
 };
 const check = (over: Partial<PurchaseRowInput> = {}, settings: Partial<PurchaseRowInput["settings"]> = {}) => checkPurchaseRow({ ...base, ...over, settings: { ...base.settings, ...settings } });
 
@@ -57,7 +57,7 @@ describe("whether a purchase row can be imported", () => {
     expect(r.computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130, paid: 0, billType: "vat" });
   });
   it("only a VAT bill carries VAT", () => {
-    expect(check({ billType: "pan" }).computed).toMatchObject({ tax: 0, total: 1000, billType: "pan" });
+    expect(check({ billType: "pan" }).computed).toMatchObject({ tax: 0, total: 1130, billType: "pan" });
     expect(check({ billType: "no_bill" }).computed?.tax).toBe(0);
   });
   it("flags what can't be read, one issue each", () => {
@@ -92,7 +92,7 @@ describe("whether a purchase row can be imported", () => {
     expect(check({ duplicate: true, dateIso: null }).status).toBe("attention");
   });
   it("amounts that include VAT are worked back, but only on a VAT bill", () => {
-    expect(check({ amount: { value: 1130, invalid: false } }, { amountsIncludeVat: true }).computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130 });
-    expect(check({ amount: { value: 1130, invalid: false }, billType: "pan" }, { amountsIncludeVat: true }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
+    expect(check({ amount: { value: 1130, invalid: false } }).computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130 });
+    expect(check({ amount: { value: 1130, invalid: false }, billType: "pan" }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
   });
 });
