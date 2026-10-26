@@ -9,6 +9,7 @@ import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialo
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { WEEKDAYS_SHORT, monthCells, todayIso, ymdOf } from "@/lib/calendar";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 type Item = Awaited<ReturnType<typeof listCalendarItems>>[number];
 type UserOption = Awaited<ReturnType<typeof listAssignableUsers>>[number];
 
@@ -84,8 +85,9 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string) {
-    if (!confirm("Delete this compliance item?")) return;
+    if (!(await ask("Delete this compliance item?", { confirmLabel: "Delete", danger: true }))) return;
     setBusy(true);
     setError(null);
     try {

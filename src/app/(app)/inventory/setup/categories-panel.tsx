@@ -5,6 +5,7 @@ import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createCategory, updateCategory, deleteCategory } from "./actions";
 import { InfoDialog } from "../info-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
@@ -93,8 +94,9 @@ export function CategoriesPanel({ categories, groups }: { categories: Category[]
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete category ${name}?`)) return;
+    if (!(await ask(`Delete category ${name}?`, { confirmLabel: "Delete", danger: true }))) return;
     setBusy(true);
     try {
       await deleteCategory({ categoryId: id });

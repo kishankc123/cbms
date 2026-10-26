@@ -20,6 +20,7 @@ import { D, PeriodLabel } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Detail = Awaited<ReturnType<typeof getTaxObligationDetail>>;
 type Options = Awaited<ReturnType<typeof getTaxActionOptions>>;
@@ -31,6 +32,7 @@ const STATUS_LABEL: Record<ObligationStatus, string> = { pending: "Pending", in_
 const KIND_LABEL = { assessment: "Assessment", penalty: "Penalty / fine", interest: "Interest" } as const;
 
 export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () => void }) {
+  const ask = useConfirm();
   const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [options, setOptions] = useState<Options | null>(null);
@@ -214,7 +216,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                   run(async () => {
                     const r = await recordObligationPayment({ obligationId: id, ...v });
                     if (r.duplicateWarning) {
-                      if (!window.confirm("A very similar payment was recorded recently. Record this one anyway?")) return;
+                      if (!(await ask("A very similar payment was recorded recently. Record this one anyway?", { confirmLabel: "Record anyway" }))) return;
                       await recordObligationPayment({ obligationId: id, ...v, confirmDuplicate: true });
                     }
                     setPanel("none");

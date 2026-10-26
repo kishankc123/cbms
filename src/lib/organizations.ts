@@ -1,6 +1,6 @@
-import { desc, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { tenants, accounts, memberships, subscriptions, taxRates } from "@/db/schema";
+import { tenants, accounts, memberships, subscriptions, taxRates, complianceCountries } from "@/db/schema";
 import { publishedVersionsFor } from "@/lib/compliance/platform-tax-rates";
 import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-accounts";
 import { logAuditEvent } from "@/lib/audit";
@@ -12,6 +12,7 @@ import { seedPaymentModes } from "@/lib/payment-modes";
 export type BusinessInfo = {
   name: string;
   businessType?: string;
+  /** The country's code (NP), chosen from the platform's active countries. Blank means Nepal. */
   country?: string;
   address?: string;
   phone?: string;
@@ -33,6 +34,9 @@ async function nextClientCode(): Promise<string> {
  * subscription) and makes `ownerUserId` its Owner — all in one transaction.
  */
 export async function createOrganization(info: BusinessInfo, ownerUserId: string) {
+  const countryCode = info.country?.trim() || "NP";
+  const [country] = await db.select({ code: complianceCountries.code }).from(complianceCountries).where(and(eq(complianceCountries.code, countryCode), eq(complianceCountries.isActive, true))).limit(1);
+  if (!country) throw new Error("Choose a country from the list.");
   for (let attempt = 0; attempt < 5; attempt++) {
     const clientCode = await nextClientCode();
     try {
@@ -43,7 +47,7 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
             clientCode,
             companyName: info.name.trim(),
             industry: info.businessType?.trim() || null,
-            country: info.country?.trim() || null,
+            countryCode: country.code,
             address: info.address?.trim() || null,
             phone: info.phone?.trim() || null,
             email: info.email?.trim().toLowerCase() || null,

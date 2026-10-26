@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { voidPurchaseReturn } from "./actions";
 
 import { D } from "@/components/calendar/date-text";
+import { ConfirmForm } from "@/components/ui/confirm-dialog";
 type Vendor = { id: string; name: string };
 type Note = {
   id: string;
@@ -145,18 +146,12 @@ export function PurchaseReturnsTable({
               <td className="px-4 py-2 capitalize">{n.status}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 {n.status !== "void" && (
-                  <form
-                    action={voidPurchaseReturn}
-                    className="inline"
-                    onSubmit={(e) => {
-                      if (!confirm(`Void credit note ${n.noteNumber}?`)) e.preventDefault();
-                    }}
-                  >
+                  <ConfirmForm confirm={`Void credit note ${n.noteNumber}?`} confirmOptions={{ confirmLabel: "Void", danger: true }} action={voidPurchaseReturn} className="inline">
                     <input type="hidden" name="noteId" value={n.id} />
                     <button type="submit" className="text-red-600 hover:underline text-xs">
                       Void
                     </button>
-                  </form>
+                  </ConfirmForm>
                 )}
               </td>
             </tr>

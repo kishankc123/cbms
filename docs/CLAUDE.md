@@ -112,6 +112,16 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   `...migrate` (never the plain `npx drizzle-kit` shim). A data backfill can be hand-appended to a generated
   `.sql`. Integration tests: `node --env-file=.env node_modules/vitest/vitest.mjs run -c
   vitest.int.config.ts <path>` (they use throwaway `ZZ ...` organizations from `src/test/temp-org.ts`).
+- **Global UI rules (standing, apply to all new and touched screens):**
+  - *Confirm first.* Anything that deletes, voids, closes, ends, deactivates, removes or can't easily be undone asks
+    in a pop-up before it runs: `const ask = useConfirm(); if (!(await ask(msg, { confirmLabel, danger: true }))) return;`
+    (`src/components/ui/confirm-dialog.tsx`; a form that posts to a server action uses `<ConfirmForm confirm="...">`).
+    Never the browser's own `confirm()` or `alert()`. A notice with one OK button is `ask(msg, { cancelLabel: "" })`.
+    (The older `sales/confirm-dialog.tsx` Yes/No dialog is still used in places; prefer `useConfirm` in new code.)
+  - *Errors a basic user understands.* Say what went wrong and what to do, in plain words: no codes, table or field
+    names, stack traces or "Failed to ..." leftovers. Our own rule messages are thrown as plain `Error`s and shown as
+    written (`lib/user-facing-errors.ts`, `friendlyMessage`); show them in the problem dialog (`components/problem-dialog.tsx`,
+    `useProblem` / `useErrorDialog`), not as raw text.
 
 ## What's built (all committed)
 

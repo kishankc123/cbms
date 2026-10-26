@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLog, memberships, roles, subscriptions, tenants, users } from "@/db/schema";
+import { auditLog, complianceCountries, memberships, roles, subscriptions, tenants, users } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { roleLabel } from "@/lib/roles";
 
@@ -185,7 +185,7 @@ export async function getPlatformOrg(tenantId: string) {
     .where(eq(tenants.id, tenantId))
     .limit(1);
   if (!t) return null;
-  const [members, events] = await Promise.all([
+  const [members, events, [countryName]] = await Promise.all([
     db
       .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, roleName: roles.name, status: memberships.status, joined: memberships.createdAt })
       .from(memberships)
@@ -194,6 +194,7 @@ export async function getPlatformOrg(tenantId: string) {
       .where(eq(memberships.tenantId, tenantId))
       .orderBy(asc(memberships.createdAt)),
     db.select({ action: auditLog.action, at: auditLog.timestamp, after: auditLog.afterValue }).from(auditLog).where(and(eq(auditLog.entityType, "organization"), eq(auditLog.entityId, tenantId))).orderBy(desc(auditLog.timestamp)).limit(10),
+    db.select({ name: complianceCountries.name }).from(complianceCountries).where(eq(complianceCountries.code, t.tenant.countryCode)).limit(1),
   ]);
   const o = t.tenant;
   return {
@@ -202,7 +203,7 @@ export async function getPlatformOrg(tenantId: string) {
       clientCode: o.clientCode,
       name: o.companyName,
       industry: o.industry,
-      country: o.country,
+      country: countryName?.name ?? o.countryCode,
       address: o.address,
       phone: o.phone,
       email: o.email,

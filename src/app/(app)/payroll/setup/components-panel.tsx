@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createComponent, deleteComponent } from "./actions";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Component = { id: string; name: string; type: string; amount: string; taxable: boolean };
 
@@ -34,8 +35,9 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string, componentName: string) {
-    if (!confirm(`Delete ${componentName}?`)) return;
+    if (!(await ask(`Delete ${componentName}?`, { confirmLabel: "Delete", danger: true }))) return;
     await deleteComponent({ componentId: id });
     router.refresh();
   }

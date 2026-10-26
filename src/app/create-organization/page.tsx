@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createAdditionalOrganization } from "../select-organization/actions";
+import { listCountryOptions } from "../register/actions";
 
 const inputCls = "w-full rounded border border-gray-300 px-3 py-2 text-sm";
 
 export default function CreateOrganizationPage() {
-  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
+  const [b, setB] = useState({ name: "", businessType: "", country: "NP", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    listCountryOptions().then(setCountries);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,7 +48,16 @@ export default function CreateOrganizationPage() {
         {f("name", "Business / Organization name *")}
         <div className="grid grid-cols-2 gap-3">
           {f("businessType", "Business type")}
-          {f("country", "Country")}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+            <select className={inputCls} value={b.country} onChange={(e) => setB({ ...b, country: e.target.value })}>
+              {countries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {f("address", "Address")}
         <div className="grid grid-cols-2 gap-3">

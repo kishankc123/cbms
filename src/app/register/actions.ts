@@ -11,11 +11,15 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { createAuthToken } from "@/lib/tokens";
 import { sendEmail, verificationEmail, appUrl } from "@/lib/email";
 import { logAuditEvent } from "@/lib/audit";
+import { activeCountries } from "@/lib/countries";
 
 export type RegisterInput = {
   business: BusinessInfo;
   admin: { fullName: string; email: string; mobile?: string; password: string; confirmPassword: string };
 };
+
+/** The countries offered when setting up a company (Setup → Countries in platform admin). */
+export const listCountryOptions = activeCountries;
 
 export async function registerOrganization(input: RegisterInput): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!rateLimit(`register:${await clientIp()}`, 5, 60 * 60 * 1000)) {

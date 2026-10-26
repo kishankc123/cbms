@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalizedRun } from "../actions";
 import { useProblem } from "@/components/problem-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -62,8 +63,9 @@ export function RunStatusControls({
     }
   }
 
+  const ask = useConfirm();
   async function handleRecalculate() {
-    if (!confirm("Recalculate this payroll run from the latest salary, benefits, and attendance records?")) return;
+    if (!(await ask("Recalculate this payroll run from the latest salary, benefits, and attendance records?", { confirmLabel: "Recalculate" }))) return;
     setBusy(true);
     try {
       await generatePayrollRun({ month, year, calendar, employeeIds: [] });

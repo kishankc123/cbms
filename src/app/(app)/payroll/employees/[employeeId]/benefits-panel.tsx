@@ -6,6 +6,7 @@ import { deactivateBenefit } from "../actions";
 import { AddBenefitModal } from "./add-benefit-modal";
 
 import { D } from "@/components/calendar/date-text";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 type Benefit = {
   id: string;
   benefitType: string;
@@ -21,8 +22,9 @@ export function BenefitsPanel({ employeeId, benefits }: { employeeId: string; be
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
 
+  const ask = useConfirm();
   async function handleDeactivate(id: string) {
-    if (!confirm("End this benefit as of today?")) return;
+    if (!(await ask("End this benefit as of today?", { confirmLabel: "End" }))) return;
     await deactivateBenefit({ benefitId: id });
     router.refresh();
   }

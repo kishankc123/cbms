@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setBankAccountActive } from "../actions";
 import { BankAccountFormModal, type InitialBankAccount } from "./bank-account-form-modal";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type BankAccountRow = {
   id: string;
@@ -22,6 +23,7 @@ type BankAccountRow = {
 type LedgerOption = { id: string; code: string; name: string };
 
 export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccounts: BankAccountRow[]; ledgerOptions: LedgerOption[] }) {
+  const ask = useConfirm();
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<InitialBankAccount | null>(null);
@@ -99,8 +101,8 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccount
                 <button
                   type="button"
                   disabled={toggling === b.id}
-                  onClick={() => {
-                    if (b.isActive && !confirm(`Deactivate ${b.accountName}? It will no longer be usable for new transactions.`)) return;
+                  onClick={async () => {
+                    if (b.isActive && !(await ask(`Deactivate ${b.accountName}? It will no longer be usable for new transactions.`, { confirmLabel: "Deactivate", danger: true }))) return;
                     toggleActive(b);
                   }}
                   className="text-xs text-red-600 hover:underline disabled:opacity-40"
