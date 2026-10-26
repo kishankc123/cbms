@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, expenseImports, expenses, supplierAliases, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { analyzeExpenseFile, checkExpenseImport, finishExpenseImport, importExpenseChunk, importExpenseIds, prepareExpenseImport, reviewExpenseFile } from "./service";
+import { checkExpenseImport, finishExpenseImport, importExpenseChunk, importExpenseIds, prepareExpenseImport, reviewExpenseFile } from "./service";
 import type { ExpenseImportSettings, ExpenseRunInput } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -12,10 +12,9 @@ let acmeId: string;
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
 const SETTINGS: ExpenseImportSettings = { amountsIncludeVat: false, defaultBillType: "pan", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
-const MAPPING = { date: "Date", supplier: "Paid To", category: "Head", invoiceNumber: "Inv", description: "Details", amount: "Amount", paid: "Paid", account: "Mode" };
 const csv = (cat: string) =>
   [
-    "Date,Paid To,Head,Inv,Details,Amount,Paid,Mode",
+    "Date,Supplier,Category,Invoice number,Description,Amount,Paid amount,Paid from",
     `2026-09-10,Acme Traders,${cat},R-1,Rent,1000,0,`,
     `2026-09-11,Acme Trader,${cat},R-2,Rent 2,500,0,`,
     `2026-09-12,,${cat},,Taxi,200,200,Cash`,
@@ -24,7 +23,6 @@ const csv = (cat: string) =>
 const runInput = (over: Partial<ExpenseRunInput> = {}): ExpenseRunInput => ({
   fileName: "expenses.csv",
   base64: b64(csv(rentName)),
-  mapping: MAPPING,
  
   settings: SETTINGS,
   supplierDecisions: { "acme trader": { action: "existing", vendorId: acmeId, remember: true } },
@@ -45,10 +43,8 @@ afterAll(async () => {
 });
 
 describe("import expenses", () => {
-  it("finds the columns and reviews every row", async () => {
-    const a = await analyzeExpenseFile(org.tenantId, { fileName: "e.csv", base64: b64(csv(rentName)) });
-    expect(a).toMatchObject({ rowCount: 4, mappingComplete: true });
-    const r = await reviewExpenseFile(org.tenantId, { fileName: "e.csv", base64: b64(csv(rentName)), mapping: MAPPING, settings: SETTINGS });
+  it("reads the columns and reviews every row", async () => {
+    const r = await reviewExpenseFile(org.tenantId, { fileName: "e.csv", base64: b64(csv(rentName)), settings: SETTINGS });
     const row = (n: number) => r.rows.find((x) => x.rowNumber === n)!;
     expect(row(2)).toMatchObject({ status: "ready", total: 1000 });
     expect(row(3)).toMatchObject({ status: "attention", issues: ["supplier"] });

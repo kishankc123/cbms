@@ -8,9 +8,8 @@ import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getRevenueAccounts } from "@/lib/sales/revenue-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
-import { analyzeSalesFile, buildSalesTemplate, checkSalesImport, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
-import type { CheckResult, FileAnalysis, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
-import type { SalesColumnMapping } from "@/lib/sales/import/fields";
+import { buildSalesTemplate, checkSalesImport, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
+import type { CheckResult, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
 import { voidInvoice } from "../actions";
 
 // Import Sales: every step needs permission to create sales (undoing an import needs permission to void them).
@@ -36,13 +35,7 @@ export async function getImportSetup() {
 }
 export type ImportSetup = Awaited<ReturnType<typeof getImportSetup>>;
 
-export async function analyzeFile(input: { fileName: string; base64: string }): Promise<FileAnalysis> {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "create")) throw new Error("Not permitted");
-  return analyzeSalesFile(session.tenantId, input);
-}
-
-export async function reviewFile(input: { fileName: string; base64: string; mapping: SalesColumnMapping; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
+export async function reviewFile(input: { fileName: string; base64: string; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
   return reviewSalesFile(session.tenantId, input);

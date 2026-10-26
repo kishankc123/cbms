@@ -1,30 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { netFromInclusive, rowTotals } from "./amounts";
 import { checkRow, type RowCheckInput } from "./checks";
-import { headerSignature, mappingComplete, suggestMapping } from "./fields";
+import { assertColumns, templateMapping } from "@/lib/import-columns";
+import { noPays, pays, slot } from "@/test/import-pays";
+import { IMPORT_FIELDS } from "./fields";
 import { bestNameMatch, nameSimilarity, normalizeName, parseAmountCell, parseBillTypeCell } from "./values";
 
-describe("matching a file's headers to the columns", () => {
-  it("finds the usual names, once each", () => {
-    expect(suggestMapping(["Invoice Date", "Party Name", "Taxable Amount", "VAT Amount", "Discount", "Paid"])).toEqual({
-      date: "Invoice Date",
-      customer: "Party Name",
-      amount: "Taxable Amount",
-      discount: "Discount",
-      paid: "Paid",
+describe("reading a file's columns", () => {
+  it("finds each column by its name in the template, whatever the capitals, spaces or punctuation", () => {
+    expect(templateMapping(IMPORT_FIELDS, ["Date", "customer", "AMOUNT", "Bill  type", "Paid amount", "received-into"])).toEqual({
+      date: "Date",
+      customer: "customer",
+      amount: "AMOUNT",
+      billType: "Bill  type",
+      paid: "Paid amount",
+      account: "received-into",
     });
   });
-  it("keeps Amount for the amount and never takes a VAT Amount column for the bill type", () => {
-    const m = suggestMapping(["Date", "Customer", "Amount", "VAT Amount", "Total", "Bill Type"]);
-    expect(m).toMatchObject({ amount: "Amount", billType: "Bill Type" });
+  it("finds the second and third payment columns too", () => {
+    expect(templateMapping(IMPORT_FIELDS, ["Paid amount 2", "Received into 2", "Paid amount 3", "Received into 3"])).toEqual({ paid2: "Paid amount 2", account2: "Received into 2", paid3: "Paid amount 3", account3: "Received into 3" });
   });
-  it("knows when a required column is missing", () => {
-    expect(mappingComplete(suggestMapping(["Date", "Customer"]))).toBe(false);
-    expect(mappingComplete(suggestMapping(["Date", "Customer", "Amount"]))).toBe(true);
+  it("does not guess at other names", () => {
+    expect(templateMapping(IMPORT_FIELDS, ["Invoice Date", "Party Name", "Taxable Amount"])).toEqual({});
   });
-  it("gives the same fingerprint however the headers are cased or ordered", () => {
-    expect(headerSignature(["Date", "Customer", "Amount"])).toBe(headerSignature(["amount", " DATE ", "customer"]));
-    expect(headerSignature(["Date", "Customer", "Amount"])).not.toBe(headerSignature(["Date", "Customer", "Qty"]));
+  it("refuses a file without a required column, and says what to do", () => {
+    expect(() => assertColumns(IMPORT_FIELDS, templateMapping(IMPORT_FIELDS, ["Date", "Customer"]))).toThrow(/no "Amount" column.*template/);
+    expect(() => assertColumns(IMPORT_FIELDS, templateMapping(IMPORT_FIELDS, ["Date", "Customer", "Amount"]))).not.toThrow();
   });
 });
 
@@ -70,14 +71,13 @@ describe("the money of a row", () => {
 const base: RowCheckInput = {
   dateIso: "2026-09-10",
   periodLocked: false,
-  amount: { value: 1000, invalid: false },
+  amount: { value: 1130, invalid: false },
   discount: { value: null, invalid: false },
   billType: undefined,
-  paid: { value: null, invalid: false },
-  account: "none",
+  pays: noPays,
   customer: "matched",
   duplicate: false,
-  settings: { amountsIncludeVat: false, vatRate: 13, defaultBillType: "taxable", paidMode: "file", hasDefaultAccount: false },
+  settings: { vatRate: 13, defaultBillType: "taxable", paidMode: "file", hasDefaultAccount: false },
 };
 const check = (over: Partial<RowCheckInput> = {}, settings: Partial<RowCheckInput["settings"]> = {}) => checkRow({ ...base, ...over, settings: { ...base.settings, ...settings } });
 
@@ -96,18 +96,27 @@ describe("whether a row can be imported", () => {
     expect(check({ billType: null, billTypeText: "maybe" }).issues).toEqual(["billType"]);
   });
   it("lets a fully paid sale go without a customer, but not a part-paid one", () => {
-    const paidFull = check({ customer: "none", account: "ok" }, { paidMode: "full" });
+    const paidFull = check({ customer: "none", pays: pays(null, "ok") }, { paidMode: "full" });
     expect(paidFull.status).toBe("ready");
     expect(check({ customer: "none" }).issues).toEqual(["customer"]);
-    expect(check({ customer: "none", paid: { value: 500, invalid: false }, account: "ok" }).issues).toEqual(["customer"]);
+    expect(check({ customer: "none", pays: pays(500, "ok") }).issues).toEqual(["customer"]);
   });
   it("needs an account when money was received, from the file or the default", () => {
-    expect(check({ paid: { value: 1130, invalid: false } }).issues).toEqual(["account"]);
-    expect(check({ paid: { value: 1130, invalid: false } }, { hasDefaultAccount: true }).status).toBe("ready");
-    expect(check({ paid: { value: 1130, invalid: false }, account: "unknown", accountText: "Petty" }).messages[0]).toMatch(/isn't one of your cash, bank or wallet/);
+    expect(check({ pays: pays(1130) }).issues).toEqual(["account"]);
+    expect(check({ pays: pays(1130) }, { hasDefaultAccount: true }).status).toBe("ready");
+    expect(check({ pays: pays(1130, "unknown", "Petty") }).messages[0]).toMatch(/isn't one of your cash, bank or wallet/);
+  });
+  it("takes a payment in parts, each through its own account", () => {
+    const split = (second: ReturnType<typeof slot>) => [slot({ amount: { value: 600, invalid: false }, account: "ok" }), second, slot()];
+    const ok = check({ pays: split(slot({ amount: { value: 530, invalid: false }, account: "ok" })) });
+    expect(ok.status).toBe("ready");
+    expect(ok.computed).toMatchObject({ total: 1130, paid: 1130 });
+    expect(check({ pays: split(slot({ amount: { value: 530, invalid: false } })) }).issues).toEqual(["account"]); // the second part names no account
+    expect(check({ pays: split(slot({ amount: { value: 600, invalid: false }, account: "ok" })) }).issues).toEqual(["paid"]); // together more than the total
+    expect(check({ pays: split(slot({ amount: { value: null, invalid: true }, account: "ok" })) }).messages[0]).toMatch(/Payment 2: The paid amount isn't a number/);
   });
   it("refuses more paid than the invoice total", () => {
-    expect(check({ paid: { value: 2000, invalid: false }, account: "ok" }).issues).toEqual(["paid"]);
+    expect(check({ pays: pays(2000, "ok") }).issues).toEqual(["paid"]);
   });
   it("an unknown customer is a pending decision, and a skipped row is just skipped", () => {
     expect(check({ customer: "unknown" }).issues).toEqual(["customer"]);
@@ -118,9 +127,9 @@ describe("whether a row can be imported", () => {
     expect(check({ duplicate: true }).status).toBe("duplicate");
     expect(check({ duplicate: true, dateIso: null }).status).toBe("attention");
   });
-  it("amounts that include VAT: the invoice total is the file's amount", () => {
-    const r = check({ amount: { value: 1130, invalid: false } }, { amountsIncludeVat: true });
-    expect(r.computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130 });
-    expect(check({ amount: { value: 1130, invalid: false }, billType: "zero_rated" }, { amountsIncludeVat: true }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
+  it("the amount includes VAT: the invoice total is the file's amount, less any discount", () => {
+    expect(check().computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130 });
+    expect(check({ discount: { value: 113, invalid: false } }).computed).toMatchObject({ subtotal: 900, tax: 117, total: 1017 });
+    expect(check({ billType: "zero_rated" }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
   });
 });

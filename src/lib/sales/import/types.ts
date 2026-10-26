@@ -1,12 +1,10 @@
 import type { CustomerState, RowIssue, RowStatus } from "./checks";
-import type { ImportFieldKey, SalesColumnMapping } from "./fields";
+import type { ImportFieldKey } from "./fields";
 import type { SalesBillTypeValue } from "./values";
 
 // The shapes passed between the Import Sales screen and its server actions.
 
 export type ImportSettings = {
-  /** Amounts in the file already include VAT. */
-  amountsIncludeVat: boolean;
   defaultBillType: SalesBillTypeValue;
   /** What to assume about payment: only what the paid column says, everything unpaid, or everything paid in full. */
   paidMode: "file" | "unpaid" | "full";
@@ -20,15 +18,6 @@ export type ImportSettings = {
 
 /** Corrections typed into the review: a row's cell text, by the row's number in the file, that replaces what the file says. */
 export type Overrides = Record<number, Partial<Record<ImportFieldKey, string>>>;
-
-export type FileAnalysis = {
-  headers: string[];
-  sample: string[][];
-  rowCount: number;
-  mapping: SalesColumnMapping;
-  remembered: boolean;
-  mappingComplete: boolean;
-};
 
 export type ReviewRow = {
   rowNumber: number;
@@ -73,7 +62,6 @@ export type GroupDecision = { action: "existing"; customerId: string; remember: 
 export type RunInput = {
   fileName: string;
   base64: string;
-  mapping: SalesColumnMapping;
   settings: ImportSettings;
   decisions: Record<string, GroupDecision>;
   skipRows: number[];

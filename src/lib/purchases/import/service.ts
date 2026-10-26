@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { purchaseColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { importColumnMappings, purchaseBills, purchaseImports, supplierAliases, vendors } from "@/db/schema";
+import { purchaseBills, purchaseImports, supplierAliases, vendors } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { importedDate } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
@@ -11,10 +11,11 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
 import { createCashPurchaseCore } from "@/lib/purchases/cash-purchase";
-import { headerSignature } from "@/lib/sales/import/fields";
+import { assertColumns, templateMapping, templateRows } from "@/lib/import-columns";
+import { paymentLines, readPaySlots } from "@/lib/import-payments";
 import { bestNameMatch, normalizeName, parseAmountCell } from "@/lib/sales/import/values";
 import { checkPurchaseRow, type CategoryState, type SupplierState } from "./checks";
-import { PURCHASE_FIELDS, purchaseMappingComplete, suggestPurchaseMapping, type PurchaseColumnMapping } from "./fields";
+import { PURCHASE_FIELDS, type PurchaseColumnMapping } from "./fields";
 import type {
   CategoryDecision,
   CategoryGroup,
@@ -22,7 +23,7 @@ import type {
   FinishedImport,
   PreparedImport,
   PurchaseCheckResult,
-  PurchaseFileAnalysis,
+  
   PurchaseImportSettings,
   PurchaseOverrides,
   PurchaseReviewResult,
@@ -40,7 +41,6 @@ import { parsePurchaseBillType } from "./values";
 
 const MAX_ROWS = 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const KIND = "purchases";
 
 type Parsed = { headers: string[]; rows: string[][] };
 
@@ -55,19 +55,9 @@ const colIndex = (headers: string[], name: string | undefined) => (name ? header
 
 // ------------------------------------------------------------------ step 1: what is in the file
 
-export async function analyzePurchaseFile(tenantId: string, input: { fileName: string; base64: string }): Promise<PurchaseFileAnalysis> {
-  const parsed = readFile(input.base64, input.fileName);
-  const signature = headerSignature(parsed.headers);
-  const [remembered] = await db.select().from(importColumnMappings).where(and(eq(importColumnMappings.tenantId, tenantId), eq(importColumnMappings.kind, KIND), eq(importColumnMappings.signature, signature))).limit(1);
-  const known = remembered?.mapping as PurchaseColumnMapping | undefined;
-  const usable = known && Object.values(known).every((h) => colIndex(parsed.headers, h) >= 0);
-  const mapping = usable ? known! : suggestPurchaseMapping(parsed.headers);
-  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: purchaseMappingComplete(mapping) };
-}
-
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; discount: number; accountId: string | null; modeId: string | null; billNumber: string; description: string };
+type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; discount: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; billNumber: string; description: string };
 type Category = { id: string; code: string; name: string };
 
 async function cashBankAccountList(tenantId: string) {
@@ -103,7 +93,6 @@ function applyOverrides(parsed: Parsed, mapping: PurchaseColumnMapping, override
 async function buildRows(
   tenantId: string,
   parsedIn: Parsed,
-  mappingIn: PurchaseColumnMapping,
   settings: PurchaseImportSettings,
   supplierDecisions: Record<string, SupplierDecision>,
   categoryDecisions: Record<string, CategoryDecision>,
@@ -111,8 +100,8 @@ async function buildRows(
   overrides: PurchaseOverrides = {},
   opts: { skipDuplicateCheck?: boolean } = {}
 ) {
-  const { parsed, mapping } = applyOverrides(parsedIn, mappingIn, overrides);
-  for (const f of PURCHASE_FIELDS.filter((x) => x.required)) if (colIndex(parsed.headers, mapping[f.key]) < 0) throw new Error(`Choose the column that holds the ${f.label.toLowerCase()}.`);
+  const { parsed, mapping } = applyOverrides(parsedIn, templateMapping(PURCHASE_FIELDS, parsedIn.headers), overrides);
+  assertColumns(PURCHASE_FIELDS, mapping);
   const idx = Object.fromEntries(PURCHASE_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof PURCHASE_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
@@ -204,14 +193,9 @@ async function buildRows(
       category = "ok";
     }
 
-    const accountText = cell(r, "account");
-    const accountPick = accountText ? payResolver.resolve(accountText) : null;
-    const picked = accountPick && "accountId" in accountPick ? accountPick : null;
-    const accountId = picked?.accountId ?? null;
-    const accountNote = accountPick && "ambiguous" in accountPick ? `"${accountText}" has more than one account (${accountPick.ambiguous.join(", ")}). Write the account name instead.` : undefined;
+    const pays = readPaySlots((k) => cell(r, k), payResolver);
     const amount = parseAmountCell(cell(r, "amount"));
     const discount = parseAmountCell(cell(r, "discount"));
-    const paid = parseAmountCell(cell(r, "paid"));
     const billTypeText = cell(r, "billType");
     const iso = d?.iso ?? null;
     const billNumber = cell(r, "billNumber");
@@ -224,10 +208,7 @@ async function buildRows(
       discount,
       billType: parsePurchaseBillType(billTypeText),
       billTypeText,
-      paid,
-      account: accountText === "" ? "none" : accountId ? "ok" : "unknown",
-      accountText,
-      accountNote,
+      pays,
       supplier,
       category,
       categoryText,
@@ -279,8 +260,7 @@ async function buildRows(
       categoryId,
       gross: check.computed?.gross ?? 0,
       discount: check.computed?.discount ?? 0,
-      accountId: accountId ?? settings.defaultAccountId,
-      modeId: picked ? picked.modeId : accountText ? null : settings.defaultModeId ?? null,
+      payLines: check.computed ? paymentLines(pays, check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       billNumber,
       description: cell(r, "description"),
     });
@@ -290,10 +270,10 @@ async function buildRows(
 
 export async function reviewPurchaseFile(
   tenantId: string,
-  input: { base64: string; fileName: string; mapping: PurchaseColumnMapping; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }
+  input: { base64: string; fileName: string; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }
 ): Promise<PurchaseReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.settings, {}, {}, new Set(), input.overrides);
+  const { rows, supplierList, categoryList } = await buildRows(tenantId, parsed, input.settings, {}, {}, new Set(), input.overrides);
 
   const sGroups = new Map<string, SupplierGroup>();
   const cGroups = new Map<string, CategoryGroup>();
@@ -388,7 +368,7 @@ export async function checkPurchaseImport(tenantId: string, input: PurchaseRunIn
   const parsed = readFile(input.base64, input.fileName);
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   return { wouldImport: importable.length, total: round2(importable.reduce((s, r) => s + (r.total ?? 0), 0)), tax: round2(importable.reduce((s, r) => s + (r.tax ?? 0), 0)), suppliersToCreate: v.toCreate.map((c) => c.name), skipped };
 }
@@ -397,7 +377,6 @@ export async function checkPurchaseImport(tenantId: string, input: PurchaseRunIn
 export async function preparePurchaseImport(ctx: { tenantId: string; userId: string }, input: PurchaseRunInput): Promise<PreparedImport> {
   const { tenantId, userId } = ctx;
   const parsed = readFile(input.base64, input.fileName);
-  const signature = headerSignature(parsed.headers);
 
   if (input.settings.defaultAccountId && !(await cashBankAccountList(tenantId)).some((a) => a.id === input.settings.defaultAccountId)) return { ok: false, error: "Choose a cash or bank account of this organization." };
   if (input.settings.defaultAccountId && input.settings.defaultModeId) {
@@ -411,7 +390,7 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
   if (!v.defaultCategoryOk) return { ok: false, error: "Choose a purchase category of this organization." };
 
   // Rows are checked before anything is created, so an import with nothing to post creates nothing.
-  const dry = await buildRows(tenantId, parsed, input.mapping, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const dry = await buildRows(tenantId, parsed, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   if (plan(dry.rows, input.includeDuplicates).importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
   const created: { id: string; name: string }[] = [];
@@ -422,7 +401,7 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
     resolved[c.key] = { action: "existing", vendorId: s.id, remember: false };
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   const [imp] = await db.insert(purchaseImports).values({ tenantId, fileName: input.fileName.slice(0, 200), rowCount: rows.length, suppliersCreated: created, createdBy: userId }).returning({ id: purchaseImports.id });
 
@@ -430,10 +409,6 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
     if (d.action !== "existing" || !d.remember || !v.ownIds.has(d.vendorId)) continue;
     await db.insert(supplierAliases).values({ tenantId, alias: key, vendorId: d.vendorId }).onConflictDoUpdate({ target: [supplierAliases.tenantId, supplierAliases.alias], set: { vendorId: d.vendorId } });
   }
-  await db
-    .insert(importColumnMappings)
-    .values({ tenantId, kind: KIND, signature, mapping: input.mapping as Record<string, string> })
-    .onConflictDoUpdate({ target: [importColumnMappings.tenantId, importColumnMappings.kind, importColumnMappings.signature], set: { mapping: input.mapping as Record<string, string>, updatedAt: new Date() } });
 
   return { ok: true, importId: imp.id, supplierDecisions: resolved, rowNumbers: importable.map((r) => r.rowNumber), skipped, suppliersCreated: created.map((c) => c.name) };
 }
@@ -448,7 +423,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
   const wanted = new Set(input.rowNumbers);
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
+  const { rows } = await buildRows(tenantId, parsed, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
   const mine = rows.filter((r) => wanted.has(r.rowNumber));
 
   // Numbers already in use, read once for the whole slice.
@@ -467,7 +442,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
           vendorId: r.vendorId ?? "",
           billType: r.billType ?? input.settings.defaultBillType,
           lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: r.discount }],
-          payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid, modeId: r.modeId }] : [],
+          payments: r.payLines,
         },
         { importId: input.importId, takenNumbers: taken }
       );
@@ -535,12 +510,15 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
     cashBankAccountList(tenantId),
   ]);
   const wb = XLSX.utils.book_new();
-  const sheet = XLSX.utils.aoa_to_sheet([
-    ["Date", "Supplier", "Category", "Bill number", "Description", "Amount", "Discount", "Bill type", "Paid amount", "Paid from"],
-    ["15/04/2083", supplierList[0]?.name ?? "Supplier name", categoryList[0]?.name ?? "Category", "B-101", "Office supplies", 5000, 0, "VAT", 0, ""],
-    ["16/04/2083", "", categoryList[0]?.name ?? "Category", "", "Tea and snacks", 850, 0, "No bill", 850, accountList[0]?.name ?? "Cash"],
-  ]);
-  sheet["!cols"] = [{ wch: 14 }, { wch: 28 }, { wch: 24 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
+  const sheet = XLSX.utils.aoa_to_sheet(
+    templateRows(PURCHASE_FIELDS, [
+      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5000, discount: 0, billType: "VAT", paid: 0 },
+      // Paid in two parts, through two accounts
+      { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Tea and snacks", amount: 850, discount: 0, billType: "No bill", paid: 500, account: accountList[0]?.name ?? "Cash", paid2: 350, account2: accountList[1]?.name ?? "Fonepay" },
+    ])
+  );
+  const wide: Partial<Record<(typeof PURCHASE_FIELDS)[number]["key"], number>> = { date: 14, supplier: 28, category: 24, billNumber: 14, description: 26, account: 22, account2: 22, account3: 22 };
+  sheet["!cols"] = PURCHASE_FIELDS.map((f) => ({ wch: wide[f.key] ?? 12 }));
   XLSX.utils.book_append_sheet(wb, sheet, "Purchases");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Purchase categories"], ...categoryList.map((c) => [c.name])]), "Categories");
@@ -548,7 +526,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   const payModes = (await buildPaymentResolver(tenantId)).modes;
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(purchaseColumnGuide()));
-  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
+  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, guideData, "Columns");
   XLSX.utils.book_append_sheet(
     wb,
@@ -560,6 +538,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
       ["Supplier: leave blank for a purchase paid in full to no one in particular."],
       ["Bill type: VAT, PAN, Estimate, Challan or No bill. Only a VAT bill carries VAT."],
       ["Paid amount and Paid from: only if money was paid."],
+      ["Paid in parts (say cash and Fonepay)? Use Paid amount 2 and Paid from 2 (and 3) on the same row."],
       ["Bill number: the supplier's own number. Blank gets an automatic one."],
     ]),
     "How to fill in"

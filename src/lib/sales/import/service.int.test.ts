@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, customerAliases, customers, journalEntries, journalLines, salesImports, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { analyzeSalesFile, checkSalesImport, importInvoiceIds, listSalesImports, reviewSalesFile, runSalesImport } from "./service";
+import { checkSalesImport, importInvoiceIds, listSalesImports, reviewSalesFile, runSalesImport } from "./service";
 import type { ImportSettings } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -11,19 +11,18 @@ let cashId: string;
 let himalId: string;
 
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
-const SETTINGS: ImportSettings = { amountsIncludeVat: false, defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
+const SETTINGS: ImportSettings = { defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
 const CSV = [
-  "Invoice Date,Party Name,Amount,Discount,Bill Type,Paid,Received Into",
-  "2026-09-10,Himal Enterprises,10000,0,Taxable,0,",
+  "Date,Customer,Amount,Discount,Bill type,Paid amount,Received into",
+  "2026-09-10,Himal Enterprises,11300,0,Taxable,0,",
   "2026-09-11,Hamal Entrprises,5000,500,Zero rated,0,",
-  "2026-09-12,Brand New Traders,2000,0,,0,",
-  "2026-09-13,,1000,0,Taxable,1130,Cash",
+  "2026-09-12,Brand New Traders,2260,0,,0,",
+  "2026-09-13,,1130,0,Taxable,1130,Cash",
   "2026-09-14,Himal Enterprises,abc,0,,0,",
   "not a date,Himal Enterprises,100,0,,0,",
 ].join("\n");
-const MAPPING = { date: "Invoice Date", customer: "Party Name", amount: "Amount", discount: "Discount", billType: "Bill Type", paid: "Paid", account: "Received Into" };
 
-const base = (text = CSV, settings = SETTINGS) => ({ fileName: "sales.csv", base64: b64(text), mapping: MAPPING, settings });
+const base = (text = CSV, settings = SETTINGS) => ({ fileName: "sales.csv", base64: b64(text), settings });
 const balance = async (code: string) => {
   const [a] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code)));
   const lines = await db
@@ -45,12 +44,9 @@ afterAll(async () => {
 });
 
 describe("reading the file", () => {
-  it("finds the columns by itself and says when it recognises none of them", async () => {
-    const a = await analyzeSalesFile(org.tenantId, { fileName: "sales.csv", base64: b64(CSV) });
-    expect(a).toMatchObject({ rowCount: 6, mappingComplete: true, remembered: false });
-    expect(a.mapping).toMatchObject({ date: "Invoice Date", customer: "Party Name", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Received Into" });
-    const odd = await analyzeSalesFile(org.tenantId, { fileName: "x.csv", base64: b64("A,B\n1,2") });
-    expect(odd.mappingComplete).toBe(false);
+  it("reads the template's columns, and refuses a file that lacks a required one", async () => {
+    expect((await reviewSalesFile(org.tenantId, base())).rows).toHaveLength(6);
+    await expect(reviewSalesFile(org.tenantId, { fileName: "x.csv", base64: b64("A,B\n1,2"), settings: SETTINGS })).rejects.toThrow(/no "Date" column.*template/);
   });
 });
 
@@ -72,8 +68,8 @@ describe("the review", () => {
   });
 
   it("an amount that includes VAT is worked back, and a default account stands in when the file names none", async () => {
-    const text = "Date,Customer,Amount,Paid\n2026-09-10,Himal Enterprises,1130,1130";
-    const r = await reviewSalesFile(org.tenantId, { ...base(text, { ...SETTINGS, amountsIncludeVat: true, defaultAccountId: cashId }), mapping: { date: "Date", customer: "Customer", amount: "Amount", paid: "Paid" } });
+    const text = "Date,Customer,Amount,Paid amount\n2026-09-10,Himal Enterprises,1130,1130";
+    const r = await reviewSalesFile(org.tenantId, { ...base(text, { ...SETTINGS, defaultAccountId: cashId }) });
     expect(r.rows[0]).toMatchObject({ status: "ready", total: 1130, tax: 130, paid: 1130 });
   });
 });
@@ -110,12 +106,10 @@ describe("importing", () => {
     expect(await importInvoiceIds(org.tenantId, r.importId)).toHaveLength(4);
   });
 
-  it("remembers the match and the column mapping for next time", async () => {
+  it("remembers the name match for next time", async () => {
     const aliases = await db.select().from(customerAliases).where(eq(customerAliases.tenantId, org.tenantId));
     expect(aliases.map((a) => [a.alias, a.customerId])).toEqual([["hamal entrprises", himalId]]);
 
-    const a = await analyzeSalesFile(org.tenantId, { fileName: "again.csv", base64: b64(CSV) });
-    expect(a.remembered).toBe(true);
     const r = await reviewSalesFile(org.tenantId, base());
     expect(r.groups).toHaveLength(0); // both names now match on their own
   });
@@ -132,10 +126,9 @@ describe("importing", () => {
     const [foreign] = await db.insert(customers).values({ tenantId: other.tenantId, name: "Foreign Co", openingBalance: "0" }).returning({ id: customers.id });
     try {
       const text = "Date,Customer,Amount\n2026-10-01,Mystery Buyer,500";
-      const mapping = { date: "Date", customer: "Customer", amount: "Amount" };
-      const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, settings: SETTINGS, decisions: { "mystery buyer": { action: "existing", customerId: foreign.id, remember: true } }, skipRows: [], includeDuplicates: false });
+      const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), settings: SETTINGS, decisions: { "mystery buyer": { action: "existing", customerId: foreign.id, remember: true } }, skipRows: [], includeDuplicates: false });
       expect(r).toMatchObject({ ok: false }); // the foreign id is ignored, so the customer is still undecided and nothing imports
-      const bad = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, settings: { ...SETTINGS, defaultAccountId: "00000000-0000-0000-0000-000000000000" }, decisions: {}, skipRows: [], includeDuplicates: false });
+      const bad = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), settings: { ...SETTINGS, defaultAccountId: "00000000-0000-0000-0000-000000000000" }, decisions: {}, skipRows: [], includeDuplicates: false });
       expect(bad).toMatchObject({ ok: false, error: expect.stringMatching(/cash or bank account/) });
     } finally {
       await db.delete(customers).where(eq(customers.id, foreign.id));
@@ -146,8 +139,7 @@ describe("importing", () => {
 
 describe("correcting rows in the review, and checking without importing", () => {
   const FIX = ["Date,Customer,Amount", "2026-10-01,Himal Enterprises,abc", "not a date,Himal Enterprises,100", "2026-10-03,Himal Enterprises,200"].join("\n");
-  const MAP = { date: "Date", customer: "Customer", amount: "Amount" };
-  const fixBase = { fileName: "fix.csv", base64: b64(FIX), mapping: MAP, settings: SETTINGS };
+  const fixBase = { fileName: "fix.csv", base64: b64(FIX), settings: SETTINGS };
 
   it("typed corrections replace the file's cells, and re-check the row", async () => {
     const before = await reviewSalesFile(org.tenantId, fixBase);
@@ -155,12 +147,12 @@ describe("correcting rows in the review, and checking without importing", () => 
 
     const after = await reviewSalesFile(org.tenantId, { ...fixBase, overrides: { 2: { amount: "750" }, 3: { date: "2026-10-02" } } });
     expect(after.rows.map((r) => r.status)).toEqual(["ready", "ready", "ready"]);
-    expect(after.rows[0]).toMatchObject({ total: 847.5, raw: { amount: "750" } });
+    expect(after.rows[0]).toMatchObject({ total: 750, raw: { amount: "750" } });
     expect(after.rows[1].dateIso).toBe("2026-10-02");
   });
 
   it("a customer can be typed in for a row even when the file has no customer column", async () => {
-    const noCustomer = { ...fixBase, base64: b64("Date,Amount\n2026-10-04,300"), mapping: { date: "Date", amount: "Amount" } };
+    const noCustomer = { ...fixBase, base64: b64("Date,Amount\n2026-10-04,300") };
     expect((await reviewSalesFile(org.tenantId, noCustomer)).rows[0]).toMatchObject({ status: "attention", issues: ["customer"] });
     const typed = await reviewSalesFile(org.tenantId, { ...noCustomer, overrides: { 2: { customer: "Himal Enterprises" } } });
     expect(typed.rows[0]).toMatchObject({ status: "ready", customerName: "Himal Enterprises" });
@@ -172,8 +164,8 @@ describe("correcting rows in the review, and checking without importing", () => 
       invoices: (await db.select().from(salesInvoices).where(eq(salesInvoices.tenantId, org.tenantId))).length,
       imports: (await db.select().from(salesImports).where(eq(salesImports.tenantId, org.tenantId))).length,
     });
-    const text = ["Date,Customer,Amount", "2026-10-05,Check Only Traders,1000", "2026-10-06,Himal Enterprises,500", "bad,Himal Enterprises,50"].join("\n");
-    const input = { fileName: "check.csv", base64: b64(text), mapping: MAP, settings: SETTINGS, decisions: { "check only traders": { action: "create" as const, name: "Check Only Traders" } }, skipRows: [], includeDuplicates: false };
+    const text = ["Date,Customer,Amount", "2026-10-05,Check Only Traders,1130", "2026-10-06,Himal Enterprises,565", "bad,Himal Enterprises,50"].join("\n");
+    const input = { fileName: "check.csv", base64: b64(text), settings: SETTINGS, decisions: { "check only traders": { action: "create" as const, name: "Check Only Traders" } }, skipRows: [], includeDuplicates: false };
     const before = await counts();
     const r = await checkSalesImport(org.tenantId, input);
     expect(r).toMatchObject({ wouldImport: 2, total: 1130 + 565, tax: 130 + 65, customersToCreate: ["Check Only Traders"] });
@@ -189,5 +181,23 @@ describe("correcting rows in the review, and checking without importing", () => 
   it("corrections made in the review carry into the import", async () => {
     const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { ...fixBase, decisions: {}, skipRows: [], includeDuplicates: false, overrides: { 2: { amount: "750" }, 3: { date: "2026-10-02" } } });
     expect(r).toMatchObject({ ok: true, imported: 3 });
+  });
+
+  it("an invoice paid in parts goes through each account, and parts that add up to too much are refused", async () => {
+    const csvOf = (...rows: string[]) => ["Date,Customer,Amount,Paid amount,Received into,Paid amount 2,Received into 2", ...rows].join("\n");
+    const parts = csvOf("2026-10-20,Himal Enterprises,1130,500,Cash,630,Bank");
+    const cash = await balance("1000");
+    const bank = await balance("1010");
+    const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "split.csv", base64: b64(parts), settings: SETTINGS, decisions: {}, skipRows: [], includeDuplicates: false });
+    expect(r).toMatchObject({ ok: true, imported: 1, total: 1130 });
+    expect(await balance("1000")).toBe(cash + 500);
+    expect(await balance("1010")).toBe(bank + 630);
+    const [inv] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.tenantId, org.tenantId), eq(salesInvoices.invoiceDate, "2026-10-20")));
+    expect(inv).toMatchObject({ status: "paid", amountPaid: "1130.00" });
+
+    const tooMuch = await reviewSalesFile(org.tenantId, { fileName: "x.csv", base64: b64(csvOf("2026-10-21,Himal Enterprises,1000,900,Cash,900,Bank")), settings: SETTINGS });
+    expect(tooMuch.rows[0]).toMatchObject({ status: "attention", issues: ["paid"] });
+    const noAccount = await reviewSalesFile(org.tenantId, { fileName: "x.csv", base64: b64(csvOf("2026-10-22,Himal Enterprises,1130,500,Cash,630,")), settings: SETTINGS });
+    expect(noAccount.rows[0]).toMatchObject({ status: "attention", issues: ["account"] });
   });
 });

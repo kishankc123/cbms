@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { checkExpenseRow, type ExpenseRowInput } from "./checks";
-import { expenseMappingComplete, suggestExpenseMapping } from "./fields";
+import { assertColumns, templateMapping } from "@/lib/import-columns";
+import { noPays, pays } from "@/test/import-pays";
+import { EXPENSE_FIELDS } from "./fields";
 
-describe("matching an expense file's headers", () => {
-  it("finds the usual names", () => {
-    expect(suggestExpenseMapping(["Voucher Date", "Expense Head", "Paid To", "Narration", "Invoice No", "Taxable Amount", "VAT Amount", "TDS", "Paid", "Payment Mode"])).toMatchObject({
-      date: "Voucher Date",
-      category: "Expense Head",
-      supplier: "Paid To",
-      description: "Narration",
-      invoiceNumber: "Invoice No",
-      amount: "Taxable Amount",
-      vat: "VAT Amount",
-      tds: "TDS",
-      paid: "Paid",
-      account: "Payment Mode",
+describe("reading an expense file's columns", () => {
+  it("finds each column by its name in the template", () => {
+    expect(templateMapping(EXPENSE_FIELDS, ["Date", "Category", "Supplier", "Description", "Invoice number", "Amount", "VAT amount", "TDS amount", "Due date", "Paid amount", "Paid from"])).toMatchObject({
+      date: "Date",
+      category: "Category",
+      supplier: "Supplier",
+      invoiceNumber: "Invoice number",
+      amount: "Amount",
+      vat: "VAT amount",
+      tds: "TDS amount",
+      dueDate: "Due date",
+      paid: "Paid amount",
+      account: "Paid from",
     });
   });
   it("needs only a date and an amount", () => {
-    expect(expenseMappingComplete(suggestExpenseMapping(["Date", "Amount"]))).toBe(true);
-    expect(expenseMappingComplete(suggestExpenseMapping(["Date", "Category"]))).toBe(false);
+    expect(() => assertColumns(EXPENSE_FIELDS, templateMapping(EXPENSE_FIELDS, ["Date", "Amount"]))).not.toThrow();
+    expect(() => assertColumns(EXPENSE_FIELDS, templateMapping(EXPENSE_FIELDS, ["Date", "Category"]))).toThrow(/no "Amount" column/);
   });
 });
 
@@ -31,8 +33,7 @@ const base: ExpenseRowInput = {
   billType: undefined,
   vat: { value: null, invalid: false },
   tds: { value: null, invalid: false },
-  paid: { value: null, invalid: false },
-  account: "none",
+  pays: noPays,
   supplier: "matched",
   category: "ok",
   duplicate: false,
@@ -62,7 +63,7 @@ describe("whether an expense row can be imported", () => {
     expect(check({ tds: { value: 5000, invalid: false }, billType: "pan" }).issues).toEqual(["tds"]);
   });
   it("paid in full means paid what is payable, after TDS", () => {
-    expect(check({ tds: { value: 100, invalid: false }, billType: "pan", supplier: "none", account: "ok" }, { paidMode: "full" })).toMatchObject({ status: "ready", computed: { paid: 900 } });
+    expect(check({ tds: { value: 100, invalid: false }, billType: "pan", supplier: "none", pays: pays(null, "ok") }, { paidMode: "full" })).toMatchObject({ status: "ready", computed: { paid: 900 } });
   });
   it("flags what can't be read, one issue each", () => {
     expect(check({ dateIso: null, dateNote: "Not a date" }).issues).toEqual(["date"]);
@@ -78,7 +79,7 @@ describe("whether an expense row can be imported", () => {
   it("needs a category, and a supplier unless fully paid", () => {
     expect(check({ category: "none" }).issues).toEqual(["category"]);
     expect(check({ supplier: "none" }).issues).toEqual(["supplier"]);
-    expect(check({ supplier: "none", account: "ok" }, { paidMode: "full" }).status).toBe("ready");
+    expect(check({ supplier: "none", pays: pays(null, "ok") }, { paidMode: "full" }).status).toBe("ready");
   });
   it("reports a duplicate only when nothing else is wrong", () => {
     expect(check({ duplicate: true }).status).toBe("duplicate");

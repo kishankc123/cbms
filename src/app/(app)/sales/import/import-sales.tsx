@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
-import type { SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { CheckResult, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
-import { analyzeFile, checkImport, downloadTemplate, getImportSetup, reviewFile, runImport, undoImport, type ImportSetup } from "./actions";
+import type { CheckResult, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
+import { checkImport, downloadTemplate, getImportSetup, reviewFile, runImport, undoImport, type ImportSetup } from "./actions";
 import { CheckDialog } from "./check-dialog";
 import { DoneStep } from "./done-step";
 import { HistoryList } from "./history-list";
@@ -15,7 +14,7 @@ import { UploadStep } from "./upload-step";
 type Step = "upload" | "review" | "done";
 export type File = { name: string; base64: string };
 
-const DEFAULT_SETTINGS: ImportSettings = { amountsIncludeVat: false, defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
+const DEFAULT_SETTINGS: ImportSettings = { defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
 export const MAX_FILE_BYTES = 2.5 * 1024 * 1024;
 
 function readBase64(file: Blob): Promise<string> {
@@ -34,8 +33,6 @@ export function ImportSales() {
   const [setup, setSetup] = useState<ImportSetup | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
-  const [analysis, setAnalysis] = useState<FileAnalysis | null>(null);
-  const [mapping, setMapping] = useState<SalesColumnMapping>({});
   const [settings, setSettings] = useState<ImportSettings>(DEFAULT_SETTINGS);
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [decisions, setDecisions] = useState<Record<string, GroupDecision>>({});
@@ -55,14 +52,14 @@ export function ImportSales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: File, m: SalesColumnMapping, s: ImportSettings, o: Overrides = overrides) {
+  async function runReview(f: File, s: ImportSettings, o: Overrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewFile({ fileName: f.name, base64: f.base64, mapping: m, settings: s, overrides: o });
+      const r = await reviewFile({ fileName: f.name, base64: f.base64, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
-      // A missing column is a message to act on in the column panel, not a crash.
+      // A file that doesn't follow the template is refused with the reason.
       setReview(null);
       reportError(e);
       return null;
@@ -76,17 +73,15 @@ export function ImportSales() {
     setBusy(true);
     try {
       const f = { name: picked.name, base64: await readBase64(picked) };
-      const a = await analyzeFile({ fileName: f.name, base64: f.base64 });
-      setFile(f);
-      setAnalysis(a);
-      setMapping(a.mapping);
       setDecisions({});
       setSkipRows([]);
       setOverrides({});
       setIncludeDuplicates(false);
-      setStep("review");
-      if (a.mappingComplete) await runReview(f, a.mapping, settings, {});
-      else setReview(null);
+      // The review reads the template's columns; a file that doesn't follow the template is refused here, with the reason.
+      if (await runReview(f, settings, {})) {
+        setFile(f);
+        setStep("review");
+      }
     } catch (e) {
       reportError(e);
     } finally {
@@ -94,17 +89,13 @@ export function ImportSales() {
     }
   }
 
-  const changeMapping = (m: SalesColumnMapping) => {
-    setMapping(m);
-    if (file) void runReview(file, m, settings);
-  };
   const changeOverrides = (o: Overrides) => {
     setOverrides(o);
-    if (file) void runReview(file, mapping, settings, o);
+    if (file) void runReview(file, settings, o);
   };
   const changeSettings = (s: ImportSettings) => {
     setSettings(s);
-    if (file) void runReview(file, mapping, s);
+    if (file) void runReview(file, s);
   };
 
   // What the review's rows come to once the decisions made here are applied (the server confirms it all again on import).
@@ -127,7 +118,7 @@ export function ImportSales() {
     if (!file) return;
     setBusy(true);
     try {
-      setCheckResult(await checkImport({ fileName: file.name, base64: file.base64, mapping, settings, decisions, skipRows, includeDuplicates, overrides }));
+      setCheckResult(await checkImport({ fileName: file.name, base64: file.base64, settings, decisions, skipRows, includeDuplicates, overrides }));
     } catch (e) {
       reportError(e);
     } finally {
@@ -142,7 +133,7 @@ export function ImportSales() {
     setResult(null);
     setStep("review");
     setIncludeDuplicates(false);
-    await runReview(file, mapping, settings);
+    await runReview(file, settings);
   }
 
   async function doImport() {
@@ -150,7 +141,7 @@ export function ImportSales() {
     setCheckResult(null);
     setBusy(true);
     try {
-      const r = await runImport({ fileName: file.name, base64: file.base64, mapping, settings, decisions, skipRows, includeDuplicates, overrides });
+      const r = await runImport({ fileName: file.name, base64: file.base64, settings, decisions, skipRows, includeDuplicates, overrides });
       if (!r.ok) return reportError(new Error(r.error));
       setResult(r);
       setStep("done");
@@ -165,7 +156,6 @@ export function ImportSales() {
   function reset() {
     setStep("upload");
     setFile(null);
-    setAnalysis(null);
     setReview(null);
     setResult(null);
     setDecisions({});
@@ -199,7 +189,7 @@ export function ImportSales() {
             rowNoun="invoice"
             pasteExample={"Date\tCustomer\tAmount\n15/04/2083\tHimal Enterprises\t10000"}
             notes={[
-              "Columns are matched for you, and dates are read as dd/mm/yyyy (AD or BS). You only fix what can't be read.",
+              "Download the template, paste your rows into it and upload it. Dates are written dd/mm/yyyy (AD or BS). An invoice paid in parts uses the extra Paid amount and account columns.",
               "Customers in the file are matched to yours; new names are created only if you tick them.",
               "Invoices are numbered automatically, continuing your sequence, and post exactly like Multi-Invoice.",
               "You can undo a whole import afterwards.",
@@ -209,13 +199,10 @@ export function ImportSales() {
         </>
       )}
 
-      {step === "review" && file && analysis && (
+      {step === "review" && file && (
         <ReviewStep
           file={file}
-          analysis={analysis}
           setup={setup}
-          mapping={mapping}
-          onMapping={changeMapping}
           settings={settings}
           onSettings={changeSettings}
           review={review}

@@ -1,24 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { checkPurchaseRow, type PurchaseRowInput } from "./checks";
-import { purchaseMappingComplete, suggestPurchaseMapping } from "./fields";
+import { assertColumns, templateMapping } from "@/lib/import-columns";
+import { noPays, pays } from "@/test/import-pays";
+import { PURCHASE_FIELDS } from "./fields";
 import { parsePurchaseBillType } from "./values";
 
-describe("matching a purchase file's headers", () => {
-  it("finds the usual names", () => {
-    expect(suggestPurchaseMapping(["Bill Date", "Vendor", "Category", "Bill No.", "Particulars", "Amount", "Paid", "Payment Mode"])).toMatchObject({
-      date: "Bill Date",
-      supplier: "Vendor",
+describe("reading a purchase file's columns", () => {
+  it("finds each column by its name in the template", () => {
+    expect(templateMapping(PURCHASE_FIELDS, ["Date", "Supplier", "Category", "Bill number", "Description", "Amount", "Paid amount", "paid from"])).toMatchObject({
+      date: "Date",
+      supplier: "Supplier",
       category: "Category",
-      billNumber: "Bill No.",
-      description: "Particulars",
+      billNumber: "Bill number",
+      description: "Description",
       amount: "Amount",
-      paid: "Paid",
-      account: "Payment Mode",
+      paid: "Paid amount",
+      account: "paid from",
     });
   });
   it("needs only a date and an amount", () => {
-    expect(purchaseMappingComplete(suggestPurchaseMapping(["Date", "Amount"]))).toBe(true);
-    expect(purchaseMappingComplete(suggestPurchaseMapping(["Date", "Vendor"]))).toBe(false);
+    expect(() => assertColumns(PURCHASE_FIELDS, templateMapping(PURCHASE_FIELDS, ["Date", "Amount"]))).not.toThrow();
+    expect(() => assertColumns(PURCHASE_FIELDS, templateMapping(PURCHASE_FIELDS, ["Date", "Supplier"]))).toThrow(/no "Amount" column/);
   });
 });
 
@@ -40,8 +42,7 @@ const base: PurchaseRowInput = {
   amount: { value: 1000, invalid: false },
   discount: { value: null, invalid: false },
   billType: undefined,
-  paid: { value: null, invalid: false },
-  account: "none",
+  pays: noPays,
   supplier: "matched",
   category: "ok",
   duplicate: false,
@@ -71,14 +72,14 @@ describe("whether a purchase row can be imported", () => {
     expect(check({ category: "unknown", categoryText: "Stationary" }).messages[0]).toMatch(/Stationary/);
   });
   it("lets a fully paid bill go without a supplier, but not a part-paid one", () => {
-    expect(check({ supplier: "none", account: "ok" }, { paidMode: "full" }).status).toBe("ready");
+    expect(check({ supplier: "none", pays: pays(null, "ok") }, { paidMode: "full" }).status).toBe("ready");
     expect(check({ supplier: "none" }).issues).toEqual(["supplier"]);
-    expect(check({ supplier: "none", paid: { value: 500, invalid: false }, account: "ok" }).issues).toEqual(["supplier"]);
+    expect(check({ supplier: "none", pays: pays(500, "ok") }).issues).toEqual(["supplier"]);
   });
   it("needs an account when money was paid, and refuses paying more than the bill", () => {
-    expect(check({ paid: { value: 1130, invalid: false } }).issues).toEqual(["account"]);
-    expect(check({ paid: { value: 1130, invalid: false } }, { hasDefaultAccount: true }).status).toBe("ready");
-    expect(check({ paid: { value: 5000, invalid: false }, account: "ok" }).issues).toEqual(["paid"]);
+    expect(check({ pays: pays(1130) }).issues).toEqual(["account"]);
+    expect(check({ pays: pays(1130) }, { hasDefaultAccount: true }).status).toBe("ready");
+    expect(check({ pays: pays(5000, "ok") }).issues).toEqual(["paid"]);
   });
   it("an unknown supplier is a pending decision; ticked-to-create and skipped behave", () => {
     expect(check({ supplier: "unknown" }).issues).toEqual(["supplier"]);

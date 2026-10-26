@@ -659,6 +659,13 @@
       "when": 1792913864323,
       "tag": "0093_opening_balance_date",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792996804108,
+      "tag": "0094_drop_import_column_mappings",
+      "breakpoints": true
     }
   ]
 }

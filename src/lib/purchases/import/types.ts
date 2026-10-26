@@ -1,5 +1,5 @@
 import type { PurchaseRowIssue, PurchaseRowStatus } from "./checks";
-import type { PurchaseColumnMapping, PurchaseFieldKey } from "./fields";
+import type { PurchaseFieldKey } from "./fields";
 import type { PurchaseBillTypeValue } from "./values";
 
 // The shapes passed between the Import Purchases screen and its server actions.
@@ -18,14 +18,6 @@ export type PurchaseImportSettings = {
 };
 
 export type PurchaseOverrides = Record<number, Partial<Record<PurchaseFieldKey, string>>>;
-export type PurchaseFileAnalysis = {
-  headers: string[];
-  sample: string[][];
-  rowCount: number;
-  mapping: PurchaseColumnMapping;
-  remembered: boolean;
-  mappingComplete: boolean;
-};
 
 export type PurchaseReviewRow = {
   rowNumber: number;
@@ -67,7 +59,6 @@ export type CategoryDecision = { action: "existing"; categoryId: string } | { ac
 export type PurchaseRunInput = {
   fileName: string;
   base64: string;
-  mapping: PurchaseColumnMapping;
   settings: PurchaseImportSettings;
   supplierDecisions: Record<string, SupplierDecision>;
   categoryDecisions: Record<string, CategoryDecision>;

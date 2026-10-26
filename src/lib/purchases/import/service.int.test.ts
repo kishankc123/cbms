@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines, purchaseBills, purchaseImports, supplierAliases, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
-import { analyzePurchaseFile, checkPurchaseImport, finishPurchaseImport, importBillIds, importPurchaseChunk, listPurchaseImports, preparePurchaseImport, reviewPurchaseFile } from "./service";
+import { checkPurchaseImport, finishPurchaseImport, importBillIds, importPurchaseChunk, listPurchaseImports, preparePurchaseImport, reviewPurchaseFile } from "./service";
 import type { PurchaseImportSettings, PurchaseRunInput } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -15,7 +15,7 @@ let acmeId: string;
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
 const SETTINGS: PurchaseImportSettings = { amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
 const CSV = [
-  "Bill Date,Vendor,Category,Bill No,Particulars,Amount,Bill Type,Paid,Paid From",
+  "Date,Supplier,Category,Bill number,Description,Amount,Bill type,Paid amount,Paid from",
   "2026-09-10,Acme Traders,Stationery,B-1,Paper,10000,VAT,0,",
   "2026-09-11,Acme Trader,Cleaning,B-2,Mops,2000,PAN,0,",
   "2026-09-12,Brand New Supplies,Stationery,,Pens,500,VAT,0,",
@@ -23,9 +23,8 @@ const CSV = [
   "2026-09-14,Acme Traders,Stationary,B-5,Typo category,100,VAT,0,",
   "2026-09-15,Acme Traders,Stationery,B-6,Bad amount,abc,VAT,0,",
 ].join("\n");
-const MAPPING = { date: "Bill Date", supplier: "Vendor", category: "Category", billNumber: "Bill No", description: "Particulars", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Paid From" };
 
-const base = (text = CSV, settings = SETTINGS) => ({ fileName: "purchases.csv", base64: b64(text), mapping: MAPPING, settings });
+const base = (text = CSV, settings = SETTINGS) => ({ fileName: "purchases.csv", base64: b64(text), settings });
 const runInput = (over: Partial<PurchaseRunInput> = {}): PurchaseRunInput => ({ ...base(), supplierDecisions: {}, categoryDecisions: {}, skipRows: [], includeDuplicates: false, ...over });
 const balance = async (code: string) => {
   const [a] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code)));
@@ -66,10 +65,9 @@ afterAll(async () => {
 });
 
 describe("reading the file", () => {
-  it("finds the columns by itself", async () => {
-    const a = await analyzePurchaseFile(org.tenantId, { fileName: "p.csv", base64: b64(CSV) });
-    expect(a).toMatchObject({ rowCount: 6, mappingComplete: true, remembered: false });
-    expect(a.mapping).toMatchObject({ date: "Bill Date", supplier: "Vendor", category: "Category", billNumber: "Bill No", description: "Particulars", amount: "Amount" });
+  it("reads the template's columns, and refuses a file that lacks a required one", async () => {
+    expect((await reviewPurchaseFile(org.tenantId, base())).rows).toHaveLength(6);
+    await expect(reviewPurchaseFile(org.tenantId, { fileName: "x.csv", base64: b64("A,B\n1,2"), settings: SETTINGS })).rejects.toThrow(/no "Date" column.*template/);
   });
 });
 
@@ -91,8 +89,8 @@ describe("the review", () => {
   });
 
   it("a default category stands in when the file has none, and an amount that includes VAT is worked back", async () => {
-    const text = "Date,Vendor,Amount,Bill Type\n2026-09-10,Acme Traders,1130,VAT";
-    const r = await reviewPurchaseFile(org.tenantId, { ...base(text, { ...SETTINGS, amountsIncludeVat: true, defaultCategoryId: cleaningId }), mapping: { date: "Date", supplier: "Vendor", amount: "Amount", billType: "Bill Type" } });
+    const text = "Date,Supplier,Amount,Bill type\n2026-09-10,Acme Traders,1130,VAT";
+    const r = await reviewPurchaseFile(org.tenantId, { ...base(text, { ...SETTINGS, amountsIncludeVat: true, defaultCategoryId: cleaningId }) });
     expect(r.rows[0]).toMatchObject({ status: "ready", total: 1130, tax: 130, categoryName: "Cleaning" });
   });
 });
@@ -137,9 +135,8 @@ describe("importing in steps", () => {
     expect(await importBillIds(org.tenantId, r.importId)).toHaveLength(5);
   });
 
-  it("remembers the supplier match and the layout, and finds the same file already in the books", async () => {
+  it("remembers the supplier match, and finds the same file already in the books", async () => {
     expect((await db.select().from(supplierAliases).where(eq(supplierAliases.tenantId, org.tenantId))).map((a) => a.alias)).toEqual(["acme trader"]);
-    expect((await analyzePurchaseFile(org.tenantId, { fileName: "again.csv", base64: b64(CSV) })).remembered).toBe(true);
 
     const r = await reviewPurchaseFile(org.tenantId, base());
     expect(r.supplierGroups).toHaveLength(0);
@@ -149,8 +146,8 @@ describe("importing in steps", () => {
   });
 
   it("refuses another organization's supplier and a made-up account or category", async () => {
-    const text = "Date,Vendor,Amount\n2026-10-01,Mystery,500";
-    const input = { ...runInput(), base64: b64(text), mapping: { date: "Date", supplier: "Vendor", amount: "Amount" } };
+    const text = "Date,Supplier,Amount\n2026-10-01,Mystery,500";
+    const input = { ...runInput(), base64: b64(text) };
     expect(await preparePurchaseImport({ tenantId: org.tenantId, userId: org.userId }, { ...input, settings: { ...SETTINGS, defaultAccountId: "00000000-0000-0000-0000-000000000000" } })).toMatchObject({ ok: false, error: expect.stringMatching(/cash or bank account/) });
     expect(await preparePurchaseImport({ tenantId: org.tenantId, userId: org.userId }, { ...input, settings: { ...SETTINGS, defaultCategoryId: "00000000-0000-0000-0000-000000000000" } })).toMatchObject({ ok: false, error: expect.stringMatching(/purchase category/) });
   });

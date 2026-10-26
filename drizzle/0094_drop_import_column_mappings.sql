@@ -1,0 +1,1 @@
+DROP TABLE "import_column_mappings" CASCADE;

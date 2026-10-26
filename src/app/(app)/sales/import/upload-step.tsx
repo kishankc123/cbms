@@ -108,7 +108,6 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
                   <th className="px-3 py-2 font-medium">Needed</th>
                   <th className="px-3 py-2 font-medium">What to enter</th>
                   <th className="px-3 py-2 font-medium">Example</th>
-                  <th className="px-3 py-2 font-medium">Also found as</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-[var(--text-secondary)]">
@@ -118,12 +117,11 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
                     <td className={`px-3 py-2 ${g.needed === "Required" ? "font-medium text-[var(--text-primary)]" : ""}`}>{g.needed}</td>
                     <td className="px-3 py-2">{g.accepts}</td>
                     <td className="px-3 py-2 tabular-nums">{g.example}</td>
-                    <td className="px-3 py-2">{g.alsoRead}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-[var(--text-secondary)]">The first row of the file must be the column names. The order of columns does not matter, and columns you do not have can be left out.</p>
+            <p className="mt-2 text-xs text-[var(--text-secondary)]">Use the template: its first row is the column names, and they must be kept as they are. The order of columns does not matter, and optional columns you do not need can be left out.</p>
           </div>
         )}
       </div>

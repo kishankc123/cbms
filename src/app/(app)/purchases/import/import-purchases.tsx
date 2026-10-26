@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
-import type { PurchaseColumnMapping } from "@/lib/purchases/import/fields";
-import type { CategoryDecision, PurchaseCheckResult, PurchaseFileAnalysis, PurchaseImportSettings, PurchaseOverrides, PurchaseReviewResult, PurchaseRunInput, SupplierDecision } from "@/lib/purchases/import/types";
+import type { CategoryDecision, PurchaseCheckResult, PurchaseImportSettings, PurchaseOverrides, PurchaseReviewResult, PurchaseRunInput, SupplierDecision } from "@/lib/purchases/import/types";
 import { CheckDialog } from "../../sales/import/check-dialog";
 import { DoneStep, type DoneResult } from "../../sales/import/done-step";
 import { HistoryList } from "../../sales/import/history-list";
 import { purchaseColumnGuide } from "@/lib/sales/import/column-guide";
 import { UploadStep } from "../../sales/import/upload-step";
-import { analyzePurchases, checkPurchases, downloadPurchaseTemplate, finishPurchases, getPurchaseImportSetup, importPurchasesChunk, preparePurchases, reviewPurchases, undoPurchaseImport, type PurchaseImportSetup } from "./actions";
+import { checkPurchases, downloadPurchaseTemplate, finishPurchases, getPurchaseImportSetup, importPurchasesChunk, preparePurchases, reviewPurchases, undoPurchaseImport, type PurchaseImportSetup } from "./actions";
 import { ReviewStep } from "./review-step";
 
 type Step = "upload" | "review" | "done";
@@ -34,8 +33,6 @@ export function ImportPurchases() {
   const [setup, setSetup] = useState<PurchaseImportSetup | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<PurchaseFile | null>(null);
-  const [analysis, setAnalysis] = useState<PurchaseFileAnalysis | null>(null);
-  const [mapping, setMapping] = useState<PurchaseColumnMapping>({});
   const [settings, setSettings] = useState<PurchaseImportSettings>({ amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
   const [review, setReview] = useState<PurchaseReviewResult | null>(null);
   const [supplierDecisions, setSupplierDecisions] = useState<Record<string, SupplierDecision>>({});
@@ -64,10 +61,10 @@ export function ImportPurchases() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: PurchaseFile, m: PurchaseColumnMapping, s: PurchaseImportSettings, o: PurchaseOverrides = overrides) {
+  async function runReview(f: PurchaseFile, s: PurchaseImportSettings, o: PurchaseOverrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewPurchases({ fileName: f.name, base64: f.base64, mapping: m, settings: s, overrides: o });
+      const r = await reviewPurchases({ fileName: f.name, base64: f.base64, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
@@ -84,18 +81,16 @@ export function ImportPurchases() {
     setBusy(true);
     try {
       const f = { name: picked.name, base64: await readBase64(picked) };
-      const a = await analyzePurchases({ fileName: f.name, base64: f.base64 });
-      setFile(f);
-      setAnalysis(a);
-      setMapping(a.mapping);
       setSupplierDecisions({});
       setCategoryDecisions({});
       setSkipRows([]);
       setOverrides({});
       setIncludeDuplicates(false);
-      setStep("review");
-      if (a.mappingComplete) await runReview(f, a.mapping, settings, {});
-      else setReview(null);
+      // The review reads the template's columns; a file that doesn't follow the template is refused here, with the reason.
+      if (await runReview(f, settings, {})) {
+        setFile(f);
+        setStep("review");
+      }
     } catch (e) {
       reportError(e);
     } finally {
@@ -103,17 +98,13 @@ export function ImportPurchases() {
     }
   }
 
-  const changeMapping = (m: PurchaseColumnMapping) => {
-    setMapping(m);
-    if (file) void runReview(file, m, settings);
-  };
   const changeSettings = (s: PurchaseImportSettings) => {
     setSettings(s);
-    if (file) void runReview(file, mapping, s);
+    if (file) void runReview(file, s);
   };
   const changeOverrides = (o: PurchaseOverrides) => {
     setOverrides(o);
-    if (file) void runReview(file, mapping, settings, o);
+    if (file) void runReview(file, settings, o);
   };
 
   // What the review's rows come to once the decisions made here are applied (the server confirms it all again on import).
@@ -131,7 +122,7 @@ export function ImportPurchases() {
   }, [review, supplierDecisions, categoryDecisions, skipRows]);
 
   const toImport = effective ? effective.filter((r) => r.status === "ready" || (includeDuplicates && r.status === "duplicate")).length : 0;
-  const runInput = (): PurchaseRunInput => ({ fileName: file!.name, base64: file!.base64, mapping, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
+  const runInput = (): PurchaseRunInput => ({ fileName: file!.name, base64: file!.base64, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
 
   async function doCheck() {
     if (!file) return;
@@ -186,13 +177,12 @@ export function ImportPurchases() {
     setResult(null);
     setStep("review");
     setIncludeDuplicates(false);
-    await runReview(file, mapping, settings);
+    await runReview(file, settings);
   }
 
   function reset() {
     setStep("upload");
     setFile(null);
-    setAnalysis(null);
     setReview(null);
     setResult(null);
     setSupplierDecisions({});
@@ -227,7 +217,7 @@ export function ImportPurchases() {
             rowNoun="bill"
             pasteExample={"Date\tSupplier\tCategory\tAmount\n15/04/2083\tHimal Traders\tStationery\t5000"}
             notes={[
-              "Columns are matched for you, and dates are read as dd/mm/yyyy (AD or BS). You only fix what can't be read.",
+              "Download the template, paste your rows into it and upload it. Dates are written dd/mm/yyyy (AD or BS). A bill paid in parts uses the extra Paid amount and account columns.",
               "Suppliers and categories in the file are matched to yours; new suppliers are created only if you tick them.",
               "Bills post exactly like Add New: your own bill number is kept, a blank one gets an automatic number.",
               "You can undo a whole import afterwards.",
@@ -237,7 +227,7 @@ export function ImportPurchases() {
         </>
       )}
 
-      {step === "review" && file && analysis && (
+      {step === "review" && file && (
         <>
           {progress && (
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
@@ -251,10 +241,7 @@ export function ImportPurchases() {
           )}
           <ReviewStep
             file={file}
-            analysis={analysis}
             setup={setup}
-            mapping={mapping}
-            onMapping={changeMapping}
             settings={settings}
             onSettings={changeSettings}
             review={review}

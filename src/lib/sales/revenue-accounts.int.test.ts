@@ -57,14 +57,13 @@ describe("revenue accounts", () => {
   });
 
   it("an import takes the revenue account from the file, else from the default setting", { timeout: 200000 }, async () => {
-    const csv = ["Date,Amount,Bill Type,Revenue", "2026-09-11,500,Zero rated,Service Income", "2026-09-12,300,Zero rated,"].join("\n");
-    const settings: ImportSettings = { amountsIncludeVat: false, defaultBillType: "zero_rated", paidMode: "full", defaultAccountId: cashId, defaultRevenueAccountId: otherIncomeId };
+    const csv = ["Date,Amount,Bill type,Revenue account", "2026-09-11,500,Zero rated,Service Income", "2026-09-12,300,Zero rated,"].join("\n");
+    const settings: ImportSettings = { defaultBillType: "zero_rated", paidMode: "full", defaultAccountId: cashId, defaultRevenueAccountId: otherIncomeId };
     const r = await runSalesImport(
       { tenantId: org.tenantId, userId: org.userId },
       {
         fileName: "s.csv",
         base64: Buffer.from(csv, "utf8").toString("base64"),
-        mapping: { date: "Date", amount: "Amount", billType: "Bill Type", revenue: "Revenue" },
         settings,
         decisions: {},
         skipRows: [],

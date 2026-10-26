@@ -83,20 +83,6 @@ export const customerAliases = pgTable(
   (t) => [uniqueIndex("customer_aliases_tenant_alias").on(t.tenantId, t.alias)]
 );
 
-/** The column mapping last used for a file with these headers, so the same layout needs no mapping next time. */
-export const importColumnMappings = pgTable(
-  "import_column_mappings",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),
-    signature: text("signature").notNull(),
-    mapping: jsonb("mapping").$type<Record<string, string>>().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("import_column_mappings_key").on(t.tenantId, t.kind, t.signature)]
-);
-
 export const salesInvoices = pgTable("sales_invoices", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
