@@ -96,13 +96,13 @@ export async function saveOpeningSheet(tenantId: string, userId: string, input: 
     } else if (total !== row.other) {
       // The record's own Opening balance field changes, and its own entry is replaced, as on its own screen.
       if (owner.kind === "customer") {
-        await db.update(customers).set({ openingBalance: total.toFixed(2) }).where(eq(customers.id, owner.id));
+        await db.update(customers).set({ openingBalance: total.toFixed(2) }).where(and(eq(customers.id, owner.id), eq(customers.tenantId, tenantId)));
         await syncCustomerOpeningBalanceEntry(tenantId, owner.id, owner.name, total, userId);
       } else if (owner.kind === "supplier") {
-        await db.update(vendors).set({ openingBalance: (-total).toFixed(2) }).where(eq(vendors.id, owner.id));
+        await db.update(vendors).set({ openingBalance: (-total).toFixed(2) }).where(and(eq(vendors.id, owner.id), eq(vendors.tenantId, tenantId)));
         await syncSupplierOpeningBalanceEntry(tenantId, owner.id, owner.name, -total, userId);
       } else {
-        await db.update(bankAccounts).set({ openingBalance: total.toFixed(2) }).where(eq(bankAccounts.id, owner.id));
+        await db.update(bankAccounts).set({ openingBalance: total.toFixed(2) }).where(and(eq(bankAccounts.id, owner.id), eq(bankAccounts.tenantId, tenantId)));
         await syncBankOpeningBalanceEntry(tenantId, owner.id, owner.name, row.id, total, userId);
       }
     }

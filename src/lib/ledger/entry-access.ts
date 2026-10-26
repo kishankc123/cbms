@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, journalLines, vendors } from "@/db/schema";
+import { customers, journalEntries, journalLines, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 
 // Which transactions a report may open in its pop-up. Each report is allowed by its own module, and may only open the entries it
@@ -23,6 +23,9 @@ async function touches(entryId: string, accountIds: string[]): Promise<boolean> 
 }
 
 export async function entryInScope(tenantId: string, entryId: string, scope: EntryScope): Promise<boolean> {
+  // An entry of another organization is out of every scope, whatever the report.
+  const [own] = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.id, entryId), eq(journalEntries.tenantId, tenantId))).limit(1);
+  if (!own) return false;
   switch (scope) {
     case "ledger":
       return true;
