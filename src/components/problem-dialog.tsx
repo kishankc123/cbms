@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { InfoDialog } from "@/app/(app)/inventory/info-dialog";
+import { friendlyMessage } from "@/lib/user-facing-errors";
 
 /**
  * Moves the cursor to the element `selector` matches (or to the first control inside it) — used after a
@@ -37,7 +38,7 @@ export function targetForMessage(message: string, rules: FieldRules | undefined,
 }
 
 export function messageOf(error: unknown, fallback = "Something went wrong. Please try again."): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+  return error instanceof Error && error.message ? friendlyMessage(error.message) : fallback;
 }
 
 /**
