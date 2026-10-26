@@ -7,7 +7,7 @@ export type ExpenseFieldKey = "date" | "amount" | "category" | "supplier" | "des
 
 export const EXPENSE_FIELDS: FieldDef<ExpenseFieldKey>[] = [
   { key: "date", label: "Date", required: true, help: "dd/mm/yyyy, in AD or BS." },
-  { key: "amount", label: "Amount", required: true, help: "The expense amount, before VAT unless you say it includes VAT." },
+  { key: "amount", label: "Amount", required: true, help: "The expense amount, VAT included." },
   { key: "category", label: "Category", required: false, help: "The expense category it is booked to." },
   { key: "supplier", label: "Supplier", required: false, help: "Leave blank for an expense paid in full to no one in particular." },
   { key: "description", label: "Description", required: false, help: "What it was for." },

@@ -11,7 +11,7 @@ let rentName: string;
 let acmeId: string;
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
-const SETTINGS: ExpenseImportSettings = { amountsIncludeVat: false, defaultBillType: "pan", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
+const SETTINGS: ExpenseImportSettings = { defaultBillType: "pan", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
 const csv = (cat: string) =>
   [
     "Date,Supplier,Category,Invoice number,Description,Amount,Paid amount,Paid from",

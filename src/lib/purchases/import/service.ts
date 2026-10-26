@@ -213,7 +213,7 @@ async function buildRows(
       category,
       categoryText,
       duplicate: false,
-      settings: { amountsIncludeVat: settings.amountsIncludeVat, vatRate: iso ? vatByDate.get(iso) ?? 0 : 0, defaultBillType: settings.defaultBillType, paidMode: settings.paidMode, hasDefaultAccount: Boolean(settings.defaultAccountId) },
+      settings: { vatRate: iso ? vatByDate.get(iso) ?? 0 : 0, defaultBillType: settings.defaultBillType, paidMode: settings.paidMode, hasDefaultAccount: Boolean(settings.defaultAccountId) },
     });
 
     let status = check.status;
@@ -512,7 +512,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet(
     templateRows(PURCHASE_FIELDS, [
-      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5000, discount: 0, billType: "VAT", paid: 0 },
+      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5650, discount: 0, billType: "VAT", paid: 0 },
       // Paid in two parts, through two accounts
       { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Tea and snacks", amount: 850, discount: 0, billType: "No bill", paid: 500, account: accountList[0]?.name ?? "Cash", paid2: 350, account2: accountList[1]?.name ?? "Fonepay" },
     ])
@@ -533,6 +533,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Purchases sheet"],
       ["One row is one bill. Only Date and Amount are needed."],
+      ["Amount: what is paid for the bill, VAT included (after any discount). The VAT is worked out from it."],
       ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your purchase categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for a purchase paid in full to no one in particular."],

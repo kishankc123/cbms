@@ -26,7 +26,6 @@ export type ExpenseRowInput = {
   categoryText?: string;
   duplicate: boolean;
   settings: {
-    amountsIncludeVat: boolean;
     vatRate: number;
     defaultBillType: PurchaseBillTypeValue;
     paidMode: "file" | "unpaid" | "full";
@@ -86,13 +85,13 @@ export function checkExpenseRow(i: ExpenseRowInput): ExpenseRowCheck {
     let vat: number;
     if (i.vat.value !== null && i.vat.value > 0) {
       vat = round2(i.vat.value);
-      taxable = i.settings.amountsIncludeVat ? round2(a - vat) : a;
-    } else if (rate > 0 && i.settings.amountsIncludeVat) {
+      taxable = round2(a - vat);
+    } else if (rate > 0) {
       taxable = netFromInclusive(a, rate);
       vat = round2(taxable * (rate / 100));
     } else {
       taxable = a;
-      vat = rate > 0 ? round2(a * (rate / 100)) : 0;
+      vat = 0;
     }
     if (taxable <= 0) flag("amount", "The VAT is as much as the amount.");
     const tds = round2(i.tds.value ?? 0);

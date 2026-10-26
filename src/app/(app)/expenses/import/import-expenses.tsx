@@ -34,7 +34,7 @@ export function ImportExpenses() {
   const [setup, setSetup] = useState<ExpenseImportSetup | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<ExpenseFile | null>(null);
-  const [settings, setSettings] = useState<ExpenseImportSettings>({ amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
+  const [settings, setSettings] = useState<ExpenseImportSettings>({ defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
   const [review, setReview] = useState<ExpenseReviewResult | null>(null);
   const [supplierDecisions, setSupplierDecisions] = useState<Record<string, SupplierDecision>>({});
   const [categoryDecisions, setCategoryDecisions] = useState<Record<string, CategoryDecision>>({});

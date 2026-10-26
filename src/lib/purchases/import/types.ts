@@ -5,8 +5,6 @@ import type { PurchaseBillTypeValue } from "./values";
 // The shapes passed between the Import Purchases screen and its server actions.
 
 export type PurchaseImportSettings = {
-  /** Amounts in the file already include VAT (only meaningful for VAT bills). */
-  amountsIncludeVat: boolean;
   defaultBillType: PurchaseBillTypeValue;
   paidMode: "file" | "unpaid" | "full";
   /** Used when money was paid and the file doesn't name the account. */

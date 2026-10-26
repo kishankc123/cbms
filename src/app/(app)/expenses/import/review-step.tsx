@@ -107,13 +107,6 @@ function Defaults({ settings, onSettings, setup }: Props) {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Amounts are</label>
-          <select className={`${field} w-full`} value={settings.amountsIncludeVat ? "incl" : "excl"} onChange={(e) => onSettings({ ...settings, amountsIncludeVat: e.target.value === "incl" })}>
-            <option value="excl">Before VAT</option>
-            <option value="incl">Including VAT (VAT bills)</option>
-          </select>
-        </div>
-        <div>
           <label className="mb-1 block text-xs text-gray-500">Payment</label>
           <select className={`${field} w-full`} value={settings.paidMode} onChange={(e) => onSettings({ ...settings, paidMode: e.target.value as ExpenseImportSettings["paidMode"] })}>
             <option value="file">Use the paid columns</option>
@@ -147,8 +140,7 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
       importTax += r.tax ?? 0;
     }
   }
-  const before = Math.round((importTotal - importTax) * 100) / 100;
-  const compare = settings.amountsIncludeVat ? Math.round(importTotal * 100) / 100 : before;
+  const compare = Math.round(importTotal * 100) / 100;
   return (
     <section className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -160,7 +152,7 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
       <div className={`${card} flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm`}>
         <div className="text-[var(--text-secondary)]">
           <p>
-            Amount column in the file: <span className="tabular-nums text-[var(--text-primary)]">{money(review.fileTotal)}</span> · {settings.amountsIncludeVat ? "Expense totals to import" : "Expense amounts to import (before VAT)"}:{" "}
+            Amount column in the file: <span className="tabular-nums text-[var(--text-primary)]">{money(review.fileTotal)}</span> · Expense totals to import:{" "}
             <span className="tabular-nums text-[var(--text-primary)]">{money(compare)}</span>
             {Math.abs(review.fileTotal - compare) > 0.005 && <span className="ml-2 text-amber-700">Difference {money(Math.round((review.fileTotal - compare) * 100) / 100)}: rows that aren&apos;t going in.</span>}
           </p>

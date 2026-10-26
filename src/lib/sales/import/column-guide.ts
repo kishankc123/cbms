@@ -46,7 +46,7 @@ export const salesColumnGuide = (): ColumnGuideRow[] =>
 export const purchaseColumnGuide = (): ColumnGuideRow[] =>
   build(PURCHASE_FIELDS, {
     date: { accepts: DATE, example: "15/04/2083" },
-    amount: { accepts: `${MONEY} More than zero. Before VAT, unless you tell the import it includes VAT.`, example: "5000" },
+    amount: { accepts: `${MONEY} More than zero. What is paid, VAT included, after any discount. The VAT is worked out from it.`, example: "5650" },
     supplier: { accepts: "The supplier's name as in your suppliers. Blank only for a purchase paid in full.", example: "Himal Traders" },
     category: { accepts: "The name or code of one of your purchase categories, or choose a default in the import.", example: "Stationery" },
     billNumber: { accepts: "The supplier's own bill number. Blank gets an automatic one.", example: "B-101" },
@@ -59,7 +59,7 @@ export const purchaseColumnGuide = (): ColumnGuideRow[] =>
 export const expenseColumnGuide = (): ColumnGuideRow[] =>
   build(EXPENSE_FIELDS, {
     date: { accepts: DATE, example: "15/04/2083" },
-    amount: { accepts: `${MONEY} More than zero. Before VAT, unless you tell the import it includes VAT.`, example: "20000" },
+    amount: { accepts: `${MONEY} More than zero. What is paid, VAT included. The VAT is worked out from it, or taken from the VAT amount if you give one.`, example: "20000" },
     category: { accepts: "The name or code of one of your expense categories (lowest level only), or choose a default in the import.", example: "Rent" },
     supplier: { accepts: "The supplier's name as in your suppliers. Blank only for an expense paid in full.", example: "Landlord Ltd" },
     description: { accepts: "Free text: what it was for.", example: "Office rent" },

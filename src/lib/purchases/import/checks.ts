@@ -25,7 +25,6 @@ export type PurchaseRowInput = {
   categoryText?: string;
   duplicate: boolean;
   settings: {
-    amountsIncludeVat: boolean;
     vatRate: number;
     defaultBillType: PurchaseBillTypeValue;
     paidMode: "file" | "unpaid" | "full";
@@ -73,14 +72,14 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
   let computed: PurchaseRowCheck["computed"] = null;
   const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0 && !i.discount.invalid && discountValue >= 0 && discountValue <= i.amount.value;
   if (amountOk) {
-    // VAT applies only to a VAT bill; for any other bill type the amount is the whole cost.
+    // The file's amount is what is paid, VAT included. VAT applies only to a VAT bill; for any other bill type the amount is the whole cost.
     const vatRate = billType === "vat" ? i.settings.vatRate : 0;
     let t;
-    if (i.settings.amountsIncludeVat && billType === "vat") {
+    if (billType === "vat") {
       const net = netFromInclusive(round2(i.amount.value! - discountValue), vatRate);
       t = rowTotals(net, 0, "taxable", vatRate);
     } else {
-      t = rowTotals(i.amount.value!, discountValue, billType === "vat" ? "taxable" : "zero_rated", vatRate);
+      t = rowTotals(i.amount.value!, discountValue, "zero_rated", vatRate);
     }
     const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "bill", "paid from");
     for (const p of pay.problems) flag(p.issue, p.message);

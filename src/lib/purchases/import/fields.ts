@@ -7,7 +7,7 @@ export type PurchaseFieldKey = "date" | "amount" | "supplier" | "category" | "bi
 
 export const PURCHASE_FIELDS: FieldDef<PurchaseFieldKey>[] = [
   { key: "date", label: "Date", required: true, help: "dd/mm/yyyy, in AD or BS." },
-  { key: "amount", label: "Amount", required: true, help: "The bill amount, before VAT unless you say it includes VAT." },
+  { key: "amount", label: "Amount", required: true, help: "The bill amount, VAT included." },
   { key: "supplier", label: "Supplier", required: false, help: "Leave blank for a purchase paid in full to no one in particular." },
   { key: "category", label: "Category", required: false, help: "The purchase category it is booked to." },
   { key: "billNumber", label: "Bill number", required: false, help: "The supplier's own number. Blank gets an automatic one." },
