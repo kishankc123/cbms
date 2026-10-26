@@ -1,3 +1,4 @@
+import { checkPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive } from "@/lib/sales/import/amounts";
 import type { PurchaseBillTypeValue } from "@/lib/purchases/import/values";
 import type { CategoryState, SupplierState } from "@/lib/purchases/import/checks";
@@ -18,11 +19,8 @@ export type ExpenseRowInput = {
   billTypeText?: string;
   vat: { value: number | null; invalid: boolean };
   tds: { value: number | null; invalid: boolean };
-  paid: { value: number | null; invalid: boolean };
-  account: "none" | "ok" | "unknown";
-  accountText?: string;
-  /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
-  accountNote?: string;
+  /** The payment columns: up to three parts, each with the account it went through. */
+  pays: PaySlot[];
   supplier: SupplierState;
   category: CategoryState;
   categoryText?: string;
@@ -104,16 +102,9 @@ export function checkExpenseRow(i: ExpenseRowInput): ExpenseRowCheck {
 
     let paid = 0;
     if (payable >= 0) {
-    if (i.settings.paidMode === "full") paid = Math.max(payable, 0);
-    else if (i.settings.paidMode === "file") {
-      if (i.paid.invalid) flag("paid", "The paid amount isn't a number.");
-      else paid = round2(Math.max(i.paid.value ?? 0, 0));
-    }
-    if (paid > payable + 0.004) flag("paid", `The paid amount (${paid.toFixed(2)}) is more than the amount payable (${payable.toFixed(2)}).`);
-    if (paid > 0) {
-      if (i.account === "unknown") flag("account", i.accountNote ?? `"${i.accountText ?? ""}" isn't one of your cash, bank or wallet accounts, or payment modes.`);
-      else if (i.account === "none" && !i.settings.hasDefaultAccount) flag("account", "Choose the account the money was paid from.");
-    }
+    const pay = checkPayments(i.pays, Math.max(payable, 0), i.settings.paidMode, i.settings.hasDefaultAccount, "amount payable", "paid from");
+    for (const p of pay.problems) flag(p.issue, p.message);
+    paid = pay.paid;
     // Only a fully paid expense can go without a supplier: otherwise the unpaid part has nobody to be owed to.
     if (paid < payable - 0.004 && (i.supplier === "none" || i.supplier === "unknown")) {
       flag("supplier", i.supplier === "unknown" ? "This supplier isn't set up yet." : "A supplier is needed, because the expense isn't fully paid.");

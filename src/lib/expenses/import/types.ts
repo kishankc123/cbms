@@ -1,14 +1,12 @@
-import type { ExpenseColumnMapping, ExpenseFieldKey } from "./fields";
+import type { ExpenseFieldKey } from "./fields";
 import type { ExpenseRowIssue, ExpenseRowStatus } from "./checks";
-import type { CategoryDecision, CategoryGroup, PurchaseDateOptions, PurchaseFileAnalysis, PurchaseImportSettings, SupplierDecision, SupplierGroup } from "@/lib/purchases/import/types";
+import type { CategoryDecision, CategoryGroup, PurchaseImportSettings, SupplierDecision, SupplierGroup } from "@/lib/purchases/import/types";
 import type { PurchaseBillTypeValue } from "@/lib/purchases/import/values";
 
 // The shapes passed between the Import Expenses screen and its server actions. Settings, decisions, groups and the steps of
 // the posting are the same as Import Purchases, so those types are shared.
 
 export type ExpenseImportSettings = PurchaseImportSettings;
-export type ExpenseDateOptions = PurchaseDateOptions;
-export type ExpenseFileAnalysis = Omit<PurchaseFileAnalysis, "mapping"> & { mapping: ExpenseColumnMapping };
 export type ExpenseOverrides = Record<number, Partial<Record<ExpenseFieldKey, string>>>;
 
 export type ExpenseReviewRow = {
@@ -40,14 +38,11 @@ export type ExpenseReviewResult = {
   fileTotal: number;
   importTotal: number;
   importTax: number;
-  dates: ExpenseFileAnalysis["dates"];
 };
 
 export type ExpenseRunInput = {
   fileName: string;
   base64: string;
-  mapping: ExpenseColumnMapping;
-  dateOptions: ExpenseDateOptions;
   settings: ExpenseImportSettings;
   supplierDecisions: Record<string, SupplierDecision>;
   categoryDecisions: Record<string, CategoryDecision>;

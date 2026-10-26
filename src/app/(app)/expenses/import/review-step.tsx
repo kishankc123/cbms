@@ -3,8 +3,8 @@
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
-import { EXPENSE_FIELDS, expenseMappingComplete, type ExpenseColumnMapping } from "@/lib/expenses/import/fields";
-import type { ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow } from "@/lib/expenses/import/types";
+import { EXPENSE_FIELDS } from "@/lib/expenses/import/fields";
+import type { ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow } from "@/lib/expenses/import/types";
 import type { CategoryDecision, SupplierDecision } from "@/lib/purchases/import/types";
 import { BILL_TYPE_LABEL } from "@/lib/purchases/import/values";
 import { RowEditor } from "../../sales/import/row-editor";
@@ -22,12 +22,7 @@ const LABEL = { ready: "Ready", attention: "Needs attention", duplicate: "Duplic
 
 type Props = {
   file: ExpenseFile;
-  analysis: ExpenseFileAnalysis;
   setup: ExpenseImportSetup | null;
-  mapping: ExpenseColumnMapping;
-  onMapping: (m: ExpenseColumnMapping) => void;
-  dateOptions: ExpenseDateOptions;
-  onDates: (d: ExpenseDateOptions) => void;
   settings: ExpenseImportSettings;
   onSettings: (s: ExpenseImportSettings) => void;
   review: ExpenseReviewResult | null;
@@ -50,8 +45,6 @@ type Props = {
 };
 
 export function ReviewStep(p: Props) {
-  const needsColumns = !p.analysis.mappingComplete || !expenseMappingComplete(p.mapping) || p.analysis.dates.blocking;
-  const [editColumns, setEditColumns] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -59,8 +52,7 @@ export function ReviewStep(p: Props) {
         <div>
           <p className="text-sm font-medium text-[var(--text-primary)]">{p.file.name}</p>
           <p className="text-xs text-[var(--text-secondary)]">
-            {p.analysis.rowCount} row{p.analysis.rowCount === 1 ? "" : "s"}
-            {p.analysis.remembered ? " · columns remembered from your last import" : ""}
+            {p.review ? `${p.review.rows.length} row${p.review.rows.length === 1 ? "" : "s"}` : "Reading the file..."}
           </p>
         </div>
         <button type="button" onClick={p.onBack} className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -68,11 +60,10 @@ export function ReviewStep(p: Props) {
         </button>
       </div>
 
-      <Columns {...p} show={needsColumns || editColumns} forced={needsColumns} onToggle={() => setEditColumns((v) => !v)} />
       <Defaults {...p} />
 
       {!p.review ? (
-        <div className={`${card} p-6 text-sm text-[var(--text-secondary)]`}>{p.busy ? "Checking every row..." : "Match the columns above and the review appears here."}</div>
+        <div className={`${card} p-6 text-sm text-[var(--text-secondary)]`}>{p.busy ? "Checking every row..." : "Reading the file..."}</div>
       ) : (
         <>
           <Summary {...p} review={p.review} />
@@ -85,95 +76,18 @@ export function ReviewStep(p: Props) {
   );
 }
 
-// ------------------------------------------------------------ columns and dates
-
-function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, forced, onToggle }: Props & { show: boolean; forced: boolean; onToggle: () => void }) {
-  const found = EXPENSE_FIELDS.filter((f) => mapping[f.key]);
-  return (
-    <section className={`${card} p-4`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium text-[var(--text-primary)]">{forced ? "Match your columns" : "Columns found"}</span>
-          {!forced &&
-            found.map((f) => (
-              <span key={f.key} className="rounded-full bg-[var(--surface-muted-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-                {f.label} ✓
-              </span>
-            ))}
-          <span className="rounded-full bg-[var(--surface-muted-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-            Dates: {dateOptions.choice === "auto" ? (analysis.dates.detected === "BS" || analysis.dates.detected === "AD" ? `${analysis.dates.detected} detected` : "check below") : dateOptions.choice}
-          </span>
-        </div>
-        {!forced && (
-          <button type="button" onClick={onToggle} className="text-sm text-[var(--color-primary)] hover:underline">
-            {show ? "Hide" : "Change"}
-          </button>
-        )}
-      </div>
-
-      {show && (
-        <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {EXPENSE_FIELDS.map((f) => (
-              <div key={f.key}>
-                <label className="mb-1 block text-xs text-gray-500">
-                  {f.label}
-                  {f.required ? " *" : ""}
-                </label>
-                <select className={`${field} w-full`} value={mapping[f.key] ?? ""} onChange={(e) => onMapping({ ...mapping, [f.key]: e.target.value || undefined })}>
-                  <option value="">{f.required ? "Choose column" : "— not in my file —"}</option>
-                  {analysis.headers.filter(Boolean).map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">Dates in the file are</label>
-              <select className={field} value={dateOptions.choice} onChange={(e) => onDates({ ...dateOptions, choice: e.target.value as ExpenseDateOptions["choice"] })}>
-                <option value="auto">Detect automatically</option>
-                <option value="AD">AD (Gregorian)</option>
-                <option value="BS">BS (Bikram Sambat)</option>
-              </select>
-            </div>
-            {analysis.dates.dayMonthAmbiguity && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.dayFirst} onChange={(e) => onDates({ ...dateOptions, dayFirst: e.target.checked })} />
-                Day comes before month (15/04/2083)
-              </label>
-            )}
-            {analysis.dates.mixed && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.allowMixed} onChange={(e) => onDates({ ...dateOptions, allowMixed: e.target.checked })} />
-                The file mixes AD and BS dates, read each row on its own
-              </label>
-            )}
-          </div>
-          {analysis.dates.blocking && <p className="text-sm text-amber-700">The dates can&apos;t be told apart yet. Choose AD or BS above.</p>}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ------------------------------------------------------------ what to assume when the file doesn't say
 
-function Defaults({ settings, onSettings, setup, mapping }: Props) {
-  const paidColumn = Boolean(mapping.paid);
-  const needsAccount = settings.paidMode === "full" || (settings.paidMode === "file" && paidColumn && !mapping.account);
-  const needsCategory = !mapping.category;
+function Defaults({ settings, onSettings, setup }: Props) {
+  const needsAccount = settings.paidMode === "full";
   return (
     <section className={`${card} p-4`}>
       <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">If the file doesn&apos;t say</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Category{needsCategory ? " *" : ""}</label>
+          <label className="mb-1 block text-xs text-gray-500">Category</label>
           <select className={`${field} w-full`} value={settings.defaultCategoryId ?? ""} onChange={(e) => onSettings({ ...settings, defaultCategoryId: e.target.value || null })}>
-            <option value="">{needsCategory ? "Choose category" : "— when a row has none —"}</option>
+            <option value="">— when a row has none —</option>
             {(setup?.categories ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -202,7 +116,7 @@ function Defaults({ settings, onSettings, setup, mapping }: Props) {
         <div>
           <label className="mb-1 block text-xs text-gray-500">Payment</label>
           <select className={`${field} w-full`} value={settings.paidMode} onChange={(e) => onSettings({ ...settings, paidMode: e.target.value as ExpenseImportSettings["paidMode"] })}>
-            <option value="file">{paidColumn ? "Use the paid column" : "Unpaid (no paid column)"}</option>
+            <option value="file">Use the paid columns</option>
             <option value="unpaid">All unpaid</option>
             <option value="full">All paid in full</option>
           </select>

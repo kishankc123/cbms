@@ -3,8 +3,8 @@
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
-import { IMPORT_FIELDS, type SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
+import { IMPORT_FIELDS } from "@/lib/sales/import/fields";
+import type { GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
 import type { ImportSetup } from "./actions";
 import type { File } from "./import-sales";
 import { RowEditor } from "./row-editor";
@@ -21,12 +21,7 @@ const LABEL = { ready: "Ready", attention: "Needs attention", duplicate: "Duplic
 
 type Props = {
   file: File;
-  analysis: FileAnalysis;
   setup: ImportSetup | null;
-  mapping: SalesColumnMapping;
-  onMapping: (m: SalesColumnMapping) => void;
-  dateOptions: DateOptions;
-  onDates: (d: DateOptions) => void;
   settings: ImportSettings;
   onSettings: (s: ImportSettings) => void;
   review: ReviewResult | null;
@@ -47,9 +42,6 @@ type Props = {
 };
 
 export function ReviewStep(p: Props) {
-  const needsColumns = !p.analysis.mappingComplete || !IMPORT_FIELDS.filter((f) => f.required).every((f) => p.mapping[f.key]) || p.analysis.dates.blocking;
-  const [editColumns, setEditColumns] = useState(false);
-  const showColumns = needsColumns || editColumns;
 
   return (
     <div className="space-y-4">
@@ -57,8 +49,7 @@ export function ReviewStep(p: Props) {
         <div>
           <p className="text-sm font-medium text-[var(--text-primary)]">{p.file.name}</p>
           <p className="text-xs text-[var(--text-secondary)]">
-            {p.analysis.rowCount} row{p.analysis.rowCount === 1 ? "" : "s"}
-            {p.analysis.remembered ? " · columns remembered from your last import" : ""}
+            {p.review ? `${p.review.rows.length} row${p.review.rows.length === 1 ? "" : "s"}` : "Reading the file..."}
           </p>
         </div>
         <button type="button" onClick={p.onBack} className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -66,11 +57,10 @@ export function ReviewStep(p: Props) {
         </button>
       </div>
 
-      <Columns {...p} show={showColumns} forced={needsColumns} onToggle={() => setEditColumns((v) => !v)} />
       <Defaults {...p} />
 
       {!p.review ? (
-        <div className={`${card} p-6 text-sm text-[var(--text-secondary)]`}>{p.busy ? "Checking every row..." : "Match the columns above and the review appears here."}</div>
+        <div className={`${card} p-6 text-sm text-[var(--text-secondary)]`}>{p.busy ? "Checking every row..." : "Reading the file..."}</div>
       ) : (
         <>
           <Summary {...p} review={p.review} />
@@ -82,99 +72,14 @@ export function ReviewStep(p: Props) {
   );
 }
 
-// ------------------------------------------------------------ columns and dates
-
-function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, forced, onToggle }: Props & { show: boolean; forced: boolean; onToggle: () => void }) {
-  const found = IMPORT_FIELDS.filter((f) => mapping[f.key]);
-  return (
-    <section className={`${card} p-4`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium text-[var(--text-primary)]">{forced ? "Match your columns" : "Columns found"}</span>
-          {!forced &&
-            found.map((f) => (
-              <span key={f.key} className="rounded-full bg-[var(--surface-muted-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-                {f.label} ✓
-              </span>
-            ))}
-          <span className="rounded-full bg-[var(--surface-muted-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-            Dates: {dateOptions.choice === "auto" ? (analysis.dates.detected === "BS" || analysis.dates.detected === "AD" ? `${analysis.dates.detected} detected` : "check below") : dateOptions.choice}
-          </span>
-        </div>
-        {!forced && (
-          <button type="button" onClick={onToggle} className="text-sm text-[var(--color-primary)] hover:underline">
-            {show ? "Hide" : "Change"}
-          </button>
-        )}
-      </div>
-
-      {show && (
-        <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {IMPORT_FIELDS.map((f) => (
-              <div key={f.key}>
-                <label className="mb-1 block text-xs text-gray-500">
-                  {f.label}
-                  {f.required ? " *" : ""}
-                </label>
-                <select className={`${field} w-full`} value={mapping[f.key] ?? ""} onChange={(e) => onMapping({ ...mapping, [f.key]: e.target.value || undefined })}>
-                  <option value="">{f.required ? "Choose column" : "— not in my file —"}</option>
-                  {analysis.headers.filter(Boolean).map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">Dates in the file are</label>
-              <select className={field} value={dateOptions.choice} onChange={(e) => onDates({ ...dateOptions, choice: e.target.value as DateOptions["choice"] })}>
-                <option value="auto">Detect automatically</option>
-                <option value="AD">AD (Gregorian)</option>
-                <option value="BS">BS (Bikram Sambat)</option>
-              </select>
-            </div>
-            {analysis.dates.dayMonthAmbiguity && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.dayFirst} onChange={(e) => onDates({ ...dateOptions, dayFirst: e.target.checked })} />
-                Day comes before month (15/04/2083)
-              </label>
-            )}
-            {analysis.dates.mixed && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.allowMixed} onChange={(e) => onDates({ ...dateOptions, allowMixed: e.target.checked })} />
-                The file mixes AD and BS dates, read each row on its own
-              </label>
-            )}
-          </div>
-          {analysis.dates.blocking && <p className="text-sm text-amber-700">The dates can&apos;t be told apart yet. Choose AD or BS above.</p>}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ------------------------------------------------------------ what to assume when the file doesn't say
 
-function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
-  const paidColumn = Boolean(mapping.paid);
-  const revenueColumn = Boolean(mapping.revenue);
-  const needsAccount = settings.paidMode === "full" || (settings.paidMode === "file" && paidColumn && !mapping.account);
+function Defaults({ settings, onSettings, setup, review }: Props) {
+  const needsAccount = settings.paidMode === "full";
   return (
     <section className={`${card} p-4`}>
       <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">If the file doesn&apos;t say</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">Amounts are</label>
-          <select className={`${field} w-full`} value={settings.amountsIncludeVat ? "incl" : "excl"} onChange={(e) => onSettings({ ...settings, amountsIncludeVat: e.target.value === "incl" })}>
-            <option value="excl">Before VAT</option>
-            <option value="incl">Including VAT</option>
-          </select>
-        </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Bill type</label>
           <select className={`${field} w-full`} value={settings.defaultBillType} onChange={(e) => onSettings({ ...settings, defaultBillType: e.target.value as ImportSettings["defaultBillType"] })}>
@@ -185,7 +90,7 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
         <div>
           <label className="mb-1 block text-xs text-gray-500">Revenue account</label>
           <select className={`${field} w-full`} value={settings.defaultRevenueAccountId ?? ""} onChange={(e) => onSettings({ ...settings, defaultRevenueAccountId: e.target.value || null })}>
-            <option value="">{revenueColumn ? "— when the file names none —" : "Sales Revenue (default)"}</option>
+            <option value="">Sales Revenue (default)</option>
             {(setup?.revenueAccounts ?? []).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -196,7 +101,7 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
         <div>
           <label className="mb-1 block text-xs text-gray-500">Payment</label>
           <select className={`${field} w-full`} value={settings.paidMode} onChange={(e) => onSettings({ ...settings, paidMode: e.target.value as ImportSettings["paidMode"] })}>
-            <option value="file">{paidColumn ? "Use the paid column" : "Unpaid (no paid column)"}</option>
+            <option value="file">Use the paid columns</option>
             <option value="unpaid">All unpaid</option>
             <option value="full">All paid in full</option>
           </select>
@@ -210,7 +115,6 @@ function Defaults({ settings, onSettings, setup, mapping, review }: Props) {
           />
         </div>
       </div>
-      {settings.amountsIncludeVat && review && <p className="mt-2 text-xs text-[var(--text-secondary)]">Each amount is taken as the invoice total after any discount; the VAT is worked back out of it.</p>}
     </section>
   );
 }
@@ -228,9 +132,7 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
       importTax += r.tax ?? 0;
     }
   }
-  const before = Math.round((importTotal - importTax) * 100) / 100;
-  const fileTotalLabel = settings.amountsIncludeVat ? "Invoice totals to import" : "Invoice amounts to import (before VAT)";
-  const compare = settings.amountsIncludeVat ? Math.round(importTotal * 100) / 100 : before;
+  const compare = Math.round(importTotal * 100) / 100;
   return (
     <section className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -242,7 +144,7 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
       <div className={`${card} flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm`}>
         <div className="text-[var(--text-secondary)]">
           <p>
-            Amount column in the file: <span className="tabular-nums text-[var(--text-primary)]">{money(review.fileTotal)}</span> · {fileTotalLabel}: <span className="tabular-nums text-[var(--text-primary)]">{money(compare)}</span>
+            Amount column in the file: <span className="tabular-nums text-[var(--text-primary)]">{money(review.fileTotal)}</span> · Invoice totals to import: <span className="tabular-nums text-[var(--text-primary)]">{money(compare)}</span>
             {Math.abs(review.fileTotal - compare) > 0.005 && <span className="ml-2 text-amber-700">Difference {money(Math.round((review.fileTotal - compare) * 100) / 100)}: rows that aren&apos;t going in.</span>}
           </p>
           <p>

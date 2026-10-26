@@ -2,21 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
-import type { ExpenseColumnMapping } from "@/lib/expenses/import/fields";
-import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
+import type { ExpenseCheckResult, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
 import type { CategoryDecision, SupplierDecision } from "@/lib/purchases/import/types";
 import { CheckDialog } from "../../sales/import/check-dialog";
 import { DoneStep, type DoneResult } from "../../sales/import/done-step";
 import { HistoryList } from "../../sales/import/history-list";
 import { expenseColumnGuide } from "@/lib/sales/import/column-guide";
 import { UploadStep } from "../../sales/import/upload-step";
-import { analyzeExpenses, checkExpenses, downloadExpenseTemplate, finishExpenses, getExpenseImportSetup, importExpensesChunk, prepareExpenses, reviewExpenses, undoExpenseImport, type ExpenseImportSetup } from "./actions";
+import { checkExpenses, downloadExpenseTemplate, finishExpenses, getExpenseImportSetup, importExpensesChunk, prepareExpenses, reviewExpenses, undoExpenseImport, type ExpenseImportSetup } from "./actions";
 import { ReviewStep } from "./review-step";
 
 type Step = "upload" | "review" | "done";
 export type ExpenseFile = { name: string; base64: string };
 
-const DEFAULT_DATES: ExpenseDateOptions = { choice: "auto", dayFirst: true, allowMixed: false };
 const MAX_FILE_BYTES = 2.5 * 1024 * 1024;
 const SLICE = 10;
 
@@ -36,9 +34,6 @@ export function ImportExpenses() {
   const [setup, setSetup] = useState<ExpenseImportSetup | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<ExpenseFile | null>(null);
-  const [analysis, setAnalysis] = useState<ExpenseFileAnalysis | null>(null);
-  const [mapping, setMapping] = useState<ExpenseColumnMapping>({});
-  const [dateOptions, setDateOptions] = useState<ExpenseDateOptions>(DEFAULT_DATES);
   const [settings, setSettings] = useState<ExpenseImportSettings>({ amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
   const [review, setReview] = useState<ExpenseReviewResult | null>(null);
   const [supplierDecisions, setSupplierDecisions] = useState<Record<string, SupplierDecision>>({});
@@ -67,10 +62,10 @@ export function ImportExpenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: ExpenseFile, m: ExpenseColumnMapping, d: ExpenseDateOptions, s: ExpenseImportSettings, o: ExpenseOverrides = overrides) {
+  async function runReview(f: ExpenseFile, s: ExpenseImportSettings, o: ExpenseOverrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewExpenses({ fileName: f.name, base64: f.base64, mapping: m, dateOptions: d, settings: s, overrides: o });
+      const r = await reviewExpenses({ fileName: f.name, base64: f.base64, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
@@ -87,19 +82,16 @@ export function ImportExpenses() {
     setBusy(true);
     try {
       const f = { name: picked.name, base64: await readBase64(picked) };
-      const a = await analyzeExpenses({ fileName: f.name, base64: f.base64 });
-      setFile(f);
-      setAnalysis(a);
-      setMapping(a.mapping);
-      setDateOptions(DEFAULT_DATES);
       setSupplierDecisions({});
       setCategoryDecisions({});
       setSkipRows([]);
       setOverrides({});
       setIncludeDuplicates(false);
-      setStep("review");
-      if (a.mappingComplete && !a.dates.blocking) await runReview(f, a.mapping, DEFAULT_DATES, settings, {});
-      else setReview(null);
+      // The review reads the template's columns; a file that doesn't follow the template is refused here, with the reason.
+      if (await runReview(f, settings, {})) {
+        setFile(f);
+        setStep("review");
+      }
     } catch (e) {
       reportError(e);
     } finally {
@@ -107,21 +99,13 @@ export function ImportExpenses() {
     }
   }
 
-  const changeMapping = (m: ExpenseColumnMapping) => {
-    setMapping(m);
-    if (file) void runReview(file, m, dateOptions, settings);
-  };
-  const changeDates = (d: ExpenseDateOptions) => {
-    setDateOptions(d);
-    if (file) void runReview(file, mapping, d, settings);
-  };
   const changeSettings = (s: ExpenseImportSettings) => {
     setSettings(s);
-    if (file) void runReview(file, mapping, dateOptions, s);
+    if (file) void runReview(file, s);
   };
   const changeOverrides = (o: ExpenseOverrides) => {
     setOverrides(o);
-    if (file) void runReview(file, mapping, dateOptions, settings, o);
+    if (file) void runReview(file, settings, o);
   };
 
   // What the review's rows come to once the decisions made here are applied (the server confirms it all again on import).
@@ -139,7 +123,7 @@ export function ImportExpenses() {
   }, [review, supplierDecisions, categoryDecisions, skipRows]);
 
   const toImport = effective ? effective.filter((r) => r.status === "ready" || (includeDuplicates && r.status === "duplicate")).length : 0;
-  const runInput = (): ExpenseRunInput => ({ fileName: file!.name, base64: file!.base64, mapping, dateOptions, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
+  const runInput = (): ExpenseRunInput => ({ fileName: file!.name, base64: file!.base64, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
 
   async function doCheck() {
     if (!file) return;
@@ -194,13 +178,12 @@ export function ImportExpenses() {
     setResult(null);
     setStep("review");
     setIncludeDuplicates(false);
-    await runReview(file, mapping, dateOptions, settings);
+    await runReview(file, settings);
   }
 
   function reset() {
     setStep("upload");
     setFile(null);
-    setAnalysis(null);
     setReview(null);
     setResult(null);
     setSupplierDecisions({});
@@ -233,9 +216,9 @@ export function ImportExpenses() {
             onFile={onFile}
             onTemplate={downloadExpenseTemplate}
             rowNoun="expense"
-            pasteExample={"Date\tSupplier\tCategory\tAmount\n2083-04-15\tHimal Traders\tStationery\t5000"}
+            pasteExample={"Date\tSupplier\tCategory\tAmount\n15/04/2083\tHimal Traders\tStationery\t5000"}
             notes={[
-              "Columns and dates (AD or BS) are matched for you. You only fix what can't be read.",
+              "Download the template, paste your rows into it and upload it. Dates are written dd/mm/yyyy (AD or BS). An expense paid in parts uses the extra Paid amount and account columns.",
               "Suppliers and categories in the file are matched to yours; new suppliers are created only if you tick them.",
               "Expenses post exactly like Add Expense: VAT, TDS, payments and your audit rules all apply.",
               "You can undo a whole import afterwards.",
@@ -245,7 +228,7 @@ export function ImportExpenses() {
         </>
       )}
 
-      {step === "review" && file && analysis && (
+      {step === "review" && file && (
         <>
           {progress && (
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
@@ -259,12 +242,7 @@ export function ImportExpenses() {
           )}
           <ReviewStep
             file={file}
-            analysis={analysis}
             setup={setup}
-            mapping={mapping}
-            onMapping={changeMapping}
-            dateOptions={dateOptions}
-            onDates={changeDates}
             settings={settings}
             onSettings={changeSettings}
             review={review}

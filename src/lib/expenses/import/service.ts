@@ -3,10 +3,10 @@ import * as XLSX from "xlsx";
 import { expenseColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { expenseImports, expenses, importColumnMappings, supplierAliases, vendors } from "@/db/schema";
+import { expenseImports, expenses, supplierAliases, vendors } from "@/db/schema";
 import { applyAmountRules, loadAmountRules } from "@/lib/audit-rules";
 import { logAuditEvent } from "@/lib/audit";
-import { resolveImportDates } from "@/lib/banking/import-dates";
+import { importedDate } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
@@ -15,11 +15,12 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import type { CategoryDecision, CategoryGroup, ChunkResult, FinishedImport, PreparedImport, SupplierDecision, SupplierGroup } from "@/lib/purchases/import/types";
 import type { CategoryState, SupplierState } from "@/lib/purchases/import/checks";
 import { parsePurchaseBillType } from "@/lib/purchases/import/values";
-import { headerSignature } from "@/lib/sales/import/fields";
+import { assertColumns, templateMapping, templateRows } from "@/lib/import-columns";
+import { paymentLines, readPaySlots } from "@/lib/import-payments";
 import { bestNameMatch, normalizeName, parseAmountCell } from "@/lib/sales/import/values";
 import { checkExpenseRow } from "./checks";
-import { EXPENSE_FIELDS, expenseMappingComplete, suggestExpenseMapping, type ExpenseColumnMapping } from "./fields";
-import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow, ExpenseRunInput } from "./types";
+import { EXPENSE_FIELDS, type ExpenseColumnMapping } from "./fields";
+import type { ExpenseCheckResult,  ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow, ExpenseRunInput } from "./types";
 
 // Import Expenses: reading a spreadsheet of expenses (one row per expense), matching it to suppliers, categories and accounts,
 // checking every row (including the organization's own amount rules), and posting the clean ones through the same writer the
@@ -28,7 +29,6 @@ import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, Expen
 
 const MAX_ROWS = 1000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const KIND = "expenses";
 
 type Parsed = { headers: string[]; rows: string[][] };
 
@@ -41,29 +41,11 @@ function readFile(base64: string, fileName: string): Parsed {
 
 const colIndex = (headers: string[], name: string | undefined) => (name ? headers.findIndex((h) => h.trim().toLowerCase() === name.trim().toLowerCase()) : -1);
 
-function datesFor(parsed: Parsed, column: string | undefined, opts: ExpenseDateOptions, allowMixed = opts.allowMixed) {
-  const idx = colIndex(parsed.headers, column);
-  return resolveImportDates(parsed.rows.map((r) => (idx >= 0 ? r[idx] : undefined)), { header: column, choice: opts.choice, dayFirst: opts.dayFirst, allowMixed });
-}
-
-const datesSummary = (d: ReturnType<typeof resolveImportDates>): ExpenseFileAnalysis["dates"] => ({ detected: d.detected, confidence: d.confidence, mixed: d.mixed, blocking: d.blocking, problemCount: d.problemCount, dayMonthAmbiguity: d.hasDayMonthAmbiguity });
-
 // ------------------------------------------------------------------ step 1: what is in the file
-
-export async function analyzeExpenseFile(tenantId: string, input: { fileName: string; base64: string }): Promise<ExpenseFileAnalysis> {
-  const parsed = readFile(input.base64, input.fileName);
-  const signature = headerSignature(parsed.headers);
-  const [remembered] = await db.select().from(importColumnMappings).where(and(eq(importColumnMappings.tenantId, tenantId), eq(importColumnMappings.kind, KIND), eq(importColumnMappings.signature, signature))).limit(1);
-  const known = remembered?.mapping as ExpenseColumnMapping | undefined;
-  const usable = known && Object.values(known).every((h) => colIndex(parsed.headers, h) >= 0);
-  const mapping = usable ? known! : suggestExpenseMapping(parsed.headers);
-  const dates = datesFor(parsed, mapping.date, { choice: "auto", dayFirst: true, allowMixed: false });
-  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: expenseMappingComplete(mapping), dates: datesSummary(dates) };
-}
 
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = ExpenseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; taxable: number; vat: number; tds: number; accountId: string | null; modeId: string | null; invoiceNumber: string; description: string; dueDate: string };
+type Row = ExpenseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; taxable: number; vat: number; tds: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; invoiceNumber: string; description: string; dueDate: string };
 type Category = { id: string; code: string; name: string };
 
 async function cashBankAccountList(tenantId: string) {
@@ -99,8 +81,6 @@ function applyOverrides(parsed: Parsed, mapping: ExpenseColumnMapping, overrides
 async function buildRows(
   tenantId: string,
   parsedIn: Parsed,
-  mappingIn: ExpenseColumnMapping,
-  dateOptions: ExpenseDateOptions,
   settings: ExpenseImportSettings,
   supplierDecisions: Record<string, SupplierDecision>,
   categoryDecisions: Record<string, CategoryDecision>,
@@ -108,13 +88,13 @@ async function buildRows(
   overrides: ExpenseOverrides = {},
   opts: { skipDuplicateCheck?: boolean } = {}
 ) {
-  const { parsed, mapping } = applyOverrides(parsedIn, mappingIn, overrides);
-  for (const f of EXPENSE_FIELDS.filter((x) => x.required)) if (colIndex(parsed.headers, mapping[f.key]) < 0) throw new Error(`Choose the column that holds the ${f.label.toLowerCase()}.`);
+  const { parsed, mapping } = applyOverrides(parsedIn, templateMapping(EXPENSE_FIELDS, parsedIn.headers), overrides);
+  assertColumns(EXPENSE_FIELDS, mapping);
   const idx = Object.fromEntries(EXPENSE_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof EXPENSE_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
-  const dates = datesFor(parsed, mapping.date, dateOptions);
-  const dueDates = idx.dueDate >= 0 ? datesFor(parsed, mapping.dueDate, dateOptions, true) : null;
+  const dates = parsed.rows.map((r) => importedDate(cell(r, "date")));
+  const dueDates = idx.dueDate >= 0 ? parsed.rows.map((r) => importedDate(cell(r, "dueDate"))) : null;
   const [supplierList, aliasRows, categoryList, amountRules] = await Promise.all([
     db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId)),
     db.select({ alias: supplierAliases.alias, vendorId: supplierAliases.vendorId }).from(supplierAliases).where(eq(supplierAliases.tenantId, tenantId)),
@@ -135,7 +115,7 @@ async function buildRows(
 
   const lockedByDate = new Map<string, boolean>();
   const vatByDate = new Map<string, number>();
-  const isoDates = [...new Set(dates.rows.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
+  const isoDates = [...new Set(dates.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
   for (const d of isoDates) {
     lockedByDate.set(d, await assertPeriodOpen(tenantId, d).then(() => false, () => true));
     vatByDate.set(d, await getTaxRate(tenantId, "vat", d));
@@ -161,7 +141,7 @@ async function buildRows(
   parsed.rows.forEach((r, i) => {
     const rowNumber = i + 2;
     if (r.every((c) => (c ?? "").trim() === "")) return;
-    const d = dates.rows[i];
+    const d = dates[i];
     const supplierText = cell(r, "supplier");
     const supplierKey = supplierText ? normalizeName(supplierText) : null;
 
@@ -202,24 +182,19 @@ async function buildRows(
       category = "ok";
     }
 
-    const accountText = cell(r, "account");
-    const accountPick = accountText ? payResolver.resolve(accountText) : null;
-    const picked = accountPick && "accountId" in accountPick ? accountPick : null;
-    const accountId = picked?.accountId ?? null;
-    const accountNote = accountPick && "ambiguous" in accountPick ? `"${accountText}" has more than one account (${accountPick.ambiguous.join(", ")}). Write the account name instead.` : undefined;
+    const pays = readPaySlots((k) => cell(r, k), payResolver);
     const amount = parseAmountCell(cell(r, "amount"));
     const vat = parseAmountCell(cell(r, "vat"));
     const tds = parseAmountCell(cell(r, "tds"));
-    const paid = parseAmountCell(cell(r, "paid"));
     const billTypeText = cell(r, "billType");
     const iso = d?.iso ?? null;
     const invoiceNumber = cell(r, "invoiceNumber");
     const dueText = cell(r, "dueDate");
-    const dueIso = dueText && dueDates ? dueDates.rows[i]?.iso ?? null : null;
+    const dueIso = dueText && dueDates ? dueDates[i]?.iso ?? null : null;
 
     const check = checkExpenseRow({
       dateIso: iso,
-      dateNote: d?.note ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
+      dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       dueDate: { text: dueText, iso: dueIso },
       amount,
@@ -227,10 +202,7 @@ async function buildRows(
       billTypeText,
       vat,
       tds,
-      paid,
-      account: accountText === "" ? "none" : accountId ? "ok" : "unknown",
-      accountText,
-      accountNote,
+      pays,
       supplier,
       category,
       categoryText,
@@ -290,22 +262,21 @@ async function buildRows(
       taxable: check.computed?.taxable ?? 0,
       vat: check.computed?.vat ?? 0,
       tds: check.computed?.tds ?? 0,
-      accountId: accountId ?? settings.defaultAccountId,
-      modeId: picked ? picked.modeId : accountText ? null : settings.defaultModeId ?? null,
+      payLines: check.computed ? paymentLines(pays, Math.max(check.computed.payable, 0), settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       invoiceNumber,
       description: cell(r, "description"),
       dueDate: dueIso ?? "",
     });
   });
-  return { rows: out, dates, supplierList, categoryList };
+  return { rows: out, supplierList, categoryList };
 }
 
 export async function reviewExpenseFile(
   tenantId: string,
-  input: { base64: string; fileName: string; mapping: ExpenseColumnMapping; dateOptions: ExpenseDateOptions; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }
+  input: { base64: string; fileName: string; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }
 ): Promise<ExpenseReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, dates, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, {}, new Set(), input.overrides);
+  const { rows, supplierList, categoryList } = await buildRows(tenantId, parsed, input.settings, {}, {}, new Set(), input.overrides);
 
   const sGroups = new Map<string, SupplierGroup>();
   const cGroups = new Map<string, CategoryGroup>();
@@ -351,7 +322,7 @@ export async function reviewExpenseFile(
     categoryText: r.categoryText, categoryName: r.categoryName, categoryKey: r.categoryKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status,
     issues: r.issues, messages: r.messages, total: r.total, tax: r.tax,
   });
-  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, dates: datesSummary(dates) };
+  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax };
 }
 
 // ------------------------------------------------------------------ step 3: import, in steps
@@ -398,7 +369,7 @@ export async function checkExpenseImport(tenantId: string, input: ExpenseRunInpu
   const parsed = readFile(input.base64, input.fileName);
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   return { wouldImport: importable.length, total: round2(importable.reduce((s, r) => s + (r.total ?? 0), 0)), tax: round2(importable.reduce((s, r) => s + (r.tax ?? 0), 0)), suppliersToCreate: v.toCreate.map((c) => c.name), skipped };
 }
@@ -406,7 +377,6 @@ export async function checkExpenseImport(tenantId: string, input: ExpenseRunInpu
 export async function prepareExpenseImport(ctx: { tenantId: string; userId: string }, input: ExpenseRunInput): Promise<PreparedImport> {
   const { tenantId, userId } = ctx;
   const parsed = readFile(input.base64, input.fileName);
-  const signature = headerSignature(parsed.headers);
 
   if (input.settings.defaultAccountId && !(await cashBankAccountList(tenantId)).some((a) => a.id === input.settings.defaultAccountId)) return { ok: false, error: "Choose a cash or bank account of this organization." };
   if (input.settings.defaultAccountId && input.settings.defaultModeId) {
@@ -419,7 +389,7 @@ export async function prepareExpenseImport(ctx: { tenantId: string; userId: stri
   const v = await validDecisions(tenantId, input);
   if (!v.defaultCategoryOk) return { ok: false, error: "Choose an expense category of this organization." };
 
-  const dry = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const dry = await buildRows(tenantId, parsed, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   if (plan(dry.rows, input.includeDuplicates).importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
   const created: { id: string; name: string }[] = [];
@@ -430,7 +400,7 @@ export async function prepareExpenseImport(ctx: { tenantId: string; userId: stri
     resolved[c.key] = { action: "existing", vendorId: s.id, remember: false };
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   const [imp] = await db.insert(expenseImports).values({ tenantId, fileName: input.fileName.slice(0, 200), rowCount: rows.length, suppliersCreated: created, createdBy: userId }).returning({ id: expenseImports.id });
 
@@ -438,10 +408,6 @@ export async function prepareExpenseImport(ctx: { tenantId: string; userId: stri
     if (d.action !== "existing" || !d.remember || !v.ownIds.has(d.vendorId)) continue;
     await db.insert(supplierAliases).values({ tenantId, alias: key, vendorId: d.vendorId }).onConflictDoUpdate({ target: [supplierAliases.tenantId, supplierAliases.alias], set: { vendorId: d.vendorId } });
   }
-  await db
-    .insert(importColumnMappings)
-    .values({ tenantId, kind: KIND, signature, mapping: input.mapping as Record<string, string> })
-    .onConflictDoUpdate({ target: [importColumnMappings.tenantId, importColumnMappings.kind, importColumnMappings.signature], set: { mapping: input.mapping as Record<string, string>, updatedAt: new Date() } });
 
   return { ok: true, importId: imp.id, supplierDecisions: resolved, rowNumbers: importable.map((r) => r.rowNumber), skipped, suppliersCreated: created.map((c) => c.name) };
 }
@@ -456,7 +422,7 @@ export async function importExpenseChunk(ctx: { tenantId: string; userId: string
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
   const wanted = new Set(input.rowNumbers);
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
+  const { rows } = await buildRows(tenantId, parsed, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
   const mine = rows.filter((r) => wanted.has(r.rowNumber));
 
   const taken = new Set((await db.select({ n: expenses.expenseNumber }).from(expenses).where(eq(expenses.tenantId, tenantId))).map((r) => r.n));
@@ -482,7 +448,7 @@ export async function importExpenseChunk(ctx: { tenantId: string; userId: string
           vatAmount: r.vat,
           tdsAmount: r.tds,
           otherTaxAmount: 0,
-          payments: r.paid > 0 && r.accountId ? [{ accountId: r.accountId, amount: r.paid, modeId: r.modeId }] : [],
+          payments: r.payLines,
         },
         { importId: input.importId, takenNumbers: taken }
       );
@@ -549,12 +515,15 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
     cashBankAccountList(tenantId),
   ]);
   const wb = XLSX.utils.book_new();
-  const sheet = XLSX.utils.aoa_to_sheet([
-    ["Date", "Category", "Supplier", "Description", "Invoice number", "Amount", "Bill type", "VAT amount", "TDS amount", "Due date", "Paid amount", "Paid from"],
-    ["2083-04-15", categoryList[0]?.name ?? "Category", supplierList[0]?.name ?? "Supplier name", "Office rent", "R-101", 20000, "PAN", 0, 1000, "2083-04-30", 0, ""],
-    ["2083-04-16", categoryList[0]?.name ?? "Category", "", "Taxi fare", "", 450, "No bill", 0, 0, "", 450, accountList[0]?.name ?? "Cash"],
-  ]);
-  sheet["!cols"] = [{ wch: 14 }, { wch: 24 }, { wch: 26 }, { wch: 24 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 22 }];
+  const sheet = XLSX.utils.aoa_to_sheet(
+    templateRows(EXPENSE_FIELDS, [
+      { date: "15/04/2083", category: categoryList[0]?.name ?? "Category", supplier: supplierList[0]?.name ?? "Supplier name", description: "Office rent", invoiceNumber: "R-101", amount: 20000, billType: "PAN", vat: 0, tds: 1000, dueDate: "30/04/2083", paid: 0 },
+      // Paid in two parts, through two accounts
+      { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Taxi fare", amount: 450, billType: "No bill", vat: 0, tds: 0, paid: 300, account: accountList[0]?.name ?? "Cash", paid2: 150, account2: accountList[1]?.name ?? "Fonepay" },
+    ])
+  );
+  const wide: Partial<Record<(typeof EXPENSE_FIELDS)[number]["key"], number>> = { date: 14, category: 24, supplier: 26, description: 24, invoiceNumber: 14, dueDate: 14, account: 22, account2: 22, account3: 22 };
+  sheet["!cols"] = EXPENSE_FIELDS.map((f) => ({ wch: wide[f.key] ?? 12 }));
   XLSX.utils.book_append_sheet(wb, sheet, "Expenses");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Expense categories"], ...categoryList.map((c) => [c.name])]), "Categories");
@@ -562,19 +531,20 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
   const payModes = (await buildPaymentResolver(tenantId)).modes;
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(expenseColumnGuide()));
-  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }, { wch: 40 }];
+  guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, guideData, "Columns");
   XLSX.utils.book_append_sheet(
     wb,
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Expenses sheet"],
       ["One row is one expense. Only Date and Amount are needed."],
-      ["Date: AD or BS (2083-04-15 or 2026-07-31)."],
+      ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your expense categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for an expense paid in full to no one in particular."],
       ["Bill type: VAT, PAN, Estimate, Challan or No bill. VAT is worked out for VAT bills unless you give a VAT amount."],
       ["TDS amount: tax withheld from the payee; it is taken out of what you owe them."],
       ["Paid amount and Paid from: only if money was paid."],
+      ["Paid in parts (say cash and Fonepay)? Use Paid amount 2 and Paid from 2 (and 3) on the same row."],
     ]),
     "How to fill in"
   );

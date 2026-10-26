@@ -1,3 +1,4 @@
+import { checkPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive, rowTotals } from "./amounts";
 import type { SalesBillTypeValue } from "./values";
 
@@ -18,19 +19,14 @@ export type RowCheckInput = {
   /** undefined = cell blank, null = not a bill type */
   billType: SalesBillTypeValue | undefined | null;
   billTypeText?: string;
-  paid: { value: number | null; invalid: boolean };
-  /** The account named in the file: none given, found, or named but not a cash/bank account. */
-  account: "none" | "ok" | "unknown";
-  accountText?: string;
-  /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
-  accountNote?: string;
+  /** The payment columns: up to three parts, each with the account it went through. */
+  pays: PaySlot[];
   /** The revenue account named in the file: none given, found, or named but not one that can be chosen. */
   revenue?: "none" | "ok" | "unknown";
   revenueText?: string;
   customer: CustomerState;
   duplicate: boolean;
   settings: {
-    amountsIncludeVat: boolean;
     vatRate: number;
     defaultBillType: SalesBillTypeValue;
     /** What to assume about payment when the file says nothing: unpaid, or paid in full. "file" = use the paid column only. */
@@ -79,27 +75,12 @@ export function checkRow(i: RowCheckInput): RowCheck {
   const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0 && !i.discount.invalid && discountValue >= 0 && discountValue <= i.amount.value;
   if (amountOk) {
     const vatRate = i.settings.vatRate;
-    let t;
-    if (i.settings.amountsIncludeVat) {
-      // The file's amount is what the customer pays, after discount: work back to the amount before VAT.
-      const net = netFromInclusive(round2(i.amount.value! - discountValue), billType === "taxable" ? vatRate : 0);
-      t = rowTotals(net, 0, billType, vatRate);
-    } else {
-      t = rowTotals(i.amount.value!, discountValue, billType, vatRate);
-    }
-    let paid = 0;
-    if (i.settings.paidMode === "full") paid = t.total;
-    else if (i.settings.paidMode === "file") {
-      if (i.paid.invalid) flag("paid", "The paid amount isn't a number.");
-      else paid = round2(Math.max(i.paid.value ?? 0, 0));
-    }
-    if (paid > t.total + 0.004) {
-      flag("paid", `The paid amount (${paid.toFixed(2)}) is more than the invoice total (${t.total.toFixed(2)}).`);
-    }
-    if (paid > 0) {
-      if (i.account === "unknown") flag("account", i.accountNote ?? `"${i.accountText ?? ""}" isn't one of your cash, bank or wallet accounts, or payment modes.`);
-      else if (i.account === "none" && !i.settings.hasDefaultAccount) flag("account", "Choose the account the money was received into.");
-    }
+    // The file's amount is what the customer pays: VAT included, after any discount. Work back to the amount before VAT.
+    const net = netFromInclusive(round2(i.amount.value! - discountValue), billType === "taxable" ? vatRate : 0);
+    const t = rowTotals(net, 0, billType, vatRate);
+    const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "invoice", "received into");
+    for (const p of pay.problems) flag(p.issue, p.message);
+    const paid = pay.paid;
     // Only a fully paid invoice can go without a customer: otherwise the unpaid part has nobody to be owed by.
     if (paid < t.total - 0.004 && (i.customer === "none" || i.customer === "unknown")) {
       flag("customer", i.customer === "unknown" ? "This customer isn't set up yet." : "A customer is needed, because the invoice isn't fully paid.");

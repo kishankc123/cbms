@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { resolveImportDates, type ImportDateChoice, type ImportDateResult } from "./import-dates";
+import { importedDate } from "@/lib/calendar";
 
 export type ColumnMapping = {
   date: string;
@@ -35,15 +35,12 @@ function columnIndex(headers: string[], name: string | undefined): number {
 
 // Applies a column mapping to raw parsed rows, producing signed amounts and
 // a dedupe hash per row — the mapping is resolved once per import, not
-// hard-coded to any particular bank's column names.
-export type DateImportOptions = { choice?: ImportDateChoice; dayFirst?: boolean; allowMixed?: boolean };
-
+// hard-coded to any particular bank's column names. Dates are read as dd/mm/yyyy in AD or BS; a row whose date can't be read is skipped.
 export function normalizeStatementRows(
   headers: string[],
   rows: string[][],
-  mapping: ColumnMapping,
-  dateOptions: DateImportOptions = {}
-): { valid: NormalizedStatementRow[]; skipped: number; dates: ImportDateResult } {
+  mapping: ColumnMapping
+): { valid: NormalizedStatementRow[]; skipped: number } {
   const dateIdx = columnIndex(headers, mapping.date);
   const descIdx = columnIndex(headers, mapping.description);
   const debitIdx = columnIndex(headers, mapping.debit);
@@ -51,12 +48,6 @@ export function normalizeStatementRows(
   const amountIdx = columnIndex(headers, mapping.amount);
   const referenceIdx = columnIndex(headers, mapping.reference);
   const balanceIdx = columnIndex(headers, mapping.balance);
-
-  // Dates may be AD or BS in the file; resolved once for the whole column, always to AD.
-  const dates = resolveImportDates(
-    rows.map((r) => (dateIdx >= 0 ? r[dateIdx] : undefined)),
-    { header: mapping.date, ...dateOptions }
-  );
 
   const valid: NormalizedStatementRow[] = [];
   let skipped = 0;
@@ -66,7 +57,7 @@ export function normalizeStatementRows(
   const occurrences = new Map<string, number>();
 
   for (const [rowIndex, row] of rows.entries()) {
-    const transactionDate = dates.rows[rowIndex]?.iso ?? null;
+    const transactionDate = importedDate(dateIdx >= 0 ? row[dateIdx] : undefined).iso;
     if (!transactionDate) {
       skipped++;
       continue;
@@ -101,5 +92,5 @@ export function normalizeStatementRows(
     valid.push({ transactionDate, description, reference, amount, runningBalance, dedupeHash, raw: row });
   }
 
-  return { valid, skipped, dates };
+  return { valid, skipped };
 }

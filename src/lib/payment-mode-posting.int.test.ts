@@ -96,11 +96,11 @@ describe("saving the payment mode", () => {
     expect(resolver.resolve("Card")).toBeNull(); // nothing linked yet, so it is not offered
     expect(resolver.resolve("nonsense")).toBeNull();
 
-    const csv = ["Date,Amount,Bill Type,Paid,Received into", "2026-09-12,300,Zero rated,300,Fonepay", "2026-09-13,200,Zero rated,200,Cash"].join("\n");
-    const settings: ImportSettings = { amountsIncludeVat: false, defaultBillType: "zero_rated", paidMode: "file", defaultAccountId: null };
+    const csv = ["Date,Amount,Bill type,Paid amount,Received into", "2026-09-12,300,Zero rated,300,Fonepay", "2026-09-13,200,Zero rated,200,Cash"].join("\n");
+    const settings: ImportSettings = { defaultBillType: "zero_rated", paidMode: "file", defaultAccountId: null };
     const r = await runSalesImport(
       { tenantId: org.tenantId, userId: org.userId },
-      { fileName: "m.csv", base64: Buffer.from(csv, "utf8").toString("base64"), mapping: { date: "Date", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Received into" }, dateOptions: { choice: "AD", dayFirst: true, allowMixed: false }, settings, decisions: {}, skipRows: [], includeDuplicates: true }
+      { fileName: "m.csv", base64: Buffer.from(csv, "utf8").toString("base64"), settings, decisions: {}, skipRows: [], includeDuplicates: true }
     );
     expect(r).toMatchObject({ ok: true, imported: 2 });
     const rows = await db.select({ name: journalLines.paymentModeName, account: journalLines.accountId }).from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId)).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceType, "receipt")));

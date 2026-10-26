@@ -47,9 +47,12 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   `tenantId` null.
 - **Close/reopen pattern** (accounting periods, bank reconciliations, fiscal years): closing is a routine
   action gated on `edit`; reopening is admin-only, requires a reason, always audit-logged.
-- **Imports follow one shape** (Sales, Purchases, Expenses): Upload → Review → Done; columns and AD/BS dates detected
-  automatically; unknown customers/suppliers grouped and decided once (tick to create, never auto-created);
-  remembered matches and column mappings; typed row corrections ("overrides"); Check only; undo per import
+- **Imports follow one shape** (Sales, Purchases, Expenses): Upload → Review → Done. The file is the downloaded
+  **template** (a column is the one headed with the field's name, `lib/import-columns.ts`; no column matching, nothing remembered);
+  **dates are dd/mm/yyyy in AD or BS** (the year tells which, `importedDate` in `lib/calendar`; a real Excel date also works);
+  a document can be **paid in up to three parts**, each through its own account (`lib/import-payments.ts`: Paid amount / account,
+  Paid amount 2 / account 2, ...). Unknown customers/suppliers grouped and decided once (tick to create, never auto-created);
+  remembered name matches; typed row corrections ("overrides"); Check only; undo per import
   (batch id on the invoices/bills). The server re-reads and re-checks the file at every step and never trusts
   the browser's decisions. Pure rules are in `lib/*/import/{fields,values,checks,amounts,paste}.ts` (unit
   tested); DB work in `service.ts`. Purchases and Expenses post in slices (prepare → chunks → finish) with a
@@ -158,7 +161,7 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   Expenses page. One row per invoice/bill/expense (consumable purchases only; stockable purchases need item
   lines). Paste from Excel, template download, fix rows in place, Check only, "Fix and import the remaining
   rows", undo. Tables: `sales_imports`, `purchase_imports`, `expense_imports`, `customer_aliases`,
-  `supplier_aliases`, `import_column_mappings`. Server-action body limit raised to 4 MB in `next.config.ts`.
+  `supplier_aliases`. Server-action body limit raised to 4 MB in `next.config.ts`.
   Expenses post through `lib/expenses/expense-records.ts` (`createExpenseCore`).
 - **Settings → Payment modes** (list, add, edit, delete; owner/admin only). Customers and suppliers: PAN / VAT
   number is **optional** (still 9 digits when typed); the company's own PAN stays mandatory.

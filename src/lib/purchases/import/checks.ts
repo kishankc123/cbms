@@ -1,3 +1,4 @@
+import { checkPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive, rowTotals } from "@/lib/sales/import/amounts";
 import type { PurchaseBillTypeValue } from "./values";
 
@@ -17,11 +18,8 @@ export type PurchaseRowInput = {
   discount: { value: number | null; invalid: boolean };
   billType: PurchaseBillTypeValue | undefined | null;
   billTypeText?: string;
-  paid: { value: number | null; invalid: boolean };
-  account: "none" | "ok" | "unknown";
-  accountText?: string;
-  /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
-  accountNote?: string;
+  /** The payment columns: up to three parts, each with the account it went through. */
+  pays: PaySlot[];
   supplier: SupplierState;
   category: CategoryState;
   categoryText?: string;
@@ -84,17 +82,9 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
     } else {
       t = rowTotals(i.amount.value!, discountValue, billType === "vat" ? "taxable" : "zero_rated", vatRate);
     }
-    let paid = 0;
-    if (i.settings.paidMode === "full") paid = t.total;
-    else if (i.settings.paidMode === "file") {
-      if (i.paid.invalid) flag("paid", "The paid amount isn't a number.");
-      else paid = round2(Math.max(i.paid.value ?? 0, 0));
-    }
-    if (paid > t.total + 0.004) flag("paid", `The paid amount (${paid.toFixed(2)}) is more than the bill total (${t.total.toFixed(2)}).`);
-    if (paid > 0) {
-      if (i.account === "unknown") flag("account", i.accountNote ?? `"${i.accountText ?? ""}" isn't one of your cash, bank or wallet accounts, or payment modes.`);
-      else if (i.account === "none" && !i.settings.hasDefaultAccount) flag("account", "Choose the account the money was paid from.");
-    }
+    const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "bill", "paid from");
+    for (const p of pay.problems) flag(p.issue, p.message);
+    const paid = pay.paid;
     // Only a fully paid bill can go without a supplier: otherwise the unpaid part has nobody to be owed to.
     if (paid < t.total - 0.004 && (i.supplier === "none" || i.supplier === "unknown")) {
       flag("supplier", i.supplier === "unknown" ? "This supplier isn't set up yet." : "A supplier is needed, because the bill isn't fully paid.");

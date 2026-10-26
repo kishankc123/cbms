@@ -25,7 +25,7 @@ export function RowEditor({ row, fields, edited, onSave, onRevert, onClose }: { 
                 {f.label}
                 {f.required ? " *" : ""}
               </label>
-              <input className={field} value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} placeholder={f.key === "billType" ? "Taxable or Zero rated" : f.key === "date" ? "e.g. 2083-04-15" : ""} />
+              <input className={field} value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} placeholder={f.key === "billType" ? "Taxable or Zero rated" : f.key === "date" ? "dd/mm/yyyy" : ""} />
             </div>
           ))}
         </div>
