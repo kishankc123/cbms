@@ -27,7 +27,7 @@ import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts } from "./account-guards";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import { getCustomerBalances } from "./customer-balances";
-import { getSupplierBalances } from "./supplier-balances";
+import { resettleParty } from "./party-settlement";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { assertMonthOpenForAdvance } from "@/lib/payroll/staff-advances";
 import { getOrCreateEmployeeAdvanceAccountId } from "./advance-accounts";
@@ -40,13 +40,7 @@ import { ensureTaxPayableAccount } from "@/lib/compliance/tax-accounts";
 import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/tax-amounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getOrCreateExpensePayableAccount } from "./expense-accounts";
-import {
-  getOrCreateCustomerAdvanceAccountId,
-  getOrCreateSupplierAdvanceAccountId,
-  getCustomerAdvanceBalance,
-  getSupplierAdvanceBalance,
-  getOrCreateOwnerDrawingsAccount,
-} from "./advance-accounts";
+import { getOrCreateOwnerDrawingsAccount } from "./advance-accounts";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -80,8 +74,9 @@ export const MONEY_OUT_TYPES: PaymentType[] = [
   "other_payment",
 ];
 
-// Types that show the invoice/bill/expense allocation section at all.
-export const ALLOCATABLE_TYPES: PaymentType[] = ["customer_payment", "supplier_payment", "expense_payment"];
+// Types that show the expense allocation section. Money from or to a customer or supplier is not allocated: it goes on their own
+// ledger account, and their invoices and bills are settled from it (party-settlement.ts).
+export const ALLOCATABLE_TYPES: PaymentType[] = ["expense_payment"];
 
 // Types that need a second ("to") account instead of/alongside a party.
 export const TRANSFER_TYPES: PaymentType[] = ["bank_transfer", "cash_withdrawal"];
@@ -174,26 +169,12 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
     : { accountId: input.accountId, paymentModeId: input.paymentModeId, creditAmount: amount, description: label };
 
   const allocations = input.allocations ?? [];
-  const allocatedTotal = round2(allocations.reduce((s, a) => s + a.allocatedAmount, 0));
-  const unallocated = round2(Math.max(amount - allocatedTotal, 0));
 
   switch (input.paymentType) {
-    case "customer_payment": {
-      const lines: PostLineInput[] = [primaryLine];
-      for (const a of allocations) {
-        const arId = await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!);
-        lines.push({ accountId: arId, creditAmount: a.allocatedAmount, description: label });
-      }
-      if (unallocated > 0) {
-        const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
-        lines.push({ accountId: advId, creditAmount: unallocated, description: `${label} (unallocated → advance)` });
-      }
-      return lines;
-    }
-    case "customer_advance": {
-      const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
-      return [primaryLine, { accountId: advId, creditAmount: amount, description: label }];
-    }
+    // Money from a customer goes on THEIR ledger account, whatever it settles; any credit stays there as an advance.
+    case "customer_payment":
+    case "customer_advance":
+      return [primaryLine, { accountId: await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!), creditAmount: amount, description: label }];
     case "loan_received": {
       const loans = await findControlAccount(tenantId, ["2200"], "Loans Payable");
       if (!loans) throw new Error("No Loans Payable account found — add one to the Chart of Accounts first");
@@ -212,71 +193,23 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [primaryLine, { accountId: capital.id, creditAmount: amount, description: label }];
     }
     case "refund_received": {
-      const lines: PostLineInput[] = [primaryLine];
-      let remaining = amount;
-      if (input.vendorId) {
-        // A refund after a purchase return settles what the supplier owes us on their own (payable) account first;
-        // anything beyond that reduces an advance we paid them.
-        const balance = (await getSupplierBalances(tenantId))[input.vendorId] ?? 0; // negative = the supplier owes us
-        const owedToUs = round2(Math.max(-balance, 0));
-        const toPayable = round2(Math.min(remaining, owedToUs));
-        if (toPayable > 0) {
-          const apId = await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId);
-          lines.push({ accountId: apId, creditAmount: toPayable, description: label });
-          remaining = round2(remaining - toPayable);
-        }
-        if (remaining > 0) {
-          const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
-          lines.push({ accountId: advId, creditAmount: remaining, description: label });
-          remaining = 0;
-        }
-      } else if (input.categoryAccountId) {
-        lines.push({ accountId: input.categoryAccountId, creditAmount: remaining, description: label });
-        remaining = 0;
-      } else {
-        const otherIncome = await findControlAccount(tenantId, ["4100"], "Other Income");
-        if (!otherIncome) throw new Error("No Other Income account found — add one to the Chart of Accounts first");
-        lines.push({ accountId: otherIncome.id, creditAmount: remaining, description: label });
-        remaining = 0;
-      }
-      return lines;
+      // A refund from a supplier (after a purchase return) goes back on their own ledger account.
+      if (input.vendorId) return [primaryLine, { accountId: await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId), creditAmount: amount, description: label }];
+      const target = input.categoryAccountId ?? (await findControlAccount(tenantId, ["4100"], "Other Income"))?.id;
+      if (!target) throw new Error("No Other Income account found — add one to the Chart of Accounts first");
+      return [primaryLine, { accountId: target, creditAmount: amount, description: label }];
     }
     case "other_receipt": {
       const categoryId = input.categoryAccountId ?? (await findControlAccount(tenantId, ["4100"], "Other Income"))?.id;
       if (!categoryId) throw new Error("Select a classification account for this receipt");
       return [primaryLine, { accountId: categoryId, creditAmount: amount, description: label }];
     }
-    case "supplier_payment": {
-      const lines: PostLineInput[] = [];
-      for (const a of allocations) {
-        const apId = await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId!);
-        lines.push({ accountId: apId, debitAmount: a.allocatedAmount, description: label });
-      }
-      if (unallocated > 0) {
-        const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
-        lines.push({ accountId: advId, debitAmount: unallocated, description: `${label} (unallocated → advance)` });
-      }
-      lines.push(primaryLine);
-      return lines;
-    }
-    case "customer_refund": {
-      // Money paid back to a customer settles, first, the credit we owe them on their own (receivable) account — for
-      // example after a sales return — and then any advance they have paid us.
-      const owedOnAccount = round2(Math.max(-((await getCustomerBalances(tenantId))[input.customerId!] ?? 0), 0));
-      const fromAccount = round2(Math.min(amount, owedOnAccount));
-      const fromAdvance = round2(amount - fromAccount);
-      const lines: PostLineInput[] = [];
-      if (fromAccount > 0) {
-        const arId = await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!);
-        lines.push({ accountId: arId, debitAmount: fromAccount, description: label });
-      }
-      if (fromAdvance > 0) {
-        const advId = await getOrCreateCustomerAdvanceAccountId(tenantId, input.customerId!);
-        lines.push({ accountId: advId, debitAmount: fromAdvance, description: `${label} (advance refunded)` });
-      }
-      lines.push(primaryLine);
-      return lines;
-    }
+    // Money to a supplier settles THEIR ledger account, whatever it is for; any excess stays there as an advance.
+    case "supplier_payment":
+    case "supplier_advance":
+      return [{ accountId: await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId!), debitAmount: amount, description: label }, primaryLine];
+    case "customer_refund":
+      return [{ accountId: await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!), debitAmount: amount, description: label }, primaryLine];
     case "salary_payment": {
       // Pay-out of what an employee is owed: settles their own Salary Payable account.
       const [emp] = await db.select({ id: employees.id, fullName: employees.fullName, payableAccountId: employees.payableAccountId }).from(employees).where(and(eq(employees.id, input.employeeId!), eq(employees.tenantId, tenantId))).limit(1);
@@ -324,10 +257,6 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       const loans = await findControlAccount(tenantId, ["2200"], "Loans Payable");
       if (!loans) throw new Error("No Loans Payable account found — add one to the Chart of Accounts first");
       return [{ accountId: loans.id, debitAmount: amount, description: label }, primaryLine];
-    }
-    case "supplier_advance": {
-      const advId = await getOrCreateSupplierAdvanceAccountId(tenantId, input.vendorId!);
-      return [{ accountId: advId, debitAmount: amount, description: label }, primaryLine];
     }
     case "owner_withdrawal": {
       const drawings = await getOrCreateOwnerDrawingsAccount(tenantId);
@@ -419,24 +348,6 @@ function validateInput(input: CreatePaymentInput) {
 async function applyAllocationToTarget(tenantId: string, allocation: AllocationInput) {
   if (allocation.targetType === "tax_obligation") {
     await syncObligationFromPayments(tenantId, allocation.targetId);
-  } else if (allocation.targetType === "sales_invoice") {
-    const [invoice] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.id, allocation.targetId), eq(salesInvoices.tenantId, tenantId))).limit(1);
-    if (!invoice) throw new Error("Invoice not found");
-    if (invoice.status === "void") throw new Error("Cannot allocate against a cancelled invoice");
-    const outstanding = round2(Number(invoice.total) - Number(invoice.amountPaid));
-    if (allocation.allocatedAmount > outstanding + 0.005) throw new Error(`Allocation exceeds invoice ${invoice.invoiceNumber}'s outstanding balance`);
-    const newPaid = round2(Number(invoice.amountPaid) + allocation.allocatedAmount);
-    const status = newPaid >= Number(invoice.total) - 0.005 ? "paid" : "partially_paid";
-    await db.update(salesInvoices).set({ amountPaid: newPaid.toFixed(2), status }).where(eq(salesInvoices.id, invoice.id));
-  } else if (allocation.targetType === "purchase_bill") {
-    const [bill] = await db.select().from(purchaseBills).where(and(eq(purchaseBills.id, allocation.targetId), eq(purchaseBills.tenantId, tenantId))).limit(1);
-    if (!bill) throw new Error("Bill not found");
-    if (bill.status === "void") throw new Error("Cannot allocate against a cancelled bill");
-    const outstanding = round2(Number(bill.total) - Number(bill.amountPaid));
-    if (allocation.allocatedAmount > outstanding + 0.005) throw new Error(`Allocation exceeds bill ${bill.billNumber}'s outstanding balance`);
-    const newPaid = round2(Number(bill.amountPaid) + allocation.allocatedAmount);
-    const status = newPaid >= Number(bill.total) - 0.005 ? "paid" : "partially_paid";
-    await db.update(purchaseBills).set({ amountPaid: newPaid.toFixed(2), status }).where(eq(purchaseBills.id, bill.id));
   } else if (allocation.targetType === "expense") {
     const [expense] = await db.select().from(expenses).where(and(eq(expenses.id, allocation.targetId), eq(expenses.tenantId, tenantId))).limit(1);
     if (!expense) throw new Error("Expense not found");
@@ -454,18 +365,6 @@ async function revertAllocationOnTarget(tenantId: string, allocation: { targetTy
   if (allocation.targetType === "tax_obligation") {
     // The payment is not marked voided yet, so leave it out of the paid total explicitly.
     await syncObligationFromPayments(tenantId, allocation.targetId, { excludePaymentId: allocation.paymentId });
-  } else if (allocation.targetType === "sales_invoice") {
-    const [invoice] = await db.select().from(salesInvoices).where(and(eq(salesInvoices.id, allocation.targetId), eq(salesInvoices.tenantId, tenantId))).limit(1);
-    if (!invoice) return;
-    const newPaid = round2(Math.max(Number(invoice.amountPaid) - amount, 0));
-    const status = newPaid <= 0 ? "sent" : newPaid >= Number(invoice.total) - 0.005 ? "paid" : "partially_paid";
-    await db.update(salesInvoices).set({ amountPaid: newPaid.toFixed(2), status }).where(eq(salesInvoices.id, invoice.id));
-  } else if (allocation.targetType === "purchase_bill") {
-    const [bill] = await db.select().from(purchaseBills).where(and(eq(purchaseBills.id, allocation.targetId), eq(purchaseBills.tenantId, tenantId))).limit(1);
-    if (!bill) return;
-    const newPaid = round2(Math.max(Number(bill.amountPaid) - amount, 0));
-    const status = newPaid <= 0 ? "open" : newPaid >= Number(bill.total) - 0.005 ? "paid" : "partially_paid";
-    await db.update(purchaseBills).set({ amountPaid: newPaid.toFixed(2), status }).where(eq(purchaseBills.id, bill.id));
   } else if (allocation.targetType === "expense") {
     const [expense] = await db.select().from(expenses).where(and(eq(expenses.id, allocation.targetId), eq(expenses.tenantId, tenantId))).limit(1);
     if (!expense) return;
@@ -507,14 +406,12 @@ async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
 }
 
 const EXPECTED_TARGET: Partial<Record<PaymentType, PaymentAllocationTarget>> = {
-  customer_payment: "sales_invoice",
-  supplier_payment: "purchase_bill",
   expense_payment: "expense",
   tax_payment: "tax_obligation",
 };
 
-// Checked before anything is posted: every allocation must point at a live document of the right kind that belongs
-// to the party being paid, and no document may be allocated more than it still owes.
+// Checked before anything is posted: every allocation must point at a live expense or tax item, and no document may be
+// allocated more than it still owes. Customer and supplier payments take no allocations.
 async function validateAllocations(tenantId: string, input: CreatePaymentInput, credit: Map<string, number> = new Map()) {
   const allocations = input.allocations ?? [];
   if (allocations.length === 0) return;
@@ -529,25 +426,7 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput, 
   for (const a of allocations) wanted.set(a.targetId, round2((wanted.get(a.targetId) ?? 0) + a.allocatedAmount));
   const ids = [...wanted.keys()];
 
-  if (expected === "sales_invoice") {
-    const rows = await db.select().from(salesInvoices).where(and(eq(salesInvoices.tenantId, tenantId), inArray(salesInvoices.id, ids)));
-    for (const [id, value] of wanted) {
-      const inv = rows.find((r) => r.id === id);
-      if (!inv) throw new Error("Invoice not found");
-      if (inv.status === "void") throw new Error(`Invoice ${inv.invoiceNumber} is cancelled`);
-      if (inv.customerId !== input.customerId) throw new Error(`Invoice ${inv.invoiceNumber} belongs to a different customer`);
-      if (value > round2(Number(inv.total) - Number(inv.amountPaid) + (credit.get(id) ?? 0)) + 0.005) throw new Error(`The allocation exceeds invoice ${inv.invoiceNumber}'s outstanding balance`);
-    }
-  } else if (expected === "purchase_bill") {
-    const rows = await db.select().from(purchaseBills).where(and(eq(purchaseBills.tenantId, tenantId), inArray(purchaseBills.id, ids)));
-    for (const [id, value] of wanted) {
-      const bill = rows.find((r) => r.id === id);
-      if (!bill) throw new Error("Bill not found");
-      if (bill.status === "void") throw new Error(`Bill ${bill.billNumber} is cancelled`);
-      if (bill.vendorId !== input.vendorId) throw new Error(`Bill ${bill.billNumber} belongs to a different supplier`);
-      if (value > round2(Number(bill.total) - Number(bill.amountPaid) + (credit.get(id) ?? 0)) + 0.005) throw new Error(`The allocation exceeds bill ${bill.billNumber}'s outstanding balance`);
-    }
-  } else if (expected === "expense") {
+  if (expected === "expense") {
     const rows = await db.select().from(expenses).where(and(eq(expenses.tenantId, tenantId), inArray(expenses.id, ids)));
     for (const [id, value] of wanted) {
       const ex = rows.find((r) => r.id === id);
@@ -559,19 +438,18 @@ async function validateAllocations(tenantId: string, input: CreatePaymentInput, 
   }
 }
 
-// Paying a customer back can't be more than we owe them: the credit on their account (for example after a sales
-// return) plus any advance they have paid us.
+// Paying a customer back can't be more than we owe them: the credit on their account (a sales return, or money they paid
+// ahead of an invoice).
 // `ownAmount`: when a refund is being edited, what it already paid back counts as still available.
 async function validateRefund(tenantId: string, input: CreatePaymentInput, ownAmount = 0) {
   if (input.paymentType !== "customer_refund") return;
   const balance = (await getCustomerBalances(tenantId))[input.customerId!] ?? 0; // negative = we owe the customer
   const credit = round2(Math.max(-balance, 0));
-  const advance = round2(Math.max(await getCustomerAdvanceBalance(tenantId, input.customerId!), 0));
-  const refundable = round2(credit + advance + ownAmount);
+  const refundable = round2(credit + ownAmount);
   if (round2(input.amount) > refundable + 0.005) {
     throw new Error(
       refundable > 0
-        ? `This customer is owed ${refundable.toFixed(2)} (credit ${credit.toFixed(2)} + advance ${advance.toFixed(2)}), so a refund can't be more than that`
+        ? `This customer is owed ${refundable.toFixed(2)}, so a refund can't be more than that`
         : "This customer isn't owed anything — there is no credit or advance to refund"
     );
   }
@@ -602,23 +480,6 @@ async function validateStaffAdvance(tenantId: string, input: CreatePaymentInput)
   if (emp.joiningDate > input.paymentDate) throw new Error(`${emp.fullName} hadn't joined by that date`);
   if (emp.leavingDate && emp.leavingDate < input.paymentDate) throw new Error(`${emp.fullName} had already left by that date`);
   await assertMonthOpenForAdvance(tenantId, m.calendar, m.month, m.year, forPeriodStart);
-}
-
-// The money a payment put into an advance account can't be taken away (by voiding the payment) once it has been
-// applied to a document or refunded.
-async function assertAdvanceStillThere(tenantId: string, payment: typeof payments.$inferSelect, allocatedTotal: number) {
-  const amount = Number(payment.amount);
-  const unallocated = round2(Math.max(amount - allocatedTotal, 0));
-  let toAdvance = 0;
-  let side: "customer" | "supplier" | null = null;
-  if (payment.paymentType === "customer_advance") [side, toAdvance] = ["customer", amount];
-  else if (payment.paymentType === "customer_payment") [side, toAdvance] = ["customer", unallocated];
-  else if (payment.paymentType === "supplier_advance") [side, toAdvance] = ["supplier", amount];
-  else if (payment.paymentType === "supplier_payment") [side, toAdvance] = ["supplier", unallocated];
-  const partyId = side === "customer" ? payment.customerId : payment.vendorId;
-  if (!side || !partyId || toAdvance <= 0.005) return;
-  const balance = side === "customer" ? await getCustomerAdvanceBalance(tenantId, partyId) : await getSupplierAdvanceBalance(tenantId, partyId);
-  if (balance + 0.005 < toAdvance) throw new Error("The advance from this payment has already been applied or refunded — take that back before voiding the payment");
 }
 
 // Undoes a payment that was only partly recorded: allocations already applied, the journal entry, and the row.
@@ -750,7 +611,16 @@ export async function createPayment(
     throw e;
   }
 
+  await settleParties(tenantId, input);
   return { paymentId: paymentRow.id, paymentNumber: number };
+}
+
+// The customer's or supplier's invoices or bills follow their ledger, so settle them again after a payment changes it.
+async function settleParties(tenantId: string, ...parties: { customerId?: string | null; vendorId?: string | null }[]) {
+  for (const p of parties) {
+    await resettleParty(tenantId, "customer", p.customerId);
+    await resettleParty(tenantId, "supplier", p.vendorId);
+  }
 }
 
 async function isReconciled(journalEntryId: string) {
@@ -792,7 +662,6 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
   }
 
   const allocations = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
-  await assertAdvanceStillThere(tenantId, payment, round2(allocations.reduce((s, a) => s + Number(a.allocatedAmount), 0)));
   for (const a of allocations) {
     await revertAllocationOnTarget(tenantId, a);
   }
@@ -806,6 +675,7 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
     .update(payments)
     .set({ status: "voided", voidReason: reason, voidedBy: userId, voidedAt: new Date() })
     .where(eq(payments.id, paymentId));
+  await settleParties(tenantId, payment);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -937,8 +807,6 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
     const [rec] = await db.select({ id: staffAdvanceRecoveries.id }).from(staffAdvanceRecoveries).where(eq(staffAdvanceRecoveries.advanceId, oldAdvance.id)).limit(1);
     if (rec) throw new Error("Part of this advance has already been recovered through payroll — reverse that payroll run first, then edit the advance");
   }
-  // The advance a payment put on a customer's or supplier's account can't be changed once it has been applied or refunded.
-  await assertAdvanceStillThere(tenantId, payment, round2(oldAllocs.reduce((s, a) => s + Number(a.allocatedAmount), 0)));
 
   const input: CreatePaymentInput = { ...edit, direction: payment.direction, paymentType: payment.paymentType, origin: "standalone" };
   const oldInput = inputFromRow(payment, oldAllocs, oldAdvance ?? null);
@@ -1068,8 +936,10 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
     }
   } catch (e) {
     await restoreAfterFailedEdit(tenantId, userId, payment, oldAllocs, oldAdvance ?? null, oldInput, progress);
+    await settleParties(tenantId, payment, input).catch(() => {});
     throw e;
   }
+  await settleParties(tenantId, payment, input);
 
   await logAuditEvent({
     tenantId,

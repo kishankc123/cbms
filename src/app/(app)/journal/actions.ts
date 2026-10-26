@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts } from "@/db/schema";
+import { accounts, journalLines } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { assertEntryNotReconciled } from "@/lib/ledger/reconciliation-guards";
+import { resettleForAccounts } from "@/lib/ledger/party-settlement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { validateADDate } from "@/lib/calendar";
 import { issueVoucher } from "@/lib/ledger/voucher";
@@ -56,6 +57,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
       createdBy: session.userId,
       lines,
     });
+    await resettleForAccounts(session.tenantId, ids);
     revalidatePath("/journal");
     revalidatePath("/dashboard");
     return { ok: true, voucherNumber };
@@ -69,7 +71,9 @@ export async function reverseEntry(formData: FormData) {
   if (!can(session, "chart_of_accounts", "void")) throw new Error("Not permitted");
   const journalEntryId = String(formData.get("journalEntryId"));
   await assertEntryNotReconciled(session.tenantId, journalEntryId, "entry");
+  const touched = await db.select({ accountId: journalLines.accountId }).from(journalLines).where(eq(journalLines.journalEntryId, journalEntryId));
   await reverseJournalEntry(session.tenantId, journalEntryId, session.userId);
+  await resettleForAccounts(session.tenantId, touched.map((l) => l.accountId));
   revalidatePath("/journal");
   revalidatePath("/dashboard");
 }

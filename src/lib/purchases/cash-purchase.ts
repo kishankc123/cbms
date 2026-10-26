@@ -9,7 +9,7 @@ import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned } from 
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
-import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, discardBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
 
 // A Consumable purchase: one bill with one or more lines, booked to purchase categories. The rules and the writer live
@@ -109,7 +109,7 @@ export function billLineItems(computed: { line: CashPurchaseLine }[]): PurchaseL
 
 /**
  * Writes one consumable bill: its number (the supplier's own, or AUTO-n), the bill, its ledger entry, the embedded payment
- * record, and any advance already paid to the supplier. Everything is checked first, and a failure part-way leaves nothing
+ * record, and the supplier's ledger (money already paid to them settles the oldest bills). Everything is checked first, and a failure part-way leaves nothing
  * behind. `takenNumbers` lets a batch share one list of used numbers instead of reading them again for every bill.
  */
 export async function createCashPurchaseCore(
@@ -178,7 +178,7 @@ export async function createCashPurchaseCore(
     throw e;
   }
 
-  // Any advance paid to this supplier goes to their oldest open bills first.
-  if (vendorId) await autoApplyAdvance(tenantId, userId, "supplier", vendorId);
+  // Money paid to this supplier ahead settles their oldest bills first (it is on their ledger).
+  await resettleParty(tenantId, "supplier", vendorId);
   return { billId: bill.id, billNumber };
 }

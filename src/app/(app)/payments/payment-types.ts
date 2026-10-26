@@ -21,7 +21,6 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export const MONEY_IN_TYPE_OPTIONS = [
   { value: "customer_payment", label: "Customer Payment" },
-  { value: "customer_advance", label: "Customer Advance" },
   { value: "loan_received", label: "Loan Received" },
   { value: "capital_introduced", label: "Capital Introduced" },
   { value: "refund_received", label: "Refund Received" },
@@ -36,7 +35,6 @@ export const MONEY_OUT_TYPE_OPTIONS = [
   { value: "expense_payment", label: "Expense Payment" },
   { value: "tax_payment", label: "Tax Payment" },
   { value: "loan_repayment", label: "Loan Repayment" },
-  { value: "supplier_advance", label: "Supplier Advance" },
   { value: "owner_withdrawal", label: "Owner Withdrawal" },
   { value: "cash_withdrawal", label: "Cash Withdrawal" },
   { value: "bank_transfer", label: "Bank Transfer" },
@@ -52,7 +50,8 @@ export const PAYMENT_METHOD_OPTIONS = [
   { value: "other", label: "Other" },
 ] as const;
 
-export const ALLOCATABLE_TYPES = ["customer_payment", "supplier_payment", "expense_payment"];
+// Only an expense is settled document by document; money from or to a customer or supplier goes on their own ledger.
+export const ALLOCATABLE_TYPES = ["expense_payment"];
 export const TRANSFER_TYPES = ["bank_transfer", "cash_withdrawal"];
 
 export const STATUS_FILTER_OPTIONS = [

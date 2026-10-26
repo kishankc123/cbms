@@ -11,7 +11,7 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { ensureSalesReturnsAccount } from "@/lib/ledger/return-accounts";
 import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { getCreditInfo, applyCredit, unapplyCredit, assertNoAppliedCredit } from "@/lib/ledger/credit-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
@@ -170,6 +170,7 @@ export async function createSalesReturn(input: SalesReturnInput) {
     throw e;
   }
 
+  await resettleParty(session.tenantId, "customer", input.customerId);
   refresh();
   await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Sales return ${noteNumber}`);
 }
@@ -188,34 +189,12 @@ export async function voidSalesReturn(formData: FormData) {
   if (!note) throw new Error("Debit note not found");
   if (note.status === "void") throw new Error("Debit note is already void");
 
-  await assertNoAppliedCredit(session.tenantId, note.id, note.noteNumber);
   // The returned goods must still be there to take back out (checked before anything is reversed).
   await assertStockTimeline(session.tenantId, { excludeSource: { sourceType: "sales_return", sourceId: note.id } });
   await unwindStock(session.tenantId, { date: todayIso(), sourceType: "sales_return", sourceId: note.id, userId: session.userId });
   await reverseAllActiveEntriesForSource(session.tenantId, note.id, session.userId, `Void of debit note ${note.noteNumber}`);
   await db.update(salesReturns).set({ status: "void" }).where(eq(salesReturns.id, id));
+  await resettleParty(session.tenantId, "customer", note.customerId);
   refresh();
   await recalculateAfter(session.tenantId, ((note.lineItems ?? []) as { itemId?: string | null }[]).map((l) => l.itemId), session.userId, `Void of debit note ${note.noteNumber}`);
-}
-
-// ---- applying this note's credit to the party's open invoices
-
-export async function getSalesReturnCredit(noteId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "view")) throw new Error("Not permitted");
-  return getCreditInfo(session.tenantId, "sales_return", noteId);
-}
-
-export async function applySalesReturnCredit(noteId: string, allocations: { targetId: string; amount: number }[]) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
-  await applyCredit(session.tenantId, session.userId, "sales_return", noteId, allocations);
-  refresh();
-}
-
-export async function removeSalesReturnCredit(applicationId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
-  await unapplyCredit(session.tenantId, "sales_return", applicationId);
-  refresh();
 }

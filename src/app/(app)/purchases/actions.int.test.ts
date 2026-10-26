@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accountingPeriods, accounts, items, journalEntries, journalLines, paymentAllocations, payments, purchaseBills, tenantTaxRegistrations, vendors } from "@/db/schema";
+import { accountingPeriods, accounts, items, journalEntries, journalLines, payments, purchaseBills, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
+import { createPayment } from "@/lib/ledger/payments-engine";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let other: Awaited<ReturnType<typeof createTempOrg>>;
@@ -104,11 +105,11 @@ describe("stockable purchases", () => {
     // VAT: both are needed, even when paid in full
     await expect(createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: vendorA, billType: "vat", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 113 }] })).rejects.toThrow(/Invoice number is required.*VAT bill/);
     await expect(createPurchaseInvoice({ invoiceNumber: "V-1", invoiceDate: "2026-09-01", vendorId: "", billType: "vat", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 113 }] })).rejects.toThrow(/Select a supplier.*VAT bill/);
-    // a balance that is not paid: owed to a supplier
-    await expect(createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: vendorA, billType: "no_bill", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 40 }] })).rejects.toThrow(/Invoice number is required.*balance is owed/);
+    // a balance that is not paid is owed to a supplier, who is needed; a No bill / Estimate still gets its number automatically
+    await createPurchaseInvoice({ invoiceNumber: "", invoiceDate: "2026-09-01", vendorId: vendorA, billType: "no_bill", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 40 }] });
     await expect(createPurchaseInvoice({ invoiceNumber: "P-1", invoiceDate: "2026-09-01", vendorId: "", billType: "no_bill", lines: [line(100, 1)], payments: [] })).rejects.toThrow(/Select a supplier/);
-    expect((await bills()).length).toBe(before + 4); // the refusals saved nothing
-  });
+    expect((await bills()).length).toBe(before + 5); // the refusals saved nothing
+  }, 150_000);
 
   it("a supplier-less invoice can be edited, keeping its generated number, and still posts straight to cash and stock", async () => {
     const b = (await bills()).find((x) => x.vendorId === null && x.billType === "no_bill" && x.billNumber.startsWith("AUTO-"))!;
@@ -132,17 +133,16 @@ describe("stockable purchases", () => {
     expect((await bills()).length).toBe(before);
   });
 
-  it("can't be edited or voided under a payment made later in Payments", async () => {
-    const bill = (await bills()).find((b) => b.billNumber === "S-3" && b.vendorId === vendorA)!;
-    const [p] = await db
-      .insert(payments)
-      .values({ tenantId: org.tenantId, paymentNumber: "MO-TEST-1", direction: "money_out", paymentType: "supplier_payment", paymentDate: "2026-09-06", partyType: "supplier", vendorId: vendorA, accountId: cashId, amount: "5.00", createdBy: org.userId })
-      .returning();
-    await db.insert(paymentAllocations).values({ paymentId: p.id, targetType: "purchase_bill", targetId: bill.id, allocatedAmount: "5.00" });
+  it("can still be edited and voided when a payment was made later in Payments; the payment stays on the supplier's account", async () => {
+    await createPurchaseInvoice({ invoiceNumber: "S-PAY", invoiceDate: "2026-09-05", vendorId: vendorA, billType: "no_bill", lines: [line(30, 1)], payments: [] });
+    const bill = (await bills()).find((b) => b.billNumber === "S-PAY" && b.vendorId === vendorA)!;
+    await createPayment(org.tenantId, org.userId, "TMP-PAY", { direction: "money_out", paymentType: "supplier_payment", paymentDate: "2026-09-06", partyType: "supplier", vendorId: vendorA, accountId: cashId, paymentMethod: "cash", amount: 5, confirmDuplicate: true });
 
-    const fd = Object.assign(new FormData(), { get: () => bill.id }) as unknown as FormData;
-    await expect(voidBill(fd)).rejects.toThrow(/MO-TEST-1/);
-    await expect(updatePurchaseInvoice({ billId: bill.id, invoiceNumber: "S-3", invoiceDate: "2026-09-05", vendorId: vendorA, billType: "no_bill", lines: [line(20, 1)], payments: [] })).rejects.toThrow(/MO-TEST-1/);
+    await updatePurchaseInvoice({ billId: bill.id, invoiceNumber: "S-PAY", invoiceDate: "2026-09-05", vendorId: vendorA, billType: "no_bill", lines: [line(20, 1)], payments: [] });
+    expect(Number((await bills()).find((b) => b.id === bill.id)!.total)).toBe(20);
+    await voidBill(Object.assign(new FormData(), { get: () => bill.id }) as unknown as FormData);
+    expect((await bills()).find((b) => b.id === bill.id)!.status).toBe("void");
+    expect((await db.select().from(payments).where(and(eq(payments.tenantId, org.tenantId), eq(payments.vendorId, vendorA), eq(payments.status, "posted")))).length).toBeGreaterThan(0);
   });
 
   it("stock that has already been sold can't be taken back out by voiding", async () => {

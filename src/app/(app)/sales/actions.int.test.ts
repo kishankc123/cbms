@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accountingPeriods, accounts, customers, journalEntries, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
 import { createPayment } from "@/lib/ledger/payments-engine";
-import { getCustomerAdvanceBalance } from "@/lib/ledger/advance-accounts";
+import { getCustomerBalances } from "@/lib/ledger/customer-balances";
 import { createTempOrg } from "@/test/temp-org";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -60,7 +60,7 @@ describe("sales invoice rules", () => {
     expect((await db.select().from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId)))).length).toBe(entriesBefore);
   });
 
-  it("an advance the customer has paid is applied to the new invoice automatically", async () => {
+  it("money the customer paid ahead settles the new invoice from their ledger, and the rest stays as their credit", async () => {
     // a customer with no other open invoices, so the new one is the oldest
     const [{ id: advCustomer }] = await db.insert(customers).values({ tenantId: org.tenantId, name: "Advance Customer" }).returning({ id: customers.id });
     const [cash] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, "1000")));
@@ -69,6 +69,6 @@ describe("sales invoice rules", () => {
     const inv = (await invoices()).find((i) => i.invoiceNumber === "ADV-1")!;
     expect(inv.status).toBe("paid");
     expect(Number(inv.amountPaid)).toBe(Number(inv.total));
-    expect(await getCustomerAdvanceBalance(org.tenantId, advCustomer)).toBe(500 - Number(inv.total));
+    expect((await getCustomerBalances(org.tenantId))[advCustomer]).toBe(-(500 - Number(inv.total)));
   });
 });

@@ -61,6 +61,8 @@ export const tenants = pgTable("tenants", {
   // which is unused now that the Settings page collects these instead.
   fiscalYearLabel: text("fiscal_year_label"),
   fiscalYearStartDate: date("fiscal_year_start_date"),
+  // The day opening balances are posted on; blank means the fiscal year start date.
+  openingBalanceDate: date("opening_balance_date"),
   fiscalYearEndDate: date("fiscal_year_end_date"),
   baseCurrency: text("base_currency").notNull().default("NPR"),
   // How dates are shown and entered for this organization: "AD" or "BS".

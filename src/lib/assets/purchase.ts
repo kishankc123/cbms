@@ -7,7 +7,7 @@ import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput 
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments, assertSupplierOwned } from "@/lib/ledger/account-guards";
-import { autoApplyAdvance } from "@/lib/ledger/advance-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { inputVatClaimable } from "@/lib/purchases/vat";
@@ -224,8 +224,8 @@ async function recordAssetPurchaseUnchecked(tenantId: string, userId: string, in
     throw e;
   }
 
-  // Any advance already paid to this supplier goes to their oldest open bills first.
-  await autoApplyAdvance(tenantId, userId, "supplier", input.vendorId);
+  // Money already paid to this supplier settles their oldest bills first (it is on their ledger).
+  await resettleParty(tenantId, "supplier", input.vendorId);
   return { ok: true, assetId: asset.id, assetCode: asset.assetCode, billId: bill.id };
 }
 
@@ -251,6 +251,7 @@ export async function voidAssetPurchase(tenantId: string, userId: string, assetI
     await reverseAllActiveEntriesForSource(tenantId, billId, userId, `Void of asset purchase ${asset.assetCode}`);
     await deleteEmbeddedPaymentsForBill(tenantId, billId);
     await db.update(purchaseBills).set({ status: "void" }).where(eq(purchaseBills.id, billId));
+    await resettleParty(tenantId, "supplier", asset.vendorId);
     await db.update(assets).set({ status: "voided", updatedAt: new Date() }).where(eq(assets.id, asset.id));
     await db.insert(assetEvents).values({ tenantId, assetId: asset.id, eventType: "voided", eventDate: todayIso(), description: "Purchase voided", createdBy: userId });
     await logAuditEvent({ tenantId, userId, action: "asset_purchase_voided", entityType: "asset", entityId: asset.id, before: { status: asset.status }, after: { status: "voided" } });

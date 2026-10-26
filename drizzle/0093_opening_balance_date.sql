@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "opening_balance_date" date;

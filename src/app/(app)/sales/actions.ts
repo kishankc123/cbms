@@ -16,7 +16,7 @@ import { getOrCreateCustomerReceivableAccountId } from "@/lib/ledger/subledger-a
 import { assertInventoryDate, assertItemsUsable, assertStockAvailable, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { autoApplyAdvance, getAdvanceInfo, applyAdvance, unapplyAdvance } from "@/lib/ledger/advance-applications";
+import { resettleParty } from "@/lib/ledger/party-settlement";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
@@ -192,6 +192,7 @@ export async function voidInvoice(formData: FormData) {
   await unwindStock(session.tenantId, { date: todayIso(), sourceType: "sale", sourceId: invoiceId, userId: session.userId });
 
   await db.update(salesInvoices).set({ status: "void" }).where(eq(salesInvoices.id, invoiceId));
+  await resettleParty(session.tenantId, "customer", invoice.customerId);
 
   revalidatePath("/sales");
   revalidatePath("/sales/invoices");
@@ -473,6 +474,8 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/customers");
+  await resettleParty(session.tenantId, "customer", existing.customerId);
+  await resettleParty(session.tenantId, "customer", input.customerId);
   revalidatePath("/inventory/items");
   await recalculateAfter(session.tenantId, [...validLines, ...((existing.lineItems ?? []) as LineItem[])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
 }
@@ -661,8 +664,8 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
     throw e;
   }
 
-  // Any advance this customer has paid goes to their oldest open invoices first.
-  await autoApplyAdvance(session.tenantId, session.userId, "customer", input.customerId);
+  // Money the customer paid ahead settles their oldest invoices first (it is on their ledger).
+  await resettleParty(session.tenantId, "customer", input.customerId);
 
   revalidatePath("/sales");
   revalidatePath("/sales/invoices");
@@ -671,26 +674,4 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   revalidatePath("/customers");
   revalidatePath("/inventory/items");
   await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Invoice ${invoiceNumber}`);
-}
-
-// ---- applying a customer's advance to one invoice by hand (it is also applied automatically when an invoice is created)
-
-export async function getInvoiceAdvance(invoiceId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "view")) throw new Error("Not permitted");
-  return getAdvanceInfo(session.tenantId, "customer", invoiceId);
-}
-
-export async function applyInvoiceAdvance(invoiceId: string, amount: number) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
-  await applyAdvance(session.tenantId, session.userId, "customer", invoiceId, amount);
-  for (const p of ["/sales", "/customers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
-}
-
-export async function removeInvoiceAdvance(applicationId: string) {
-  const session = await requireTenantSession();
-  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
-  await unapplyAdvance(session.tenantId, session.userId, "customer", applicationId);
-  for (const p of ["/sales", "/customers", "/journal", "/payments", "/dashboard"]) revalidatePath(p);
 }

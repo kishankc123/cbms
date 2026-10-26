@@ -68,6 +68,14 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
   (`recurring_expenses.expected_payment_mode_*`, planning only) and the **Receipts & Payments by Mode** report
   (`reports/receipts-by-mode`, `lib/ledger/cash-by-mode*.ts`; leaves out voided/edited entries and Inter-Transfers;
   older lines with no mode show as "No mode recorded").
+- **Customer and supplier money is not allocated.** A receipt from a customer or payment to a supplier (including one paid ahead, a
+  refund or a credit note) is one line on THEIR OWN ledger account (receivable / payable sub-account); there are no Advance accounts
+  and no "apply advance / apply credit" steps any more. What an invoice or bill shows as paid is worked out from that ledger by
+  `lib/ledger/party-settlement.ts` (`resettleParty`, one SQL statement): what was paid together with a document (embedded payment, or an
+  older hand allocation) stays with it, the rest of what the ledger has cleared goes to the oldest open documents first. Call it after
+  anything that changes a party's ledger or documents (it is wired into payments, invoices, bills, returns, voids and manual journals).
+  Only expenses and tax items are still allocated payment by payment. Old Advance balances are moved onto the party's own account by
+  `npm run ledger:settle` (run once per database after deploying; safe to repeat).
 - **Revenue account on invoices**: `sales_invoices.revenue_account_id`; chosen on Single Invoice (overrides the
   items' accounts), each Multi-Invoice row, and the Sales import (column + default). Only lowest-level income
   accounts (`lib/sales/revenue-accounts.ts`); blank = Sales Revenue (4000) as before.
@@ -181,7 +189,9 @@ duplicate date math elsewhere). Git user for this repo: kishankc123.
 
 ## Operations / things only the user can do
 
-- Run migrations **0065–0092** (and any later ones). **Deploy the code before running 0092** — it drops
+- Run `npm run ledger:settle` once on each database after deploying the ledger-settlement change (moves old customer/supplier
+  Advance balances onto their own accounts and settles every invoice and bill from the ledger).
+- Run migrations **0065–0093** (and any later ones). **Deploy the code before running 0092** — it drops
   `memberships.permissions`, which the previous release still reads on the Vercel database by hand, and make sure its host
   matches `.env` (compare the host of the production `DATABASE_URL` with the local one; if they are the
   same database nothing needs running). Commands for a manual run: set `$env:DATABASE_URL` in PowerShell to the

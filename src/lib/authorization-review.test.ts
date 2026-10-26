@@ -41,10 +41,6 @@ const EXCEPTIONS: Record<string, string> = {
   "app/(app)/payroll/salary-sheet/actions.ts#reverseFinalizedRun": "Payroll has no Void permission, so any role with Edit and 'See salary amounts' can reverse a finalized run (review: consider a Payroll Void action)",
   "app/(app)/compliance/ownership-actions.ts#cancelShares": "a share-register transaction (a corporate action), not the voiding of a document",
   "app/(app)/compliance/excise-actions.ts#undoExciseRenewal": "undoes the latest renewal record on the permit; posts no money",
-  "app/(app)/purchases/actions.ts#removeBillAdvance": "takes an advance off a bill (undoes an application); does not remove a record",
-  "app/(app)/return/purchase/actions.ts#removePurchaseReturnCredit": "takes a credit off a bill (undoes an application); does not remove a record",
-  "app/(app)/return/sales/actions.ts#removeSalesReturnCredit": "takes a credit off an invoice (undoes an application); does not remove a record",
-  "app/(app)/sales/actions.ts#removeInvoiceAdvance": "takes an advance off an invoice (undoes an application); does not remove a record",
   "app/(app)/compliance/tax/vat-worksheet-actions.ts#discardVatWorksheetLoad": "throws away an unsaved draft, not a record",
 };
 

@@ -8,132 +8,63 @@ import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccou
 import { todayIso } from "@/lib/calendar";
 export async function openingBalanceEntryDate(tenantId: string) {
   const [tenant] = await db
-    .select({ fiscalYearStartDate: tenants.fiscalYearStartDate })
+    .select({ openingDate: tenants.openingBalanceDate, fiscalYearStartDate: tenants.fiscalYearStartDate })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
-  return tenant?.fiscalYearStartDate || todayIso();
+  return tenant?.openingDate || tenant?.fiscalYearStartDate || todayIso();
 }
 
-// Posts (or, if the balance is now zero, simply leaves reversed) a customer's
-// opening balance against the "Brought forward" equity account, routed
-// through the customer's own receivable sub-account rather than the shared
-// AR control account. Always reverses whatever was posted before first —
-// safe to call on every create/update since reversing a non-existent entry
-// is a no-op.
-export async function syncCustomerOpeningBalanceEntry(
-  tenantId: string,
-  customerId: string,
-  customerName: string,
-  openingBalance: number,
-  userId: string
-) {
-  await reverseLatestEntryForSource(tenantId, "opening_balance", customerId, userId, `Opening balance update - ${customerName}`);
-  if (openingBalance === 0) return;
-
-  const arId = await getOrCreateCustomerReceivableAccountId(tenantId, customerId);
-  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
-
-  const amount = Math.abs(openingBalance);
-  const lines: PostLineInput[] =
-    openingBalance > 0
-      ? [
-          { accountId: arId, debitAmount: amount, description: `Opening balance - ${customerName}` },
-          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${customerName}` },
-        ]
-      : [
-          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${customerName}` },
-          { accountId: arId, creditAmount: amount, description: `Opening balance - ${customerName}` },
-        ];
-
+// The one place an opening entry is posted. Always reverses whatever was posted before for the same source first, so it is
+// safe to call on every create/update (reversing a non-existent entry is a no-op); no lines means the balance is now nil.
+export async function replaceOpeningEntry(tenantId: string, userId: string, sourceId: string, name: string, lines: PostLineInput[], entryDate?: string) {
+  await reverseLatestEntryForSource(tenantId, "opening_balance", sourceId, userId, `Opening balance update - ${name}`);
+  if (lines.length === 0) return;
   await postJournalEntry({
     tenantId,
-    entryDate: await openingBalanceEntryDate(tenantId),
+    entryDate: entryDate ?? (await openingBalanceEntryDate(tenantId)),
     sourceType: "opening_balance",
-    sourceId: customerId,
-    referenceNumber: customerName,
-    memo: `Opening balance - ${customerName}`,
+    sourceId,
+    referenceNumber: name,
+    memo: `Opening balance - ${name}`,
     createdBy: userId,
     lines,
   });
 }
 
-// Posts a supplier's opening balance against "Brought forward" — the AP
-// mirror of the customer version, routed through the supplier's own payable
-// sub-account. A positive balance means we owe the supplier (the normal AP
-// credit balance); negative means we're prepaid.
-export async function syncSupplierOpeningBalanceEntry(
-  tenantId: string,
-  supplierId: string,
-  supplierName: string,
-  openingBalance: number,
-  userId: string
-) {
-  await reverseLatestEntryForSource(tenantId, "opening_balance", supplierId, userId, `Opening balance update - ${supplierName}`);
-  if (openingBalance === 0) return;
-
-  const apId = await getOrCreateSupplierPayableAccountId(tenantId, supplierId);
+// One account against "Brought forward": a positive net debit debits the account, a negative one credits it.
+async function recordOpeningLines(tenantId: string, accountId: string, name: string, netDebit: number): Promise<PostLineInput[]> {
+  if (netDebit === 0) return [];
   const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
-
-  const amount = Math.abs(openingBalance);
-  const lines: PostLineInput[] =
-    openingBalance > 0
-      ? [
-          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${supplierName}` },
-          { accountId: apId, creditAmount: amount, description: `Opening balance - ${supplierName}` },
-        ]
-      : [
-          { accountId: apId, debitAmount: amount, description: `Opening balance - ${supplierName}` },
-          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${supplierName}` },
-        ];
-
-  await postJournalEntry({
-    tenantId,
-    entryDate: await openingBalanceEntryDate(tenantId),
-    sourceType: "opening_balance",
-    sourceId: supplierId,
-    referenceNumber: supplierName,
-    memo: `Opening balance - ${supplierName}`,
-    createdBy: userId,
-    lines,
-  });
+  const amount = Math.abs(netDebit);
+  const description = `Opening balance - ${name}`;
+  return netDebit > 0
+    ? [
+        { accountId, debitAmount: amount, description },
+        { accountId: broughtForward.id, creditAmount: amount, description },
+      ]
+    : [
+        { accountId: broughtForward.id, debitAmount: amount, description },
+        { accountId, creditAmount: amount, description },
+      ];
 }
 
-// Posts a bank/cash account's opening balance against "Brought forward", so the ledger (and the trial balance) carry
-// it — the same way customer and supplier opening balances are carried. A positive balance is money in the account;
-// a negative one is an overdraft. Reverses whatever was posted before first, so it is safe on every create/update.
-export async function syncBankOpeningBalanceEntry(
-  tenantId: string,
-  bankAccountId: string,
-  bankName: string,
-  ledgerAccountId: string,
-  openingBalance: number,
-  userId: string
-) {
-  await reverseLatestEntryForSource(tenantId, "opening_balance", bankAccountId, userId, `Opening balance update - ${bankName}`);
-  if (openingBalance === 0) return;
+// A customer's opening balance, routed through the customer's own receivable sub-account rather than the shared AR
+// control account. Positive = they owe us.
+export async function syncCustomerOpeningBalanceEntry(tenantId: string, customerId: string, customerName: string, openingBalance: number, userId: string) {
+  const arId = openingBalance === 0 ? "" : await getOrCreateCustomerReceivableAccountId(tenantId, customerId);
+  await replaceOpeningEntry(tenantId, userId, customerId, customerName, await recordOpeningLines(tenantId, arId, customerName, openingBalance));
+}
 
-  const broughtForward = await getOrCreateBroughtForwardAccount(tenantId);
-  const amount = Math.abs(openingBalance);
-  const lines: PostLineInput[] =
-    openingBalance > 0
-      ? [
-          { accountId: ledgerAccountId, debitAmount: amount, description: `Opening balance - ${bankName}` },
-          { accountId: broughtForward.id, creditAmount: amount, description: `Opening balance - ${bankName}` },
-        ]
-      : [
-          { accountId: broughtForward.id, debitAmount: amount, description: `Opening balance - ${bankName}` },
-          { accountId: ledgerAccountId, creditAmount: amount, description: `Opening balance - ${bankName}` },
-        ];
+// The AP mirror, through the supplier's own payable sub-account. Positive = we owe the supplier (the normal AP credit
+// balance); negative means we're prepaid.
+export async function syncSupplierOpeningBalanceEntry(tenantId: string, supplierId: string, supplierName: string, openingBalance: number, userId: string) {
+  const apId = openingBalance === 0 ? "" : await getOrCreateSupplierPayableAccountId(tenantId, supplierId);
+  await replaceOpeningEntry(tenantId, userId, supplierId, supplierName, await recordOpeningLines(tenantId, apId, supplierName, -openingBalance));
+}
 
-  await postJournalEntry({
-    tenantId,
-    entryDate: await openingBalanceEntryDate(tenantId),
-    sourceType: "opening_balance",
-    sourceId: bankAccountId,
-    referenceNumber: bankName,
-    memo: `Opening balance - ${bankName}`,
-    createdBy: userId,
-    lines,
-  });
+// A bank/cash account's opening balance, so the ledger (and the trial balance) carry it the same way. A positive balance
+// is money in the account; a negative one is an overdraft.
+export async function syncBankOpeningBalanceEntry(tenantId: string, bankAccountId: string, bankName: string, ledgerAccountId: string, openingBalance: number, userId: string) {
+  await replaceOpeningEntry(tenantId, userId, bankAccountId, bankName, await recordOpeningLines(tenantId, ledgerAccountId, bankName, openingBalance));
 }
