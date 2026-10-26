@@ -6,8 +6,7 @@ import {
   convertBStoAD,
   formatDate,
   parseDate,
-  detectCalendar,
-  convertAll,
+  importedDate,
   monthRange,
   addMonths,
   presetRange,
@@ -181,45 +180,32 @@ describe("parsing", () => {
   });
 });
 
-describe("calendar detection", () => {
+describe("dates in imported files", () => {
   const today = "2026-09-20";
+  const read = (v: string) => importedDate(v, today);
 
-  it("detects a BS column", () => {
-    const d = detectCalendar(["04-06-2083", "05-06-2083", "2083-06-10"], { today });
-    expect(d.calendar).toBe("BS");
-    expect(d.counts.BS).toBe(3);
-    expect(convertAll(["04-06-2083"], "BS")[0].iso).toBe("2026-09-20");
+  it("reads dd/mm/yyyy in BS or AD, telling them apart by the year", () => {
+    expect(read("04/06/2083")).toEqual({ iso: "2026-09-20", calendar: "BS" });
+    expect(read("20/09/2026")).toEqual({ iso: "2026-09-20", calendar: "AD" });
+    expect(read("20-09-2026")).toEqual({ iso: "2026-09-20", calendar: "AD" });
   });
 
-  it("detects an AD column", () => {
-    const d = detectCalendar(["2026-09-20", "20/09/2026", "21-09-2026"], { today });
-    expect(d.calendar).toBe("AD");
+  it("reads a real Excel date (yyyy-mm-dd) as it is, and AD and BS in the same column", () => {
+    expect(read("2026-09-20")).toEqual({ iso: "2026-09-20", calendar: "AD" });
+    expect(read("2083-06-04")).toEqual({ iso: "2026-09-20", calendar: "BS" });
   });
 
-  it("flags mixed columns and identifies the odd rows", () => {
-    const d = detectCalendar(["2083-06-04", "2083-06-05", "2026-09-22"], { today });
-    expect(d.calendar).toBe("mixed");
-    expect(d.needsReview).toBe(true);
-    expect(d.rows.map((r) => r.calendar)).toEqual(["BS", "BS", "AD"]);
+  it("is always day first: 03/04/2083 is the 3rd of Shrawan, never the 4th of Ashadh", () => {
+    expect(read("03/04/2083").iso).toBe(convertBStoAD({ year: 2083, month: 4, day: 3 }));
   });
 
-  it("does not guess when a date fits both calendars equally", () => {
-    const d = detectCalendar(["2045-05-05"], { today });
-    expect(d.calendar).toBe("ambiguous");
-    expect(d.needsReview).toBe(true);
-  });
-
-  it("uses the header only as a tie-breaker", () => {
-    expect(detectCalendar(["2045-05-05"], { today, header: "Nepali Date" }).calendar).toBe("BS");
-    expect(detectCalendar(["2045-05-05"], { today, header: "AD Date" }).calendar).toBe("AD");
-    // a clear year beats a misleading header
-    expect(detectCalendar(["2083-06-04"], { today, header: "AD Date" }).calendar).toBe("BS");
-  });
-
-  it("flags invalid rows and day/month ambiguity for review", () => {
-    expect(detectCalendar(["2026-09-20", "not a date"], { today }).needsReview).toBe(true);
-    expect(detectCalendar(["04/06/2026"], { today }).needsReview).toBe(true);
-    expect(detectCalendar([], { today }).calendar).toBe("none");
+  it("reports what it cannot read instead of guessing", () => {
+    for (const text of ["not a date", "", "2045-05-05", "13/13/2026", "20/09/26"]) {
+      const r = read(text);
+      expect(r.iso).toBeNull();
+      expect(r.calendar).toBeNull();
+    }
+    expect(read("not a date")).toMatchObject({ error: expect.stringContaining("dd/mm/yyyy") });
   });
 });
 

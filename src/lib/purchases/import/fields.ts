@@ -5,7 +5,7 @@ import { suggestMappingFrom, type FieldDef } from "@/lib/sales/import/fields";
 export type PurchaseFieldKey = "date" | "amount" | "supplier" | "category" | "billNumber" | "description" | "discount" | "billType" | "paid" | "account";
 
 export const PURCHASE_FIELDS: FieldDef<PurchaseFieldKey>[] = [
-  { key: "date", label: "Date", required: true, synonyms: ["date", "bill date", "purchase date", "invoice date", "txn date", "transaction date", "miti", "मिति"], help: "AD or BS dates both work." },
+  { key: "date", label: "Date", required: true, synonyms: ["date", "bill date", "purchase date", "invoice date", "txn date", "transaction date", "miti", "मिति"], help: "dd/mm/yyyy, in AD or BS." },
   { key: "amount", label: "Amount", required: true, synonyms: ["amount", "purchase amount", "bill amount", "taxable amount", "net amount", "basic amount", "invoice amount", "value", "total"], help: "The bill amount, before VAT unless you say it includes VAT." },
   { key: "supplier", label: "Supplier", required: false, synonyms: ["supplier", "supplier name", "vendor", "vendor name", "party", "party name", "seller", "paid to", "name"], help: "Leave blank for a purchase paid in full to no one in particular." },
   { key: "category", label: "Category", required: false, synonyms: ["category", "purchase category", "expense category", "account", "head", "item category", "type"], help: "The purchase category it is booked to." },

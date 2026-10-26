@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import type { ExpenseColumnMapping } from "@/lib/expenses/import/fields";
-import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
+import type { ExpenseCheckResult, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
 import type { CategoryDecision, SupplierDecision } from "@/lib/purchases/import/types";
 import { CheckDialog } from "../../sales/import/check-dialog";
 import { DoneStep, type DoneResult } from "../../sales/import/done-step";
@@ -16,7 +16,6 @@ import { ReviewStep } from "./review-step";
 type Step = "upload" | "review" | "done";
 export type ExpenseFile = { name: string; base64: string };
 
-const DEFAULT_DATES: ExpenseDateOptions = { choice: "auto", dayFirst: true, allowMixed: false };
 const MAX_FILE_BYTES = 2.5 * 1024 * 1024;
 const SLICE = 10;
 
@@ -38,7 +37,6 @@ export function ImportExpenses() {
   const [file, setFile] = useState<ExpenseFile | null>(null);
   const [analysis, setAnalysis] = useState<ExpenseFileAnalysis | null>(null);
   const [mapping, setMapping] = useState<ExpenseColumnMapping>({});
-  const [dateOptions, setDateOptions] = useState<ExpenseDateOptions>(DEFAULT_DATES);
   const [settings, setSettings] = useState<ExpenseImportSettings>({ amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null });
   const [review, setReview] = useState<ExpenseReviewResult | null>(null);
   const [supplierDecisions, setSupplierDecisions] = useState<Record<string, SupplierDecision>>({});
@@ -67,10 +65,10 @@ export function ImportExpenses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: ExpenseFile, m: ExpenseColumnMapping, d: ExpenseDateOptions, s: ExpenseImportSettings, o: ExpenseOverrides = overrides) {
+  async function runReview(f: ExpenseFile, m: ExpenseColumnMapping, s: ExpenseImportSettings, o: ExpenseOverrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewExpenses({ fileName: f.name, base64: f.base64, mapping: m, dateOptions: d, settings: s, overrides: o });
+      const r = await reviewExpenses({ fileName: f.name, base64: f.base64, mapping: m, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
@@ -91,14 +89,13 @@ export function ImportExpenses() {
       setFile(f);
       setAnalysis(a);
       setMapping(a.mapping);
-      setDateOptions(DEFAULT_DATES);
       setSupplierDecisions({});
       setCategoryDecisions({});
       setSkipRows([]);
       setOverrides({});
       setIncludeDuplicates(false);
       setStep("review");
-      if (a.mappingComplete && !a.dates.blocking) await runReview(f, a.mapping, DEFAULT_DATES, settings, {});
+      if (a.mappingComplete) await runReview(f, a.mapping, settings, {});
       else setReview(null);
     } catch (e) {
       reportError(e);
@@ -109,19 +106,15 @@ export function ImportExpenses() {
 
   const changeMapping = (m: ExpenseColumnMapping) => {
     setMapping(m);
-    if (file) void runReview(file, m, dateOptions, settings);
-  };
-  const changeDates = (d: ExpenseDateOptions) => {
-    setDateOptions(d);
-    if (file) void runReview(file, mapping, d, settings);
+    if (file) void runReview(file, m, settings);
   };
   const changeSettings = (s: ExpenseImportSettings) => {
     setSettings(s);
-    if (file) void runReview(file, mapping, dateOptions, s);
+    if (file) void runReview(file, mapping, s);
   };
   const changeOverrides = (o: ExpenseOverrides) => {
     setOverrides(o);
-    if (file) void runReview(file, mapping, dateOptions, settings, o);
+    if (file) void runReview(file, mapping, settings, o);
   };
 
   // What the review's rows come to once the decisions made here are applied (the server confirms it all again on import).
@@ -139,7 +132,7 @@ export function ImportExpenses() {
   }, [review, supplierDecisions, categoryDecisions, skipRows]);
 
   const toImport = effective ? effective.filter((r) => r.status === "ready" || (includeDuplicates && r.status === "duplicate")).length : 0;
-  const runInput = (): ExpenseRunInput => ({ fileName: file!.name, base64: file!.base64, mapping, dateOptions, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
+  const runInput = (): ExpenseRunInput => ({ fileName: file!.name, base64: file!.base64, mapping, settings, supplierDecisions, categoryDecisions, skipRows, includeDuplicates, overrides });
 
   async function doCheck() {
     if (!file) return;
@@ -194,7 +187,7 @@ export function ImportExpenses() {
     setResult(null);
     setStep("review");
     setIncludeDuplicates(false);
-    await runReview(file, mapping, dateOptions, settings);
+    await runReview(file, mapping, settings);
   }
 
   function reset() {
@@ -233,9 +226,9 @@ export function ImportExpenses() {
             onFile={onFile}
             onTemplate={downloadExpenseTemplate}
             rowNoun="expense"
-            pasteExample={"Date\tSupplier\tCategory\tAmount\n2083-04-15\tHimal Traders\tStationery\t5000"}
+            pasteExample={"Date\tSupplier\tCategory\tAmount\n15/04/2083\tHimal Traders\tStationery\t5000"}
             notes={[
-              "Columns and dates (AD or BS) are matched for you. You only fix what can't be read.",
+              "Columns are matched for you, and dates are read as dd/mm/yyyy (AD or BS). You only fix what can't be read.",
               "Suppliers and categories in the file are matched to yours; new suppliers are created only if you tick them.",
               "Expenses post exactly like Add Expense: VAT, TDS, payments and your audit rules all apply.",
               "You can undo a whole import afterwards.",
@@ -263,8 +256,6 @@ export function ImportExpenses() {
             setup={setup}
             mapping={mapping}
             onMapping={changeMapping}
-            dateOptions={dateOptions}
-            onDates={changeDates}
             settings={settings}
             onSettings={changeSettings}
             review={review}

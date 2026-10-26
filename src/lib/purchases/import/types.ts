@@ -1,4 +1,3 @@
-import type { ImportDateChoice } from "@/lib/banking/import-dates";
 import type { PurchaseRowIssue, PurchaseRowStatus } from "./checks";
 import type { PurchaseColumnMapping, PurchaseFieldKey } from "./fields";
 import type { PurchaseBillTypeValue } from "./values";
@@ -19,8 +18,6 @@ export type PurchaseImportSettings = {
 };
 
 export type PurchaseOverrides = Record<number, Partial<Record<PurchaseFieldKey, string>>>;
-export type PurchaseDateOptions = { choice: ImportDateChoice; dayFirst: boolean; allowMixed: boolean };
-
 export type PurchaseFileAnalysis = {
   headers: string[];
   sample: string[][];
@@ -28,7 +25,6 @@ export type PurchaseFileAnalysis = {
   mapping: PurchaseColumnMapping;
   remembered: boolean;
   mappingComplete: boolean;
-  dates: { detected: string; confidence: number; mixed: boolean; blocking: boolean; problemCount: number; dayMonthAmbiguity: boolean };
 };
 
 export type PurchaseReviewRow = {
@@ -63,7 +59,6 @@ export type PurchaseReviewResult = {
   fileTotal: number;
   importTotal: number;
   importTax: number;
-  dates: PurchaseFileAnalysis["dates"];
 };
 
 export type SupplierDecision = { action: "existing"; vendorId: string; remember: boolean } | { action: "create"; name: string } | { action: "skip" };
@@ -73,7 +68,6 @@ export type PurchaseRunInput = {
   fileName: string;
   base64: string;
   mapping: PurchaseColumnMapping;
-  dateOptions: PurchaseDateOptions;
   settings: PurchaseImportSettings;
   supplierDecisions: Record<string, SupplierDecision>;
   categoryDecisions: Record<string, CategoryDecision>;

@@ -1,7 +1,6 @@
 import type { CustomerState, RowIssue, RowStatus } from "./checks";
 import type { ImportFieldKey, SalesColumnMapping } from "./fields";
 import type { SalesBillTypeValue } from "./values";
-import type { ImportDateChoice } from "@/lib/banking/import-dates";
 
 // The shapes passed between the Import Sales screen and its server actions.
 
@@ -22,8 +21,6 @@ export type ImportSettings = {
 /** Corrections typed into the review: a row's cell text, by the row's number in the file, that replaces what the file says. */
 export type Overrides = Record<number, Partial<Record<ImportFieldKey, string>>>;
 
-export type DateOptions = { choice: ImportDateChoice; dayFirst: boolean; allowMixed: boolean };
-
 export type FileAnalysis = {
   headers: string[];
   sample: string[][];
@@ -31,7 +28,6 @@ export type FileAnalysis = {
   mapping: SalesColumnMapping;
   remembered: boolean;
   mappingComplete: boolean;
-  dates: { detected: string; confidence: number; mixed: boolean; blocking: boolean; problemCount: number; dayMonthAmbiguity: boolean };
 };
 
 export type ReviewRow = {
@@ -69,7 +65,6 @@ export type ReviewResult = {
   fileTotal: number;
   importTotal: number;
   importTax: number;
-  dates: FileAnalysis["dates"];
   customersToCreate: number;
 };
 
@@ -79,7 +74,6 @@ export type RunInput = {
   fileName: string;
   base64: string;
   mapping: SalesColumnMapping;
-  dateOptions: DateOptions;
   settings: ImportSettings;
   decisions: Record<string, GroupDecision>;
   skipRows: number[];

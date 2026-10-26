@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 // The sample statement file offered on the Upload Statement screen. The first sheet is the one the upload reads
 // (parse-statement.ts), so the example rows come first and the explanations sit on later sheets.
 export const STATEMENT_COLUMNS: { name: string; needed: string; meaning: string }[] = [
-  { name: "Date", needed: "Required", meaning: "AD or BS (2083-04-15 or 2026-07-31). You choose the format when uploading; it is stored as AD." },
+  { name: "Date", needed: "Required", meaning: "dd/mm/yyyy, in AD or BS (04/04/2083 or 17/07/2026). It is stored as AD." },
   { name: "Description", needed: "Optional", meaning: "The bank's narration. Helps matching and is shown in reconciliation." },
   { name: "Reference", needed: "Optional", meaning: "Cheque number, transaction ID or voucher number from the bank." },
   { name: "Debit", needed: "One layout needed", meaning: "Money out of the account (withdrawals, payments). Use with Credit." },
@@ -16,10 +16,10 @@ export function buildStatementTemplate(): string {
   const wb = XLSX.utils.book_new();
   const statement = XLSX.utils.aoa_to_sheet([
     ["Date", "Description", "Reference", "Debit", "Credit", "Balance"],
-    ["2083-04-02", "Cash deposit", "DEP-1001", "", 50000, 150000],
-    ["2083-04-05", "Cheque payment to supplier", "CHQ-000231", 12500, "", 137500],
-    ["2083-04-09", "Fonepay collection", "FP-77821", "", 8200, 145700],
-    ["2083-04-15", "Bank charges", "", 150, "", 145550],
+    ["02/04/2083", "Cash deposit", "DEP-1001", "", 50000, 150000],
+    ["05/04/2083", "Cheque payment to supplier", "CHQ-000231", 12500, "", 137500],
+    ["09/04/2083", "Fonepay collection", "FP-77821", "", 8200, 145700],
+    ["15/04/2083", "Bank charges", "", 150, "", 145550],
   ]);
   statement["!cols"] = [{ wch: 14 }, { wch: 34 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, statement, "Statement");

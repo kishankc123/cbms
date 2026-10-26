@@ -12,7 +12,7 @@ export type ImportField = {
 };
 
 export const IMPORT_FIELDS: ImportField[] = [
-  { key: "date", label: "Date", required: true, synonyms: ["date", "invoice date", "bill date", "sales date", "sale date", "txn date", "transaction date", "miti", "मिति"], help: "AD or BS dates both work." },
+  { key: "date", label: "Date", required: true, synonyms: ["date", "invoice date", "bill date", "sales date", "sale date", "txn date", "transaction date", "miti", "मिति"], help: "dd/mm/yyyy, in AD or BS." },
   { key: "amount", label: "Amount", required: true, synonyms: ["amount", "sales amount", "sale amount", "taxable amount", "net amount", "basic amount", "invoice amount", "bill amount", "value", "sales", "total"], help: "The invoice amount, before VAT unless you say it includes VAT." },
   { key: "customer", label: "Customer", required: false, synonyms: ["customer", "customer name", "party", "party name", "client", "client name", "buyer", "sold to", "name"], help: "Leave blank for cash sales that are paid in full." },
   { key: "discount", label: "Discount", required: false, synonyms: ["discount", "discount amount", "disc", "disc amount"], help: "Optional." },

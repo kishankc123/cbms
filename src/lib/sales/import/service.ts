@@ -5,7 +5,7 @@ import { and, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customerAliases, customers, importColumnMappings, salesImports, salesInvoices } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { resolveImportDates } from "@/lib/banking/import-dates";
+import { importedDate } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { PartialBatchError, postSalesBatch, type BatchInvoiceRow } from "@/lib/sales/invoice-records";
@@ -13,7 +13,7 @@ import { assertRevenueAccount, getRevenueAccounts } from "@/lib/sales/revenue-ac
 import { salesVatRate } from "@/lib/sales/vat";
 import { checkRow, type CustomerState } from "./checks";
 import { headerSignature, IMPORT_FIELDS, mappingComplete, suggestMapping, type SalesColumnMapping } from "./fields";
-import type { CheckResult, CustomerGroup, DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow, RunInput, RunResult } from "./types";
+import type { CheckResult, CustomerGroup, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow, RunInput, RunResult } from "./types";
 import { bestNameMatch, normalizeName, parseAmountCell, parseBillTypeCell } from "./values";
 
 // Import Sales: reading a spreadsheet of sales (one row per invoice), matching it to customers and accounts, checking every
@@ -36,13 +36,6 @@ function readFile(base64: string, fileName: string): Parsed {
 
 const colIndex = (headers: string[], name: string | undefined) => (name ? headers.findIndex((h) => h.trim().toLowerCase() === name.trim().toLowerCase()) : -1);
 
-function datesFor(parsed: Parsed, mapping: SalesColumnMapping, opts: DateOptions) {
-  const idx = colIndex(parsed.headers, mapping.date);
-  return resolveImportDates(parsed.rows.map((r) => (idx >= 0 ? r[idx] : undefined)), { header: mapping.date, choice: opts.choice, dayFirst: opts.dayFirst, allowMixed: opts.allowMixed });
-}
-
-const datesSummary = (d: ReturnType<typeof resolveImportDates>): FileAnalysis["dates"] => ({ detected: d.detected, confidence: d.confidence, mixed: d.mixed, blocking: d.blocking, problemCount: d.problemCount, dayMonthAmbiguity: d.hasDayMonthAmbiguity });
-
 // ------------------------------------------------------------------ step 1: what is in the file
 
 export async function analyzeSalesFile(tenantId: string, input: { fileName: string; base64: string }): Promise<FileAnalysis> {
@@ -55,8 +48,7 @@ export async function analyzeSalesFile(tenantId: string, input: { fileName: stri
   const usable = known && Object.values(known).every((h) => colIndex(parsed.headers, h) >= 0);
   const mapping = usable ? known! : suggestMapping(parsed.headers);
 
-  const dates = datesFor(parsed, mapping, { choice: "auto", dayFirst: true, allowMixed: false });
-  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: mappingComplete(mapping), dates: datesSummary(dates) };
+  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: mappingComplete(mapping) };
 }
 
 // ------------------------------------------------------------------ step 2: every row, checked
@@ -97,13 +89,13 @@ function applyOverrides(parsed: Parsed, mapping: SalesColumnMapping, overrides: 
 }
 
 /** Everything the review and the import both need, worked out once from the file, the settings and the decisions made so far. */
-async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesColumnMapping, dateOptions: DateOptions, settings: ImportSettings, decisions: Record<string, GroupDecision>, skipRows: Set<number>, overrides: Overrides = {}) {
+async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesColumnMapping, settings: ImportSettings, decisions: Record<string, GroupDecision>, skipRows: Set<number>, overrides: Overrides = {}) {
   const { parsed, mapping } = applyOverrides(parsedIn, mappingIn, overrides);
   for (const f of IMPORT_FIELDS.filter((x) => x.required)) if (colIndex(parsed.headers, mapping[f.key]) < 0) throw new Error(`Choose the column that holds the ${f.label.toLowerCase()}.`);
   const idx = Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof IMPORT_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
-  const dates = datesFor(parsed, mapping, dateOptions);
+  const dates = parsed.rows.map((r) => importedDate(cell(r, "date")));
   const [customerList, aliasRows, revenueList] = await Promise.all([
     db.select({ id: customers.id, name: customers.name }).from(customers).where(eq(customers.tenantId, tenantId)),
     db.select({ alias: customerAliases.alias, customerId: customerAliases.customerId }).from(customerAliases).where(eq(customerAliases.tenantId, tenantId)),
@@ -124,7 +116,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
 
   const lockedByDate = new Map<string, boolean>();
   const vatByDate = new Map<string, number>();
-  const isoDates = [...new Set(dates.rows.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
+  const isoDates = [...new Set(dates.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
   for (const d of isoDates) {
     lockedByDate.set(d, await assertPeriodOpen(tenantId, d).then(() => false, () => true));
     vatByDate.set(d, await salesVatRate(tenantId, d));
@@ -146,7 +138,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
   parsed.rows.forEach((r, i) => {
     const rowNumber = i + 2;
     if (r.every((c) => (c ?? "").trim() === "")) return;
-    const d = dates.rows[i];
+    const d = dates[i];
     const customerText = cell(r, "customer");
     const key = customerText ? normalizeName(customerText) : null;
 
@@ -188,7 +180,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
 
     const check = checkRow({
       dateIso: iso,
-      dateNote: d?.note ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
+      dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       amount,
       discount,
@@ -237,12 +229,12 @@ async function buildRows(tenantId: string, parsedIn: Parsed, mappingIn: SalesCol
       revenueAccountId: revenueId ?? (settings.defaultRevenueAccountId && revenueList.some((a) => a.id === settings.defaultRevenueAccountId) ? settings.defaultRevenueAccountId : null),
     });
   });
-  return { rows: out, dates, customerList };
+  return { rows: out, customerList };
 }
 
-export async function reviewSalesFile(tenantId: string, input: { base64: string; fileName: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
+export async function reviewSalesFile(tenantId: string, input: { base64: string; fileName: string; mapping: SalesColumnMapping; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, dates, customerList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, new Set(), input.overrides);
+  const { rows, customerList } = await buildRows(tenantId, parsed, input.mapping, input.settings, {}, new Set(), input.overrides);
 
   // Names in the file that match nobody yet, grouped so each is decided once. The closest existing name is suggested.
   const groups = new Map<string, CustomerGroup>();
@@ -273,7 +265,7 @@ export async function reviewSalesFile(tenantId: string, input: { base64: string;
     }
   }
   const strip = (r: Row): ReviewRow => ({ rowNumber: r.rowNumber, raw: r.raw, dateRaw: r.dateRaw, dateIso: r.dateIso, customerText: r.customerText, customerName: r.customerName, customerKey: r.customerKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status, issues: r.issues, messages: r.messages, total: r.total, tax: r.tax });
-  return { rows: rows.map(strip), groups: [...groups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, dates: datesSummary(dates), customersToCreate: groups.size };
+  return { rows: rows.map(strip), groups: [...groups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, customersToCreate: groups.size };
 }
 
 // ------------------------------------------------------------------ step 3: import
@@ -313,7 +305,7 @@ export async function checkSalesImport(tenantId: string, input: RunInput): Promi
       }
     }
   }
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, decisions, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.settings, decisions, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   return {
     wouldImport: importable.length,
@@ -375,7 +367,7 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
     }
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.settings, resolved, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   if (importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
@@ -471,8 +463,8 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sales = XLSX.utils.aoa_to_sheet([
     ["Date", "Customer", "Amount", "Discount", "Bill type", "Revenue account", "Paid amount", "Received into"],
-    ["2083-04-15", customerList[0]?.name ?? "Customer name", 10000, 0, "Taxable", revenueList[0]?.name ?? "Sales Revenue", 0, ""],
-    ["2083-04-16", "", 2500, 0, "Taxable", "", 2825, accountList[0]?.name ?? "Cash"],
+    ["15/04/2083", customerList[0]?.name ?? "Customer name", 10000, 0, "Taxable", revenueList[0]?.name ?? "Sales Revenue", 0, ""],
+    ["16/04/2083", "", 2500, 0, "Taxable", "", 2825, accountList[0]?.name ?? "Cash"],
   ]);
   sales["!cols"] = [{ wch: 14 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, sales, "Sales");
@@ -489,7 +481,7 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Sales sheet"],
       ["One row is one invoice. Only Date and Amount are needed."],
-      ["Date: AD or BS (2083-04-15 or 2026-07-31)."],
+      ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Amount: before VAT (or including VAT if you tell the import so)."],
       ["Customer: leave blank for a cash sale that is paid in full."],
       ["Bill type: Taxable or Zero rated. Blank uses the default you choose."],

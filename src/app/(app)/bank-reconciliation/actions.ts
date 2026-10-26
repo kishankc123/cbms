@@ -26,8 +26,7 @@ import { assessReconciliation } from "@/lib/banking/assess";
 import { todayIso } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { buildStatementTemplate } from "@/lib/banking/statement-template";
-import { normalizeStatementRows, type ColumnMapping, type DateImportOptions } from "@/lib/banking/normalize-rows";
-import type { ImportDateResult } from "@/lib/banking/import-dates";
+import { normalizeStatementRows, type ColumnMapping } from "@/lib/banking/normalize-rows";
 import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -260,44 +259,12 @@ export async function previewStatementFile(input: { bankAccountId: string; fileN
   return { headers, sampleRows: rows.slice(0, 10), totalRows: rows.length, suggestedMapping };
 }
 
-export type DatePreview = ImportDateResult & {
-  /** Only the rows worth showing: the first few, plus every problem row. */
-  shown: ImportDateResult["rows"];
-  totalRows: number;
-};
-
-// Shows how the file's date column will be read (AD or BS, auto-detected or
-// chosen by the user) and what each date converts to — before anything is imported.
-export async function previewStatementDates(input: {
-  bankAccountId: string;
-  fileName: string;
-  base64: string;
-  dateColumn: string;
-  choice: DateImportOptions["choice"];
-  dayFirst: boolean;
-  allowMixed: boolean;
-}): Promise<DatePreview> {
-  const session = await requireTenantSession();
-  if (!can(session, "bank_reconciliation", "create")) throw new Error("Not permitted");
-  const { headers, rows } = parseStatementFile(input.base64, input.fileName);
-  const { dates } = normalizeStatementRows(headers, rows, { date: input.dateColumn }, { choice: input.choice, dayFirst: input.dayFirst, allowMixed: input.allowMixed });
-  const shown = dates.rows.filter((r, i) => i < 12 || r.status === "invalid" || r.status === "ambiguous" || r.dayMonthAmbiguous || r.projected || (dates.mixed && i < 200)).slice(0, 200);
-  return { ...dates, rows: [], shown, totalRows: dates.rows.length };
-}
-
 export type ConfirmImportInput = {
   bankAccountId: string;
   fileName: string;
   base64: string;
   mapping: ColumnMapping;
-  /** Ignored: the period of an import is worked out from the transactions in it. */
-  statementPeriodStart?: string;
-  statementPeriodEnd?: string;
   saveAsTemplateName: string;
-  /** How to read the date column; the stored result is always AD. */
-  dateChoice?: DateImportOptions["choice"];
-  dayFirst?: boolean;
-  allowMixedDates?: boolean;
 };
 
 export type ConfirmImportResult = { imported: number; duplicates: number; skipped: number };
@@ -317,15 +284,8 @@ export async function confirmStatementImport(input: ConfirmImportInput): Promise
   if (!bank) throw new Error("Bank account not found");
 
   const { headers, rows } = parseStatementFile(input.base64, input.fileName);
-  const { valid, skipped, dates } = normalizeStatementRows(headers, rows, input.mapping, {
-    choice: input.dateChoice ?? "auto",
-    dayFirst: input.dayFirst ?? true,
-    allowMixed: input.allowMixedDates ?? false,
-  });
-  if (dates.blocking) {
-    throw new Error("The dates in this file need to be reviewed first — choose AD or BS, or fix the highlighted rows.");
-  }
-  if (valid.length === 0) throw new Error("No valid transaction rows found with this column mapping");
+  const { valid, skipped } = normalizeStatementRows(headers, rows, input.mapping);
+  if (valid.length === 0) throw new Error("No valid transaction rows found with this column mapping. Dates must be written dd/mm/yyyy.");
 
   const existingHashes = await db
     .select({ hash: bankStatementLines.dedupeHash })

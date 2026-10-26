@@ -273,41 +273,11 @@ export function parseDate(input: string | null | undefined, calendar: CalendarSy
   return { ok: true, iso, calendar, dayMonthAmbiguous, projected: false };
 }
 
-// ------------------------------------------------------------- detection
-
-export type RowCalendar = "AD" | "BS" | "ambiguous" | "invalid";
-export type RowDetection = {
-  index: number;
-  raw: string;
-  calendar: RowCalendar;
-  /** Canonical AD date under the detected calendar (null when ambiguous/invalid). */
-  iso: IsoDate | null;
-  adIso: IsoDate | null;
-  bsIso: IsoDate | null;
-  dayMonthAmbiguous: boolean;
-  projected: boolean;
-  note?: string;
-};
-
-export type DetectOptions = { header?: string; dayFirst?: boolean; today?: IsoDate };
-
-const AD_HEADER_HINT = /\b(ad|a\.d\.?|english|gregorian|eng)\b/i;
-const BS_HEADER_HINT = /\b(bs|b\.s\.?|nepali|miti|bikram|vs)\b|मिति/i;
-
-export function headerHint(header?: string): CalendarSystem | null {
-  if (!header) return null;
-  const bs = BS_HEADER_HINT.test(header);
-  const ad = AD_HEADER_HINT.test(header);
-  if (bs && !ad) return "BS";
-  if (ad && !bs) return "AD";
-  return null;
-}
+// ------------------------------------------------------- dates in imported files
 
 /**
- * Years that make sense for real accounting data, per calendar: a generous
- * window around today. The AD and BS windows never overlap (BS ≈ AD + 57), so
- * the year alone usually decides, and structural validity (day 32, etc.)
- * backs it up. Anything that fits neither is reported, never guessed.
+ * Years that make sense for real accounting data, per calendar: a generous window around today. The AD and BS windows never
+ * overlap (BS is about 57 years ahead), so the year alone says which calendar a date is written in.
  */
 function plausibleYears(today: IsoDate) {
   const ad = +today.slice(0, 4);
@@ -315,81 +285,22 @@ function plausibleYears(today: IsoDate) {
   return { ad: [ad - 30, ad + 8] as const, bs: [bsNow - 30, bsNow + 8] as const };
 }
 
-export function classifyDate(raw: string | null | undefined, index: number, opts: DetectOptions = {}): RowDetection {
+export type ImportedDate = { iso: IsoDate | null; calendar: CalendarSystem | null; error?: string };
+
+/**
+ * A date from an imported file: written dd/mm/yyyy, in AD or BS (04/04/2083 and 17/07/2026 both work, in the same column too).
+ * A real Excel date (yyyy-mm-dd) is read as it is. Anything that fits neither calendar is reported, never guessed.
+ */
+export function importedDate(raw: string | null | undefined, today: IsoDate = todayIso()): ImportedDate {
   const value = raw == null ? "" : String(raw);
-  const today = opts.today ?? todayIso();
+  if (value.trim() === "") return { iso: null, calendar: null, error: "The date is empty." };
   const win = plausibleYears(today);
-  const asAd = parseDate(value, "AD", { dayFirst: opts.dayFirst });
-  const asBs = parseDate(value, "BS", { dayFirst: opts.dayFirst });
-
-  const base = { index, raw: value, adIso: asAd.ok ? asAd.iso : null, bsIso: asBs.ok ? asBs.iso : null };
-  const yearOf = (p: ParseResult, cal: CalendarSystem) => (p.ok ? (cal === "AD" ? +p.iso.slice(0, 4) : (convertADtoBS(p.iso)?.year ?? 0)) : 0);
-  const inWin = (y: number, w: readonly [number, number]) => y >= w[0] && y <= w[1];
-
-  const adPlausible = asAd.ok && inWin(yearOf(asAd, "AD"), win.ad);
-  const bsPlausible = asBs.ok && inWin(yearOf(asBs, "BS"), win.bs);
-
-  const pick = (cal: CalendarSystem, note?: string): RowDetection => {
-    const p = cal === "AD" ? asAd : asBs;
-    return { ...base, calendar: cal, iso: p.ok ? p.iso : null, dayMonthAmbiguous: p.ok ? p.dayMonthAmbiguous : false, projected: p.ok ? p.projected : false, note };
-  };
-
-  if (!asAd.ok && !asBs.ok) {
-    return { ...base, calendar: "invalid", iso: null, dayMonthAmbiguous: false, projected: false, note: value.trim() === "" ? "Empty date" : (asAd.ok ? "" : asAd.error) };
-  }
-  if (asAd.ok && !asBs.ok) return pick("AD");
-  if (asBs.ok && !asAd.ok) return pick("BS");
-
-  if (adPlausible && !bsPlausible) return pick("AD");
-  if (bsPlausible && !adPlausible) return pick("BS");
-
-  const hint = headerHint(opts.header);
-  if (hint) return pick(hint, "Chosen from the column header");
-  return { ...base, calendar: "ambiguous", iso: null, dayMonthAmbiguous: false, projected: false, note: "Could be AD or BS — please choose" };
-}
-
-export type Detection = {
-  /** "none" = no dates found. */
-  calendar: CalendarSystem | "ambiguous" | "mixed" | "none";
-  /** 0–1. */
-  confidence: number;
-  counts: { AD: number; BS: number; ambiguous: number; invalid: number };
-  rows: RowDetection[];
-  /** true when the user must look at the result before importing. */
-  needsReview: boolean;
-  headerHint: CalendarSystem | null;
-};
-
-export function detectCalendar(values: (string | null | undefined)[], opts: DetectOptions = {}): Detection {
-  const rows = values.map((v, i) => classifyDate(v, i, opts)).filter((r) => r.raw.trim() !== "" || r.calendar !== "invalid");
-  const counts = { AD: 0, BS: 0, ambiguous: 0, invalid: 0 };
-  for (const r of rows) counts[r.calendar]++;
-  const hint = headerHint(opts.header);
-  const total = rows.length;
-
-  let calendar: Detection["calendar"];
-  if (total === 0) calendar = "none";
-  else if (counts.AD > 0 && counts.BS > 0) calendar = "mixed";
-  else if (counts.AD > 0) calendar = "AD";
-  else if (counts.BS > 0) calendar = "BS";
-  else calendar = counts.ambiguous > 0 ? "ambiguous" : "none";
-
-  const decided = calendar === "AD" || calendar === "BS" ? counts[calendar] : 0;
-  let confidence = total === 0 ? 0 : decided / total;
-  if (hint && hint === calendar) confidence = Math.min(1, confidence + 0.1);
-  if (hint && (calendar === "AD" || calendar === "BS") && hint !== calendar) confidence = Math.max(0, confidence - 0.3);
-
-  const needsReview =
-    calendar === "mixed" || calendar === "ambiguous" || calendar === "none" || counts.ambiguous > 0 || counts.invalid > 0 || rows.some((r) => r.dayMonthAmbiguous) || rows.some((r) => r.projected);
-  return { calendar, confidence, counts, rows, needsReview, headerHint: hint };
-}
-
-/** Converts every value using an explicitly chosen calendar (the user's override). */
-export function convertAll(values: (string | null | undefined)[], calendar: CalendarSystem, opts: ParseOptions = {}) {
-  return values.map((raw, index) => {
-    const r = parseDate(raw, calendar, opts);
-    return r.ok ? { index, raw: String(raw ?? ""), iso: r.iso as IsoDate | null, error: null as string | null, dayMonthAmbiguous: r.dayMonthAmbiguous, projected: r.projected } : { index, raw: String(raw ?? ""), iso: null as IsoDate | null, error: r.error, dayMonthAmbiguous: false, projected: false };
-  });
+  const inside = (year: number, w: readonly [number, number]) => year >= w[0] && year <= w[1];
+  const asAd = parseDate(value, "AD");
+  const asBs = parseDate(value, "BS");
+  if (asAd.ok && inside(+asAd.iso.slice(0, 4), win.ad)) return { iso: asAd.iso, calendar: "AD" };
+  if (asBs.ok && inside(convertADtoBS(asBs.iso)?.year ?? 0, win.bs)) return { iso: asBs.iso, calendar: "BS" };
+  return { iso: null, calendar: null, error: `"${value.trim()}" isn't a date. Write it as dd/mm/yyyy, like 04/04/2083 or 17/07/2026.` };
 }
 
 // ---------------------------------------------------------------- ranges

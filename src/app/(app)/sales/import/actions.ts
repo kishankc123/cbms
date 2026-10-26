@@ -9,7 +9,7 @@ import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getRevenueAccounts } from "@/lib/sales/revenue-accounts";
 import { salesVatRate } from "@/lib/sales/vat";
 import { analyzeSalesFile, buildSalesTemplate, checkSalesImport, importInvoiceIds, listSalesImports, markImportUndone, reviewSalesFile, runSalesImport } from "@/lib/sales/import/service";
-import type { CheckResult, DateOptions, FileAnalysis, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
+import type { CheckResult, FileAnalysis, ImportSettings, Overrides, ReviewResult, RunInput, RunResult } from "@/lib/sales/import/types";
 import type { SalesColumnMapping } from "@/lib/sales/import/fields";
 import { voidInvoice } from "../actions";
 
@@ -42,7 +42,7 @@ export async function analyzeFile(input: { fileName: string; base64: string }): 
   return analyzeSalesFile(session.tenantId, input);
 }
 
-export async function reviewFile(input: { fileName: string; base64: string; mapping: SalesColumnMapping; dateOptions: DateOptions; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
+export async function reviewFile(input: { fileName: string; base64: string; mapping: SalesColumnMapping; settings: ImportSettings; overrides?: Overrides }): Promise<ReviewResult> {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
   return reviewSalesFile(session.tenantId, input);

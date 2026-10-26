@@ -11,7 +11,7 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { analyzePurchaseFile, buildPurchaseTemplate, checkPurchaseImport, finishPurchaseImport, importBillIds, importPurchaseChunk, listPurchaseImports, markPurchaseImportUndone, preparePurchaseImport, reviewPurchaseFile } from "@/lib/purchases/import/service";
 import type { PurchaseColumnMapping } from "@/lib/purchases/import/fields";
-import type { ChunkResult, FinishedImport, PreparedImport, PurchaseCheckResult, PurchaseDateOptions, PurchaseFileAnalysis, PurchaseImportSettings, PurchaseOverrides, PurchaseReviewResult, PurchaseRunInput } from "@/lib/purchases/import/types";
+import type { ChunkResult, FinishedImport, PreparedImport, PurchaseCheckResult, PurchaseFileAnalysis, PurchaseImportSettings, PurchaseOverrides, PurchaseReviewResult, PurchaseRunInput } from "@/lib/purchases/import/types";
 import { voidBill } from "../actions";
 
 // Import Purchases: every step needs permission to create purchases (undoing an import needs permission to void them).
@@ -45,7 +45,7 @@ export async function analyzePurchases(input: { fileName: string; base64: string
   return analyzePurchaseFile(session.tenantId, input);
 }
 
-export async function reviewPurchases(input: { fileName: string; base64: string; mapping: PurchaseColumnMapping; dateOptions: PurchaseDateOptions; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }): Promise<PurchaseReviewResult> {
+export async function reviewPurchases(input: { fileName: string; base64: string; mapping: PurchaseColumnMapping; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }): Promise<PurchaseReviewResult> {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
   return reviewPurchaseFile(session.tenantId, input);

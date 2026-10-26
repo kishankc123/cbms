@@ -11,7 +11,7 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { analyzeExpenseFile, buildExpenseTemplate, checkExpenseImport, finishExpenseImport, importExpenseChunk, importExpenseIds, listExpenseImports, markExpenseImportUndone, prepareExpenseImport, reviewExpenseFile } from "@/lib/expenses/import/service";
 import type { ExpenseColumnMapping } from "@/lib/expenses/import/fields";
-import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
+import type { ExpenseCheckResult, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseRunInput } from "@/lib/expenses/import/types";
 import type { ChunkResult, FinishedImport, PreparedImport } from "@/lib/purchases/import/types";
 import { voidExpense } from "../actions";
 
@@ -46,7 +46,7 @@ export async function analyzeExpenses(input: { fileName: string; base64: string 
   return analyzeExpenseFile(session.tenantId, input);
 }
 
-export async function reviewExpenses(input: { fileName: string; base64: string; mapping: ExpenseColumnMapping; dateOptions: ExpenseDateOptions; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }): Promise<ExpenseReviewResult> {
+export async function reviewExpenses(input: { fileName: string; base64: string; mapping: ExpenseColumnMapping; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }): Promise<ExpenseReviewResult> {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "create")) throw new Error("Not permitted");
   return reviewExpenseFile(session.tenantId, input);

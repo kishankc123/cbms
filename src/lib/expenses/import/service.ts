@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { expenseImports, expenses, importColumnMappings, supplierAliases, vendors } from "@/db/schema";
 import { applyAmountRules, loadAmountRules } from "@/lib/audit-rules";
 import { logAuditEvent } from "@/lib/audit";
-import { resolveImportDates } from "@/lib/banking/import-dates";
+import { importedDate } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
@@ -19,7 +19,7 @@ import { headerSignature } from "@/lib/sales/import/fields";
 import { bestNameMatch, normalizeName, parseAmountCell } from "@/lib/sales/import/values";
 import { checkExpenseRow } from "./checks";
 import { EXPENSE_FIELDS, expenseMappingComplete, suggestExpenseMapping, type ExpenseColumnMapping } from "./fields";
-import type { ExpenseCheckResult, ExpenseDateOptions, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow, ExpenseRunInput } from "./types";
+import type { ExpenseCheckResult, ExpenseFileAnalysis, ExpenseImportSettings, ExpenseOverrides, ExpenseReviewResult, ExpenseReviewRow, ExpenseRunInput } from "./types";
 
 // Import Expenses: reading a spreadsheet of expenses (one row per expense), matching it to suppliers, categories and accounts,
 // checking every row (including the organization's own amount rules), and posting the clean ones through the same writer the
@@ -41,13 +41,6 @@ function readFile(base64: string, fileName: string): Parsed {
 
 const colIndex = (headers: string[], name: string | undefined) => (name ? headers.findIndex((h) => h.trim().toLowerCase() === name.trim().toLowerCase()) : -1);
 
-function datesFor(parsed: Parsed, column: string | undefined, opts: ExpenseDateOptions, allowMixed = opts.allowMixed) {
-  const idx = colIndex(parsed.headers, column);
-  return resolveImportDates(parsed.rows.map((r) => (idx >= 0 ? r[idx] : undefined)), { header: column, choice: opts.choice, dayFirst: opts.dayFirst, allowMixed });
-}
-
-const datesSummary = (d: ReturnType<typeof resolveImportDates>): ExpenseFileAnalysis["dates"] => ({ detected: d.detected, confidence: d.confidence, mixed: d.mixed, blocking: d.blocking, problemCount: d.problemCount, dayMonthAmbiguity: d.hasDayMonthAmbiguity });
-
 // ------------------------------------------------------------------ step 1: what is in the file
 
 export async function analyzeExpenseFile(tenantId: string, input: { fileName: string; base64: string }): Promise<ExpenseFileAnalysis> {
@@ -57,8 +50,7 @@ export async function analyzeExpenseFile(tenantId: string, input: { fileName: st
   const known = remembered?.mapping as ExpenseColumnMapping | undefined;
   const usable = known && Object.values(known).every((h) => colIndex(parsed.headers, h) >= 0);
   const mapping = usable ? known! : suggestExpenseMapping(parsed.headers);
-  const dates = datesFor(parsed, mapping.date, { choice: "auto", dayFirst: true, allowMixed: false });
-  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: expenseMappingComplete(mapping), dates: datesSummary(dates) };
+  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: expenseMappingComplete(mapping) };
 }
 
 // ------------------------------------------------------------------ step 2: every row, checked
@@ -100,7 +92,6 @@ async function buildRows(
   tenantId: string,
   parsedIn: Parsed,
   mappingIn: ExpenseColumnMapping,
-  dateOptions: ExpenseDateOptions,
   settings: ExpenseImportSettings,
   supplierDecisions: Record<string, SupplierDecision>,
   categoryDecisions: Record<string, CategoryDecision>,
@@ -113,8 +104,8 @@ async function buildRows(
   const idx = Object.fromEntries(EXPENSE_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof EXPENSE_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
-  const dates = datesFor(parsed, mapping.date, dateOptions);
-  const dueDates = idx.dueDate >= 0 ? datesFor(parsed, mapping.dueDate, dateOptions, true) : null;
+  const dates = parsed.rows.map((r) => importedDate(cell(r, "date")));
+  const dueDates = idx.dueDate >= 0 ? parsed.rows.map((r) => importedDate(cell(r, "dueDate"))) : null;
   const [supplierList, aliasRows, categoryList, amountRules] = await Promise.all([
     db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId)),
     db.select({ alias: supplierAliases.alias, vendorId: supplierAliases.vendorId }).from(supplierAliases).where(eq(supplierAliases.tenantId, tenantId)),
@@ -135,7 +126,7 @@ async function buildRows(
 
   const lockedByDate = new Map<string, boolean>();
   const vatByDate = new Map<string, number>();
-  const isoDates = [...new Set(dates.rows.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
+  const isoDates = [...new Set(dates.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
   for (const d of isoDates) {
     lockedByDate.set(d, await assertPeriodOpen(tenantId, d).then(() => false, () => true));
     vatByDate.set(d, await getTaxRate(tenantId, "vat", d));
@@ -161,7 +152,7 @@ async function buildRows(
   parsed.rows.forEach((r, i) => {
     const rowNumber = i + 2;
     if (r.every((c) => (c ?? "").trim() === "")) return;
-    const d = dates.rows[i];
+    const d = dates[i];
     const supplierText = cell(r, "supplier");
     const supplierKey = supplierText ? normalizeName(supplierText) : null;
 
@@ -215,11 +206,11 @@ async function buildRows(
     const iso = d?.iso ?? null;
     const invoiceNumber = cell(r, "invoiceNumber");
     const dueText = cell(r, "dueDate");
-    const dueIso = dueText && dueDates ? dueDates.rows[i]?.iso ?? null : null;
+    const dueIso = dueText && dueDates ? dueDates[i]?.iso ?? null : null;
 
     const check = checkExpenseRow({
       dateIso: iso,
-      dateNote: d?.note ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
+      dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       dueDate: { text: dueText, iso: dueIso },
       amount,
@@ -297,15 +288,15 @@ async function buildRows(
       dueDate: dueIso ?? "",
     });
   });
-  return { rows: out, dates, supplierList, categoryList };
+  return { rows: out, supplierList, categoryList };
 }
 
 export async function reviewExpenseFile(
   tenantId: string,
-  input: { base64: string; fileName: string; mapping: ExpenseColumnMapping; dateOptions: ExpenseDateOptions; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }
+  input: { base64: string; fileName: string; mapping: ExpenseColumnMapping; settings: ExpenseImportSettings; overrides?: ExpenseOverrides }
 ): Promise<ExpenseReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, dates, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, {}, new Set(), input.overrides);
+  const { rows, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.settings, {}, {}, new Set(), input.overrides);
 
   const sGroups = new Map<string, SupplierGroup>();
   const cGroups = new Map<string, CategoryGroup>();
@@ -351,7 +342,7 @@ export async function reviewExpenseFile(
     categoryText: r.categoryText, categoryName: r.categoryName, categoryKey: r.categoryKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status,
     issues: r.issues, messages: r.messages, total: r.total, tax: r.tax,
   });
-  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, dates: datesSummary(dates) };
+  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax };
 }
 
 // ------------------------------------------------------------------ step 3: import, in steps
@@ -398,7 +389,7 @@ export async function checkExpenseImport(tenantId: string, input: ExpenseRunInpu
   const parsed = readFile(input.base64, input.fileName);
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   return { wouldImport: importable.length, total: round2(importable.reduce((s, r) => s + (r.total ?? 0), 0)), tax: round2(importable.reduce((s, r) => s + (r.tax ?? 0), 0)), suppliersToCreate: v.toCreate.map((c) => c.name), skipped };
 }
@@ -419,7 +410,7 @@ export async function prepareExpenseImport(ctx: { tenantId: string; userId: stri
   const v = await validDecisions(tenantId, input);
   if (!v.defaultCategoryOk) return { ok: false, error: "Choose an expense category of this organization." };
 
-  const dry = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const dry = await buildRows(tenantId, parsed, input.mapping, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   if (plan(dry.rows, input.includeDuplicates).importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
   const created: { id: string; name: string }[] = [];
@@ -430,7 +421,7 @@ export async function prepareExpenseImport(ctx: { tenantId: string; userId: stri
     resolved[c.key] = { action: "existing", vendorId: s.id, remember: false };
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   const [imp] = await db.insert(expenseImports).values({ tenantId, fileName: input.fileName.slice(0, 200), rowCount: rows.length, suppliersCreated: created, createdBy: userId }).returning({ id: expenseImports.id });
 
@@ -456,7 +447,7 @@ export async function importExpenseChunk(ctx: { tenantId: string; userId: string
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
   const wanted = new Set(input.rowNumbers);
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
   const mine = rows.filter((r) => wanted.has(r.rowNumber));
 
   const taken = new Set((await db.select({ n: expenses.expenseNumber }).from(expenses).where(eq(expenses.tenantId, tenantId))).map((r) => r.n));
@@ -551,8 +542,8 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet([
     ["Date", "Category", "Supplier", "Description", "Invoice number", "Amount", "Bill type", "VAT amount", "TDS amount", "Due date", "Paid amount", "Paid from"],
-    ["2083-04-15", categoryList[0]?.name ?? "Category", supplierList[0]?.name ?? "Supplier name", "Office rent", "R-101", 20000, "PAN", 0, 1000, "2083-04-30", 0, ""],
-    ["2083-04-16", categoryList[0]?.name ?? "Category", "", "Taxi fare", "", 450, "No bill", 0, 0, "", 450, accountList[0]?.name ?? "Cash"],
+    ["15/04/2083", categoryList[0]?.name ?? "Category", supplierList[0]?.name ?? "Supplier name", "Office rent", "R-101", 20000, "PAN", 0, 1000, "30/04/2083", 0, ""],
+    ["16/04/2083", categoryList[0]?.name ?? "Category", "", "Taxi fare", "", 450, "No bill", 0, 0, "", 450, accountList[0]?.name ?? "Cash"],
   ]);
   sheet["!cols"] = [{ wch: 14 }, { wch: 24 }, { wch: 26 }, { wch: 24 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, sheet, "Expenses");
@@ -569,7 +560,7 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Expenses sheet"],
       ["One row is one expense. Only Date and Amount are needed."],
-      ["Date: AD or BS (2083-04-15 or 2026-07-31)."],
+      ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your expense categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for an expense paid in full to no one in particular."],
       ["Bill type: VAT, PAN, Estimate, Challan or No bill. VAT is worked out for VAT bills unless you give a VAT amount."],

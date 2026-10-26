@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import type { SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { CheckResult, DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
+import type { CheckResult, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, RunResult } from "@/lib/sales/import/types";
 import { analyzeFile, checkImport, downloadTemplate, getImportSetup, reviewFile, runImport, undoImport, type ImportSetup } from "./actions";
 import { CheckDialog } from "./check-dialog";
 import { DoneStep } from "./done-step";
@@ -16,7 +16,6 @@ type Step = "upload" | "review" | "done";
 export type File = { name: string; base64: string };
 
 const DEFAULT_SETTINGS: ImportSettings = { amountsIncludeVat: false, defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
-const DEFAULT_DATES: DateOptions = { choice: "auto", dayFirst: true, allowMixed: false };
 export const MAX_FILE_BYTES = 2.5 * 1024 * 1024;
 
 function readBase64(file: Blob): Promise<string> {
@@ -37,7 +36,6 @@ export function ImportSales() {
   const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<FileAnalysis | null>(null);
   const [mapping, setMapping] = useState<SalesColumnMapping>({});
-  const [dateOptions, setDateOptions] = useState<DateOptions>(DEFAULT_DATES);
   const [settings, setSettings] = useState<ImportSettings>(DEFAULT_SETTINGS);
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [decisions, setDecisions] = useState<Record<string, GroupDecision>>({});
@@ -57,10 +55,10 @@ export function ImportSales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runReview(f: File, m: SalesColumnMapping, d: DateOptions, s: ImportSettings, o: Overrides = overrides) {
+  async function runReview(f: File, m: SalesColumnMapping, s: ImportSettings, o: Overrides = overrides) {
     setBusy(true);
     try {
-      const r = await reviewFile({ fileName: f.name, base64: f.base64, mapping: m, dateOptions: d, settings: s, overrides: o });
+      const r = await reviewFile({ fileName: f.name, base64: f.base64, mapping: m, settings: s, overrides: o });
       setReview(r);
       return r;
     } catch (e) {
@@ -82,13 +80,12 @@ export function ImportSales() {
       setFile(f);
       setAnalysis(a);
       setMapping(a.mapping);
-      setDateOptions(DEFAULT_DATES);
       setDecisions({});
       setSkipRows([]);
       setOverrides({});
       setIncludeDuplicates(false);
       setStep("review");
-      if (a.mappingComplete && !a.dates.blocking) await runReview(f, a.mapping, DEFAULT_DATES, settings, {});
+      if (a.mappingComplete) await runReview(f, a.mapping, settings, {});
       else setReview(null);
     } catch (e) {
       reportError(e);
@@ -99,19 +96,15 @@ export function ImportSales() {
 
   const changeMapping = (m: SalesColumnMapping) => {
     setMapping(m);
-    if (file) void runReview(file, m, dateOptions, settings);
-  };
-  const changeDates = (d: DateOptions) => {
-    setDateOptions(d);
-    if (file) void runReview(file, mapping, d, settings);
+    if (file) void runReview(file, m, settings);
   };
   const changeOverrides = (o: Overrides) => {
     setOverrides(o);
-    if (file) void runReview(file, mapping, dateOptions, settings, o);
+    if (file) void runReview(file, mapping, settings, o);
   };
   const changeSettings = (s: ImportSettings) => {
     setSettings(s);
-    if (file) void runReview(file, mapping, dateOptions, s);
+    if (file) void runReview(file, mapping, s);
   };
 
   // What the review's rows come to once the decisions made here are applied (the server confirms it all again on import).
@@ -134,7 +127,7 @@ export function ImportSales() {
     if (!file) return;
     setBusy(true);
     try {
-      setCheckResult(await checkImport({ fileName: file.name, base64: file.base64, mapping, dateOptions, settings, decisions, skipRows, includeDuplicates, overrides }));
+      setCheckResult(await checkImport({ fileName: file.name, base64: file.base64, mapping, settings, decisions, skipRows, includeDuplicates, overrides }));
     } catch (e) {
       reportError(e);
     } finally {
@@ -149,7 +142,7 @@ export function ImportSales() {
     setResult(null);
     setStep("review");
     setIncludeDuplicates(false);
-    await runReview(file, mapping, dateOptions, settings);
+    await runReview(file, mapping, settings);
   }
 
   async function doImport() {
@@ -157,7 +150,7 @@ export function ImportSales() {
     setCheckResult(null);
     setBusy(true);
     try {
-      const r = await runImport({ fileName: file.name, base64: file.base64, mapping, dateOptions, settings, decisions, skipRows, includeDuplicates, overrides });
+      const r = await runImport({ fileName: file.name, base64: file.base64, mapping, settings, decisions, skipRows, includeDuplicates, overrides });
       if (!r.ok) return reportError(new Error(r.error));
       setResult(r);
       setStep("done");
@@ -204,9 +197,9 @@ export function ImportSales() {
             onFile={onFile}
             onTemplate={downloadTemplate}
             rowNoun="invoice"
-            pasteExample={"Date\tCustomer\tAmount\n2083-04-15\tHimal Enterprises\t10000"}
+            pasteExample={"Date\tCustomer\tAmount\n15/04/2083\tHimal Enterprises\t10000"}
             notes={[
-              "Columns and dates (AD or BS) are matched for you. You only fix what can't be read.",
+              "Columns are matched for you, and dates are read as dd/mm/yyyy (AD or BS). You only fix what can't be read.",
               "Customers in the file are matched to yours; new names are created only if you tick them.",
               "Invoices are numbered automatically, continuing your sequence, and post exactly like Multi-Invoice.",
               "You can undo a whole import afterwards.",
@@ -223,8 +216,6 @@ export function ImportSales() {
           setup={setup}
           mapping={mapping}
           onMapping={changeMapping}
-          dateOptions={dateOptions}
-          onDates={changeDates}
           settings={settings}
           onSettings={changeSettings}
           review={review}

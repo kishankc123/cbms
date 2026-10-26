@@ -4,7 +4,7 @@ import { normalizeStatementRows } from "./normalize-rows";
 
 const headers = ["Date", "Description", "Amount"];
 const map = { date: "Date", description: "Description", amount: "Amount" };
-const run = (rows: string[][]) => normalizeStatementRows(headers, rows, map, { choice: "AD" }).valid;
+const run = (rows: string[][]) => normalizeStatementRows(headers, rows, map).valid;
 
 describe("statement import identity", () => {
   it("keeps two identical transactions on the same day as two transactions", () => {

@@ -5,7 +5,7 @@ import { suggestMappingFrom, type FieldDef } from "@/lib/sales/import/fields";
 export type ExpenseFieldKey = "date" | "amount" | "category" | "supplier" | "description" | "invoiceNumber" | "dueDate" | "billType" | "vat" | "tds" | "paid" | "account";
 
 export const EXPENSE_FIELDS: FieldDef<ExpenseFieldKey>[] = [
-  { key: "date", label: "Date", required: true, synonyms: ["date", "expense date", "bill date", "voucher date", "txn date", "transaction date", "miti", "मिति"], help: "AD or BS dates both work." },
+  { key: "date", label: "Date", required: true, synonyms: ["date", "expense date", "bill date", "voucher date", "txn date", "transaction date", "miti", "मिति"], help: "dd/mm/yyyy, in AD or BS." },
   { key: "amount", label: "Amount", required: true, synonyms: ["amount", "expense amount", "taxable amount", "net amount", "basic amount", "bill amount", "value", "total"], help: "The expense amount, before VAT unless you say it includes VAT." },
   { key: "category", label: "Category", required: false, synonyms: ["category", "expense category", "expense head", "head", "account head", "ledger", "type"], help: "The expense category it is booked to." },
   { key: "supplier", label: "Supplier", required: false, synonyms: ["supplier", "supplier name", "vendor", "vendor name", "payee", "paid to", "party", "party name", "name"], help: "Leave blank for an expense paid in full to no one in particular." },

@@ -65,7 +65,6 @@ describe("revenue accounts", () => {
         fileName: "s.csv",
         base64: Buffer.from(csv, "utf8").toString("base64"),
         mapping: { date: "Date", amount: "Amount", billType: "Bill Type", revenue: "Revenue" },
-        dateOptions: { choice: "AD", dayFirst: true, allowMixed: false },
         settings,
         decisions: {},
         skipRows: [],

@@ -5,7 +5,7 @@ import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { importColumnMappings, purchaseBills, purchaseImports, supplierAliases, vendors } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { resolveImportDates } from "@/lib/banking/import-dates";
+import { importedDate } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
@@ -22,7 +22,6 @@ import type {
   FinishedImport,
   PreparedImport,
   PurchaseCheckResult,
-  PurchaseDateOptions,
   PurchaseFileAnalysis,
   PurchaseImportSettings,
   PurchaseOverrides,
@@ -54,13 +53,6 @@ function readFile(base64: string, fileName: string): Parsed {
 
 const colIndex = (headers: string[], name: string | undefined) => (name ? headers.findIndex((h) => h.trim().toLowerCase() === name.trim().toLowerCase()) : -1);
 
-function datesFor(parsed: Parsed, mapping: PurchaseColumnMapping, opts: PurchaseDateOptions) {
-  const idx = colIndex(parsed.headers, mapping.date);
-  return resolveImportDates(parsed.rows.map((r) => (idx >= 0 ? r[idx] : undefined)), { header: mapping.date, choice: opts.choice, dayFirst: opts.dayFirst, allowMixed: opts.allowMixed });
-}
-
-const datesSummary = (d: ReturnType<typeof resolveImportDates>): PurchaseFileAnalysis["dates"] => ({ detected: d.detected, confidence: d.confidence, mixed: d.mixed, blocking: d.blocking, problemCount: d.problemCount, dayMonthAmbiguity: d.hasDayMonthAmbiguity });
-
 // ------------------------------------------------------------------ step 1: what is in the file
 
 export async function analyzePurchaseFile(tenantId: string, input: { fileName: string; base64: string }): Promise<PurchaseFileAnalysis> {
@@ -70,8 +62,7 @@ export async function analyzePurchaseFile(tenantId: string, input: { fileName: s
   const known = remembered?.mapping as PurchaseColumnMapping | undefined;
   const usable = known && Object.values(known).every((h) => colIndex(parsed.headers, h) >= 0);
   const mapping = usable ? known! : suggestPurchaseMapping(parsed.headers);
-  const dates = datesFor(parsed, mapping, { choice: "auto", dayFirst: true, allowMixed: false });
-  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: purchaseMappingComplete(mapping), dates: datesSummary(dates) };
+  return { headers: parsed.headers, sample: parsed.rows.slice(0, 5), rowCount: parsed.rows.length, mapping, remembered: Boolean(usable), mappingComplete: purchaseMappingComplete(mapping) };
 }
 
 // ------------------------------------------------------------------ step 2: every row, checked
@@ -113,7 +104,6 @@ async function buildRows(
   tenantId: string,
   parsedIn: Parsed,
   mappingIn: PurchaseColumnMapping,
-  dateOptions: PurchaseDateOptions,
   settings: PurchaseImportSettings,
   supplierDecisions: Record<string, SupplierDecision>,
   categoryDecisions: Record<string, CategoryDecision>,
@@ -126,7 +116,7 @@ async function buildRows(
   const idx = Object.fromEntries(PURCHASE_FIELDS.map((f) => [f.key, colIndex(parsed.headers, mapping[f.key])])) as Record<(typeof PURCHASE_FIELDS)[number]["key"], number>;
   const cell = (r: string[], k: keyof typeof idx) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
 
-  const dates = datesFor(parsed, mapping, dateOptions);
+  const dates = parsed.rows.map((r) => importedDate(cell(r, "date")));
   const [supplierList, aliasRows, categoryList] = await Promise.all([
     db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId)),
     db.select({ alias: supplierAliases.alias, vendorId: supplierAliases.vendorId }).from(supplierAliases).where(eq(supplierAliases.tenantId, tenantId)),
@@ -146,7 +136,7 @@ async function buildRows(
 
   const lockedByDate = new Map<string, boolean>();
   const vatByDate = new Map<string, number>();
-  const isoDates = [...new Set(dates.rows.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
+  const isoDates = [...new Set(dates.map((r) => r.iso).filter((d): d is string => Boolean(d)))];
   for (const d of isoDates) {
     lockedByDate.set(d, await assertPeriodOpen(tenantId, d).then(() => false, () => true));
     vatByDate.set(d, await getTaxRate(tenantId, "vat", d));
@@ -173,7 +163,7 @@ async function buildRows(
   parsed.rows.forEach((r, i) => {
     const rowNumber = i + 2;
     if (r.every((c) => (c ?? "").trim() === "")) return;
-    const d = dates.rows[i];
+    const d = dates[i];
     const supplierText = cell(r, "supplier");
     const supplierKey = supplierText ? normalizeName(supplierText) : null;
 
@@ -228,7 +218,7 @@ async function buildRows(
 
     const check = checkPurchaseRow({
       dateIso: iso,
-      dateNote: d?.note ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
+      dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       amount,
       discount,
@@ -295,15 +285,15 @@ async function buildRows(
       description: cell(r, "description"),
     });
   });
-  return { rows: out, dates, supplierList, categoryList };
+  return { rows: out, supplierList, categoryList };
 }
 
 export async function reviewPurchaseFile(
   tenantId: string,
-  input: { base64: string; fileName: string; mapping: PurchaseColumnMapping; dateOptions: PurchaseDateOptions; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }
+  input: { base64: string; fileName: string; mapping: PurchaseColumnMapping; settings: PurchaseImportSettings; overrides?: PurchaseOverrides }
 ): Promise<PurchaseReviewResult> {
   const parsed = readFile(input.base64, input.fileName);
-  const { rows, dates, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, {}, {}, new Set(), input.overrides);
+  const { rows, supplierList, categoryList } = await buildRows(tenantId, parsed, input.mapping, input.settings, {}, {}, new Set(), input.overrides);
 
   const sGroups = new Map<string, SupplierGroup>();
   const cGroups = new Map<string, CategoryGroup>();
@@ -350,7 +340,7 @@ export async function reviewPurchaseFile(
     categoryText: r.categoryText, categoryName: r.categoryName, categoryKey: r.categoryKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status,
     issues: r.issues, messages: r.messages, total: r.total, tax: r.tax,
   });
-  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax, dates: datesSummary(dates) };
+  return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax };
 }
 
 // ------------------------------------------------------------------ step 3: import, in steps
@@ -398,7 +388,7 @@ export async function checkPurchaseImport(tenantId: string, input: PurchaseRunIn
   const parsed = readFile(input.base64, input.fileName);
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   return { wouldImport: importable.length, total: round2(importable.reduce((s, r) => s + (r.total ?? 0), 0)), tax: round2(importable.reduce((s, r) => s + (r.tax ?? 0), 0)), suppliersToCreate: v.toCreate.map((c) => c.name), skipped };
 }
@@ -421,7 +411,7 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
   if (!v.defaultCategoryOk) return { ok: false, error: "Choose a purchase category of this organization." };
 
   // Rows are checked before anything is created, so an import with nothing to post creates nothing.
-  const dry = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
+  const dry = await buildRows(tenantId, parsed, input.mapping, input.settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides);
   if (plan(dry.rows, input.includeDuplicates).importable.length === 0) return { ok: false, error: "There is nothing to import: every row needs attention or was skipped." };
 
   const created: { id: string; name: string }[] = [];
@@ -432,7 +422,7 @@ export async function preparePurchaseImport(ctx: { tenantId: string; userId: str
     resolved[c.key] = { action: "existing", vendorId: s.id, remember: false };
   }
 
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.settings, resolved, v.categories, new Set(input.skipRows), input.overrides);
   const { importable, skipped } = plan(rows, input.includeDuplicates);
   const [imp] = await db.insert(purchaseImports).values({ tenantId, fileName: input.fileName.slice(0, 200), rowCount: rows.length, suppliersCreated: created, createdBy: userId }).returning({ id: purchaseImports.id });
 
@@ -458,7 +448,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
   const v = await validDecisions(tenantId, input);
   const settings = { ...input.settings, defaultCategoryId: v.defaultCategoryOk ? input.settings.defaultCategoryId : null };
   const wanted = new Set(input.rowNumbers);
-  const { rows } = await buildRows(tenantId, parsed, input.mapping, input.dateOptions, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
+  const { rows } = await buildRows(tenantId, parsed, input.mapping, settings, v.suppliers, v.categories, new Set(input.skipRows), input.overrides, { skipDuplicateCheck: true });
   const mine = rows.filter((r) => wanted.has(r.rowNumber));
 
   // Numbers already in use, read once for the whole slice.
@@ -547,8 +537,8 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet([
     ["Date", "Supplier", "Category", "Bill number", "Description", "Amount", "Discount", "Bill type", "Paid amount", "Paid from"],
-    ["2083-04-15", supplierList[0]?.name ?? "Supplier name", categoryList[0]?.name ?? "Category", "B-101", "Office supplies", 5000, 0, "VAT", 0, ""],
-    ["2083-04-16", "", categoryList[0]?.name ?? "Category", "", "Tea and snacks", 850, 0, "No bill", 850, accountList[0]?.name ?? "Cash"],
+    ["15/04/2083", supplierList[0]?.name ?? "Supplier name", categoryList[0]?.name ?? "Category", "B-101", "Office supplies", 5000, 0, "VAT", 0, ""],
+    ["16/04/2083", "", categoryList[0]?.name ?? "Category", "", "Tea and snacks", 850, 0, "No bill", 850, accountList[0]?.name ?? "Cash"],
   ]);
   sheet["!cols"] = [{ wch: 14 }, { wch: 28 }, { wch: 24 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, sheet, "Purchases");
@@ -565,7 +555,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Purchases sheet"],
       ["One row is one bill. Only Date and Amount are needed."],
-      ["Date: AD or BS (2083-04-15 or 2026-07-31)."],
+      ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your purchase categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for a purchase paid in full to no one in particular."],
       ["Bill type: VAT, PAN, Estimate, Challan or No bill. Only a VAT bill carries VAT."],

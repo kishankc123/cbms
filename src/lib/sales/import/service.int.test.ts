@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { accounts, customerAliases, customers, journalEntries, journalLines, salesImports, salesInvoices, tenantTaxRegistrations } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { analyzeSalesFile, checkSalesImport, importInvoiceIds, listSalesImports, reviewSalesFile, runSalesImport } from "./service";
-import type { DateOptions, ImportSettings } from "./types";
+import type { ImportSettings } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let cashId: string;
@@ -12,7 +12,6 @@ let himalId: string;
 
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
 const SETTINGS: ImportSettings = { amountsIncludeVat: false, defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
-const DATES: DateOptions = { choice: "AD", dayFirst: true, allowMixed: false };
 const CSV = [
   "Invoice Date,Party Name,Amount,Discount,Bill Type,Paid,Received Into",
   "2026-09-10,Himal Enterprises,10000,0,Taxable,0,",
@@ -24,7 +23,7 @@ const CSV = [
 ].join("\n");
 const MAPPING = { date: "Invoice Date", customer: "Party Name", amount: "Amount", discount: "Discount", billType: "Bill Type", paid: "Paid", account: "Received Into" };
 
-const base = (text = CSV, settings = SETTINGS) => ({ fileName: "sales.csv", base64: b64(text), mapping: MAPPING, dateOptions: DATES, settings });
+const base = (text = CSV, settings = SETTINGS) => ({ fileName: "sales.csv", base64: b64(text), mapping: MAPPING, settings });
 const balance = async (code: string) => {
   const [a] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code)));
   const lines = await db
@@ -134,9 +133,9 @@ describe("importing", () => {
     try {
       const text = "Date,Customer,Amount\n2026-10-01,Mystery Buyer,500";
       const mapping = { date: "Date", customer: "Customer", amount: "Amount" };
-      const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, dateOptions: DATES, settings: SETTINGS, decisions: { "mystery buyer": { action: "existing", customerId: foreign.id, remember: true } }, skipRows: [], includeDuplicates: false });
+      const r = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, settings: SETTINGS, decisions: { "mystery buyer": { action: "existing", customerId: foreign.id, remember: true } }, skipRows: [], includeDuplicates: false });
       expect(r).toMatchObject({ ok: false }); // the foreign id is ignored, so the customer is still undecided and nothing imports
-      const bad = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, dateOptions: DATES, settings: { ...SETTINGS, defaultAccountId: "00000000-0000-0000-0000-000000000000" }, decisions: {}, skipRows: [], includeDuplicates: false });
+      const bad = await runSalesImport({ tenantId: org.tenantId, userId: org.userId }, { fileName: "m.csv", base64: b64(text), mapping, settings: { ...SETTINGS, defaultAccountId: "00000000-0000-0000-0000-000000000000" }, decisions: {}, skipRows: [], includeDuplicates: false });
       expect(bad).toMatchObject({ ok: false, error: expect.stringMatching(/cash or bank account/) });
     } finally {
       await db.delete(customers).where(eq(customers.id, foreign.id));
@@ -148,7 +147,7 @@ describe("importing", () => {
 describe("correcting rows in the review, and checking without importing", () => {
   const FIX = ["Date,Customer,Amount", "2026-10-01,Himal Enterprises,abc", "not a date,Himal Enterprises,100", "2026-10-03,Himal Enterprises,200"].join("\n");
   const MAP = { date: "Date", customer: "Customer", amount: "Amount" };
-  const fixBase = { fileName: "fix.csv", base64: b64(FIX), mapping: MAP, dateOptions: DATES, settings: SETTINGS };
+  const fixBase = { fileName: "fix.csv", base64: b64(FIX), mapping: MAP, settings: SETTINGS };
 
   it("typed corrections replace the file's cells, and re-check the row", async () => {
     const before = await reviewSalesFile(org.tenantId, fixBase);
@@ -174,7 +173,7 @@ describe("correcting rows in the review, and checking without importing", () => 
       imports: (await db.select().from(salesImports).where(eq(salesImports.tenantId, org.tenantId))).length,
     });
     const text = ["Date,Customer,Amount", "2026-10-05,Check Only Traders,1000", "2026-10-06,Himal Enterprises,500", "bad,Himal Enterprises,50"].join("\n");
-    const input = { fileName: "check.csv", base64: b64(text), mapping: MAP, dateOptions: DATES, settings: SETTINGS, decisions: { "check only traders": { action: "create" as const, name: "Check Only Traders" } }, skipRows: [], includeDuplicates: false };
+    const input = { fileName: "check.csv", base64: b64(text), mapping: MAP, settings: SETTINGS, decisions: { "check only traders": { action: "create" as const, name: "Check Only Traders" } }, skipRows: [], includeDuplicates: false };
     const before = await counts();
     const r = await checkSalesImport(org.tenantId, input);
     expect(r).toMatchObject({ wouldImport: 2, total: 1130 + 565, tax: 130 + 65, customersToCreate: ["Check Only Traders"] });

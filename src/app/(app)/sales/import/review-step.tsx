@@ -4,7 +4,7 @@ import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { useMemo, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { IMPORT_FIELDS, type SalesColumnMapping } from "@/lib/sales/import/fields";
-import type { DateOptions, FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
+import type { FileAnalysis, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow } from "@/lib/sales/import/types";
 import type { ImportSetup } from "./actions";
 import type { File } from "./import-sales";
 import { RowEditor } from "./row-editor";
@@ -25,8 +25,6 @@ type Props = {
   setup: ImportSetup | null;
   mapping: SalesColumnMapping;
   onMapping: (m: SalesColumnMapping) => void;
-  dateOptions: DateOptions;
-  onDates: (d: DateOptions) => void;
   settings: ImportSettings;
   onSettings: (s: ImportSettings) => void;
   review: ReviewResult | null;
@@ -47,7 +45,7 @@ type Props = {
 };
 
 export function ReviewStep(p: Props) {
-  const needsColumns = !p.analysis.mappingComplete || !IMPORT_FIELDS.filter((f) => f.required).every((f) => p.mapping[f.key]) || p.analysis.dates.blocking;
+  const needsColumns = !p.analysis.mappingComplete || !IMPORT_FIELDS.filter((f) => f.required).every((f) => p.mapping[f.key]);
   const [editColumns, setEditColumns] = useState(false);
   const showColumns = needsColumns || editColumns;
 
@@ -82,9 +80,9 @@ export function ReviewStep(p: Props) {
   );
 }
 
-// ------------------------------------------------------------ columns and dates
+// ------------------------------------------------------------ columns
 
-function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, forced, onToggle }: Props & { show: boolean; forced: boolean; onToggle: () => void }) {
+function Columns({ analysis, mapping, onMapping, show, forced, onToggle }: Props & { show: boolean; forced: boolean; onToggle: () => void }) {
   const found = IMPORT_FIELDS.filter((f) => mapping[f.key]);
   return (
     <section className={`${card} p-4`}>
@@ -97,9 +95,6 @@ function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, for
                 {f.label} ✓
               </span>
             ))}
-          <span className="rounded-full bg-[var(--surface-muted-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-            Dates: {dateOptions.choice === "auto" ? (analysis.dates.detected === "BS" || analysis.dates.detected === "AD" ? `${analysis.dates.detected} detected` : "check below") : dateOptions.choice}
-          </span>
         </div>
         {!forced && (
           <button type="button" onClick={onToggle} className="text-sm text-[var(--color-primary)] hover:underline">
@@ -129,29 +124,7 @@ function Columns({ analysis, mapping, onMapping, dateOptions, onDates, show, for
             ))}
           </div>
 
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">Dates in the file are</label>
-              <select className={field} value={dateOptions.choice} onChange={(e) => onDates({ ...dateOptions, choice: e.target.value as DateOptions["choice"] })}>
-                <option value="auto">Detect automatically</option>
-                <option value="AD">AD (Gregorian)</option>
-                <option value="BS">BS (Bikram Sambat)</option>
-              </select>
-            </div>
-            {analysis.dates.dayMonthAmbiguity && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.dayFirst} onChange={(e) => onDates({ ...dateOptions, dayFirst: e.target.checked })} />
-                Day comes before month (15/04/2083)
-              </label>
-            )}
-            {analysis.dates.mixed && (
-              <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                <input type="checkbox" checked={dateOptions.allowMixed} onChange={(e) => onDates({ ...dateOptions, allowMixed: e.target.checked })} />
-                The file mixes AD and BS dates, read each row on its own
-              </label>
-            )}
-          </div>
-          {analysis.dates.blocking && <p className="text-sm text-amber-700">The dates can&apos;t be told apart yet. Choose AD or BS above.</p>}
+          <p className="text-xs text-gray-500">Dates are read as dd/mm/yyyy, in AD or BS (04/04/2083 or 17/07/2026).</p>
         </div>
       )}
     </section>

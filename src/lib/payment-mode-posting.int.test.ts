@@ -100,7 +100,7 @@ describe("saving the payment mode", () => {
     const settings: ImportSettings = { amountsIncludeVat: false, defaultBillType: "zero_rated", paidMode: "file", defaultAccountId: null };
     const r = await runSalesImport(
       { tenantId: org.tenantId, userId: org.userId },
-      { fileName: "m.csv", base64: Buffer.from(csv, "utf8").toString("base64"), mapping: { date: "Date", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Received into" }, dateOptions: { choice: "AD", dayFirst: true, allowMixed: false }, settings, decisions: {}, skipRows: [], includeDuplicates: true }
+      { fileName: "m.csv", base64: Buffer.from(csv, "utf8").toString("base64"), mapping: { date: "Date", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Received into" }, settings, decisions: {}, skipRows: [], includeDuplicates: true }
     );
     expect(r).toMatchObject({ ok: true, imported: 2 });
     const rows = await db.select({ name: journalLines.paymentModeName, account: journalLines.accountId }).from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId)).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceType, "receipt")));

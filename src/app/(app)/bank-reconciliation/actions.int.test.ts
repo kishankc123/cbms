@@ -26,7 +26,7 @@ let salesId: string;
 
 const csv = (rows: string[]) => Buffer.from(["Date,Description,Amount", ...rows].join("\n")).toString("base64");
 const importRows = (rows: string[]) =>
-  A.confirmStatementImport({ bankAccountId: bankId, fileName: "stmt.csv", base64: csv(rows), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "", dateChoice: "AD" });
+  A.confirmStatementImport({ bankAccountId: bankId, fileName: "stmt.csv", base64: csv(rows), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" });
 const stmtLines = () => db.select().from(bankStatementLines).where(eq(bankStatementLines.bankAccountId, bankId));
 const dr = async (date: string, amount: number, sourceId?: string) => {
   const entry = await postJournalEntry({
@@ -92,7 +92,7 @@ describe("statement import", () => {
     await expect(importRows(rows)).rejects.toThrow(/already been imported/);
   });
   it("refuses a bank account from another organization", async () => {
-    await expect(A.confirmStatementImport({ bankAccountId: crypto.randomUUID(), fileName: "s.csv", base64: csv(["2026-09-03,X,5"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "", dateChoice: "AD" })).rejects.toThrow(/Bank account not found/);
+    await expect(A.confirmStatementImport({ bankAccountId: crypto.randomUUID(), fileName: "s.csv", base64: csv(["2026-09-03,X,5"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" })).rejects.toThrow(/Bank account not found/);
   });
 });
 
@@ -149,7 +149,7 @@ describe("marking a period reconciled", () => {
     const bank2Ledger = (await createSubAccount(org.tenantId, await acct(org.tenantId, "1010"), "Second Bank")).id;
     await A.createBankAccount({ bankName: "B2", accountName: "Second", accountNumber: "", branch: "", currency: "NPR", chartOfAccountsLink: bank2Ledger, openingBalance: 0 });
     const [b2] = await db.select().from(bankAccounts).where(and(eq(bankAccounts.tenantId, org.tenantId), eq(bankAccounts.chartOfAccountsLink, bank2Ledger)));
-    await A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-01,In,500"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "", dateChoice: "AD" });
+    await A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-01,In,500"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" });
     const entry = await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-08-01", sourceType: "manual", sourceId: "00000000-0000-0000-0000-0000000000aa", createdBy: org.userId, lines: [{ accountId: bank2Ledger, debitAmount: 500 }, { accountId: salesId, creditAmount: 500 }] });
     const [jl] = await db.select().from(journalLines).where(and(eq(journalLines.journalEntryId, entry.id), eq(journalLines.accountId, bank2Ledger)));
     const [sl] = await db.select().from(bankStatementLines).where(eq(bankStatementLines.bankAccountId, b2.id));
@@ -170,6 +170,6 @@ describe("marking a period reconciled", () => {
     await expect(assertSourceNotReconciled(org.tenantId, "00000000-0000-0000-0000-0000000000aa", "invoice")).rejects.toThrow(/unmatch it/);
     await expect(assertNoLaterPayments(org.tenantId, "sales_invoice", "00000000-0000-0000-0000-0000000000aa", "invoice")).rejects.toThrow(/unmatch it/);
     // and a new statement can't add transactions inside it
-    await expect(A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-20,Late,9"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "", dateChoice: "AD" })).rejects.toThrow(/already reconciled/);
+    await expect(A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-20,Late,9"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" })).rejects.toThrow(/already reconciled/);
   });
 });

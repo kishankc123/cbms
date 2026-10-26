@@ -5,7 +5,7 @@ import { accounts, journalEntries, journalLines, purchaseBills, purchaseImports,
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { analyzePurchaseFile, checkPurchaseImport, finishPurchaseImport, importBillIds, importPurchaseChunk, listPurchaseImports, preparePurchaseImport, reviewPurchaseFile } from "./service";
-import type { PurchaseDateOptions, PurchaseImportSettings, PurchaseRunInput } from "./types";
+import type { PurchaseImportSettings, PurchaseRunInput } from "./types";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let stationeryId: string;
@@ -13,7 +13,6 @@ let cleaningId: string;
 let acmeId: string;
 
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
-const DATES: PurchaseDateOptions = { choice: "AD", dayFirst: true, allowMixed: false };
 const SETTINGS: PurchaseImportSettings = { amountsIncludeVat: false, defaultBillType: "vat", paidMode: "file", defaultAccountId: null, defaultCategoryId: null };
 const CSV = [
   "Bill Date,Vendor,Category,Bill No,Particulars,Amount,Bill Type,Paid,Paid From",
@@ -26,7 +25,7 @@ const CSV = [
 ].join("\n");
 const MAPPING = { date: "Bill Date", supplier: "Vendor", category: "Category", billNumber: "Bill No", description: "Particulars", amount: "Amount", billType: "Bill Type", paid: "Paid", account: "Paid From" };
 
-const base = (text = CSV, settings = SETTINGS) => ({ fileName: "purchases.csv", base64: b64(text), mapping: MAPPING, dateOptions: DATES, settings });
+const base = (text = CSV, settings = SETTINGS) => ({ fileName: "purchases.csv", base64: b64(text), mapping: MAPPING, settings });
 const runInput = (over: Partial<PurchaseRunInput> = {}): PurchaseRunInput => ({ ...base(), supplierDecisions: {}, categoryDecisions: {}, skipRows: [], includeDuplicates: false, ...over });
 const balance = async (code: string) => {
   const [a] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code)));
