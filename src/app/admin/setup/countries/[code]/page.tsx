@@ -16,9 +16,9 @@ export default async function AdminCountryPage({ params }: { params: Promise<{ c
   // Where each part of a country's compliance is set up. The three screens under Compliance Configuration already work
   // for one country at a time, so they open here already pointed at this country.
   const sections = [
-    { title: "Company types", count: counts.companyTypes, note: "Private Limited, Sole Proprietorship and so on." },
-    { title: "Taxes", count: counts.taxTypes, note: "The tax types, like VAT and Income tax." },
-    { title: "Authorities", count: counts.authorities, note: "The tax offices and regulators." },
+    { title: "Company types", count: counts.companyTypes, note: "Private Limited, Sole Proprietorship and so on.", href: `/admin/setup/countries/${country.code}/company-types` },
+    { title: "Taxes", count: counts.taxTypes, note: "The tax types, like VAT and Income tax.", href: `/admin/setup/countries/${country.code}/taxes` },
+    { title: "Authorities", count: counts.authorities, note: "The tax offices and regulators.", href: `/admin/setup/countries/${country.code}/authorities` },
     { title: "Tax rates", count: counts.taxRates, note: "VAT and TDS rates, by date.", href: `/admin/compliance/tax-rates${rules}` },
     { title: "Deadlines", count: counts.deadlines, note: "What must be filed, and when it is due.", href: `/admin/compliance/templates${rules}` },
     { title: "Fines and penalties", count: counts.penalties, note: "Late filing and late payment figures.", href: `/admin/compliance/penalties${rules}` },
@@ -43,14 +43,10 @@ export default async function AdminCountryPage({ params }: { params: Promise<{ c
               <p className={`mt-3 text-xs ${s.count ? "text-[var(--text-secondary)]" : "text-amber-700"}`}>{s.count ? `${s.count} set up` : "Not set up yet"}</p>
             </>
           );
-          return s.href ? (
+          return (
             <Link key={s.title} href={s.href} className={`${adminCard} block p-5 transition-shadow hover:shadow-sm`}>
               {body}
             </Link>
-          ) : (
-            <div key={s.title} className={`${adminCard} p-5 opacity-60`} title="Coming next">
-              {body}
-            </div>
           );
         })}
       </div>

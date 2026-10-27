@@ -3,6 +3,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { complianceAuthorities, compliancePenaltyRules, complianceRequirementTemplates, complianceEntityTypes, complianceTaxTypes, complianceCountries, platformTaxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
+import { seedDefaultTaxes } from "@/lib/country-setup";
 import { suggestedCalendar, suggestedCurrency, suggestedFiscalStartMonth } from "@/lib/country-currencies";
 
 // The one list of countries. The platform administrator chooses which are active (Setup → Countries); registration,
@@ -71,6 +72,7 @@ export async function addCountry(adminId: string, input: { code: string; currenc
     .insert(complianceCountries)
     .values({ code: world.code, name: world.name, currency, statutoryCalendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth, isActive: true })
     .onConflictDoUpdate({ target: complianceCountries.code, set: { currency, statutoryCalendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth, isActive: true } });
+  await seedDefaultTaxes(world.code);
   await logAuditEvent({ userId: adminId, action: "country_added", entityType: "country", entityId: world.code, after: { name: world.name, currency, calendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth } });
   return { ok: true };
 }
