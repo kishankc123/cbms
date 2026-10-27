@@ -7,6 +7,7 @@ import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 
@@ -105,6 +106,7 @@ export function ExpenseFormModal({
   // Payments recorded later in Payments pin the amounts: then only the details can be edited.
   const locked = Boolean(initial?.detailsOnly);
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
+  const ask = useConfirm();
   const { problem, report, dialog } = useProblem();
 
   // Auto-fills VAT/TDS from the tenant's configured rates as the taxable
@@ -197,7 +199,7 @@ export function ExpenseFormModal({
       } else {
         const result = await createExpense(payload);
         if (result.warnings.length > 0) {
-          alert(`Saved, but flagged by Rules & Policies:\n\n${result.warnings.join("\n")}`);
+          await ask(`Saved, but flagged by Rules & Policies:\n\n${result.warnings.join("\n")}`, { title: "Saved with a warning", confirmLabel: "OK", cancelLabel: "" });
         }
       }
       router.refresh();

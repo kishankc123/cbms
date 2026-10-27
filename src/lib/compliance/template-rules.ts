@@ -1,18 +1,8 @@
-import { assertValidCondition, type Condition } from "./engine/applicability";
+import { assertValidCondition, type Condition, type Op } from "./engine/applicability";
 import { assertValidDueRule, type DueRule, type PeriodKind } from "./engine/due-rules";
 
 // Plain-language views of a requirement template's two structured rules (when it is due, and who it applies to), and the form the
 // platform administrator edits the due date in. Pure: nothing here touches the database.
-
-/** The facts an applicability condition can test (see engine/facts.ts) — what the editor offers help for. */
-export const KNOWN_FACTS: { fact: string; help: string }[] = [
-  { fact: "country_code", help: "the organization's country code, e.g. NP" },
-  { fact: "entity_type", help: "the company type, e.g. private_limited" },
-  { fact: "registered_tax_types", help: "the taxes it is registered for (a list): vat, tds, excise, pan" },
-  { fact: "vat_filing_frequency", help: "monthly or quarterly" },
-  { fact: "has_employees", help: "true when it has an active employee" },
-  { fact: "withholds_tax", help: "true when it withholds tax (TDS) at source" },
-];
 
 export const PERIOD_OPTIONS: { value: PeriodKind; label: string; help: string }[] = [
   { value: "month", label: "Each month", help: "the calendar month in the country's statutory calendar" },
@@ -45,25 +35,50 @@ export function describeDueRule(rule: unknown): string {
   return `${day} ${where}${months === 0 || months === 1 ? "" : ` ${period} ends`}`;
 }
 
-const OP_TEXT: Record<string, string> = { eq: "is", neq: "is not", in: "is one of", includes: "includes", gt: "is more than", gte: "is at least", lt: "is less than", lte: "is at most" };
-const show = (v: unknown) => (Array.isArray(v) ? v.join(", ") : String(v));
+/** What the words need to say a tax or a company type by name; without it the key is shown. */
+export type ConditionNames = { taxes?: Record<string, string>; entityTypes?: Record<string, string> };
 
-/** "Registered for VAT and the filing basis is not quarterly" — an applicability condition in words. */
-export function describeCondition(c: unknown): string {
+/** "Organizations that are registered for VAT and do not file VAT quarterly" — an applicability condition in plain words. */
+export function describeCondition(c: unknown, names: ConditionNames = {}): string {
   if (c === null || c === undefined) return "Every organization";
   try {
     assertValidCondition(c);
   } catch (e) {
     return `Not understood: ${e instanceof Error ? e.message : "invalid condition"}`;
   }
-  const walk = (x: Condition, top: boolean): string => {
+  const tax = (k: unknown) => names.taxes?.[String(k)] ?? String(k).toUpperCase();
+  const type = (k: unknown) => names.entityTypes?.[String(k)] ?? String(k).replace(/_/g, " ");
+  const leaf = (x: { fact: string; op: Op; value: unknown }, not: boolean): string => {
+    const no = (yes: string, notText: string) => (not ? notText : yes);
+    switch (x.fact) {
+      case "registered_tax_types":
+        return `${no("are", "are not")} registered for ${tax(x.value)}`;
+      case "vat_filing_frequency": {
+        const negated = (x.op === "neq") !== not;
+        return `${negated ? "do not file" : "file"} VAT ${String(x.value)}`;
+      }
+      case "has_employees":
+      case "withholds_tax": {
+        const yes = (x.value === true) !== not;
+        return x.fact === "has_employees" ? (yes ? "have employees" : "have no employees") : yes ? "withhold tax at source" : "do not withhold tax at source";
+      }
+      case "entity_type": {
+        const negated = (x.op === "neq") !== not;
+        const list = Array.isArray(x.value) ? x.value : [x.value];
+        return `${negated ? "are not" : "are"} a ${list.map(type).join(" or ")}`;
+      }
+      default:
+        return `${not ? "not: " : ""}${x.fact.replace(/_/g, " ")} ${x.op} ${Array.isArray(x.value) ? x.value.join(", ") : String(x.value)}`;
+    }
+  };
+  const walk = (x: Condition, top: boolean, not = false): string => {
     if ("all" in x) return wrap(x.all.map((y) => walk(y, false)).join(" and "), top || x.all.length === 1);
     if ("any" in x) return wrap(x.any.map((y) => walk(y, false)).join(" or "), top || x.any.length === 1);
-    if ("not" in x) return `not (${walk(x.not, true)})`;
-    return `${x.fact.replace(/_/g, " ")} ${OP_TEXT[x.op] ?? x.op} ${show(x.value)}`;
+    if ("not" in x) return "fact" in x.not ? leaf(x.not as { fact: string; op: Op; value: unknown }, !not) : `not (${walk(x.not, true)})`;
+    return leaf(x, not);
   };
   const wrap = (s: string, bare: boolean) => (bare ? s : `(${s})`);
-  return walk(c, true);
+  return `Organizations that ${walk(c, true)}`;
 }
 
 export type DueRuleForm = {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { InfoDialog } from "../info-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Row = { id: string; name: string };
 
@@ -73,8 +74,9 @@ export function NamedListPanel({
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete ${name}?`)) return;
+    if (!(await ask(`Delete ${name}?`, { confirmLabel: "Delete", danger: true }))) return;
     setBusy(true);
     try {
       await onDelete(id);

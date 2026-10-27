@@ -6,6 +6,7 @@ import { createRule, setRuleActive, deleteRule, type listRules, type RuleInput }
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 type Rule = Awaited<ReturnType<typeof listRules>>[number];
 
 const MODULES: { value: RuleInput["applicableModule"]; label: string }[] = [
@@ -91,8 +92,9 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string) {
-    if (!confirm("Delete this rule?")) return;
+    if (!(await ask("Delete this rule?", { confirmLabel: "Delete", danger: true }))) return;
     setBusy(true);
     try {
       await deleteRule(id);

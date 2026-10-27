@@ -11,6 +11,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Data = Awaited<ReturnType<typeof listStatutory>>;
 type Item = Data["items"][number];
@@ -206,8 +207,9 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
   const dueEditable = editable && item.source !== "generated";
   const deletable = editable && item.source === "manual" && item.status === "pending";
 
+  const ask = useConfirm();
   async function remove() {
-    if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return;
+    if (!(await ask(`Delete "${item.name}"? This can't be undone.`, { confirmLabel: "Delete", danger: true }))) return;
     setBusy(true);
     setError(null);
     try {

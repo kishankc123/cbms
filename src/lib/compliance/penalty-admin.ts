@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { compliancePenaltyRules } from "@/db/schema";
+import { complianceCountries, compliancePenaltyRules } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { addDays, bsFiscalYearOf, bsFiscalYearRange, todayIso, type IsoDate } from "@/lib/calendar";
+import { addDays, fiscalYearOf, fiscalYearRange, todayIso, type CalendarSystem, type IsoDate } from "@/lib/calendar";
 import { fromForm, PENALTY_TYPES, penaltyType, type FormValues, type PenaltyTypeKey } from "./penalty-types";
 
-// Fines and penalties, kept as versions: each version starts on Shrawan 1 of a fiscal year and runs until the next one starts,
+// Fines and penalties, kept as versions: each version starts on the first day of one of the country's fiscal years and runs until the next one starts,
 // so a past period is always judged by the figures that applied then. The platform administrator manages them; every
 // organization can read them. Plain server helpers, not server actions: the actions in app/admin check requirePlatformAdmin.
 // Platform-level audit events are written with no tenant.
@@ -15,7 +15,7 @@ export type Version = {
   taxTypeKey: PenaltyTypeKey;
   effectiveFrom: IsoDate;
   effectiveTo: IsoDate | null;
-  /** "2083/84" for a version that starts on Shrawan 1, null for the original figures. */
+  /** "2083/84" for a version that starts on the first day of a fiscal year, null for the original figures. */
   fiscalYear: string | null;
   params: unknown;
   isVerified: boolean;
@@ -32,8 +32,15 @@ const TYPE_KEYS = PENALTY_TYPES.map((t) => t.key);
 /** The figures as text with the keys in a fixed order, so two copies of the same figures compare equal. */
 const stable = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([p], [q]) => (p < q ? -1 : 1))) : x));
 
-function toVersion(r: typeof compliancePenaltyRules.$inferSelect, today: IsoDate): Version {
-  const fy = bsFiscalYearOf(r.effectiveFrom);
+/** How a country counts its fiscal years: the calendar and the month one starts in (Nepal: BS, Shrawan). */
+export type FiscalYears = { calendar: CalendarSystem; month: number };
+export async function fiscalYearsOf(countryCode: string): Promise<FiscalYears> {
+  const [c] = await db.select({ calendar: complianceCountries.statutoryCalendar, month: complianceCountries.fiscalYearStartMonth }).from(complianceCountries).where(eq(complianceCountries.code, countryCode)).limit(1);
+  return { calendar: (c?.calendar as CalendarSystem) ?? "BS", month: c?.month ?? 4 };
+}
+
+function toVersion(r: typeof compliancePenaltyRules.$inferSelect, today: IsoDate, years: FiscalYears): Version {
+  const fy = fiscalYearOf(years.calendar, years.month, r.effectiveFrom);
   const startsShrawan = Boolean(fy && fy.from === r.effectiveFrom);
   return {
     id: r.id,
@@ -56,8 +63,9 @@ export async function listPenaltyTimeline(countryCode: string, today: IsoDate = 
     .from(compliancePenaltyRules)
     .where(and(eq(compliancePenaltyRules.countryCode, countryCode), inArray(compliancePenaltyRules.taxTypeKey, TYPE_KEYS)))
     .orderBy(asc(compliancePenaltyRules.effectiveFrom));
+  const years = await fiscalYearsOf(countryCode);
   const out = { vat: [], tds: [], excise_permit: [] } as Record<PenaltyTypeKey, Version[]>;
-  for (const r of rows) out[r.taxTypeKey as PenaltyTypeKey].push(toVersion(r, today));
+  for (const r of rows) out[r.taxTypeKey as PenaltyTypeKey].push(toVersion(r, today, years));
   return out;
 }
 
@@ -73,12 +81,13 @@ export async function currentPenaltyRates(countryCode: string, today: IsoDate = 
   }));
 }
 
-export type NewVersionInput = { countryCode: string; taxTypeKey: PenaltyTypeKey; /** The BS year the fiscal year starts in, e.g. 2083 for 2083/84. */ fiscalYearStart: number; form: FormValues; isVerified: boolean; source: string };
+export type NewVersionInput = { countryCode: string; taxTypeKey: PenaltyTypeKey; /** The year the fiscal year starts in, e.g. 2083 for 2083/84. */ fiscalYearStart: number; form: FormValues; isVerified: boolean; source: string };
 
-/** Adds a version that starts on Shrawan 1 of the chosen fiscal year, after the latest existing one, and ends the one before it. */
+/** Adds a version that starts on the first day of the chosen fiscal year, after the latest existing one, and ends the one before it. */
 export async function createPenaltyVersion(adminId: string, input: NewVersionInput): Promise<Result> {
   if (!penaltyType(input.taxTypeKey)) return fail("Unknown penalty type.");
-  const range = bsFiscalYearRange(input.fiscalYearStart);
+  const years = await fiscalYearsOf(input.countryCode);
+  const range = fiscalYearRange(years.calendar, years.month, input.fiscalYearStart);
   if (!range) return fail("That fiscal year is outside the supported calendar.");
   const checked = fromForm(input.taxTypeKey, input.form);
   if (!checked.ok) return checked;
@@ -90,7 +99,7 @@ export async function createPenaltyVersion(adminId: string, input: NewVersionInp
     .orderBy(asc(compliancePenaltyRules.effectiveFrom));
   const latest = existing[existing.length - 1];
   if (latest && range.from <= latest.effectiveFrom) {
-    const fy = bsFiscalYearOf(latest.effectiveFrom);
+    const fy = fiscalYearOf(years.calendar, years.month, latest.effectiveFrom);
     return fail(`Versions are added in order. The latest version starts ${fy && fy.from === latest.effectiveFrom ? `in fiscal year ${fy.label}` : "from the original date"}; choose a later fiscal year.`);
   }
 

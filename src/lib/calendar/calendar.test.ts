@@ -11,6 +11,8 @@ import {
   addMonths,
   presetRange,
   bsFiscalYearRange,
+  fiscalYearOf,
+  fiscalYearRange,
   bsFiscalYearOf,
   todayIso,
   isProjectedBs,
@@ -282,5 +284,13 @@ describe("BS month periods, filing dates and defaults", () => {
     expect(bsDue.month).toBe(anchor.month === 12 ? 1 : anchor.month + 1);
     expect(filingDueDate("AD", "2026-09-05")).toBe("2026-10-25");
     expect(filingDueDate("AD", "2026-12-05")).toBe("2027-01-25");
+  });
+
+  it("works out a fiscal year for any start month and calendar", () => {
+    expect(fiscalYearRange("AD", 1, 2026)).toMatchObject({ from: "2026-01-01", to: "2026-12-31", label: "2026" });
+    expect(fiscalYearRange("AD", 7, 2026)).toMatchObject({ from: "2026-07-01", to: "2027-06-30", label: "2026/27" });
+    expect(fiscalYearOf("AD", 7, "2026-03-10")).toMatchObject({ startYear: 2025, label: "2025/26" });
+    expect(fiscalYearOf("AD", 7, "2026-07-01")?.startYear).toBe(2026);
+    expect(fiscalYearRange("BS", 4, 2083)).toEqual(bsFiscalYearRange(2083));
   });
 });

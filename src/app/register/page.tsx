@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { registerOrganization } from "./actions";
+import { listCountryOptions, registerOrganization } from "./actions";
 
 const inputCls = "w-full rounded border border-gray-300 px-3 py-2 text-sm";
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -15,10 +15,15 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1);
-  const [b, setB] = useState({ name: "", businessType: "", country: "Nepal", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
+  const [b, setB] = useState({ name: "", businessType: "", country: "NP", address: "", phone: "", email: "", panNumber: "", companyRegistrationNumber: "" });
   const [a, setA] = useState({ fullName: "", email: "", mobile: "", password: "", confirmPassword: "" });
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    listCountryOptions().then(setCountries);
+  }, []);
 
   function next(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +66,13 @@ export default function RegisterPage() {
                 <input className={inputCls} value={b.businessType} onChange={(e) => setB({ ...b, businessType: e.target.value })} placeholder="e.g. Restaurant" />
               </Field>
               <Field label="Country">
-                <input className={inputCls} value={b.country} onChange={(e) => setB({ ...b, country: e.target.value })} />
+                <select className={inputCls} value={b.country} onChange={(e) => setB({ ...b, country: e.target.value })}>
+                  {countries.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
             <Field label="Address">

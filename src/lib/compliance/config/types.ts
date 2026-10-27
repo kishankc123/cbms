@@ -31,7 +31,7 @@ export type PenaltyRuleSeed = {
 
 /** Everything that defines one country. Adding a country = adding one of these. */
 export type CountryConfig = {
-  country: { code: string; name: string; currency: string; statutoryCalendar: "AD" | "BS" };
+  country: { code: string; name: string; currency: string; statutoryCalendar: "AD" | "BS"; fiscalYearStartMonth: number };
   entityTypes: { key: string; name: string }[];
   authorities: { key: string; name: string }[];
   taxTypes: { key: string; name: string; authorityKey?: string; isRegistrable?: boolean; numberSource?: "company_pan_vat"; amountSource?: "vat_return" | "tds_withheld"; payableAccountName?: string; legacyPayableCode?: string }[];
@@ -46,4 +46,5 @@ export const COMPLIANCE_CATEGORIES = [
   { key: "statutory", name: "Statutory" },
   { key: "ownership", name: "Ownership" },
   { key: "company", name: "Company" },
+  { key: "local", name: "Local compliance" },
 ] as const;

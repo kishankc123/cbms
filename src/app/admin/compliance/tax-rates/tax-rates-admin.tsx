@@ -19,7 +19,8 @@ function bothDates(iso: string | null) {
 type Draft = { rate: string; effectiveFrom: string; source: string; isVerified: boolean };
 const blankDraft: Draft = { rate: "", effectiveFrom: "", source: "", isVerified: false };
 
-export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
+/** `only` limits the cards to some taxes; `organizations` is the table of what each organization is using. */
+export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxRateAdminData; only?: PublishableTaxType[]; organizations?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState<PublishableTaxType | null>(null);
   const [draft, setDraft] = useState<Draft>(blankDraft);
@@ -68,20 +69,10 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
   }
 
   const versionsOf = (type: PublishableTaxType): RateVersion[] => rates[type];
+  const shownTypes = PUBLISHABLE_TAX_TYPES.filter((t) => !only || only.includes(t.key));
 
   return (
     <div className="space-y-5">
-      <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-        Country
-        <select value={country.code} onChange={(e) => router.push(`/admin/compliance/tax-rates?country=${e.target.value}`)} className={adminField}>
-          {data.countries.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
       {message && (
         <div className={`rounded border px-3 py-2 text-sm ${message.tone === "ok" ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}>
           <p>{message.text}</p>
@@ -101,7 +92,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {PUBLISHABLE_TAX_TYPES.map((t) => {
+        {shownTypes.map((t) => {
           const versions = versionsOf(t.key);
           const inForce = versions.find((v) => v.inForce) ?? versions[versions.length - 1];
           const latest = versions[versions.length - 1];
@@ -211,6 +202,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
         })}
       </div>
 
+      {organizations && (
       <section className={`${adminCard} p-5`}>
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Organizations in {country.name}</h2>
         <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. An organization with its own rate can change it itself; one on the published rate cannot.</p>
@@ -218,8 +210,11 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
           <thead className="text-left text-xs text-[var(--text-secondary)]">
             <tr>
               <th className="py-1 pr-2 font-medium">Organization</th>
-              <th className="py-1 pr-2 font-medium">VAT</th>
-              <th className="py-1 pr-2 font-medium">TDS</th>
+              {shownTypes.map((t) => (
+                <th key={t.key} className="py-1 pr-2 font-medium">
+                  {t.label}
+                </th>
+              ))}
               <th className="py-1 font-medium">Follows published rates</th>
             </tr>
           </thead>
@@ -227,23 +222,26 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
             {rates.organizations.map((o) => (
               <tr key={o.id} className="border-t border-[var(--card-border)]">
                 <td className="py-1.5 pr-2">{o.name}</td>
-                {[o.vat, o.tds].map((r, i) => (
-                  <td key={i} className="py-1.5 pr-2">
-                    {r ? (
-                      <>
-                        {pct(r.rate)} <span className="text-xs text-[var(--text-secondary)]">{r.source === "platform" ? "published" : "own"}</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                ))}
+                {shownTypes.map((t) => {
+                  const r = o.rates[t.key];
+                  return (
+                    <td key={t.key} className="py-1.5 pr-2">
+                      {r ? (
+                        <>
+                          {pct(r.rate)} <span className="text-xs text-[var(--text-secondary)]">{r.source === "platform" ? "published" : "own"}</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  );
+                })}
                 <td className="py-1.5">{o.followsPublished ? <StatusPill tone="success">yes</StatusPill> : <StatusPill tone="action">no</StatusPill>}</td>
               </tr>
             ))}
             {rates.organizations.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-4 text-center text-[var(--text-secondary)]">
+                <td colSpan={shownTypes.length + 2} className="py-4 text-center text-[var(--text-secondary)]">
                   No organizations in this country yet.
                 </td>
               </tr>
@@ -251,6 +249,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
           </tbody>
         </table>
       </section>
+      )}
     </div>
   );
 }

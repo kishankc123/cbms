@@ -5,6 +5,7 @@ import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { deleteItem, setItemActive, type BillingType, type ItemType } from "./actions";
 import { EditItemModal } from "./edit-item-modal";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
@@ -97,8 +98,9 @@ export function ItemsTable({
     }
   }
 
+  const ask = useConfirm();
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete item ${name}?`)) return;
+    if (!(await ask(`Delete item ${name}?`, { confirmLabel: "Delete", danger: true }))) return;
     try {
       await deleteItem({ itemId: id });
       router.refresh();

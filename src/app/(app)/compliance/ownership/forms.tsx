@@ -7,6 +7,7 @@ import * as actions from "../ownership-actions";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Data = Awaited<ReturnType<typeof actions.getOwnership>>;
 type Holder = Data["holders"][number];
@@ -319,6 +320,7 @@ export function PaidUpForm({ holders, cashBank, currency, presetId, ...c }: Comm
   const [holderId, setHolderId] = useState(presetId ?? "");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(cashBank[0]?.id ?? "");
+  const ask = useConfirm();
   const [modeId, setModeId] = useState("");
   const [modeName, setModeName] = useState("");
   const method = modeName ? methodForMode(modeName) : "bank_transfer";
@@ -327,7 +329,7 @@ export function PaidUpForm({ holders, cashBank, currency, presetId, ...c }: Comm
   async function run() {
     const r = await actions.recordPaidUpIncrease({ ...meta, shareholderId: holderId, amount: num(amount), accountId, paymentModeId: modeId || null, paymentMethod: method });
     if (r.duplicateWarning) {
-      if (!window.confirm("A very similar payment was recorded recently. Record this one anyway?")) throw new Error("Cancelled");
+      if (!(await ask("A very similar payment was recorded recently. Record this one anyway?", { confirmLabel: "Record anyway" }))) throw new Error("Cancelled");
       await actions.recordPaidUpIncrease({ ...meta, shareholderId: holderId, amount: num(amount), accountId, paymentMethod: method, confirmDuplicate: true });
     }
   }

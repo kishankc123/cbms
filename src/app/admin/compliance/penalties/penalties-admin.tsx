@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProblem } from "@/components/problem-dialog";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -16,7 +15,8 @@ type Editing = { id: string | null; type: PenaltyTypeKey; started: boolean; fisc
 
 const blankTier = { upToMonths: "", ratePercent: "", action: "restricted" as PermitAction };
 
-export function PenaltiesAdmin({ data }: { data: PenaltyAdminData }) {
+/** `only` limits the sections to some penalty types. */
+export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: readonly PenaltyTypeKey[] }) {
   const router = useRouter();
   const { report, reportError, dialog } = useProblem();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -79,17 +79,7 @@ export function PenaltiesAdmin({ data }: { data: PenaltyAdminData }) {
 
   return (
     <div className="space-y-5">
-      {data.countries.length > 1 && (
-        <div className="flex flex-wrap gap-2 text-sm">
-          {data.countries.map((c) => (
-            <Link key={c.code} href={`/admin/compliance/penalties?country=${c.code}`} className={`rounded-full px-3 py-1 ${c.code === country.code ? "bg-[var(--color-primary)] text-white" : "bg-[var(--surface-muted-bg)] text-[var(--text-secondary)]"}`}>
-              {c.name}
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {PENALTY_TYPES.map((t) => (
+      {PENALTY_TYPES.filter((t) => !only || only.includes(t.key)).map((t) => (
         <section key={t.key} className={`${adminCard} space-y-3 p-5`}>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -174,7 +164,7 @@ export function PenaltiesAdmin({ data }: { data: PenaltyAdminData }) {
 
             {!editing.id && (
               <div>
-                <label className="mb-1 block text-xs text-gray-500">Starts on Shrawan 1 of fiscal year</label>
+                <label className="mb-1 block text-xs text-gray-500">Starts on {data.fiscalStart} of fiscal year</label>
                 <select className={`${adminField} w-full`} value={editing.fiscalYearStart ?? ""} onChange={(e) => setEditing({ ...editing, fiscalYearStart: e.target.value ? Number(e.target.value) : null })}>
                   <option value="">Choose a fiscal year</option>
                   {data.fiscalYears

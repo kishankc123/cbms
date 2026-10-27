@@ -7,6 +7,7 @@ import { toForm } from "./penalty-types";
 
 // A throwaway country, so the real figures are never touched.
 const CODE = "ZT";
+const AD_CODE = "ZY"; // an AD country whose fiscal year starts on 1 July
 const TODAY = "2026-10-08"; // inside FY 2083/84 (Shrawan 1 2083 = 17 July 2026)
 let adminId: string;
 
@@ -15,11 +16,14 @@ const timeline = async () => (await listPenaltyTimeline(CODE, TODAY)).vat;
 
 beforeAll(async () => {
   [{ userId: adminId }] = await db.select({ userId: memberships.userId }).from(memberships).limit(1);
-  await db.insert(complianceCountries).values({ code: CODE, name: "Test country", currency: "ZZZ", statutoryCalendar: "BS" }).onConflictDoNothing();
+  await db.insert(complianceCountries).values({ code: CODE, name: "Test country", currency: "ZZZ", statutoryCalendar: "BS", fiscalYearStartMonth: 4 }).onConflictDoNothing();
+  await db.insert(complianceCountries).values({ code: AD_CODE, name: "AD test country", currency: "ZZZ", statutoryCalendar: "AD", fiscalYearStartMonth: 7 }).onConflictDoNothing();
 });
 afterAll(async () => {
-  await db.delete(compliancePenaltyRules).where(eq(compliancePenaltyRules.countryCode, CODE));
-  await db.delete(complianceCountries).where(eq(complianceCountries.code, CODE));
+  for (const code of [CODE, AD_CODE]) {
+    await db.delete(compliancePenaltyRules).where(eq(compliancePenaltyRules.countryCode, code));
+    await db.delete(complianceCountries).where(eq(complianceCountries.code, code));
+  }
 });
 
 describe("penalty rule versions", () => {
@@ -76,6 +80,12 @@ describe("penalty rule versions", () => {
     const v = await timeline();
     expect(v).toHaveLength(1);
     expect(v[0].effectiveTo).toBeNull();
+  });
+
+  it("a country with its own fiscal year starts a version on that day, not on Shrawan 1", async () => {
+    expect(await createPenaltyVersion(adminId, { countryCode: AD_CODE, taxTypeKey: "vat", fiscalYearStart: 2026, form: vatForm("10"), isVerified: false, source: "" })).toEqual({ ok: true });
+    const [v] = (await listPenaltyTimeline(AD_CODE, "2026-10-08")).vat;
+    expect(v).toMatchObject({ effectiveFrom: "2026-07-01", fiscalYear: "2026/27", inForce: true });
   });
 
   it("every change is in the platform audit log", async () => {

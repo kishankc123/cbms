@@ -3,10 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
-import { blankDueRuleForm, describeCondition, describeDueRule, dueRuleToForm, formToDueRule, KNOWN_FACTS, parseApplicability, PERIOD_OPTIONS, type DueRuleForm } from "@/lib/compliance/template-rules";
-import type { TemplateRow } from "@/lib/compliance/template-admin";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { blankDueRuleForm, describeCondition, describeDueRule, dueRuleToForm, formToDueRule, PERIOD_OPTIONS, type DueRuleForm } from "@/lib/compliance/template-rules";
+import type { NewTemplateInput, TemplateRow } from "@/lib/compliance/template-admin";
+import { appliesProblem, appliesToCondition, conditionToApplies, EVERYONE, type Applies } from "@/lib/compliance/applicability-form";
+import { NOT_TAXES } from "@/lib/compliance/config-tabs";
+import { ApplicabilityEditor } from "./applicability-editor";
 import { adminCard, adminField } from "../../ui";
-import { saveTemplate, type TemplateAdminData } from "./actions";
+import { addTemplate, saveTemplate, type TemplateAdminData } from "./actions";
 
 type Draft = {
   name: string;
@@ -16,8 +20,15 @@ type Draft = {
   activeFrom: string;
   activeTo: string;
   due: DueRuleForm;
-  applicabilityText: string;
+  /** The conditions as plain choices; null for a rule too detailed for them, which is then kept as `original`. */
+  applies: Applies | null;
+  original: unknown;
   moveOpenItems: boolean;
+};
+
+const appliesText = (d: Draft) => {
+  const condition = d.applies ? appliesToCondition(d.applies) : d.original;
+  return condition ? JSON.stringify(condition) : "";
 };
 
 const draftOf = (t: TemplateRow): Draft => ({
@@ -28,24 +39,57 @@ const draftOf = (t: TemplateRow): Draft => ({
   activeFrom: t.activeFrom ?? "",
   activeTo: t.activeTo ?? "",
   due: t.dueRule ? dueRuleToForm(t.dueRule) : t.frequency === "event_based" ? { ...blankDueRuleForm(), period: "event", mode: "days" } : blankDueRuleForm(),
-  applicabilityText: t.applicability ? JSON.stringify(t.applicability, null, 2) : "",
+  applies: conditionToApplies(t.applicability),
+  original: t.applicability,
   moveOpenItems: false,
 });
 
-export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
+/**
+ * `categoryKeys`: only requirements in these categories. `taxKey`: only the ones for that tax. `exceptTaxKeys`: leave out the
+ * ones for those taxes (what is left over once each tax has shown its own). `addable` shows the "Add requirement" button.
+ */
+export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, addable }: { data: TemplateAdminData; categoryKeys?: string[]; taxKey?: string; exceptTaxKeys?: string[]; addable?: boolean }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [fresh, setFresh] = useState<TemplateRow | null>(null); // a requirement being added, shown at the top as an open form
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
 
-  const categories = useMemo(() => Array.from(new Map(data.templates.map((t) => [t.categoryKey, t.categoryName])).entries()), [data.templates]);
-  const shown = data.templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase())));
+  const templates = useMemo(() => data.templates.filter((t) => (!categoryKeys || categoryKeys.includes(t.categoryKey)) && (!taxKey || t.taxTypeKey === taxKey) && !(exceptTaxKeys && t.taxTypeKey && exceptTaxKeys.includes(t.taxTypeKey))), [data.templates, categoryKeys, taxKey, exceptTaxKeys]);
+  const categories = useMemo(() => Array.from(new Map(templates.map((t) => [t.categoryKey, t.categoryName])).entries()), [templates]);
+  const shown = (fresh ? [fresh] : []).concat(templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase()))));
 
-  if (!data.country) return <p className={`${adminCard} p-5 text-sm text-[var(--text-secondary)]`}>No country is configured yet.</p>;
-  const country = data.country;
+
+  // Inside one tax's group, or for what is left over, an empty list is simply not shown.
+  if (!addable && templates.length === 0 && (taxKey !== undefined || exceptTaxKeys !== undefined)) return null;
+
+  const choices = data.options.categories.filter((c) => !categoryKeys || categoryKeys.includes(c.key));
+
+  function startAdd() {
+    const row: TemplateRow = { id: "new", key: "", name: "", description: null, categoryKey: choices[0]?.key ?? "statutory", categoryName: "", taxTypeKey: taxKey ?? null, taxTypeName: null, authorityKey: null, entityTypeKey: null, entityTypeName: null, frequency: "monthly", periodCalendar: "statutory", applicability: null, applicabilityText: "", dueRule: null, dueRuleText: "", activeFrom: null, activeTo: null, isActive: true, isVerified: false, generatedItems: 0 };
+    setFresh(row);
+    setOpenId(row.id);
+    const registrable = taxKey && data.options.taxTypes.some((x) => x.key === taxKey && x.isRegistrable);
+    setDraft({ ...draftOf(row), applies: registrable ? { match: "all", rows: [{ kind: "registered", not: false, value: [taxKey] }] } : EVERYONE });
+    setMessage(null);
+  }
+
+  function setFrequency(frequency: string) {
+    if (!fresh || !draft) return;
+    setFresh({ ...fresh, frequency });
+    setDraft({ ...draft, due: frequency === "event_based" ? { ...blankDueRuleForm(), period: "event", mode: "days" } : blankDueRuleForm() });
+  }
+
+  function close() {
+    setOpenId(null);
+    setDraft(null);
+    setFresh(null);
+    setMessage(null);
+  }
 
   function open(t: TemplateRow) {
     setOpenId(t.id);
@@ -63,8 +107,33 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
       dueRule = r.rule;
     }
+    const problem = draft.applies && appliesProblem(draft.applies);
+    if (problem) return setMessage({ tone: "bad", text: problem });
     setBusy(true);
     try {
+      if (t.id === "new") {
+        const added = await addTemplate({
+          countryCode: data.country!.code,
+          categoryKey: t.categoryKey,
+          taxTypeKey: t.taxTypeKey ?? "",
+          authorityKey: t.authorityKey ?? "",
+          entityTypeKey: t.entityTypeKey ?? "",
+          frequency: t.frequency as NewTemplateInput["frequency"],
+          name: draft.name,
+          description: draft.description,
+          isActive: draft.isActive,
+          isVerified: draft.isVerified,
+          activeFrom: draft.activeFrom,
+          activeTo: draft.activeTo,
+          dueRule,
+          applicabilityText: appliesText(draft),
+        });
+        if (!added.ok) return setMessage({ tone: "bad", text: added.error });
+        close();
+        router.refresh();
+        await ask("Organizations get items from it the next time items are generated.", { title: "Requirement added", confirmLabel: "OK", cancelLabel: "" });
+        return;
+      }
       const r = await saveTemplate({
         id: t.id,
         name: draft.name,
@@ -74,15 +143,18 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
         activeFrom: draft.activeFrom,
         activeTo: draft.activeTo,
         dueRule,
-        applicabilityText: draft.applicabilityText,
+        applicabilityText: appliesText(draft),
         moveOpenItems: draft.moveOpenItems,
       });
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
-      setMessage({ tone: "ok", text: r.changes.length === 0 ? "Nothing was changed." : `Saved: ${r.changes.map((c) => c.field).join(", ")}.${r.movedItems > 0 ? ` ${r.movedItems} open item${r.movedItems === 1 ? "" : "s"} moved to the new due date.` : ""}` });
+      const text = r.changes.length === 0 ? "Nothing was changed." : `Saved: ${r.changes.map((c) => c.field).join(", ")}.${r.movedItems > 0 ? ` ${r.movedItems} open item${r.movedItems === 1 ? "" : "s"} moved to the new due date.` : ""}`;
+      if (r.changes.length === 0) setMessage({ tone: "ok", text });
       if (r.changes.length > 0) {
         setOpenId(null);
         setDraft(null);
+        setMessage(null);
         router.refresh();
+        await ask(text, { title: "Saved", confirmLabel: "OK", cancelLabel: "" });
       }
     } catch (e) {
       setMessage({ tone: "bad", text: e instanceof Error ? e.message : "Could not save." });
@@ -97,25 +169,13 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
     const r = formToDueRule(t.frequency === "event_based" ? { ...draft.due, period: "event", mode: "days" } : draft.due);
     return r.ok ? describeDueRule(r.rule) : r.error;
   };
-  const applicabilityPreview = () => {
-    if (!draft) return "";
-    const p = parseApplicability(draft.applicabilityText);
-    return p.ok ? describeCondition(p.condition) : p.error;
-  };
+  const names = { taxes: Object.fromEntries(data.options.taxTypes.map((x) => [x.key, x.name])), entityTypes: Object.fromEntries(data.options.entityTypes.map((x) => [x.key, x.name])) };
+  const applicabilityPreview = () => (draft ? describeCondition(draft.applies ? appliesToCondition(draft.applies) : draft.original, names) : "");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-          Country
-          <select value={country.code} onChange={(e) => router.push(`/admin/compliance/templates?country=${e.target.value}`)} className={adminField}>
-            {data.countries.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {categories.length > 1 && (
         <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
           Category
           <select value={category} onChange={(e) => setCategory(e.target.value)} className={adminField}>
@@ -127,7 +187,13 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
             ))}
           </select>
         </label>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requirements…" className={`${adminField} w-64`} />
+        )}
+        {addable && !fresh && (
+          <button type="button" onClick={startAdd} className="ml-auto rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+            Add requirement
+          </button>
+        )}
+        {templates.length > 4 && <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requirements…" className={`${adminField} w-64`} />}
       </div>
 
       {message && openId === null && <p className={`rounded border px-3 py-2 text-sm ${message.tone === "ok" ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}>{message.text}</p>}
@@ -138,21 +204,25 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-medium text-[var(--text-primary)]">
-                  {t.name} <span className="font-mono text-xs text-[var(--text-secondary)]">{t.key}</span>
+                  {t.id === "new" ? "New requirement" : t.name} <span className="font-mono text-xs text-[var(--text-secondary)]">{t.key}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-                  {t.categoryName}
-                  {t.taxTypeName ? ` · ${t.taxTypeName}` : ""} · {t.frequency.replace("_", " ")}
-                  {t.entityTypeName ? ` · only ${t.entityTypeName}` : ""} · {t.generatedItems} item{t.generatedItems === 1 ? "" : "s"} generated
-                </p>
-                <p className="mt-1 text-sm text-[var(--text-primary)]">
-                  <span className="text-[var(--text-secondary)]">Due: </span>
-                  {t.dueRuleText}
-                </p>
-                <p className="text-sm text-[var(--text-primary)]">
-                  <span className="text-[var(--text-secondary)]">Applies to: </span>
-                  {t.applicabilityText}
-                </p>
+                {t.id !== "new" && (
+                  <>
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                      {t.categoryName}
+                      {t.taxTypeName ? ` · ${t.taxTypeName}` : ""} · {t.frequency.replace("_", " ")}
+                      {t.entityTypeName ? ` · only ${t.entityTypeName}` : ""} · {t.generatedItems} item{t.generatedItems === 1 ? "" : "s"} generated
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--text-primary)]">
+                      <span className="text-[var(--text-secondary)]">Due: </span>
+                      {t.dueRuleText}
+                    </p>
+                    <p className="text-sm text-[var(--text-primary)]">
+                      <span className="text-[var(--text-secondary)]">Applies to: </span>
+                      {t.applicabilityText}
+                    </p>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill tone={t.isActive ? "success" : "pending"}>{t.isActive ? "active" : "inactive"}</StatusPill>
@@ -167,6 +237,67 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
 
             {openId === t.id && draft && (
               <div className="mt-4 space-y-4 border-t border-[var(--card-border)] pt-4">
+                {t.id === "new" && fresh && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Repeats
+                      <select value={fresh.frequency} onChange={(e) => setFrequency(e.target.value)} className={`${adminField} mt-1 w-full`}>
+                        <option value="monthly">Every month</option>
+                        <option value="quarterly">Every quarter</option>
+                        <option value="annual">Every year</option>
+                        <option value="one_time">Once</option>
+                        <option value="event_based">When something happens</option>
+                      </select>
+                    </label>
+                    {choices.length > 1 && (
+                      <label className="text-xs text-[var(--text-secondary)]">
+                        Category
+                        <select value={fresh.categoryKey} onChange={(e) => setFresh({ ...fresh, categoryKey: e.target.value })} className={`${adminField} mt-1 w-full`}>
+                          {choices.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Authority (optional)
+                      <select value={fresh.authorityKey ?? ""} onChange={(e) => setFresh({ ...fresh, authorityKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                        <option value="">None</option>
+                        {data.options.authorities.map((a) => (
+                          <option key={a.key} value={a.key}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Only for (optional)
+                      <select value={fresh.entityTypeKey ?? ""} onChange={(e) => setFresh({ ...fresh, entityTypeKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                        <option value="">Every company type</option>
+                        {data.options.entityTypes.map((e) => (
+                          <option key={e.key} value={e.key}>
+                            {e.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {!taxKey && (
+                      <label className="text-xs text-[var(--text-secondary)]">
+                        Tax (optional)
+                        <select value={fresh.taxTypeKey ?? ""} onChange={(e) => setFresh({ ...fresh, taxTypeKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                          <option value="">None</option>
+                          {data.options.taxTypes.map((x) => (
+                            <option key={x.key} value={x.key}>
+                              {x.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs text-[var(--text-secondary)]">
                     Name
@@ -242,30 +373,7 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
                   )}
                 </div>
 
-                <div className="space-y-2 rounded border border-[var(--card-border)] p-3">
-                  <p className="text-sm font-medium text-[var(--text-primary)]">Who it applies to</p>
-                  <textarea
-                    value={draft.applicabilityText}
-                    onChange={(e) => setDraft({ ...draft, applicabilityText: e.target.value })}
-                    rows={5}
-                    placeholder="Empty means every organization"
-                    className={`${adminField} w-full font-mono text-xs`}
-                  />
-                  <p className="text-sm text-[var(--text-primary)]">→ {applicabilityPreview()}</p>
-                  <details className="text-xs text-[var(--text-secondary)]">
-                    <summary className="cursor-pointer">How to write a condition</summary>
-                    <p className="mt-1">
-                      One test is <code>{`{"fact":"has_employees","op":"eq","value":true}`}</code>. Combine tests with <code>{`{"all":[…]}`}</code> (every one), <code>{`{"any":[…]}`}</code> (at least one) or <code>{`{"not":{…}}`}</code>. Operators: eq, neq, in, includes, gt, gte, lt, lte.
-                    </p>
-                    <ul className="mt-1 list-disc pl-5">
-                      {KNOWN_FACTS.map((f) => (
-                        <li key={f.fact}>
-                          <code>{f.fact}</code>: {f.help}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </div>
+                <ApplicabilityEditor applies={draft.applies} sentence={applicabilityPreview()} taxes={data.options.taxTypes.filter((x) => !(NOT_TAXES as readonly string[]).includes(x.key))} companyTypes={data.options.entityTypes} onChange={(applies) => setDraft({ ...draft, applies })} />
 
                 <div className="flex flex-wrap items-center gap-5">
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
@@ -281,7 +389,7 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
                   <button type="button" disabled={busy} onClick={() => save(t)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
                     {busy ? "Saving…" : "Save"}
                   </button>
-                  <button type="button" disabled={busy} onClick={() => { setOpenId(null); setDraft(null); setMessage(null); }} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
+                  <button type="button" disabled={busy} onClick={close} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
                     Cancel
                   </button>
                 </div>
@@ -289,7 +397,7 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
             )}
           </section>
         ))}
-        {shown.length === 0 && <p className={`${adminCard} p-5 text-center text-sm text-[var(--text-secondary)]`}>No requirements match.</p>}
+        {shown.length === 0 && <p className={`${adminCard} p-5 text-center text-sm text-[var(--text-secondary)]`}>{templates.length === 0 ? "Nothing here yet." : "No requirements match."}</p>}
       </div>
     </div>
   );

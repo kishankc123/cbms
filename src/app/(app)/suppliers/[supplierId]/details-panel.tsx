@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateSupplier, deleteSupplier } from "../actions";
 import { SupplierFormModal } from "../supplier-form-modal";
+import { ConfirmForm } from "@/components/ui/confirm-dialog";
 
 type Supplier = { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
 
@@ -48,21 +49,12 @@ export function DetailsPanel({
             </button>
           )}
         />
-        <form
-          action={deleteSupplier}
-          onSubmit={(e) => {
-            setDeleting(true);
-            if (!confirm(`Delete ${supplier.name}? This cannot be undone.`)) {
-              setDeleting(false);
-              e.preventDefault();
-            }
-          }}
-        >
+        <ConfirmForm confirm={`Delete ${supplier.name}? This cannot be undone.`} confirmOptions={{ confirmLabel: "Delete", danger: true }} onConfirmed={() => setDeleting(true)} action={deleteSupplier}>
           <input type="hidden" name="supplierId" value={supplier.id} />
           <button type="submit" disabled={deleting} className="text-sm text-red-600 hover:underline disabled:opacity-40">
             Delete
           </button>
-        </form>
+        </ConfirmForm>
       </div>
 
       <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-white p-5">

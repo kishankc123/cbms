@@ -94,4 +94,13 @@ describe("publishing a tax rate for a country", () => {
     const [after] = (await listPlatformTaxRates(CODE, "2026-10-10")).vat;
     expect(after).toMatchObject({ rate: 13, effectiveFrom: "2020-01-01", isVerified: false, source: "Corrected note" });
   });
+
+  it("Income tax has its own timeline, and each organization lists what it uses for every tax", async () => {
+    const r = await publishTaxRate(a.userId, { countryCode: CODE, taxTypeKey: "income_tax", rate: 25, effectiveFrom: "2020-01-01", isVerified: false, source: "" });
+    expect(r).toMatchObject({ ok: true, organizationsUpdated: 2 });
+    const listed = await listPlatformTaxRates(CODE, "2026-10-10");
+    expect(listed.income_tax).toEqual([expect.objectContaining({ rate: 25, inForce: true })]);
+    expect(listed.organizations.find((o) => o.id === a.tenantId)?.rates.income_tax).toMatchObject({ rate: 25, source: "platform" });
+    expect(await publishTaxRate(a.userId, { countryCode: CODE, taxTypeKey: "nonsense", rate: 5, effectiveFrom: "2030-01-01", isVerified: false, source: "" })).toMatchObject({ ok: false });
+  });
 });

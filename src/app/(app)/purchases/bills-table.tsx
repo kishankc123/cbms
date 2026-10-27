@@ -5,6 +5,7 @@ import { voidBill } from "./actions";
 
 import { D } from "@/components/calendar/date-text";
 import { todayIso } from "@/lib/calendar";
+import { ConfirmForm } from "@/components/ui/confirm-dialog";
 type Vendor = { id: string; name: string };
 type Bill = {
   id: string;
@@ -162,18 +163,12 @@ export function BillsTable({
                   </button>
                 )}
                 {b.status !== "void" && (
-                  <form
-                    action={voidBill}
-                    className="inline"
-                    onSubmit={(e) => {
-                      if (!confirm(`Void bill ${b.billNumber}?`)) e.preventDefault();
-                    }}
-                  >
+                  <ConfirmForm confirm={`Void bill ${b.billNumber}?`} confirmOptions={{ confirmLabel: "Void", danger: true }} action={voidBill} className="inline">
                     <input type="hidden" name="billId" value={b.id} />
                     <button type="submit" className="text-red-600 hover:underline text-xs">
                       Void
                     </button>
-                  </form>
+                  </ConfirmForm>
                 )}
               </td>
             </tr>

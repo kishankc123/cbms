@@ -12,7 +12,7 @@ import { listPlatformTaxRates, publishTaxRate, updatePublishedRate, type Publish
 // organization, and publishing writes the rate into every organization of the country.
 
 const done = () => {
-  revalidatePath("/admin/compliance/tax-rates");
+  revalidatePath("/admin/compliance", "layout");
   revalidatePath("/compliance", "layout");
 };
 

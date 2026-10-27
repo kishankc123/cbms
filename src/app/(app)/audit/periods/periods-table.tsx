@@ -9,6 +9,7 @@ import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialo
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { monthChoices, todayIso } from "@/lib/calendar";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 type Period = Awaited<ReturnType<typeof listPeriods>>[number];
 
 export function PeriodsTable({ periods }: { periods: Period[] }) {
@@ -43,8 +44,9 @@ export function PeriodsTable({ periods }: { periods: Period[] }) {
     }
   }
 
+  const ask = useConfirm();
   async function handleClose(id: string) {
-    if (!confirm("Close this period? Postings dated inside it will be blocked until reopened.")) return;
+    if (!(await ask("Close this period? Postings dated inside it will be blocked until reopened.", { confirmLabel: "Close" }))) return;
     setBusy(true);
     setError(null);
     try {

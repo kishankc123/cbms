@@ -30,6 +30,8 @@ export const complianceCountries = pgTable("compliance_countries", {
    * organization displays). Templates may override with "org" / "AD" / "BS".
    */
   statutoryCalendar: text("statutory_calendar").notNull().default("AD"),
+  /** The month (in the statutory calendar) a fiscal year starts: 4 = Shrawan for Nepal, 1 = January. */
+  fiscalYearStartMonth: integer("fiscal_year_start_month").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
 });
 

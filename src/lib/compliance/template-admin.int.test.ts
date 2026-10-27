@@ -3,7 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLog, complianceCountries, complianceObligations, complianceRequirementTemplates, tenants } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { listTemplates, updateTemplate, type UpdateTemplateInput } from "./template-admin";
+import { createTemplate, listTemplates, templateOptions, updateTemplate, type NewTemplateInput, type UpdateTemplateInput } from "./template-admin";
 
 // A throwaway country and template, so the real requirements are never touched.
 const CODE = "ZU";
@@ -65,9 +65,9 @@ describe("managing requirement templates", () => {
     const [log] = await db.select().from(auditLog).where(and(eq(auditLog.entityType, "compliance_requirement"), eq(auditLog.entityId, CODE + ":test_return")));
     expect(log).toMatchObject({ action: "compliance_requirement_updated", tenantId: null, userId: org.userId });
     expect(log.beforeValue).toMatchObject({ Name: "Test return", Verified: "No", "Applies to": "Every organization" });
-    expect(log.afterValue).toMatchObject({ Name: "Monthly test return", Verified: "Yes", "Applies to": "has employees is true" });
+    expect(log.afterValue).toMatchObject({ Name: "Monthly test return", Verified: "Yes", "Applies to": "Organizations that have employees" });
     const [t] = await listTemplates(CODE);
-    expect(t).toMatchObject({ name: "Monthly test return", isVerified: true, applicabilityText: "has employees is true" });
+    expect(t).toMatchObject({ name: "Monthly test return", isVerified: true, applicabilityText: "Organizations that have employees" });
   });
 
   it("does nothing, and logs nothing, when nothing changed", async () => {
@@ -102,5 +102,50 @@ describe("managing requirement templates", () => {
     const filed = await obligation(filedId);
     expect(filed.dueDate).toBe("2026-08-25");
     expect(filed.paymentDueDate).toBe("2026-08-25");
+  });
+
+  describe("adding a requirement", () => {
+    const fresh = (over: Partial<NewTemplateInput> = {}): NewTemplateInput => ({
+      countryCode: CODE,
+      categoryKey: "local",
+      taxTypeKey: "",
+      authorityKey: "",
+      entityTypeKey: "",
+      frequency: "annual",
+      name: "Trade licence renewal",
+      description: "",
+      isActive: true,
+      isVerified: false,
+      activeFrom: "",
+      activeTo: "",
+      dueRule: { period: "fiscal_year", monthsAfterEnd: 1, dayOfMonth: 15 },
+      applicabilityText: "",
+      ...over,
+    });
+
+    it("offers the Local compliance category", async () => {
+      expect((await templateOptions(CODE)).categories.map((c) => c.key)).toContain("local");
+    });
+
+    it("adds one with a key made from its name, ready for organizations to get items from", async () => {
+      expect(await createTemplate(org.userId, fresh())).toEqual({ ok: true });
+      expect(await createTemplate(org.userId, fresh())).toEqual({ ok: true });
+      const added = (await listTemplates(CODE)).filter((t) => t.categoryKey === "local");
+      expect(added.map((t) => t.key).sort()).toEqual(["trade_licence_renewal", "trade_licence_renewal_2"]);
+      expect(added[0]).toMatchObject({ categoryName: "Local compliance", frequency: "annual", isActive: true, isVerified: false, generatedItems: 0 });
+      const [log] = await db.select().from(auditLog).where(and(eq(auditLog.entityType, "compliance_requirement"), eq(auditLog.entityId, CODE + ":trade_licence_renewal")));
+      expect(log).toMatchObject({ action: "compliance_requirement_created", tenantId: null, userId: org.userId });
+    });
+
+    it("refuses what is incomplete or wrong, with a plain reason", async () => {
+      expect(await createTemplate(org.userId, fresh({ name: "  " }))).toMatchObject({ ok: false, error: expect.stringMatching(/name/i) });
+      expect(await createTemplate(org.userId, fresh({ dueRule: null }))).toMatchObject({ ok: false, error: expect.stringMatching(/due date/i) });
+      expect(await createTemplate(org.userId, fresh({ categoryKey: "nonsense" }))).toMatchObject({ ok: false, error: expect.stringMatching(/category/i) });
+      expect(await createTemplate(org.userId, fresh({ applicabilityText: "not json" }))).toMatchObject({ ok: false });
+    });
+
+    it("an event-based requirement needs no due date", async () => {
+      expect(await createTemplate(org.userId, fresh({ name: "Licence change", frequency: "event_based", dueRule: null }))).toEqual({ ok: true });
+    });
   });
 });

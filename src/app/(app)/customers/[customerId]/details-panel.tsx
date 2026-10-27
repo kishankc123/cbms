@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateCustomer, deleteCustomer } from "../actions";
 import { CustomerFormModal } from "../customer-form-modal";
+import { ConfirmForm } from "@/components/ui/confirm-dialog";
 
 type Customer = { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
 
@@ -46,21 +47,12 @@ export function DetailsPanel({
             </button>
           )}
         />
-        <form
-          action={deleteCustomer}
-          onSubmit={(e) => {
-            setDeleting(true);
-            if (!confirm(`Delete ${customer.name}? This cannot be undone.`)) {
-              setDeleting(false);
-              e.preventDefault();
-            }
-          }}
-        >
+        <ConfirmForm confirm={`Delete ${customer.name}? This cannot be undone.`} confirmOptions={{ confirmLabel: "Delete", danger: true }} onConfirmed={() => setDeleting(true)} action={deleteCustomer}>
           <input type="hidden" name="customerId" value={customer.id} />
           <button type="submit" disabled={deleting} className="text-sm text-red-600 hover:underline disabled:opacity-40">
             Delete
           </button>
-        </form>
+        </ConfirmForm>
       </div>
 
       <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-white p-5">
