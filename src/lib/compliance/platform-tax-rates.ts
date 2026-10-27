@@ -23,7 +23,7 @@ export async function listPlatformTaxRates(countryCode: string, today: string) {
     rows
       .filter((r) => r.taxTypeKey === type)
       .map((r) => ({ id: r.id, rate: Number(r.rate), effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo, isVerified: r.isVerified, source: r.source, inForce: r.effectiveFrom <= today && (!r.effectiveTo || r.effectiveTo >= today) }));
-  const byType = { vat: versions("vat"), tds: versions("tds") };
+  const byType = Object.fromEntries(PUBLISHABLE_TAX_TYPES.map((t) => [t.key, versions(t.key)])) as Record<PublishableTaxType, RateVersion[]>;
 
   const orgs = await db.select({ id: tenants.id, name: tenants.companyName }).from(tenants).where(eq(tenants.countryCode, countryCode)).orderBy(asc(tenants.companyName));
   const open = orgs.length ? await db.select().from(taxRates).where(and(inArray(taxRates.tenantId, orgs.map((o) => o.id)), isNull(taxRates.effectiveTo))) : [];
@@ -32,11 +32,10 @@ export async function listPlatformTaxRates(countryCode: string, today: string) {
       const r = open.find((x) => x.tenantId === o.id && x.taxTypeKey === type);
       return r ? { rate: Number(r.rate), source: r.source as "manual" | "platform", effectiveFrom: r.effectiveFrom } : null;
     };
-    const vat = rateOf("vat");
-    const tds = rateOf("tds");
+    const rates = Object.fromEntries(PUBLISHABLE_TAX_TYPES.map((t) => [t.key, rateOf(t.key)])) as Record<PublishableTaxType, ReturnType<typeof rateOf>>;
     const latest = (type: PublishableTaxType) => byType[type][byType[type].length - 1];
     const follows = (type: PublishableTaxType, r: ReturnType<typeof rateOf>) => !latest(type) || (r !== null && r.source === "platform" && Math.abs(r.rate - latest(type).rate) < 0.005);
-    return { id: o.id, name: o.name, vat, tds, followsPublished: follows("vat", vat) && follows("tds", tds) };
+    return { id: o.id, name: o.name, rates, followsPublished: PUBLISHABLE_TAX_TYPES.every((t) => follows(t.key, rates[t.key])) };
   });
   return { ...byType, organizations };
 }
@@ -50,7 +49,7 @@ export type PublishResult = { ok: true; organizationsUpdated: number; skipped: {
  * force (rates form one timeline, never inserted into the middle of history), and be a different rate.
  */
 export async function publishTaxRate(adminId: string, input: PublishInput): Promise<PublishResult> {
-  if (!PUBLISHABLE_TAX_TYPES.some((t) => t.key === input.taxTypeKey)) return { ok: false, error: "Choose VAT or TDS." };
+  if (!PUBLISHABLE_TAX_TYPES.some((t) => t.key === input.taxTypeKey)) return { ok: false, error: "Choose a tax that has a rate." };
   if (!Number.isFinite(input.rate) || input.rate < 0 || input.rate > 100) return { ok: false, error: "The rate must be a number between 0 and 100." };
   if (!isDate(input.effectiveFrom)) return { ok: false, error: "Enter a valid date for the rate to start from." };
   const [country] = await db.select({ code: complianceCountries.code }).from(complianceCountries).where(and(eq(complianceCountries.code, input.countryCode), eq(complianceCountries.isActive, true))).limit(1);

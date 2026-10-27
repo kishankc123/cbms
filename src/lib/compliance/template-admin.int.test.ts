@@ -65,9 +65,9 @@ describe("managing requirement templates", () => {
     const [log] = await db.select().from(auditLog).where(and(eq(auditLog.entityType, "compliance_requirement"), eq(auditLog.entityId, CODE + ":test_return")));
     expect(log).toMatchObject({ action: "compliance_requirement_updated", tenantId: null, userId: org.userId });
     expect(log.beforeValue).toMatchObject({ Name: "Test return", Verified: "No", "Applies to": "Every organization" });
-    expect(log.afterValue).toMatchObject({ Name: "Monthly test return", Verified: "Yes", "Applies to": "has employees is true" });
+    expect(log.afterValue).toMatchObject({ Name: "Monthly test return", Verified: "Yes", "Applies to": "Organizations that have employees" });
     const [t] = await listTemplates(CODE);
-    expect(t).toMatchObject({ name: "Monthly test return", isVerified: true, applicabilityText: "has employees is true" });
+    expect(t).toMatchObject({ name: "Monthly test return", isVerified: true, applicabilityText: "Organizations that have employees" });
   });
 
   it("does nothing, and logs nothing, when nothing changed", async () => {

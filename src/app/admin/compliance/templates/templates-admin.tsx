@@ -4,8 +4,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { blankDueRuleForm, describeCondition, describeDueRule, dueRuleToForm, formToDueRule, KNOWN_FACTS, parseApplicability, PERIOD_OPTIONS, type DueRuleForm } from "@/lib/compliance/template-rules";
+import { blankDueRuleForm, describeCondition, describeDueRule, dueRuleToForm, formToDueRule, PERIOD_OPTIONS, type DueRuleForm } from "@/lib/compliance/template-rules";
 import type { NewTemplateInput, TemplateRow } from "@/lib/compliance/template-admin";
+import { appliesProblem, appliesToCondition, conditionToApplies, EVERYONE, type Applies } from "@/lib/compliance/applicability-form";
+import { NOT_TAXES } from "@/lib/compliance/config-tabs";
+import { ApplicabilityEditor } from "./applicability-editor";
 import { adminCard, adminField } from "../../ui";
 import { addTemplate, saveTemplate, type TemplateAdminData } from "./actions";
 
@@ -17,8 +20,15 @@ type Draft = {
   activeFrom: string;
   activeTo: string;
   due: DueRuleForm;
-  applicabilityText: string;
+  /** The conditions as plain choices; null for a rule too detailed for them, which is then kept as `original`. */
+  applies: Applies | null;
+  original: unknown;
   moveOpenItems: boolean;
+};
+
+const appliesText = (d: Draft) => {
+  const condition = d.applies ? appliesToCondition(d.applies) : d.original;
+  return condition ? JSON.stringify(condition) : "";
 };
 
 const draftOf = (t: TemplateRow): Draft => ({
@@ -29,7 +39,8 @@ const draftOf = (t: TemplateRow): Draft => ({
   activeFrom: t.activeFrom ?? "",
   activeTo: t.activeTo ?? "",
   due: t.dueRule ? dueRuleToForm(t.dueRule) : t.frequency === "event_based" ? { ...blankDueRuleForm(), period: "event", mode: "days" } : blankDueRuleForm(),
-  applicabilityText: t.applicability ? JSON.stringify(t.applicability, null, 2) : "",
+  applies: conditionToApplies(t.applicability),
+  original: t.applicability,
   moveOpenItems: false,
 });
 
@@ -62,7 +73,8 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
     const row: TemplateRow = { id: "new", key: "", name: "", description: null, categoryKey: choices[0]?.key ?? "statutory", categoryName: "", taxTypeKey: taxKey ?? null, taxTypeName: null, authorityKey: null, entityTypeKey: null, entityTypeName: null, frequency: "monthly", periodCalendar: "statutory", applicability: null, applicabilityText: "", dueRule: null, dueRuleText: "", activeFrom: null, activeTo: null, isActive: true, isVerified: false, generatedItems: 0 };
     setFresh(row);
     setOpenId(row.id);
-    setDraft(draftOf(row));
+    const registrable = taxKey && data.options.taxTypes.some((x) => x.key === taxKey && x.isRegistrable);
+    setDraft({ ...draftOf(row), applies: registrable ? { match: "all", rows: [{ kind: "registered", not: false, value: [taxKey] }] } : EVERYONE });
     setMessage(null);
   }
 
@@ -95,6 +107,8 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
       dueRule = r.rule;
     }
+    const problem = draft.applies && appliesProblem(draft.applies);
+    if (problem) return setMessage({ tone: "bad", text: problem });
     setBusy(true);
     try {
       if (t.id === "new") {
@@ -112,7 +126,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
           activeFrom: draft.activeFrom,
           activeTo: draft.activeTo,
           dueRule,
-          applicabilityText: draft.applicabilityText,
+          applicabilityText: appliesText(draft),
         });
         if (!added.ok) return setMessage({ tone: "bad", text: added.error });
         close();
@@ -129,7 +143,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
         activeFrom: draft.activeFrom,
         activeTo: draft.activeTo,
         dueRule,
-        applicabilityText: draft.applicabilityText,
+        applicabilityText: appliesText(draft),
         moveOpenItems: draft.moveOpenItems,
       });
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
@@ -155,11 +169,8 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
     const r = formToDueRule(t.frequency === "event_based" ? { ...draft.due, period: "event", mode: "days" } : draft.due);
     return r.ok ? describeDueRule(r.rule) : r.error;
   };
-  const applicabilityPreview = () => {
-    if (!draft) return "";
-    const p = parseApplicability(draft.applicabilityText);
-    return p.ok ? describeCondition(p.condition) : p.error;
-  };
+  const names = { taxes: Object.fromEntries(data.options.taxTypes.map((x) => [x.key, x.name])), entityTypes: Object.fromEntries(data.options.entityTypes.map((x) => [x.key, x.name])) };
+  const applicabilityPreview = () => (draft ? describeCondition(draft.applies ? appliesToCondition(draft.applies) : draft.original, names) : "");
 
   return (
     <div className="space-y-4">
@@ -362,30 +373,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
                   )}
                 </div>
 
-                <div className="space-y-2 rounded border border-[var(--card-border)] p-3">
-                  <p className="text-sm font-medium text-[var(--text-primary)]">Who it applies to</p>
-                  <textarea
-                    value={draft.applicabilityText}
-                    onChange={(e) => setDraft({ ...draft, applicabilityText: e.target.value })}
-                    rows={5}
-                    placeholder="Empty means every organization"
-                    className={`${adminField} w-full font-mono text-xs`}
-                  />
-                  <p className="text-sm text-[var(--text-primary)]">→ {applicabilityPreview()}</p>
-                  <details className="text-xs text-[var(--text-secondary)]">
-                    <summary className="cursor-pointer">How to write a condition</summary>
-                    <p className="mt-1">
-                      One test is <code>{`{"fact":"has_employees","op":"eq","value":true}`}</code>. Combine tests with <code>{`{"all":[…]}`}</code> (every one), <code>{`{"any":[…]}`}</code> (at least one) or <code>{`{"not":{…}}`}</code>. Operators: eq, neq, in, includes, gt, gte, lt, lte.
-                    </p>
-                    <ul className="mt-1 list-disc pl-5">
-                      {KNOWN_FACTS.map((f) => (
-                        <li key={f.fact}>
-                          <code>{f.fact}</code>: {f.help}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </div>
+                <ApplicabilityEditor applies={draft.applies} sentence={applicabilityPreview()} taxes={data.options.taxTypes.filter((x) => !(NOT_TAXES as readonly string[]).includes(x.key))} companyTypes={data.options.entityTypes} onChange={(applies) => setDraft({ ...draft, applies })} />
 
                 <div className="flex flex-wrap items-center gap-5">
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">

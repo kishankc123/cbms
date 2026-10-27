@@ -3,6 +3,7 @@
 export const PUBLISHABLE_TAX_TYPES = [
   { key: "vat", label: "VAT" },
   { key: "tds", label: "TDS" },
+  { key: "income_tax", label: "Income tax" },
 ] as const;
 export type PublishableTaxType = (typeof PUBLISHABLE_TAX_TYPES)[number]["key"];
 

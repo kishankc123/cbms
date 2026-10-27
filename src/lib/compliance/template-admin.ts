@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/audit";
 import type { CalendarSystem } from "@/lib/calendar";
 import { computeDueDate, type DueRule } from "./engine/due-rules";
 import { resolveCalendar } from "./engine/generate";
-import { describeCondition, describeDueRule, parseApplicability } from "./template-rules";
+import { describeCondition, describeDueRule, parseApplicability, type ConditionNames } from "./template-rules";
 
 // The requirement templates a platform administrator manages: what each organization has to file and when. A template is shared by
 // every organization of the country, so a change reaches every one of them the next time items are generated. Items that were already
@@ -37,6 +37,12 @@ export type TemplateRow = {
   generatedItems: number;
 };
 
+/** The tax and company type names a condition can be written with. */
+const conditionNames = (taxTypes: { key: string; name: string }[], entityTypes: { key: string; name: string }[]): ConditionNames => ({
+  taxes: Object.fromEntries(taxTypes.map((t) => [t.key, t.name])),
+  entityTypes: Object.fromEntries(entityTypes.map((t) => [t.key, t.name])),
+});
+
 export async function listTemplates(countryCode: string): Promise<TemplateRow[]> {
   const [templates, categories, taxTypes, entityTypes, counts] = await Promise.all([
     db.select().from(complianceRequirementTemplates).where(eq(complianceRequirementTemplates.countryCode, countryCode)).orderBy(asc(complianceRequirementTemplates.categoryKey), asc(complianceRequirementTemplates.name)),
@@ -61,7 +67,7 @@ export async function listTemplates(countryCode: string): Promise<TemplateRow[]>
     frequency: t.frequency,
     periodCalendar: t.periodCalendar,
     applicability: t.applicability,
-    applicabilityText: describeCondition(t.applicability),
+    applicabilityText: describeCondition(t.applicability, conditionNames(taxTypes, entityTypes)),
     dueRule: t.dueRule,
     dueRuleText: describeDueRule(t.dueRule),
     activeFrom: t.activeFrom,
@@ -76,7 +82,7 @@ export async function listTemplates(countryCode: string): Promise<TemplateRow[]>
 export async function templateOptions(countryCode: string) {
   const [categories, taxTypes, authorities, entityTypes] = await Promise.all([
     db.select({ key: complianceCategories.key, name: complianceCategories.name }).from(complianceCategories).orderBy(asc(complianceCategories.sortOrder)),
-    db.select({ key: complianceTaxTypes.key, name: complianceTaxTypes.name }).from(complianceTaxTypes).where(and(eq(complianceTaxTypes.countryCode, countryCode), eq(complianceTaxTypes.isActive, true))).orderBy(asc(complianceTaxTypes.name)),
+    db.select({ key: complianceTaxTypes.key, name: complianceTaxTypes.name, isRegistrable: complianceTaxTypes.isRegistrable }).from(complianceTaxTypes).where(and(eq(complianceTaxTypes.countryCode, countryCode), eq(complianceTaxTypes.isActive, true))).orderBy(asc(complianceTaxTypes.name)),
     db.select({ key: complianceAuthorities.key, name: complianceAuthorities.name }).from(complianceAuthorities).where(and(eq(complianceAuthorities.countryCode, countryCode), eq(complianceAuthorities.isActive, true))).orderBy(asc(complianceAuthorities.name)),
     db.select({ key: complianceEntityTypes.key, name: complianceEntityTypes.name }).from(complianceEntityTypes).where(and(eq(complianceEntityTypes.countryCode, countryCode), eq(complianceEntityTypes.isActive, true))).orderBy(asc(complianceEntityTypes.name)),
   ]);
@@ -158,6 +164,11 @@ export async function updateTemplate(adminId: string, input: UpdateTemplateInput
   if (!checked.ok) return checked;
   const name = checked.name;
   const applicability = { condition: checked.condition };
+  const [taxTypes, entityTypes] = await Promise.all([
+    db.select({ key: complianceTaxTypes.key, name: complianceTaxTypes.name }).from(complianceTaxTypes).where(eq(complianceTaxTypes.countryCode, t.countryCode)),
+    db.select({ key: complianceEntityTypes.key, name: complianceEntityTypes.name }).from(complianceEntityTypes).where(eq(complianceEntityTypes.countryCode, t.countryCode)),
+  ]);
+  const names = conditionNames(taxTypes, entityTypes);
 
   // The database keeps an object's keys in its own order, so compare rules without regard to the order they were written in.
   const canon = (v: unknown): unknown => (Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, canon(x)])) : v);
@@ -170,7 +181,7 @@ export async function updateTemplate(adminId: string, input: UpdateTemplateInput
     "Active from": t.activeFrom ?? "—",
     "Active to": t.activeTo ?? "—",
     "Due date": describeDueRule(t.dueRule),
-    "Applies to": describeCondition(t.applicability),
+    "Applies to": describeCondition(t.applicability, names),
   };
   const after: Record<string, string> = {
     Name: name,
@@ -180,7 +191,7 @@ export async function updateTemplate(adminId: string, input: UpdateTemplateInput
     "Active from": input.activeFrom || "—",
     "Active to": input.activeTo || "—",
     "Due date": describeDueRule(input.dueRule),
-    "Applies to": describeCondition(applicability.condition),
+    "Applies to": describeCondition(applicability.condition, names),
   };
   const changes = Object.keys(after)
     .filter((k) => before[k] !== after[k])

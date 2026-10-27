@@ -69,6 +69,7 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
   }
 
   const versionsOf = (type: PublishableTaxType): RateVersion[] => rates[type];
+  const shownTypes = PUBLISHABLE_TAX_TYPES.filter((t) => !only || only.includes(t.key));
 
   return (
     <div className="space-y-5">
@@ -91,7 +92,7 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {PUBLISHABLE_TAX_TYPES.filter((t) => !only || only.includes(t.key)).map((t) => {
+        {shownTypes.map((t) => {
           const versions = versionsOf(t.key);
           const inForce = versions.find((v) => v.inForce) ?? versions[versions.length - 1];
           const latest = versions[versions.length - 1];
@@ -209,8 +210,11 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
           <thead className="text-left text-xs text-[var(--text-secondary)]">
             <tr>
               <th className="py-1 pr-2 font-medium">Organization</th>
-              <th className="py-1 pr-2 font-medium">VAT</th>
-              <th className="py-1 pr-2 font-medium">TDS</th>
+              {shownTypes.map((t) => (
+                <th key={t.key} className="py-1 pr-2 font-medium">
+                  {t.label}
+                </th>
+              ))}
               <th className="py-1 font-medium">Follows published rates</th>
             </tr>
           </thead>
@@ -218,23 +222,26 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
             {rates.organizations.map((o) => (
               <tr key={o.id} className="border-t border-[var(--card-border)]">
                 <td className="py-1.5 pr-2">{o.name}</td>
-                {[o.vat, o.tds].map((r, i) => (
-                  <td key={i} className="py-1.5 pr-2">
-                    {r ? (
-                      <>
-                        {pct(r.rate)} <span className="text-xs text-[var(--text-secondary)]">{r.source === "platform" ? "published" : "own"}</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                ))}
+                {shownTypes.map((t) => {
+                  const r = o.rates[t.key];
+                  return (
+                    <td key={t.key} className="py-1.5 pr-2">
+                      {r ? (
+                        <>
+                          {pct(r.rate)} <span className="text-xs text-[var(--text-secondary)]">{r.source === "platform" ? "published" : "own"}</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  );
+                })}
                 <td className="py-1.5">{o.followsPublished ? <StatusPill tone="success">yes</StatusPill> : <StatusPill tone="action">no</StatusPill>}</td>
               </tr>
             ))}
             {rates.organizations.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-4 text-center text-[var(--text-secondary)]">
+                <td colSpan={shownTypes.length + 2} className="py-4 text-center text-[var(--text-secondary)]">
                   No organizations in this country yet.
                 </td>
               </tr>
