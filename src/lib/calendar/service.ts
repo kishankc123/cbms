@@ -335,23 +335,27 @@ export function yearRange(calendar: CalendarSystem, iso: IsoDate): DateRange {
 }
 
 /**
- * Nepal's fiscal year runs Shrawan 1 – Ashadh end. `startYear` is the BS year
- * it begins in (2083 -> "2083/84").
+ * A fiscal year that starts on day 1 of `startMonth` in `calendar`. `startYear` is the year it begins in:
+ * (BS, 4, 2083) is Shrawan 2083 to Ashadh 2084, labelled "2083/84"; (AD, 1, 2026) is the calendar year, labelled "2026".
  */
-export function bsFiscalYearRange(startYear: number): (DateRange & { label: string }) | null {
-  const from = convertBStoAD({ year: startYear, month: 4, day: 1 });
-  const lastDay = bsDaysInMonth(startYear + 1, 3);
-  const to = lastDay ? convertBStoAD({ year: startYear + 1, month: 3, day: lastDay }) : null;
-  return from && to ? { from, to, label: `${startYear}/${pad2((startYear + 1) % 100)}` } : null;
+export function fiscalYearRange(calendar: CalendarSystem, startMonth: number, startYear: number): (DateRange & { label: string }) | null {
+  const from = isoFromYmd(calendar, { year: startYear, month: startMonth, day: 1 });
+  const next = isoFromYmd(calendar, { year: startYear + 1, month: startMonth, day: 1 });
+  return from && next ? { from, to: addDays(next, -1), label: startMonth === 1 ? `${startYear}` : `${startYear}/${pad2((startYear + 1) % 100)}` } : null;
 }
 
-export function bsFiscalYearOf(iso: IsoDate): (DateRange & { label: string; startYear: number }) | null {
-  const bs = convertADtoBS(iso);
-  if (!bs) return null;
-  const startYear = bs.month >= 4 ? bs.year : bs.year - 1;
-  const r = bsFiscalYearRange(startYear);
+export function fiscalYearOf(calendar: CalendarSystem, startMonth: number, iso: IsoDate): (DateRange & { label: string; startYear: number }) | null {
+  const ymd = ymdOf(calendar, iso);
+  if (!ymd) return null;
+  const startYear = ymd.month >= startMonth ? ymd.year : ymd.year - 1;
+  const r = fiscalYearRange(calendar, startMonth, startYear);
   return r ? { ...r, startYear } : null;
 }
+
+/** Nepal's fiscal year runs Shrawan 1 – Ashadh end. `startYear` is the BS year it begins in (2083 -> "2083/84"). */
+export const bsFiscalYearRange = (startYear: number) => fiscalYearRange("BS", 4, startYear);
+
+export const bsFiscalYearOf = (iso: IsoDate) => fiscalYearOf("BS", 4, iso);
 
 /** "Ashwin 2083" / "September 2026" — the month containing `iso`, in the given calendar. */
 export function monthLabel(calendar: CalendarSystem, iso: IsoDate): string {

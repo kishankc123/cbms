@@ -12,16 +12,12 @@ export default async function AdminCountryPage({ params }: { params: Promise<{ c
   const data = await getCountryPageData(code.toUpperCase());
   if (!data) notFound();
   const { country, counts } = data;
-  const rules = `?country=${country.code}`;
-  // Where each part of a country's compliance is set up. The three screens under Compliance Configuration already work
-  // for one country at a time, so they open here already pointed at this country.
+  // Where each part of a country is set up. Rates, filings and fines live in Compliance Configuration, one page per country.
   const sections = [
     { title: "Company types", count: counts.companyTypes, note: "Private Limited, Sole Proprietorship and so on.", href: `/admin/setup/countries/${country.code}/company-types` },
     { title: "Taxes", count: counts.taxTypes, note: "The tax types, like VAT and Income tax.", href: `/admin/setup/countries/${country.code}/taxes` },
     { title: "Authorities", count: counts.authorities, note: "The tax offices and regulators.", href: `/admin/setup/countries/${country.code}/authorities` },
-    { title: "Tax rates", count: counts.taxRates, note: "VAT and TDS rates, by date.", href: `/admin/compliance/tax-rates${rules}` },
-    { title: "Deadlines", count: counts.deadlines, note: "What must be filed, and when it is due.", href: `/admin/compliance/templates${rules}` },
-    { title: "Fines and penalties", count: counts.penalties, note: "Late filing and late payment figures.", href: `/admin/compliance/penalties${rules}` },
+    { title: "Compliance setup", count: counts.taxRates + counts.deadlines + counts.penalties, note: "Tax rates, deadlines, fines and penalties.", href: `/admin/compliance/${country.code}` },
   ];
 
   return (

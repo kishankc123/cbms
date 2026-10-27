@@ -32,7 +32,11 @@ const draftOf = (t: TemplateRow): Draft => ({
   moveOpenItems: false,
 });
 
-export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
+/**
+ * `categoryKeys`: only requirements in these categories. `taxKey`: only the ones for that tax. `exceptTaxKeys`: leave out the
+ * ones for those taxes (what is left over once each tax has shown its own).
+ */
+export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { data: TemplateAdminData; categoryKeys?: string[]; taxKey?: string; exceptTaxKeys?: string[] }) {
   const router = useRouter();
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -41,11 +45,13 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
 
-  const categories = useMemo(() => Array.from(new Map(data.templates.map((t) => [t.categoryKey, t.categoryName])).entries()), [data.templates]);
-  const shown = data.templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase())));
+  const templates = useMemo(() => data.templates.filter((t) => (!categoryKeys || categoryKeys.includes(t.categoryKey)) && (!taxKey || t.taxTypeKey === taxKey) && !(exceptTaxKeys && t.taxTypeKey && exceptTaxKeys.includes(t.taxTypeKey))), [data.templates, categoryKeys, taxKey, exceptTaxKeys]);
+  const categories = useMemo(() => Array.from(new Map(templates.map((t) => [t.categoryKey, t.categoryName])).entries()), [templates]);
+  const shown = templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase())));
 
-  if (!data.country) return <p className={`${adminCard} p-5 text-sm text-[var(--text-secondary)]`}>No country is configured yet.</p>;
-  const country = data.country;
+
+  // Inside one tax's group, or for what is left over, an empty list is simply not shown.
+  if (templates.length === 0 && (taxKey !== undefined || exceptTaxKeys !== undefined)) return null;
 
   function open(t: TemplateRow) {
     setOpenId(t.id);
@@ -106,16 +112,7 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-          Country
-          <select value={country.code} onChange={(e) => router.push(`/admin/compliance/templates?country=${e.target.value}`)} className={adminField}>
-            {data.countries.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {categories.length > 1 && (
         <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
           Category
           <select value={category} onChange={(e) => setCategory(e.target.value)} className={adminField}>
@@ -127,7 +124,8 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
             ))}
           </select>
         </label>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requirements…" className={`${adminField} w-64`} />
+        )}
+        {templates.length > 4 && <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requirements…" className={`${adminField} w-64`} />}
       </div>
 
       {message && openId === null && <p className={`rounded border px-3 py-2 text-sm ${message.tone === "ok" ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}>{message.text}</p>}
@@ -289,7 +287,7 @@ export function TemplatesAdmin({ data }: { data: TemplateAdminData }) {
             )}
           </section>
         ))}
-        {shown.length === 0 && <p className={`${adminCard} p-5 text-center text-sm text-[var(--text-secondary)]`}>No requirements match.</p>}
+        {shown.length === 0 && <p className={`${adminCard} p-5 text-center text-sm text-[var(--text-secondary)]`}>{templates.length === 0 ? "Nothing here yet." : "No requirements match."}</p>}
       </div>
     </div>
   );

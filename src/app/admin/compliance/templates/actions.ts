@@ -22,7 +22,7 @@ export async function saveTemplate(input: UpdateTemplateInput) {
   const admin = await requirePlatformAdmin();
   const r = await updateTemplate(admin.id, input);
   if (r.ok) {
-    revalidatePath("/admin/compliance/templates");
+    revalidatePath("/admin/compliance", "layout");
     revalidatePath("/compliance", "layout");
   }
   return r;

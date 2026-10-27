@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { complianceAuthorities, compliancePenaltyRules, complianceRequirementTemplates, complianceEntityTypes, complianceTaxTypes, complianceCountries, platformTaxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { seedDefaultTaxes } from "@/lib/country-setup";
+import { COMPLIANCE_TABS } from "@/lib/compliance/config-tabs";
 import { suggestedCalendar, suggestedCurrency, suggestedFiscalStartMonth } from "@/lib/country-currencies";
 
 // The one list of countries. The platform administrator chooses which are active (Setup → Countries); registration,
@@ -33,6 +34,20 @@ export async function countriesWithUsage() {
 }
 
 const validMonth = (m: number) => Number.isInteger(m) && m >= 1 && m <= 12;
+
+/** For each country, whether each tab of its compliance setup has anything in it yet. */
+export async function complianceReadiness() {
+  const perCountry = (table: PgTable, column: PgColumn) => db.select({ code: column, n: count() }).from(table).groupBy(column);
+  const [templates, rates, penalties] = await Promise.all([
+    db.select({ code: complianceRequirementTemplates.countryCode, category: complianceRequirementTemplates.categoryKey }).from(complianceRequirementTemplates).groupBy(complianceRequirementTemplates.countryCode, complianceRequirementTemplates.categoryKey),
+    perCountry(platformTaxRates, platformTaxRates.countryCode),
+    perCountry(compliancePenaltyRules, compliancePenaltyRules.countryCode),
+  ]);
+  const categories = (tab: string) => COMPLIANCE_TABS.find((t) => t.key === tab)!.categories as readonly string[];
+  const has = (code: string, tab: string) => templates.some((t) => t.code === code && categories(tab).includes(t.category));
+  const codes = new Set([...templates.map((t) => t.code), ...rates.map((r) => String(r.code)), ...penalties.map((p) => String(p.code))]);
+  return Object.fromEntries([...codes].map((code) => [code, { tax: has(code, "tax") || rates.some((r) => r.code === code) || penalties.some((p) => p.code === code), statutory: has(code, "statutory"), local: has(code, "local") }]));
+}
 
 /** One country with what has been set up for it, for its page under Setup → Countries. */
 export async function countrySummary(code: string) {

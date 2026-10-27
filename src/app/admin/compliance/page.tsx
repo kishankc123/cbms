@@ -1,25 +1,36 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/session";
+import { StatusPill } from "@/components/ui/status-pill";
+import { complianceReadiness, countriesWithUsage } from "@/lib/countries";
 import { adminCard, AdminHeader } from "../ui";
 
 export default async function AdminCompliancePage() {
   await requirePlatformAdmin();
+  const [countries, ready] = await Promise.all([countriesWithUsage(), complianceReadiness()]);
+  const active = countries.filter((c) => c.isActive);
+  const parts = [["Tax & rates", "tax"], ["Statutory", "statutory"], ["Local compliance", "local"]] as const;
   return (
     <div className="space-y-5">
-      <AdminHeader title="Compliance Configuration" description="What the platform tells every organization about its compliance duties, versioned so past periods keep the rules that applied then." />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/admin/compliance/penalties" className={`${adminCard} block p-5 transition-shadow hover:shadow-sm`}>
-          <p className="font-medium text-[var(--text-primary)]">Fines and penalties</p>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Late filing, late payment and interest for VAT and TDS, and the late-renewal fines for the excise permit, by fiscal year.</p>
-        </Link>
-        <Link href="/admin/compliance/tax-rates" className={`${adminCard} block p-5 transition-shadow hover:shadow-sm`}>
-          <p className="font-medium text-[var(--text-primary)]">Tax rates</p>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">The VAT and TDS rates for a country. Publishing a new rate writes it into every organization there, from the date you choose.</p>
-        </Link>
-        <Link href="/admin/compliance/templates" className={`${adminCard} block p-5 transition-shadow hover:shadow-sm`}>
-          <p className="font-medium text-[var(--text-primary)]">Requirement templates</p>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">What every organization has to file, when it is due and who it applies to. Activate, verify and correct a requirement here.</p>
-        </Link>
+      <AdminHeader title="Compliance Configuration" description="What the platform tells every organization about its compliance duties, country by country. Past periods keep the rules that applied then." />
+      <div className={`${adminCard} divide-y divide-[var(--card-border)]`}>
+        {active.map((c) => (
+          <Link key={c.code} href={`/admin/compliance/${c.code}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 hover:bg-[var(--surface-muted-bg)]">
+            <div>
+              <p className="font-medium text-[var(--text-primary)]">{c.name}</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {c.currency} · {c.organizations} organization{c.organizations === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {parts.map(([label, key]) => (
+                <StatusPill key={key} tone={ready[c.code]?.[key] ? "success" : "action"}>
+                  {label}: {ready[c.code]?.[key] ? "set up" : "not yet"}
+                </StatusPill>
+              ))}
+            </div>
+          </Link>
+        ))}
+        {active.length === 0 && <p className="px-5 py-6 text-center text-sm text-[var(--text-secondary)]">No countries yet. Add one under Setup → Countries.</p>}
       </div>
     </div>
   );

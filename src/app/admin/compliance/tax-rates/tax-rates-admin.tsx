@@ -19,7 +19,8 @@ function bothDates(iso: string | null) {
 type Draft = { rate: string; effectiveFrom: string; source: string; isVerified: boolean };
 const blankDraft: Draft = { rate: "", effectiveFrom: "", source: "", isVerified: false };
 
-export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
+/** `only` limits the cards to some taxes; `organizations` is the table of what each organization is using. */
+export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxRateAdminData; only?: PublishableTaxType[]; organizations?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState<PublishableTaxType | null>(null);
   const [draft, setDraft] = useState<Draft>(blankDraft);
@@ -71,17 +72,6 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
 
   return (
     <div className="space-y-5">
-      <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-        Country
-        <select value={country.code} onChange={(e) => router.push(`/admin/compliance/tax-rates?country=${e.target.value}`)} className={adminField}>
-          {data.countries.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
       {message && (
         <div className={`rounded border px-3 py-2 text-sm ${message.tone === "ok" ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}>
           <p>{message.text}</p>
@@ -101,7 +91,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {PUBLISHABLE_TAX_TYPES.map((t) => {
+        {PUBLISHABLE_TAX_TYPES.filter((t) => !only || only.includes(t.key)).map((t) => {
           const versions = versionsOf(t.key);
           const inForce = versions.find((v) => v.inForce) ?? versions[versions.length - 1];
           const latest = versions[versions.length - 1];
@@ -211,6 +201,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
         })}
       </div>
 
+      {organizations && (
       <section className={`${adminCard} p-5`}>
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Organizations in {country.name}</h2>
         <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. An organization with its own rate can change it itself; one on the published rate cannot.</p>
@@ -251,6 +242,7 @@ export function TaxRatesAdmin({ data }: { data: TaxRateAdminData }) {
           </tbody>
         </table>
       </section>
+      )}
     </div>
   );
 }
