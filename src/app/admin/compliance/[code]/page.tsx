@@ -75,12 +75,12 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
 
       {tab === "statutory" && (
         <div className="space-y-4">
-          <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("statutory")} />
+          <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("statutory")} addable />
           <PenaltiesAdmin data={await getPenaltyAdminData(code)} only={STATUTORY_PENALTIES} />
         </div>
       )}
 
-      {tab === "local" && <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("local")} />}
+      {tab === "local" && <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("local")} addable />}
     </div>
   );
 }
@@ -92,7 +92,7 @@ async function TaxTab({ code }: { code: string }) {
   const rateKeys: string[] = PUBLISHABLE_TAX_TYPES.map((t) => t.key);
   const penaltyKeys = PENALTY_TYPES.map((t) => t.key).filter((k) => !(STATUTORY_PENALTIES as readonly string[]).includes(k));
   const taxCategories = categoriesOf("tax");
-  const shown = taxes.rows.filter((t) => t.isActive && (rateKeys.includes(t.key) || (penaltyKeys as string[]).includes(t.key) || templates.templates.some((x) => x.taxTypeKey === t.key && taxCategories.includes(x.categoryKey))));
+  const shown = taxes.rows.filter((t) => t.isActive);
   const shownKeys = shown.map((t) => t.key);
   return (
     <div className="space-y-8">
@@ -101,7 +101,7 @@ async function TaxTab({ code }: { code: string }) {
           <h2 className="text-base font-semibold text-[var(--text-primary)]">{t.name}</h2>
           {rateKeys.includes(t.key) && <TaxRatesAdmin data={rates} only={[t.key as (typeof PUBLISHABLE_TAX_TYPES)[number]["key"]]} organizations={false} />}
           {(penaltyKeys as string[]).includes(t.key) && <PenaltiesAdmin data={penalties} only={[t.key as (typeof PENALTY_TYPES)[number]["key"]]} />}
-          <TemplatesAdmin data={templates} categoryKeys={taxCategories} taxKey={t.key} />
+          <TemplatesAdmin data={templates} categoryKeys={taxCategories} taxKey={t.key} addable />
         </section>
       ))}
       <TemplatesAdmin data={templates} categoryKeys={taxCategories} exceptTaxKeys={shownKeys} />

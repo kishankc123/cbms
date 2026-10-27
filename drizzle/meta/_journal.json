@@ -673,6 +673,13 @@
       "when": 1793027903902,
       "tag": "0095_country_fiscal_year_start",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1793095294200,
+      "tag": "0096_local_compliance_category",
+      "breakpoints": true
     }
   ]
 }

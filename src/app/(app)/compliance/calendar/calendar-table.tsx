@@ -270,7 +270,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
   );
 }
 
-const CATEGORY_DOT: Record<string, string> = { tax: "bg-blue-500", statutory: "bg-violet-500", ownership: "bg-teal-500", company: "bg-slate-400" };
+const CATEGORY_DOT: Record<string, string> = { tax: "bg-blue-500", statutory: "bg-violet-500", ownership: "bg-teal-500", local: "bg-orange-500", company: "bg-slate-400" };
 
 // A month grid in the organization's own calendar (a BS month for a BS organization).
 // Every event sits on its real due date; only the display follows the calendar setting.
@@ -342,7 +342,7 @@ function MonthView({ items }: { items: Item[] }) {
         })}
       </div>
       <div className="flex gap-4 border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
-        {Object.entries({ tax: "Tax", statutory: "Statutory", ownership: "Ownership", company: "Company" }).map(([k, label]) => (
+        {Object.entries({ tax: "Tax", statutory: "Statutory", ownership: "Ownership", company: "Company", local: "Local" }).map(([k, label]) => (
           <span key={k} className="flex items-center gap-1">
             <span className={`h-2 w-2 rounded-full ${CATEGORY_DOT[k]}`} /> {label}
           </span>

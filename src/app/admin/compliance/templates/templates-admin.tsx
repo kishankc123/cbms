@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { blankDueRuleForm, describeCondition, describeDueRule, dueRuleToForm, formToDueRule, KNOWN_FACTS, parseApplicability, PERIOD_OPTIONS, type DueRuleForm } from "@/lib/compliance/template-rules";
-import type { TemplateRow } from "@/lib/compliance/template-admin";
+import type { NewTemplateInput, TemplateRow } from "@/lib/compliance/template-admin";
 import { adminCard, adminField } from "../../ui";
-import { saveTemplate, type TemplateAdminData } from "./actions";
+import { addTemplate, saveTemplate, type TemplateAdminData } from "./actions";
 
 type Draft = {
   name: string;
@@ -34,24 +35,49 @@ const draftOf = (t: TemplateRow): Draft => ({
 
 /**
  * `categoryKeys`: only requirements in these categories. `taxKey`: only the ones for that tax. `exceptTaxKeys`: leave out the
- * ones for those taxes (what is left over once each tax has shown its own).
+ * ones for those taxes (what is left over once each tax has shown its own). `addable` shows the "Add requirement" button.
  */
-export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { data: TemplateAdminData; categoryKeys?: string[]; taxKey?: string; exceptTaxKeys?: string[] }) {
+export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, addable }: { data: TemplateAdminData; categoryKeys?: string[]; taxKey?: string; exceptTaxKeys?: string[]; addable?: boolean }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [fresh, setFresh] = useState<TemplateRow | null>(null); // a requirement being added, shown at the top as an open form
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
 
   const templates = useMemo(() => data.templates.filter((t) => (!categoryKeys || categoryKeys.includes(t.categoryKey)) && (!taxKey || t.taxTypeKey === taxKey) && !(exceptTaxKeys && t.taxTypeKey && exceptTaxKeys.includes(t.taxTypeKey))), [data.templates, categoryKeys, taxKey, exceptTaxKeys]);
   const categories = useMemo(() => Array.from(new Map(templates.map((t) => [t.categoryKey, t.categoryName])).entries()), [templates]);
-  const shown = templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase())));
+  const shown = (fresh ? [fresh] : []).concat(templates.filter((t) => (category === "all" || t.categoryKey === category) && (!search.trim() || (t.name + " " + t.key).toLowerCase().includes(search.trim().toLowerCase()))));
 
 
   // Inside one tax's group, or for what is left over, an empty list is simply not shown.
-  if (templates.length === 0 && (taxKey !== undefined || exceptTaxKeys !== undefined)) return null;
+  if (!addable && templates.length === 0 && (taxKey !== undefined || exceptTaxKeys !== undefined)) return null;
+
+  const choices = data.options.categories.filter((c) => !categoryKeys || categoryKeys.includes(c.key));
+
+  function startAdd() {
+    const row: TemplateRow = { id: "new", key: "", name: "", description: null, categoryKey: choices[0]?.key ?? "statutory", categoryName: "", taxTypeKey: taxKey ?? null, taxTypeName: null, authorityKey: null, entityTypeKey: null, entityTypeName: null, frequency: "monthly", periodCalendar: "statutory", applicability: null, applicabilityText: "", dueRule: null, dueRuleText: "", activeFrom: null, activeTo: null, isActive: true, isVerified: false, generatedItems: 0 };
+    setFresh(row);
+    setOpenId(row.id);
+    setDraft(draftOf(row));
+    setMessage(null);
+  }
+
+  function setFrequency(frequency: string) {
+    if (!fresh || !draft) return;
+    setFresh({ ...fresh, frequency });
+    setDraft({ ...draft, due: frequency === "event_based" ? { ...blankDueRuleForm(), period: "event", mode: "days" } : blankDueRuleForm() });
+  }
+
+  function close() {
+    setOpenId(null);
+    setDraft(null);
+    setFresh(null);
+    setMessage(null);
+  }
 
   function open(t: TemplateRow) {
     setOpenId(t.id);
@@ -71,6 +97,29 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
     }
     setBusy(true);
     try {
+      if (t.id === "new") {
+        const added = await addTemplate({
+          countryCode: data.country!.code,
+          categoryKey: t.categoryKey,
+          taxTypeKey: t.taxTypeKey ?? "",
+          authorityKey: t.authorityKey ?? "",
+          entityTypeKey: t.entityTypeKey ?? "",
+          frequency: t.frequency as NewTemplateInput["frequency"],
+          name: draft.name,
+          description: draft.description,
+          isActive: draft.isActive,
+          isVerified: draft.isVerified,
+          activeFrom: draft.activeFrom,
+          activeTo: draft.activeTo,
+          dueRule,
+          applicabilityText: draft.applicabilityText,
+        });
+        if (!added.ok) return setMessage({ tone: "bad", text: added.error });
+        close();
+        router.refresh();
+        await ask("Organizations get items from it the next time items are generated.", { title: "Requirement added", confirmLabel: "OK", cancelLabel: "" });
+        return;
+      }
       const r = await saveTemplate({
         id: t.id,
         name: draft.name,
@@ -84,11 +133,14 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
         moveOpenItems: draft.moveOpenItems,
       });
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
-      setMessage({ tone: "ok", text: r.changes.length === 0 ? "Nothing was changed." : `Saved: ${r.changes.map((c) => c.field).join(", ")}.${r.movedItems > 0 ? ` ${r.movedItems} open item${r.movedItems === 1 ? "" : "s"} moved to the new due date.` : ""}` });
+      const text = r.changes.length === 0 ? "Nothing was changed." : `Saved: ${r.changes.map((c) => c.field).join(", ")}.${r.movedItems > 0 ? ` ${r.movedItems} open item${r.movedItems === 1 ? "" : "s"} moved to the new due date.` : ""}`;
+      if (r.changes.length === 0) setMessage({ tone: "ok", text });
       if (r.changes.length > 0) {
         setOpenId(null);
         setDraft(null);
+        setMessage(null);
         router.refresh();
+        await ask(text, { title: "Saved", confirmLabel: "OK", cancelLabel: "" });
       }
     } catch (e) {
       setMessage({ tone: "bad", text: e instanceof Error ? e.message : "Could not save." });
@@ -125,6 +177,11 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
           </select>
         </label>
         )}
+        {addable && !fresh && (
+          <button type="button" onClick={startAdd} className="ml-auto rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+            Add requirement
+          </button>
+        )}
         {templates.length > 4 && <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requirements…" className={`${adminField} w-64`} />}
       </div>
 
@@ -136,21 +193,25 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-medium text-[var(--text-primary)]">
-                  {t.name} <span className="font-mono text-xs text-[var(--text-secondary)]">{t.key}</span>
+                  {t.id === "new" ? "New requirement" : t.name} <span className="font-mono text-xs text-[var(--text-secondary)]">{t.key}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-                  {t.categoryName}
-                  {t.taxTypeName ? ` · ${t.taxTypeName}` : ""} · {t.frequency.replace("_", " ")}
-                  {t.entityTypeName ? ` · only ${t.entityTypeName}` : ""} · {t.generatedItems} item{t.generatedItems === 1 ? "" : "s"} generated
-                </p>
-                <p className="mt-1 text-sm text-[var(--text-primary)]">
-                  <span className="text-[var(--text-secondary)]">Due: </span>
-                  {t.dueRuleText}
-                </p>
-                <p className="text-sm text-[var(--text-primary)]">
-                  <span className="text-[var(--text-secondary)]">Applies to: </span>
-                  {t.applicabilityText}
-                </p>
+                {t.id !== "new" && (
+                  <>
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                      {t.categoryName}
+                      {t.taxTypeName ? ` · ${t.taxTypeName}` : ""} · {t.frequency.replace("_", " ")}
+                      {t.entityTypeName ? ` · only ${t.entityTypeName}` : ""} · {t.generatedItems} item{t.generatedItems === 1 ? "" : "s"} generated
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--text-primary)]">
+                      <span className="text-[var(--text-secondary)]">Due: </span>
+                      {t.dueRuleText}
+                    </p>
+                    <p className="text-sm text-[var(--text-primary)]">
+                      <span className="text-[var(--text-secondary)]">Applies to: </span>
+                      {t.applicabilityText}
+                    </p>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill tone={t.isActive ? "success" : "pending"}>{t.isActive ? "active" : "inactive"}</StatusPill>
@@ -165,6 +226,67 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
 
             {openId === t.id && draft && (
               <div className="mt-4 space-y-4 border-t border-[var(--card-border)] pt-4">
+                {t.id === "new" && fresh && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Repeats
+                      <select value={fresh.frequency} onChange={(e) => setFrequency(e.target.value)} className={`${adminField} mt-1 w-full`}>
+                        <option value="monthly">Every month</option>
+                        <option value="quarterly">Every quarter</option>
+                        <option value="annual">Every year</option>
+                        <option value="one_time">Once</option>
+                        <option value="event_based">When something happens</option>
+                      </select>
+                    </label>
+                    {choices.length > 1 && (
+                      <label className="text-xs text-[var(--text-secondary)]">
+                        Category
+                        <select value={fresh.categoryKey} onChange={(e) => setFresh({ ...fresh, categoryKey: e.target.value })} className={`${adminField} mt-1 w-full`}>
+                          {choices.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Authority (optional)
+                      <select value={fresh.authorityKey ?? ""} onChange={(e) => setFresh({ ...fresh, authorityKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                        <option value="">None</option>
+                        {data.options.authorities.map((a) => (
+                          <option key={a.key} value={a.key}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs text-[var(--text-secondary)]">
+                      Only for (optional)
+                      <select value={fresh.entityTypeKey ?? ""} onChange={(e) => setFresh({ ...fresh, entityTypeKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                        <option value="">Every company type</option>
+                        {data.options.entityTypes.map((e) => (
+                          <option key={e.key} value={e.key}>
+                            {e.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {!taxKey && (
+                      <label className="text-xs text-[var(--text-secondary)]">
+                        Tax (optional)
+                        <select value={fresh.taxTypeKey ?? ""} onChange={(e) => setFresh({ ...fresh, taxTypeKey: e.target.value || null })} className={`${adminField} mt-1 w-full`}>
+                          <option value="">None</option>
+                          {data.options.taxTypes.map((x) => (
+                            <option key={x.key} value={x.key}>
+                              {x.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs text-[var(--text-secondary)]">
                     Name
@@ -279,7 +401,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys }: { 
                   <button type="button" disabled={busy} onClick={() => save(t)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
                     {busy ? "Saving…" : "Save"}
                   </button>
-                  <button type="button" disabled={busy} onClick={() => { setOpenId(null); setDraft(null); setMessage(null); }} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
+                  <button type="button" disabled={busy} onClick={close} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
                     Cancel
                   </button>
                 </div>

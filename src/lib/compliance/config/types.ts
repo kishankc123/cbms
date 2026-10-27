@@ -46,4 +46,5 @@ export const COMPLIANCE_CATEGORIES = [
   { key: "statutory", name: "Statutory" },
   { key: "ownership", name: "Ownership" },
   { key: "company", name: "Company" },
+  { key: "local", name: "Local compliance" },
 ] as const;
