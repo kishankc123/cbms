@@ -1,4 +1,4 @@
-// Each country's usual currency, so "Add new country" can suggest one (the platform administrator can still change it).
+// Each country's usual currency and fiscal year start, so "Add new country" can suggest one (the platform administrator can still change it).
 // Grouped by currency: the codes after the colon are the countries (ISO 3166-1 alpha-2) that use it.
 const BY_CURRENCY =
   "EUR:AD AT AX BE BL CY DE EE ES FI FR GF GP GR HR IE IT LT LU LV MC ME MF MQ MT NL PM PT RE SI SK SM TF VA YT BG|" +
@@ -17,5 +17,7 @@ const CURRENCY_OF = new Map(BY_CURRENCY.split("|").flatMap((g) => {
 }));
 
 export const suggestedCurrency = (code: string) => CURRENCY_OF.get(code) ?? "";
+/** The month a company's fiscal year usually starts (Nepal: Shrawan, the 4th month of the BS calendar). */
+export const suggestedFiscalStartMonth = (code: string) => (["NP", "IN", "GB", "JP"].includes(code) ? 4 : ["AU", "PK", "BD", "EG"].includes(code) ? 7 : code === "ZA" ? 3 : 1);
 /** Statutory periods are counted in BS in Nepal and in AD everywhere else. */
 export const suggestedCalendar = (code: string): "AD" | "BS" => (code === "NP" ? "BS" : "AD");

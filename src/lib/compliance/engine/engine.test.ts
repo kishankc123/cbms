@@ -173,7 +173,7 @@ describe("country configuration", () => {
 
   it("a new country is data only — no engine or UI change", () => {
     const uk: CountryConfig = {
-      country: { code: "GB", name: "United Kingdom", currency: "GBP", statutoryCalendar: "AD" },
+      country: { code: "GB", name: "United Kingdom", currency: "GBP", statutoryCalendar: "AD", fiscalYearStartMonth: 4 },
       entityTypes: [{ key: "ltd", name: "Private limited company" }],
       authorities: [{ key: "hmrc", name: "HMRC" }],
       taxTypes: [{ key: "vat", name: "VAT", authorityKey: "hmrc" }],

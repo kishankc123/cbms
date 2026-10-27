@@ -23,7 +23,7 @@ const COMPANY_ENTITY: Condition = { fact: "entity_type", op: "in", value: ["priv
 const VAT_REGISTERED: Condition = { fact: "registered_tax_types", op: "includes", value: "vat" };
 
 export const NEPAL: CountryConfig = {
-  country: { code: "NP", name: "Nepal", currency: "NPR", statutoryCalendar: "BS" },
+  country: { code: "NP", name: "Nepal", currency: "NPR", statutoryCalendar: "BS", fiscalYearStartMonth: 4 },
 
   entityTypes: [
     { key: "private_limited", name: "Private Limited" },

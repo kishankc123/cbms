@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/session";
-import { addCountry, countriesWithUsage, removeCountry, worldCountries } from "@/lib/countries";
+import { addCountry, countriesWithUsage, countrySummary, removeCountry, setFiscalYearStart, worldCountries } from "@/lib/countries";
 
 const done = () => {
   revalidatePath("/admin", "layout");
@@ -17,7 +17,19 @@ export async function getCountriesAdminData() {
 }
 export type CountriesAdminData = Awaited<ReturnType<typeof getCountriesAdminData>>;
 
-export async function addNewCountry(input: { code: string; currency: string; calendar: "AD" | "BS" }) {
+export async function getCountryPageData(code: string) {
+  await requirePlatformAdmin();
+  return countrySummary(code);
+}
+
+export async function saveFiscalYearStart(code: string, month: number) {
+  const admin = await requirePlatformAdmin();
+  const r = await setFiscalYearStart(admin.id, code, month);
+  if (r.ok) done();
+  return r;
+}
+
+export async function addNewCountry(input: { code: string; currency: string; calendar: "AD" | "BS"; fiscalYearStartMonth: number }) {
   const admin = await requirePlatformAdmin();
   const r = await addCountry(admin.id, input);
   if (r.ok) done();

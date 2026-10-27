@@ -666,6 +666,13 @@
       "when": 1792996804108,
       "tag": "0094_drop_import_column_mappings",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1793027903902,
+      "tag": "0095_country_fiscal_year_start",
+      "breakpoints": true
     }
   ]
 }

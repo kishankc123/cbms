@@ -1,8 +1,9 @@
 import { and, asc, count, eq } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { complianceCountries, tenants } from "@/db/schema";
+import { complianceAuthorities, compliancePenaltyRules, complianceRequirementTemplates, complianceEntityTypes, complianceTaxTypes, complianceCountries, platformTaxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { suggestedCalendar, suggestedCurrency } from "@/lib/country-currencies";
+import { suggestedCalendar, suggestedCurrency, suggestedFiscalStartMonth } from "@/lib/country-currencies";
 
 // The one list of countries. The platform administrator chooses which are active (Setup → Countries); registration,
 // Company Details and the compliance screens all read it, so a country added here shows up everywhere.
@@ -13,7 +14,7 @@ const REGIONS =
 /** Every country in the world with its usual currency and calendar, for the "Add new country" picker to suggest. */
 export function worldCountries() {
   const names = new Intl.DisplayNames(["en"], { type: "region" });
-  return REGIONS.map((code) => ({ code, name: names.of(code) ?? code, currency: suggestedCurrency(code), calendar: suggestedCalendar(code) })).sort((a, b) => a.name.localeCompare(b.name));
+  return REGIONS.map((code) => ({ code, name: names.of(code) ?? code, currency: suggestedCurrency(code), calendar: suggestedCalendar(code), fiscalYearStartMonth: suggestedFiscalStartMonth(code) })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** The active countries, for any screen that asks for one. */
@@ -30,18 +31,47 @@ export async function countriesWithUsage() {
   return list.map((c) => ({ ...c, organizations: inUse.get(c.code) ?? 0 }));
 }
 
-export async function addCountry(adminId: string, input: { code: string; currency: string; calendar: "AD" | "BS" }): Promise<{ ok: true } | { ok: false; error: string }> {
+const validMonth = (m: number) => Number.isInteger(m) && m >= 1 && m <= 12;
+
+/** One country with what has been set up for it, for its page under Setup → Countries. */
+export async function countrySummary(code: string) {
+  const [country] = await db.select().from(complianceCountries).where(eq(complianceCountries.code, code)).limit(1);
+  if (!country) return null;
+  const total = async (table: PgTable, column: PgColumn) => (await db.select({ n: count() }).from(table).where(eq(column, code)))[0].n;
+  const [organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates] = await Promise.all([
+    total(tenants, tenants.countryCode),
+    total(complianceEntityTypes, complianceEntityTypes.countryCode),
+    total(complianceTaxTypes, complianceTaxTypes.countryCode),
+    total(complianceAuthorities, complianceAuthorities.countryCode),
+    total(complianceRequirementTemplates, complianceRequirementTemplates.countryCode),
+    total(compliancePenaltyRules, compliancePenaltyRules.countryCode),
+    total(platformTaxRates, platformTaxRates.countryCode),
+  ]);
+  return { country, counts: { organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates } };
+}
+
+export async function setFiscalYearStart(adminId: string, code: string, month: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!validMonth(month)) return { ok: false, error: "Choose the month the fiscal year starts in." };
+  const [before] = await db.select({ month: complianceCountries.fiscalYearStartMonth }).from(complianceCountries).where(eq(complianceCountries.code, code)).limit(1);
+  if (!before) return { ok: false, error: "That country isn't set up." };
+  await db.update(complianceCountries).set({ fiscalYearStartMonth: month }).where(eq(complianceCountries.code, code));
+  await logAuditEvent({ userId: adminId, action: "country_fiscal_year_changed", entityType: "country", entityId: code, before: { month: before.month }, after: { month } });
+  return { ok: true };
+}
+
+export async function addCountry(adminId: string, input: { code: string; currency: string; calendar: "AD" | "BS"; fiscalYearStartMonth: number }): Promise<{ ok: true } | { ok: false; error: string }> {
   const world = worldCountries().find((c) => c.code === input.code);
   if (!world) return { ok: false, error: "Choose a country from the list." };
   const currency = input.currency.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) return { ok: false, error: "The currency is a three-letter code, like NPR or INR." };
   if (input.calendar !== "AD" && input.calendar !== "BS") return { ok: false, error: "Choose AD or BS for the calendar." };
+  if (!validMonth(input.fiscalYearStartMonth)) return { ok: false, error: "Choose the month the fiscal year starts in." };
   // Adding a country that was removed earlier turns it back on, keeping the rules already set up for it.
   await db
     .insert(complianceCountries)
-    .values({ code: world.code, name: world.name, currency, statutoryCalendar: input.calendar, isActive: true })
-    .onConflictDoUpdate({ target: complianceCountries.code, set: { currency, statutoryCalendar: input.calendar, isActive: true } });
-  await logAuditEvent({ userId: adminId, action: "country_added", entityType: "country", entityId: world.code, after: { name: world.name, currency, calendar: input.calendar } });
+    .values({ code: world.code, name: world.name, currency, statutoryCalendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth, isActive: true })
+    .onConflictDoUpdate({ target: complianceCountries.code, set: { currency, statutoryCalendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth, isActive: true } });
+  await logAuditEvent({ userId: adminId, action: "country_added", entityType: "country", entityId: world.code, after: { name: world.name, currency, calendar: input.calendar, fiscalYearStartMonth: input.fiscalYearStartMonth } });
   return { ok: true };
 }
 

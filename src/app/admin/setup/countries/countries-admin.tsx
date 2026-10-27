@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { monthNames } from "@/lib/calendar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { adminCard, adminField } from "../../ui";
 import { addNewCountry, removeActiveCountry, type CountriesAdminData } from "./actions";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const TABS = ["Active countries", "Add new country"] as const;
-const blank = { code: "", currency: "", calendar: "AD" as "AD" | "BS" };
+const blank = { code: "", currency: "", calendar: "AD" as "AD" | "BS", fiscalYearStartMonth: 1 };
 
 export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
   const router = useRouter();
@@ -63,7 +65,11 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
             <tbody>
               {data.countries.map((c) => (
                 <tr key={c.code} className="border-b border-[var(--card-border)] last:border-0">
-                  <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{c.name}</td>
+                  <td className="px-4 py-2 font-medium">
+                    <Link href={`/admin/setup/countries/${c.code}`} className="text-[var(--color-primary)] hover:underline">
+                      {c.name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2">{c.code}</td>
                   <td className="px-4 py-2">{c.currency}</td>
                   <td className="px-4 py-2">{c.statutoryCalendar}</td>
@@ -94,7 +100,7 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
               await ask(`${name} has been added to the active countries list.`, { title: "Country added", confirmLabel: "OK", cancelLabel: "" });
             });
           }}
-          className={`${adminCard} grid gap-4 p-5 sm:grid-cols-3`}
+          className={`${adminCard} grid gap-4 p-5 sm:grid-cols-4`}
         >
           <label className="text-sm">
             <span className="mb-1 block text-xs text-[var(--text-secondary)]">Country</span>
@@ -103,7 +109,7 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
               value={form.code}
               onChange={(e) => {
                 const pick = data.available.find((c) => c.code === e.target.value);
-                setForm({ code: e.target.value, currency: pick?.currency ?? "", calendar: pick?.calendar ?? "AD" });
+                setForm({ code: e.target.value, currency: pick?.currency ?? "", calendar: pick?.calendar ?? "AD", fiscalYearStartMonth: pick?.fiscalYearStartMonth ?? 1 });
               }}
               required
             >
@@ -126,8 +132,18 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
               <option value="BS">BS</option>
             </select>
           </label>
-          <div className="sm:col-span-3">
-            <p className="mb-3 text-xs text-[var(--text-secondary)]">The currency and calendar are suggested from the country. A new country has no tax rates, fines or filing requirements yet. Add them under Compliance Configuration.</p>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-[var(--text-secondary)]">Fiscal year starts in</span>
+            <select className={`${adminField} w-full`} value={form.fiscalYearStartMonth} onChange={(e) => setForm({ ...form, fiscalYearStartMonth: Number(e.target.value) })}>
+              {monthNames(form.calendar).map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="sm:col-span-4">
+            <p className="mb-3 text-xs text-[var(--text-secondary)]">The currency, calendar and fiscal year start are suggested from the country. A new country has no tax rates, fines or filing requirements yet. Add them under Compliance Configuration.</p>
             <button type="submit" disabled={busy} className="rounded bg-[var(--color-primary)] px-4 py-2 text-sm text-white disabled:opacity-50">
               Add country
             </button>
