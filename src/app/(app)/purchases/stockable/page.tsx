@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 import { vendors, purchaseBills, items } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
@@ -31,6 +32,8 @@ export default async function StockablePurchasePage() {
     getCurrentTaxRate(session.tenantId, "vat"),
   ]);
 
+  const paymentModes = await paymentModesByBill(session.tenantId, billList.map((b) => b.id));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -43,6 +46,7 @@ export default async function StockablePurchasePage() {
       <StockableTabs
         vendors={vendorList}
         bills={billList}
+        paymentModes={paymentModes}
         items={itemList}
         cashBankAccounts={cashBankAccounts}
         vatRate={vatRate}

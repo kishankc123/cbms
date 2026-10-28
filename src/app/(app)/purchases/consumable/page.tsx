@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
@@ -29,6 +30,8 @@ export default async function ConsumablePurchasePage() {
     getSupplierBalances(session.tenantId),
   ]);
 
+  const paymentModes = await paymentModesByBill(session.tenantId, billList.map((b) => b.id));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -41,6 +44,7 @@ export default async function ConsumablePurchasePage() {
       <ConsumablePurchaseTabs
         vendors={vendorList}
         bills={billList}
+        paymentModes={paymentModes}
         categoryAccounts={categoryAccounts}
         cashBankAccounts={cashBankAccounts}
         vendorBalances={vendorBalances}
