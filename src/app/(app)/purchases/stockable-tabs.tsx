@@ -29,12 +29,14 @@ type TabId = (typeof TABS)[number]["id"];
 export function StockableTabs({
   vendors,
   bills,
+  paymentModes,
   items,
   cashBankAccounts,
   vatRate,
 }: {
   vendors: Vendor[];
   bills: Bill[];
+  paymentModes: Record<string, string[]>;
   items: Item[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
@@ -76,7 +78,7 @@ export function StockableTabs({
         ))}
       </div>
 
-      {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} onEdit={setEditingBillId} />}
+      {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} paymentModes={paymentModes} onEdit={setEditingBillId} />}
       {tab === "add" && (
         <PurchaseInvoiceForm
           vendors={vendors}

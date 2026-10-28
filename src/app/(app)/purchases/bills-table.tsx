@@ -18,22 +18,31 @@ type Bill = {
   status: string;
 };
 
-// An unpaid or part-paid bill past its due date shows as overdue. Derived, not stored, so it can't go stale.
-function shownStatus(b: Bill, today: string) {
-  const open = b.status === "open" || b.status === "partially_paid" || b.status === "draft";
-  return open && b.dueDate && b.dueDate < today ? "overdue" : b.status;
+// How the bill was paid: the mode of each payment made (Cash, Fonepay, ...). What is still owed is on Credit, so a bill with nothing
+// paid says Credit and a part-paid one says, for example, "Cash, Credit". A void bill says so.
+function paidBy(b: Bill, modes: string[] | undefined) {
+  if (b.status === "void") return "Void";
+  const owed = b.status !== "paid";
+  const list = [...(modes ?? []), ...(owed ? ["Credit"] : [])];
+  return list.length > 0 ? list.join(", ") : "Paid";
 }
 
-type SortKey = "date" | "billNumber" | "supplier" | "total" | "status";
+// A bill still owed past its due date is shown in red. Derived, not stored, so it can't go stale.
+const isOverdue = (b: Bill, today: string) => b.status !== "paid" && b.status !== "void" && Boolean(b.dueDate && b.dueDate < today);
+
+type SortKey = "date" | "billNumber" | "supplier" | "total" | "mode";
 type SortDir = "asc" | "desc";
 
 export function BillsTable({
   vendors,
   bills,
+  paymentModes,
   onEdit,
 }: {
   vendors: Vendor[];
   bills: Bill[];
+  /** The payment modes each bill was paid with, by bill id. */
+  paymentModes: Record<string, string[]>;
   onEdit?: (billId: string) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -80,9 +89,9 @@ export function BillsTable({
             av = Number(a.total);
             bv = Number(b.total);
             break;
-          case "status":
-            av = shownStatus(a, today);
-            bv = shownStatus(b, today);
+          case "mode":
+            av = paidBy(a, paymentModes[a.id]);
+            bv = paidBy(b, paymentModes[b.id]);
             break;
           default:
             av = vendorById.get(a.vendorId ?? "")?.name ?? a.description ?? "";
@@ -94,7 +103,7 @@ export function BillsTable({
     }
 
     return rows;
-  }, [bills, search, vendorById, sortKey, sortDir, today]);
+  }, [bills, paymentModes, search, vendorById, sortKey, sortDir, today]);
 
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
@@ -141,9 +150,9 @@ export function BillsTable({
             </th>
             <th
               className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("status")}
+              onClick={() => toggleSort("mode")}
             >
-              Status{sortIndicator("status")}
+              Mode of payment{sortIndicator("mode")}
             </th>
             <th className="px-4 py-2 font-medium"></th>
           </tr>
@@ -155,7 +164,7 @@ export function BillsTable({
               <td className="px-4 py-2 font-mono">{b.billNumber}</td>
               <td className="px-4 py-2">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
               <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              <td className={`px-4 py-2 capitalize ${shownStatus(b, today) === "overdue" ? "font-medium text-red-600" : ""}`}>{shownStatus(b, today).replace("_", " ")}</td>
+              <td className={`px-4 py-2 ${b.status === "void" ? "text-gray-400" : isOverdue(b, today) ? "font-medium text-red-600" : ""}`}>{paidBy(b, paymentModes[b.id])}</td>
               <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                 {b.status !== "void" && onEdit && (
                   <button type="button" onClick={() => onEdit(b.id)} className="text-xs text-gray-600 hover:underline">

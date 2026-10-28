@@ -31,6 +31,7 @@ type TabId = (typeof TABS)[number]["id"];
 export function ConsumablePurchaseTabs({
   vendors,
   bills,
+  paymentModes,
   categoryAccounts,
   cashBankAccounts,
   vendorBalances,
@@ -38,6 +39,7 @@ export function ConsumablePurchaseTabs({
 }: {
   vendors: Vendor[];
   bills: Bill[];
+  paymentModes: Record<string, string[]>;
   categoryAccounts: Account[];
   cashBankAccounts: CashBankGroup[];
   vendorBalances: Record<string, number>;
@@ -80,7 +82,7 @@ export function ConsumablePurchaseTabs({
         ))}
       </div>
 
-      {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} onEdit={setEditingBillId} />}
+      {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} paymentModes={paymentModes} onEdit={setEditingBillId} />}
       {tab === "import" && <ImportPurchases />}
       {tab === "add" && (
         <ConsumablePurchaseForm

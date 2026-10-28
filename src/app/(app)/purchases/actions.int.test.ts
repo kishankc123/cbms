@@ -6,6 +6,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
 import { createPayment } from "@/lib/ledger/payments-engine";
+import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let other: Awaited<ReturnType<typeof createTempOrg>>;
@@ -153,6 +154,20 @@ describe("stockable purchases", () => {
     await expect(voidBill(Object.assign(new FormData(), { get: () => bill.id }) as unknown as FormData)).rejects.toThrow(/in stock/);
     expect((await bills()).find((b) => b.id === bill.id)!.status).not.toBe("void");
   });
+});
+
+describe("how a bill was paid, for the bills list", () => {
+  it("lists the mode of every payment made against a bill, and nothing for a bill on credit", async () => {
+    await createPurchaseInvoice({ invoiceNumber: "M-CREDIT", invoiceDate: "2026-09-10", vendorId: vendorA, billType: "no_bill", lines: [line(100, 1)], payments: [] });
+    await createPurchaseInvoice({ invoiceNumber: "M-PART", invoiceDate: "2026-09-10", vendorId: vendorA, billType: "no_bill", lines: [line(100, 1)], payments: [{ accountId: cashId, amount: 40 }] });
+    const all = await bills();
+    const credit = all.find((b) => b.billNumber === "M-CREDIT")!;
+    const part = all.find((b) => b.billNumber === "M-PART")!;
+    const modes = await paymentModesByBill(org.tenantId, [credit.id, part.id]);
+    expect(modes[credit.id]).toBeUndefined();
+    expect(modes[part.id]).toEqual([expect.stringMatching(/cash/i)]);
+    expect(await paymentModesByBill(org.tenantId, [])).toEqual({});
+  }, 150_000);
 });
 
 describe("consumable purchases", () => {
