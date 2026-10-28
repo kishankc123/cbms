@@ -36,11 +36,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export async function getOffsetAccountOptions() {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
-  return db
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name, category: accounts.category })
+  const rows = await db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name, category: accounts.category, subCategory: accounts.subCategory, parentAccountId: accounts.parentAccountId })
     .from(accounts)
     .where(and(eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)))
     .orderBy(accounts.code);
+  // An account with sub-accounts is a heading, not somewhere to post to.
+  const parents = new Set(rows.map((r) => r.parentAccountId).filter((id): id is string => Boolean(id)));
+  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, category: r.category, subCategory: r.subCategory, hasChildren: parents.has(r.id) }));
 }
 
 export async function getBankAccountLedgerOptions() {
@@ -823,17 +826,20 @@ async function isPeriodLocked(bankAccountId: string, date: string): Promise<bool
 export type CreateBankTransactionInput = {
   statementLineId: string;
   bankAccountId: string;
-  type: "payment" | "receipt" | "bank_charge" | "transfer" | "other";
-  description: string;
-  offsetAccountId: string;
+  /** Where the money goes (or comes from). Several accounts make a split; together they add up to the amount. */
+  splits: { offsetAccountId: string; amount: number }[];
+  comment: string;
+  /**
+   * Book entries that already cover part of this bank line (say five of six receipts, or a deposit less a bank fee). The new
+   * transaction is then only for what they leave, and everything is matched to the bank line together.
+   */
+  alongsideJournalLineIds?: string[];
 };
 
-// A unified poster for the "money showed up in the bank but nothing's in
-// the ledger yet" case — posts a plain two-line entry against the bank's
-// ledger account and the chosen offset account, then immediately links it
-// to the statement line that prompted it (a manual, 100%-confidence match).
-// Everything is checked before posting, and if the match can't be made the entry is taken back —
-// so a failed attempt never leaves an entry behind for a retry to duplicate.
+// A unified poster for the "money showed up in the bank but nothing's in the ledger yet" case — posts an entry against the bank's
+// ledger account and the chosen offset accounts, then immediately links it (with any entries it sits alongside) to the statement
+// line that prompted it, as a manual match. Everything is checked before posting, and if the match can't be made the entry is
+// taken back — so a failed attempt never leaves an entry behind for a retry to duplicate.
 export async function createBankTransaction(input: CreateBankTransactionInput) {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "create")) throw new Error("Not permitted");
@@ -854,39 +860,58 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
   if (line.matchStatus === "matched") throw new Error("This line is already matched");
   if (await isPeriodLocked(bankAccount.id, line.transactionDate)) throw new Error(`${line.transactionDate} falls inside a reconciled period — reopen that reconciliation first`);
 
-  const [offset] = await db
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.id, input.offsetAccountId), eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)))
-    .limit(1);
-  if (!offset) throw new Error("Select the account this transaction belongs to (the offset account)");
-  if (offset.id === bankAccount.chartOfAccountsLink) {
-    throw new Error("The offset account can't be the bank account itself — use Payments > Inter-Transfer to move money between your own accounts");
-  }
-  if (["1100", "2000"].some((c) => offset.code === c || offset.code.startsWith(c + "."))) {
-    throw new Error("Customer and supplier accounts are settled through Payments — record a payment or receipt instead");
+  // What the new entry has to cover: the whole bank line, or what the chosen entries leave of it.
+  const alongside = [...new Set(input.alongsideJournalLineIds ?? [])];
+  const covered = alongside.length
+    ? (
+        await db
+          .select({ debit: journalLines.debitAmount, credit: journalLines.creditAmount })
+          .from(journalLines)
+          .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+          .where(and(inArray(journalLines.id, alongside), eq(journalEntries.tenantId, session.tenantId), eq(journalLines.accountId, bankAccount.chartOfAccountsLink)))
+      ).reduce((sum, r) => sum + Number(r.debit) - Number(r.credit), 0)
+    : 0;
+  const bankSide = round2(Number(line.amount) - covered);
+  if (Math.abs(bankSide) < 0.005) throw new Error("The entries you chose already add up to the whole bank amount, so there is nothing left to record");
+
+  const splits = input.splits.filter((p) => p.offsetAccountId || p.amount);
+  if (splits.length === 0) throw new Error("Select the account this transaction belongs to");
+  if (splits.some((p) => !(p.amount > 0))) throw new Error("Enter an amount greater than zero for each account");
+  const splitTotal = round2(splits.reduce((sum, p) => sum + p.amount, 0));
+  if (Math.abs(splitTotal - Math.abs(bankSide)) > 0.005) {
+    throw new Error(`The amounts add up to ${splitTotal.toFixed(2)}, but this transaction is for ${Math.abs(bankSide).toFixed(2)}`);
   }
 
-  const amount = Math.abs(Number(line.amount));
-  const moneyIn = Number(line.amount) > 0;
-  const lines: PostLineInput[] = moneyIn
-    ? [
-        { accountId: bankAccount.chartOfAccountsLink, debitAmount: amount, description: input.description || undefined },
-        { accountId: offset.id, creditAmount: amount, description: input.description || undefined },
-      ]
-    : [
-        { accountId: offset.id, debitAmount: amount, description: input.description || undefined },
-        { accountId: bankAccount.chartOfAccountsLink, creditAmount: amount, description: input.description || undefined },
-      ];
+  const offsets = await db
+    .select()
+    .from(accounts)
+    .where(and(inArray(accounts.id, splits.map((p) => p.offsetAccountId)), eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)));
+  for (const p of splits) {
+    const offset = offsets.find((o) => o.id === p.offsetAccountId);
+    if (!offset) throw new Error("Select the account this transaction belongs to");
+    if (offset.id === bankAccount.chartOfAccountsLink) {
+      throw new Error("The account can't be the bank account itself — use Payments > Inter-Transfer to move money between your own accounts");
+    }
+    if (["1100", "2000"].some((c) => offset.code === c || offset.code.startsWith(c + "."))) {
+      throw new Error("Customer and supplier accounts are settled through Payments — record a receipt or payment instead");
+    }
+  }
+
+  const moneyIn = bankSide > 0;
+  const memo = input.comment.trim() || "Bank reconciliation";
+  const bankLineInput: PostLineInput = moneyIn
+    ? { accountId: bankAccount.chartOfAccountsLink, debitAmount: Math.abs(bankSide), description: memo }
+    : { accountId: bankAccount.chartOfAccountsLink, creditAmount: Math.abs(bankSide), description: memo };
+  const offsetLines: PostLineInput[] = splits.map((p) => (moneyIn ? { accountId: p.offsetAccountId, creditAmount: p.amount, description: memo } : { accountId: p.offsetAccountId, debitAmount: p.amount, description: memo }));
 
   const entry = await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: line.transactionDate,
     sourceType: "bank_adjustment",
     referenceNumber: line.reference ?? undefined,
-    memo: input.description || `${input.type.replace("_", " ")} from bank reconciliation`,
+    memo,
     createdBy: session.userId,
-    lines,
+    lines: [bankLineInput, ...offsetLines],
   });
 
   try {
@@ -897,7 +922,7 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
     await confirmMatch({
       bankAccountId: bankAccount.id,
       statementLineIds: [line.id],
-      journalLineIds: [bankLine.id],
+      journalLineIds: [bankLine.id, ...alongside],
       matchType: "manual",
     });
   } catch (e) {

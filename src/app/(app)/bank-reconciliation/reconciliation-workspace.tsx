@@ -17,9 +17,12 @@ import {
 } from "./actions";
 import type { MatchCandidate } from "@/lib/banking/matching";
 import { UploadStatementModal } from "./upload-statement-modal";
-import { CreateBankTransactionModal } from "./create-bank-transaction-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
-import { FindMatchPanel } from "./find-match-panel";
+import { LinePanel } from "./line-panel";
+import type { AccountOption } from "./account-picker";
+import { NewPaymentModal } from "../payments/new-payment-modal";
+import { getPaymentFormOptions } from "../payments/actions";
+import { COMBINATION_WINDOW_DAYS, findCombination } from "@/lib/banking/combinations";
 import { DifferencePanel } from "./difference-panel";
 
 import { todayIso } from "@/lib/calendar";
@@ -29,13 +32,13 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useProblem } from "@/components/problem-dialog";
 import { D, DT } from "@/components/calendar/date-text";
 type BankAccountOption = { id: string; label: string };
-type OffsetAccount = { id: string; code: string; name: string; category: string };
+type PaymentOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 type Workspace = Awaited<ReturnType<typeof getReconciliationWorkspace>>;
 type Reconciliation = Awaited<ReturnType<typeof listReconciliationHistory>>[number];
 
 // What each bank line is waiting for: nothing (matched), your OK (an exact or a likely match found), or a transaction to be found or created.
 type State = "matched" | "exact" | "likely" | "none";
-type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null };
+type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null; combo: UnmatchedLedgerRow[] };
 type Filter = "todo" | "matched" | "all";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "todo", label: "To do" },
@@ -60,7 +63,7 @@ function differenceText(difference: number, hasStatement: boolean) {
   return difference > 0 ? "The bank balance is higher than your books." : "The bank balance is lower than your books.";
 }
 
-export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bankAccounts: BankAccountOption[]; offsetAccounts: OffsetAccount[] }) {
+export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bankAccounts: BankAccountOption[]; offsetAccounts: AccountOption[] }) {
   const ask = useConfirm();
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -70,7 +73,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [filter, setFilter] = useState<Filter>("todo");
   const [showUpload, setShowUpload] = useState(false);
   const [findingFor, setFindingFor] = useState<StatementLineRow | null>(null);
-  const [creatingForLine, setCreatingForLine] = useState<StatementLineRow | null>(null);
+  const [recording, setRecording] = useState<{ line: StatementLineRow; options: PaymentOptions } | null>(null);
   const [classifyingLine, setClassifyingLine] = useState<UnmatchedLedgerRow | null>(null);
   const [showDifference, setShowDifference] = useState(false);
   // Problems are shown in a dialog that says why.
@@ -117,6 +120,19 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
   const confirmSuggested = (line: StatementLineRow, c: MatchCandidate) =>
     run(() => confirmMatch({ bankAccountId, statementLineIds: [line.id], journalLineIds: [c.journalLineId], matchType: c.tier, confidence: c.score }), "Failed to confirm the match");
+
+  const confirmCombination = (line: StatementLineRow, entries: UnmatchedLedgerRow[]) =>
+    run(() => confirmMatch({ bankAccountId, statementLineIds: [line.id], journalLineIds: entries.map((e) => e.journalLineId), matchType: "suggested" }), "Failed to confirm the match");
+
+  // The receipt or payment form from Payments, filled in from the bank line, for money from a customer or to a supplier.
+  async function recordPayment(line: StatementLineRow) {
+    setFindingFor(null);
+    try {
+      setRecording({ line, options: await getPaymentFormOptions() });
+    } catch (e) {
+      report(e instanceof Error ? e.message : "The payments form couldn't be opened.", null);
+    }
+  }
 
   async function unmatchLine(line: StatementLineRow) {
     if (!line.matchId) return;
@@ -178,10 +194,27 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const lockedOn = (date: string) => Boolean(lockedThrough) && date <= lockedThrough;
   const hasStatement = workspace.statementLines.length > 0;
 
+  // One bank line can be several payments at once: when no single entry matches, look for entries that add up to it. These are only
+  // ever shown as a likely match; nothing is matched until the person says OK.
+  const combos: Record<string, UnmatchedLedgerRow[]> = {};
+  {
+    const taken = new Set(Object.values(suggestions).map((c) => c.journalLineId));
+    let pool = workspace.unmatchedLedger.filter((l) => !taken.has(l.journalLineId));
+    const window = COMBINATION_WINDOW_DAYS * 86400000;
+    for (const line of workspace.statementLines.filter((l) => l.matchStatus === "unmatched" && !suggestions[l.id]).sort((a, b) => a.transactionDate.localeCompare(b.transactionDate))) {
+      const near = pool.filter((l) => Math.abs(new Date(l.entryDate).getTime() - new Date(line.transactionDate).getTime()) <= window);
+      const ids = findCombination(near.map((l) => ({ id: l.journalLineId, cents: Math.round(l.signedAmount * 100), date: l.entryDate })), Math.round(line.amount * 100), line.transactionDate);
+      if (ids) {
+        combos[line.id] = near.filter((l) => ids.includes(l.journalLineId));
+        pool = pool.filter((l) => !ids.includes(l.journalLineId));
+      }
+    }
+  }
   const rows: Row[] = workspace.statementLines.map((line) => {
-    if (line.matchStatus !== "unmatched") return { line, state: "matched", entries: workspace.matches[line.matchId ?? ""] ?? [], suggestion: null };
+    if (line.matchStatus !== "unmatched") return { line, state: "matched", entries: workspace.matches[line.matchId ?? ""] ?? [], suggestion: null, combo: [] };
     const suggestion = suggestions[line.id] ?? null;
-    return { line, state: suggestion ? (suggestion.tier === "exact" ? "exact" : "likely") : "none", entries: [], suggestion };
+    const combo = combos[line.id] ?? [];
+    return { line, state: suggestion ? (suggestion.tier === "exact" ? "exact" : "likely") : combo.length ? "likely" : "none", entries: [], suggestion, combo };
   });
   const todo = rows.filter((r) => r.state !== "matched");
   const exactCount = todo.filter((r) => r.state === "exact" && !lockedOn(r.line.transactionDate)).length;
@@ -273,7 +306,12 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         {shown.map((r, i) => {
           const days = Math.floor((new Date(today).getTime() - new Date(r.line.transactionDate).getTime()) / 86400000);
           const locked = lockedOn(r.line.transactionDate);
-          const match = r.state === "matched" ? r.entries : r.suggestion ? [{ date: r.suggestion.entryDate, text: r.suggestion.memo || r.suggestion.description || r.suggestion.referenceNumber || "Ledger entry", amount: r.suggestion.signedAmount }] : [];
+          const match: MatchedEntry[] =
+            r.state === "matched"
+              ? r.entries
+              : r.suggestion
+                ? [{ date: r.suggestion.entryDate, text: r.suggestion.memo || r.suggestion.description || r.suggestion.referenceNumber || "Ledger entry", amount: r.suggestion.signedAmount }]
+                : r.combo.map((l) => ({ date: l.entryDate, text: l.memo || l.description || l.referenceNumber || "Ledger entry", amount: l.signedAmount }));
           return (
             <div key={r.line.id} className="grid grid-cols-[2rem_1fr_1fr] items-stretch gap-2 lg:grid-cols-[2rem_1fr_1fr_11rem]">
               <div className="flex items-center justify-center text-xs text-[var(--text-secondary)]">{i + 1}</div>
@@ -296,6 +334,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                       <p className="text-xs opacity-80">
                         <D value={m.date} />
                         {r.state === "likely" && r.suggestion ? ` · ${r.suggestion.score}% sure` : ""}
+                        {r.combo.length > 1 && k === 0 ? ` · ${r.combo.length} entries add up to ${fmt(r.line.amount)}` : ""}
                       </p>
                       <p className="flex items-center justify-between gap-3">
                         <span className="min-w-0 truncate">{m.text}</span>
@@ -315,8 +354,8 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                   </>
                 ) : (
                   <>
-                    {r.suggestion && (
-                      <button type="button" disabled={busy || locked} onClick={() => confirmSuggested(r.line, r.suggestion!)} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+                    {(r.suggestion || r.combo.length > 0) && (
+                      <button type="button" disabled={busy || locked} onClick={() => (r.suggestion ? confirmSuggested(r.line, r.suggestion) : confirmCombination(r.line, r.combo))} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
                         OK
                       </button>
                     )}
@@ -351,20 +390,30 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
       {showUpload && <UploadStatementModal bankAccountId={bankAccountId} onClose={() => setShowUpload(false)} onImported={load} />}
       {findingFor && (
-        <FindMatchPanel
+        <LinePanel
           bankAccountId={bankAccountId}
+          bankLedgerId={workspace.bankAccount.chartOfAccountsLink}
           line={findingFor}
           ledger={workspace.unmatchedLedger}
+          accounts={offsetAccounts}
           locked={lockedOn(findingFor.transactionDate)}
           onClose={() => setFindingFor(null)}
-          onMatched={load}
-          onCreate={() => {
-            setCreatingForLine(findingFor);
-            setFindingFor(null);
+          onDone={load}
+          onRecordPayment={() => recordPayment(findingFor)}
+        />
+      )}
+      {recording && (
+        <NewPaymentModal
+          formOptions={recording.options}
+          fixedDirection={recording.line.amount >= 0 ? "money_in" : "money_out"}
+          prefill={{ amount: Math.abs(recording.line.amount), date: recording.line.transactionDate, accountId: workspace.bankAccount.chartOfAccountsLink }}
+          onCancel={() => setRecording(null)}
+          onDone={() => {
+            setRecording(null);
+            load();
           }}
         />
       )}
-      {creatingForLine && <CreateBankTransactionModal bankAccountId={bankAccountId} line={creatingForLine} offsetAccounts={offsetAccounts} onClose={() => setCreatingForLine(null)} onCreated={load} />}
       {showDifference && (
         <DifferencePanel
           statementBalance={workspace.statementBalance}
