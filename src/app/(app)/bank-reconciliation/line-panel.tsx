@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useProblem } from "@/components/problem-dialog";
 import { confirmMatch, createBankTransaction, type StatementLineRow, type UnmatchedLedgerRow } from "./actions";
 import { AccountPicker, postableAccounts, type AccountOption } from "./account-picker";
+import { FlagIcon } from "./flag-dialog";
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -34,6 +35,7 @@ export function LinePanel({
   onClose,
   onDone,
   onRecordPayment,
+  onFlag,
 }: {
   bankAccountId: string;
   bankLedgerId: string | null;
@@ -44,6 +46,7 @@ export function LinePanel({
   onClose: () => void;
   onDone: () => void;
   onRecordPayment: () => void;
+  onFlag: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("find");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -104,9 +107,15 @@ export function LinePanel({
               <D value={line.transactionDate} /> · {line.description || "—"} · <span className={moneyIn ? "text-green-700" : "text-red-600"}>{fmt(line.amount)}</span>
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]" aria-label="Close">
-            ✕
-          </button>
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={onFlag} className={`flex items-center gap-1.5 text-sm ${line.flagged ? "text-red-600" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
+              <FlagIcon filled={line.flagged} />
+              {line.flagged ? "Flagged" : "Flag this transaction"}
+            </button>
+            <button type="button" onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]" aria-label="Close">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-1 border-b border-[var(--card-border)]">

@@ -24,6 +24,7 @@ import { NewPaymentModal } from "../payments/new-payment-modal";
 import { getPaymentFormOptions } from "../payments/actions";
 import { COMBINATION_WINDOW_DAYS, findCombination } from "@/lib/banking/combinations";
 import { DifferencePanel } from "./difference-panel";
+import { FlagDialog, FlagIcon } from "./flag-dialog";
 
 import { todayIso } from "@/lib/calendar";
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -39,10 +40,11 @@ type Reconciliation = Awaited<ReturnType<typeof listReconciliationHistory>>[numb
 // What each bank line is waiting for: nothing (matched), your OK (an exact or a likely match found), or a transaction to be found or created.
 type State = "matched" | "exact" | "likely" | "none";
 type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null; combo: UnmatchedLedgerRow[] };
-type Filter = "todo" | "matched" | "all";
+type Filter = "todo" | "matched" | "flagged" | "all";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "todo", label: "To do" },
   { key: "matched", label: "Matched" },
+  { key: "flagged", label: "Flagged" },
   { key: "all", label: "All" },
 ];
 
@@ -76,6 +78,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [recording, setRecording] = useState<{ line: StatementLineRow; options: PaymentOptions } | null>(null);
   const [classifyingLine, setClassifyingLine] = useState<UnmatchedLedgerRow | null>(null);
   const [showDifference, setShowDifference] = useState(false);
+  const [flagging, setFlagging] = useState<StatementLineRow | null>(null);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
   const [reconcileEnd, setReconcileEnd] = useState(todayIso());
@@ -218,7 +221,8 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   });
   const todo = rows.filter((r) => r.state !== "matched");
   const exactCount = todo.filter((r) => r.state === "exact" && !lockedOn(r.line.transactionDate)).length;
-  const shown = rows.filter((r) => (filter === "todo" ? r.state !== "matched" : filter === "matched" ? r.state === "matched" : true));
+  const flaggedCount = rows.filter((r) => r.line.flagged).length;
+  const shown = rows.filter((r) => (filter === "todo" ? r.state !== "matched" : filter === "matched" ? r.state === "matched" : filter === "flagged" ? r.line.flagged : true));
   const unmatchedBank = workspace.statementLines.filter((l) => l.matchStatus === "unmatched");
 
   return (
@@ -287,6 +291,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
             >
               {f.label}
               {f.key === "todo" && todo.length > 0 ? ` (${todo.length})` : ""}
+              {f.key === "flagged" && flaggedCount > 0 ? ` (${flaggedCount})` : ""}
             </button>
           ))}
         </div>
@@ -316,14 +321,26 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
             <div key={r.line.id} className="grid grid-cols-[2rem_1fr_1fr] items-stretch gap-2 lg:grid-cols-[2rem_1fr_1fr_11rem]">
               <div className="flex items-center justify-center text-xs text-[var(--text-secondary)]">{i + 1}</div>
               <div className={`rounded-lg border px-3 py-2 text-sm ${TONE[r.state]}`}>
-                <p className="text-xs opacity-80">
-                  <D value={r.line.transactionDate} />
-                  {r.state !== "matched" && days > OLD_AFTER_DAYS ? ` · ${days} days old` : ""}
+                <p className="flex items-center justify-between gap-2 text-xs opacity-80">
+                  <span>
+                    <D value={r.line.transactionDate} />
+                    {r.state !== "matched" && days > OLD_AFTER_DAYS ? ` · ${days} days old` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFlagging(r.line)}
+                    title={r.line.flagged ? "Flagged for review. Click to see the note or remove the flag." : "Flag this transaction for review"}
+                    aria-label={r.line.flagged ? "Flagged for review" : "Flag this transaction"}
+                    className={r.line.flagged ? "text-red-600" : "opacity-60 hover:opacity-100"}
+                  >
+                    <FlagIcon filled={r.line.flagged} />
+                  </button>
                 </p>
                 <p className="flex items-center justify-between gap-3">
                   <span className="min-w-0 truncate">{r.line.description || "—"}</span>
                   <span className="shrink-0 tabular-nums">{fmt(r.line.amount)}</span>
                 </p>
+                {r.line.flagged && r.line.flagNote && <p className="mt-1 text-xs italic opacity-90">Flagged: {r.line.flagNote}</p>}
               </div>
               <div className={`rounded-lg border px-3 py-2 text-sm ${TONE[r.state]}`}>
                 {match.length === 0 ? (
@@ -400,6 +417,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           onClose={() => setFindingFor(null)}
           onDone={load}
           onRecordPayment={() => recordPayment(findingFor)}
+          onFlag={() => setFlagging(findingFor)}
         />
       )}
       {recording && (
@@ -428,6 +446,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           onClose={() => setShowDifference(false)}
         />
       )}
+      {flagging && <FlagDialog line={flagging} onClose={() => setFlagging(null)} onDone={load} />}
       {classifyingLine && <ClassifyLedgerModal bankAccountId={bankAccountId} line={classifyingLine} onClose={() => setClassifyingLine(null)} onClassified={load} />}
 
       {showReopen && latest && (

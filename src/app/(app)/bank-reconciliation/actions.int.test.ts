@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, bankAccounts, bankReconciliations, bankStatementLines, journalEntries, journalLines } from "@/db/schema";
+import { accounts, auditLog, bankAccounts, bankReconciliations, bankStatementLines, journalEntries, journalLines } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -292,5 +292,37 @@ describe("creating a transaction from a bank line: split, comment, and only the 
     const bankGroup = options.find((o) => o.code === "1010")!;
     expect(bankGroup.hasChildren).toBe(true); // the test bank is a sub-account of the Bank group
     expect(options.find((o) => o.code === "4100")).toMatchObject({ category: "income", subCategory: "Revenue", hasChildren: false });
+  });
+});
+
+describe("flagging a bank line for review", () => {
+  const csvOf = (rows: string[]) => Buffer.from(["Date,Description,Amount", ...rows].join("\n")).toString("base64");
+
+  it("flags with a note, shows it on the line and the Home count, and takes it off again", async () => {
+    await A.confirmStatementImport({ bankAccountId: bankId, fileName: "flag.csv", base64: csvOf(["2027-01-05,Looks odd,321.09"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" });
+    const line = (await stmtLines()).find((l) => l.description === "Looks odd")!;
+    const flaggedNow = async () => (await A.getReconciliationWorkspace(bankId)).statementLines.find((l) => l.id === line.id)!;
+    const homeCount = async () => (await A.getReconciliationOverview()).find((a) => a.id === bankId)!.flagged;
+    expect(await flaggedNow()).toMatchObject({ flagged: false, flagNote: null });
+    const before = await homeCount();
+
+    await A.setLineFlag({ statementLineId: line.id, flagged: true, note: "  Customer says this was not theirs  " });
+    expect(await flaggedNow()).toMatchObject({ flagged: true, flagNote: "Customer says this was not theirs" });
+    expect(await homeCount()).toBe(before + 1);
+    expect((await db.select().from(auditLog).where(and(eq(auditLog.entityId, line.id), eq(auditLog.action, "bank_line_flagged")))).length).toBe(1);
+
+    // flagging changes nothing about matching or the books
+    expect((await stmtLines()).find((l) => l.id === line.id)!.matchStatus).toBe("unmatched");
+
+    await A.setLineFlag({ statementLineId: line.id, flagged: false });
+    expect(await flaggedNow()).toMatchObject({ flagged: false, flagNote: null });
+    expect(await homeCount()).toBe(before);
+    expect((await db.select().from(auditLog).where(and(eq(auditLog.entityId, line.id), eq(auditLog.action, "bank_line_unflagged")))).length).toBe(1);
+  }, 150_000);
+
+  it("refuses a note that is too long, and a line that isn't there", async () => {
+    const line = (await stmtLines()).find((l) => l.description === "Looks odd")!;
+    await expect(A.setLineFlag({ statementLineId: line.id, flagged: true, note: "x".repeat(301) })).rejects.toThrow(/under 300 characters/);
+    await expect(A.setLineFlag({ statementLineId: "00000000-0000-0000-0000-000000000000", flagged: true })).rejects.toThrow(/not found/);
   });
 });

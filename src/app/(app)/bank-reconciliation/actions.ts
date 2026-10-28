@@ -19,6 +19,7 @@ import {
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
+import { logAuditEvent } from "@/lib/audit";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { syncBankOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
 import { SYSTEM_ACCOUNT_CODES } from "@/lib/ledger/chart-rules";
@@ -98,6 +99,8 @@ export type AccountOverview = {
   unreconciled: number;
   /** The date of the latest statement line, or null when no statement has been imported. */
   updatedUpTo: string | null;
+  /** Lines flagged for review. */
+  flagged: number;
 };
 
 /** Every active bank and wallet account with where its reconciliation stands, for the Home screen. */
@@ -114,6 +117,7 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
         total: sql<string>`coalesce(sum(${bankStatementLines.amount}), 0)`,
         unreconciled: sql<number>`count(*) filter (where ${bankStatementLines.matchStatus} <> 'matched')`,
         latest: sql<string | null>`max(${bankStatementLines.transactionDate})`,
+        flagged: sql<number>`count(*) filter (where ${bankStatementLines.flaggedAt} is not null)`,
       })
       .from(bankStatementLines)
       .where(and(eq(bankStatementLines.tenantId, session.tenantId), inArray(bankStatementLines.bankAccountId, accountList.map((b) => b.id))))
@@ -144,6 +148,7 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
       difference: round2(statementBalance - ledgerBalance),
       unreconciled: Number(s?.unreconciled ?? 0),
       updatedUpTo: s?.latest ?? null,
+      flagged: Number(s?.flagged ?? 0),
     };
   });
 }
@@ -422,6 +427,9 @@ export async function confirmStatementImport(input: ConfirmImportInput): Promise
 // ---------- Reconciliation workspace ----------
 
 export type StatementLineRow = {
+  /** Flagged for review, and the note saying why. */
+  flagged: boolean;
+  flagNote: string | null;
   id: string;
   transactionDate: string;
   description: string | null;
@@ -563,6 +571,8 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
     reference: l.reference,
     amount: Number(l.amount),
     matchStatus: l.matchStatus,
+    flagged: l.flaggedAt !== null,
+    flagNote: l.flagNote,
     matchId: matchIdByStatementLine.get(l.id) ?? null,
   }));
 
@@ -932,6 +942,43 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
 
   revalidatePath("/bank-reconciliation");
   revalidatePath("/journal");
+}
+
+// ---------- Flagging ----------
+
+const FLAG_NOTE_MAX = 300;
+
+/**
+ * Flags a bank line for review, with a note saying why, or takes the flag off. A flag is only a marker for a second look: it has no
+ * effect on matching or on the books, so it can be set on a line in a reconciled period too.
+ */
+export async function setLineFlag(input: { statementLineId: string; flagged: boolean; note?: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const note = (input.note ?? "").trim();
+  if (note.length > FLAG_NOTE_MAX) throw new Error(`Keep the note under ${FLAG_NOTE_MAX} characters.`);
+
+  const [line] = await db
+    .select({ id: bankStatementLines.id, flaggedAt: bankStatementLines.flaggedAt, flagNote: bankStatementLines.flagNote })
+    .from(bankStatementLines)
+    .where(and(eq(bankStatementLines.id, input.statementLineId), eq(bankStatementLines.tenantId, session.tenantId)))
+    .limit(1);
+  if (!line) throw new Error("Statement line not found");
+
+  await db
+    .update(bankStatementLines)
+    .set(input.flagged ? { flaggedAt: new Date(), flaggedBy: session.userId, flagNote: note || null } : { flaggedAt: null, flaggedBy: null, flagNote: null })
+    .where(and(eq(bankStatementLines.id, line.id), eq(bankStatementLines.tenantId, session.tenantId)));
+  await logAuditEvent({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    action: input.flagged ? "bank_line_flagged" : "bank_line_unflagged",
+    entityType: "bank_statement_line",
+    entityId: line.id,
+    before: line.flaggedAt ? { note: line.flagNote } : null,
+    after: input.flagged ? { note: note || null } : null,
+  });
+  revalidatePath("/bank-reconciliation");
 }
 
 // ---------- Classification ----------

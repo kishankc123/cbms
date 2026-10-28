@@ -680,6 +680,13 @@
       "when": 1793095294200,
       "tag": "0096_local_compliance_category",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1793175443253,
+      "tag": "0097_bank_line_flag",
+      "breakpoints": true
     }
   ]
 }

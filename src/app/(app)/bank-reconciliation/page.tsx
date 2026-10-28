@@ -59,7 +59,10 @@ export default async function BankReconciliationHome() {
           {accounts.map((a) => (
             <section key={a.id} className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <StatusBadge a={a} />
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge a={a} />
+                  {a.flagged > 0 && <StatusPill tone="critical">{plural(a.flagged, "flagged transaction", "flagged transactions")}</StatusPill>}
+                </div>
                 <div className="text-right">
                   <p className="font-medium text-[var(--text-primary)]">{a.label}</p>
                   <p className="text-xs text-[var(--text-secondary)]">
