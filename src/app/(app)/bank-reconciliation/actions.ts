@@ -428,6 +428,9 @@ export type StatementLineRow = {
   matchId: string | null;
 };
 
+/** A ledger entry a confirmed match was made to, for showing beside the bank line. */
+export type MatchedEntry = { date: string; text: string; amount: number };
+
 export type UnmatchedLedgerRow = {
   journalLineId: string;
   journalEntryId: string;
@@ -529,6 +532,27 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
     );
   const matchIdByStatementLine = new Map(matchLinesForStatement.map((r) => [r.statementLineId, r.matchId]));
 
+  // What each confirmed match was made to, so the list can show the book entry beside the bank line.
+  const matchIds = [...new Set(matchLinesForStatement.map((r) => r.matchId))];
+  const matchedEntryRows = matchIds.length
+    ? await db
+        .select({
+          matchId: bankReconciliationMatchJournalLines.matchId,
+          date: journalEntries.entryDate,
+          memo: journalEntries.memo,
+          description: journalLines.description,
+          reference: journalEntries.referenceNumber,
+          debit: journalLines.debitAmount,
+          credit: journalLines.creditAmount,
+        })
+        .from(bankReconciliationMatchJournalLines)
+        .innerJoin(journalLines, eq(journalLines.id, bankReconciliationMatchJournalLines.journalLineId))
+        .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+        .where(and(eq(journalEntries.tenantId, session.tenantId), inArray(bankReconciliationMatchJournalLines.matchId, matchIds)))
+    : [];
+  const matches: Record<string, MatchedEntry[]> = {};
+  for (const r of matchedEntryRows) (matches[r.matchId] ??= []).push({ date: r.date, text: r.memo || r.description || r.reference || "Ledger entry", amount: round2(Number(r.debit) - Number(r.credit)) });
+
   const statementRows: StatementLineRow[] = statementLines.map((l) => ({
     id: l.id,
     transactionDate: l.transactionDate,
@@ -561,6 +585,7 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
       chartOfAccountsLink: bankAccount.chartOfAccountsLink,
     },
     statementLines: statementRows,
+    matches,
     unmatchedLedger,
     statementBalance,
     ledgerBalance,
@@ -606,6 +631,35 @@ export async function getSuggestedMatchesForAccount(bankAccountId: string): Prom
     if (candidates.length > 0) result[line.id] = candidates[0];
   }
   return result;
+}
+
+/**
+ * "OK all": confirms every exact suggestion in one go. The server works the suggestions out itself, so only matches it would
+ * itself call exact are made; a ledger entry is never given to two bank lines, and one that can't be confirmed (a reconciled
+ * period, say) is skipped and counted.
+ */
+export async function confirmExactMatches(bankAccountId: string): Promise<{ confirmed: number; skipped: number }> {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const suggestions = await getSuggestedMatchesForAccount(bankAccountId);
+  const used = new Set<string>();
+  let confirmed = 0;
+  let skipped = 0;
+  for (const [statementLineId, c] of Object.entries(suggestions)) {
+    if (c.tier !== "exact") continue;
+    if (used.has(c.journalLineId)) {
+      skipped++;
+      continue;
+    }
+    try {
+      await confirmMatch({ bankAccountId, statementLineIds: [statementLineId], journalLineIds: [c.journalLineId], matchType: "exact", confidence: c.score });
+      used.add(c.journalLineId);
+      confirmed++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { confirmed, skipped };
 }
 
 export async function getSuggestedMatchesForLine(statementLineId: string): Promise<MatchCandidate[]> {

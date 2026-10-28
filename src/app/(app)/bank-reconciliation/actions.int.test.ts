@@ -191,3 +191,40 @@ describe("the Home overview of bank accounts", () => {
     }
   }, 120_000);
 });
+
+describe("the single list: OK all, and what a match was made to", () => {
+  const refCsv = (rows: string[]) => Buffer.from(["Date,Description,Amount,Reference", ...rows].join("\n")).toString("base64");
+  const post = async (date: string, amount: number, referenceNumber: string, memo: string) => {
+    const entry = await postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "manual", createdBy: org.userId, referenceNumber, memo, lines: [{ accountId: bankLedgerId, debitAmount: amount }, { accountId: salesId, creditAmount: amount }] });
+    return (await db.select().from(journalLines).where(and(eq(journalLines.journalEntryId, entry.id), eq(journalLines.accountId, bankLedgerId))))[0];
+  };
+
+  it("confirms only the exact suggestions, leaves the rest, and shows each confirmed bank line what it was matched to", async () => {
+    // two exact matches (same amount, same day, same reference, same words) and one bank line with nothing in the books
+    await post("2026-11-03", 1234.5, "REF-OKA", "Sale to Alpha");
+    await post("2026-11-03", 2345.5, "REF-OKB", "Sale to Beta");
+    await A.confirmStatementImport({
+      bankAccountId: bankId,
+      fileName: "ok-all.csv",
+      base64: refCsv(["2026-11-03,Sale to Alpha,1234.50,REF-OKA", "2026-11-03,Sale to Beta,2345.50,REF-OKB", "2026-11-03,Nothing in the books,99.99,"]),
+      mapping: { date: "Date", description: "Description", amount: "Amount", reference: "Reference" },
+      saveAsTemplateName: "",
+    });
+
+    const result = await A.confirmExactMatches(bankId);
+    expect(result.confirmed).toBeGreaterThanOrEqual(2);
+
+    const lines = await stmtLines();
+    const alpha = lines.find((l) => l.description === "Sale to Alpha")!;
+    const orphan = lines.find((l) => l.description === "Nothing in the books")!;
+    expect(alpha.matchStatus).toBe("matched");
+    expect(orphan.matchStatus).toBe("unmatched");
+
+    const ws = await A.getReconciliationWorkspace(bankId);
+    const shown = ws.statementLines.find((l) => l.id === alpha.id)!;
+    expect(ws.matches[shown.matchId!]).toEqual([{ date: "2026-11-03", text: "Sale to Alpha", amount: 1234.5 }]);
+
+    // nothing exact is left to confirm, so asking again confirms nothing and breaks nothing
+    expect(await A.confirmExactMatches(bankId)).toEqual({ confirmed: 0, skipped: 0 });
+  }, 150_000);
+});
