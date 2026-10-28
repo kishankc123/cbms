@@ -81,6 +81,70 @@ export async function listBankAccounts() {
     .orderBy(asc(bankAccounts.accountName));
 }
 
+export type AccountOverview = {
+  id: string;
+  label: string;
+  accountNumber: string | null;
+  currency: string;
+  /** "bank" for an account under Bank, "wallet" for the rest of Cash (e-wallets and the like). */
+  kind: "bank" | "wallet";
+  statementBalance: number;
+  ledgerBalance: number;
+  difference: number;
+  /** Statement lines still to be matched. */
+  unreconciled: number;
+  /** The date of the latest statement line, or null when no statement has been imported. */
+  updatedUpTo: string | null;
+};
+
+/** Every active bank and wallet account with where its reconciliation stands, for the Home screen. */
+export async function getReconciliationOverview(): Promise<AccountOverview[]> {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
+  const accountList = (await listBankAccounts()).filter((b) => b.isActive);
+  if (accountList.length === 0) return [];
+
+  const [statement, ledger] = await Promise.all([
+    db
+      .select({
+        id: bankStatementLines.bankAccountId,
+        total: sql<string>`coalesce(sum(${bankStatementLines.amount}), 0)`,
+        unreconciled: sql<number>`count(*) filter (where ${bankStatementLines.matchStatus} <> 'matched')`,
+        latest: sql<string | null>`max(${bankStatementLines.transactionDate})`,
+      })
+      .from(bankStatementLines)
+      .where(and(eq(bankStatementLines.tenantId, session.tenantId), inArray(bankStatementLines.bankAccountId, accountList.map((b) => b.id))))
+      .groupBy(bankStatementLines.bankAccountId),
+    // The account's balance counts every posting, reversed ones and their reversals included: they cancel out.
+    db
+      .select({ id: journalLines.accountId, net: sql<string>`coalesce(sum(${journalLines.debitAmount} - ${journalLines.creditAmount}), 0)` })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+      .where(and(eq(journalEntries.tenantId, session.tenantId), inArray(journalLines.accountId, accountList.map((b) => b.chartOfAccountsLink))))
+      .groupBy(journalLines.accountId),
+  ]);
+  const stmt = new Map(statement.map((r) => [r.id, r]));
+  const book = new Map(ledger.map((r) => [r.id, Number(r.net)]));
+
+  return accountList.map((b) => {
+    const s = stmt.get(b.id);
+    const statementBalance = round2(Number(b.openingBalance) + Number(s?.total ?? 0));
+    const ledgerBalance = round2(book.get(b.chartOfAccountsLink) ?? 0);
+    return {
+      id: b.id,
+      label: `${b.bankName && b.bankName !== b.accountName ? b.bankName + " — " : ""}${b.accountName}`,
+      accountNumber: b.accountNumber,
+      currency: b.currency,
+      kind: b.ledgerCode.startsWith("1010") ? "bank" : "wallet",
+      statementBalance,
+      ledgerBalance,
+      difference: round2(statementBalance - ledgerBalance),
+      unreconciled: Number(s?.unreconciled ?? 0),
+      updatedUpTo: s?.latest ?? null,
+    };
+  });
+}
+
 export type BankAccountInput = {
   bankName: string;
   accountName: string;

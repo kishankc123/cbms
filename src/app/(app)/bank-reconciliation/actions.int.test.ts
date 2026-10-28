@@ -173,3 +173,21 @@ describe("marking a period reconciled", () => {
     await expect(A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-20,Late,9"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" })).rejects.toThrow(/already reconciled/);
   });
 });
+
+describe("the Home overview of bank accounts", () => {
+  it("gives each account the same balances and counts as its own reconciliation screen, and only this organization's accounts", async () => {
+    const overview = await A.getReconciliationOverview();
+    const mine = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.tenantId, org.tenantId));
+    expect(overview.length).toBeGreaterThan(0);
+    expect(overview.every((a) => mine.some((m) => m.id === a.id))).toBe(true);
+    for (const a of overview) {
+      const ws = await A.getReconciliationWorkspace(a.id);
+      expect(a.statementBalance).toBe(ws.statementBalance);
+      expect(a.ledgerBalance).toBe(ws.ledgerBalance);
+      expect(a.difference).toBe(ws.difference);
+      expect(a.unreconciled).toBe(ws.statementLines.filter((l) => l.matchStatus !== "matched").length);
+      expect(a.updatedUpTo).toBe(ws.statementLines.length ? ws.statementLines.map((l) => l.transactionDate).sort().pop() : null);
+      expect(a.kind).toBe("bank");
+    }
+  }, 120_000);
+});

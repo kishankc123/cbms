@@ -100,8 +100,9 @@ const NAV = [
     href: "/bank-reconciliation",
     label: "Bank Reconciliation",
     children: [
-      { href: "/bank-reconciliation", label: "Reconciliation" },
-      { href: "/bank-reconciliation/setup", label: "Bank Accounts" },
+      { href: "/bank-reconciliation", label: "Home" },
+      { href: "/bank-reconciliation/setup", label: "Link bank account" },
+      { href: "/reports/bank-reconciliation-report", label: "Reports" },
     ],
   },
   {

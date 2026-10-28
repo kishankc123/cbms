@@ -233,20 +233,20 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Bank Account:</label>
-          <select
-            value={bankAccountId}
-            onChange={(e) => setBankAccountId(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          >
-            {bankAccounts.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {bankAccounts.length > 1 ? (
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Bank Account:</label>
+            <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           onClick={() => setShowUpload(true)}
