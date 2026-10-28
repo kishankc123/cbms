@@ -2,12 +2,14 @@
 
 import { nextEmployeeCode } from "@/lib/payroll/employee-code";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
   employees,
   salaryHistory,
+  payrollLines,
+  payrollRuns,
   employeeBenefits,
   auditLog,
   type employmentTypeEnum,
@@ -212,11 +214,17 @@ export type SalaryChangeInput = {
   effectiveFrom: string;
   reason: string;
   notes: string;
+  /**
+   * Correct the salary already recorded from the same date instead of refusing. Allowed only while no finalized payroll
+   * has used it; the correction is kept in the audit log.
+   */
+  replaceSameDate?: boolean;
 };
 
 
 // Never updates an existing salary_history row — every change is a new,
-// immutable record. previousSalary is captured on the row itself so the
+// immutable record. The one exception is correcting the salary recorded from the same date (a typo caught
+// straight away), which is refused once a finalized payroll has used it and is always kept in the audit log. previousSalary is captured on the row itself so the
 // change is self-describing even if earlier rows are later viewed out of
 // order.
 export async function addSalaryChange(input: SalaryChangeInput) {
@@ -233,6 +241,49 @@ export async function addSalaryChange(input: SalaryChangeInput) {
     .where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId)))
     .limit(1);
   if (!employee) throw new Error("Employee not found");
+
+  const [same] = await db
+    .select()
+    .from(salaryHistory)
+    .where(and(eq(salaryHistory.tenantId, session.tenantId), eq(salaryHistory.employeeId, input.employeeId), eq(salaryHistory.effectiveFrom, input.effectiveFrom)))
+    .limit(1);
+  if (same) {
+    if (!input.replaceSameDate) throw new Error(`A salary is already recorded from ${input.effectiveFrom}. Choose a later date, or correct that salary.`);
+    const [paid] = await db
+      .select({ id: payrollLines.id })
+      .from(payrollLines)
+      .innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.payrollRunId))
+      .where(and(eq(payrollLines.tenantId, session.tenantId), eq(payrollLines.employeeId, input.employeeId), eq(payrollRuns.status, "finalized"), gte(payrollRuns.periodEnd, input.effectiveFrom)))
+      .limit(1);
+    if (paid) throw new Error("Payroll has already been finalized from that date, so that salary can't be corrected. Record a change from a later date instead.");
+    const before = Number(same.basicSalary);
+    const base = same.previousSalary === null ? 0 : Number(same.previousSalary);
+    const corrected = computeNewSalary(base, input.changeType, input.changeValue, input.newFixedSalary);
+    if (corrected <= 0) throw new Error("The resulting salary must be greater than zero");
+    const amount = same.previousSalary === null ? null : round2(corrected - base);
+    await db
+      .update(salaryHistory)
+      .set({
+        basicSalary: corrected.toFixed(2),
+        changeType: same.changeType === "initial" ? "initial" : input.changeType,
+        changeAmount: amount === null ? null : amount.toFixed(2),
+        changePercentage: amount !== null && base > 0 ? round2((amount / base) * 100).toFixed(2) : null,
+        reason: input.reason.trim(),
+        notes: input.notes.trim() || null,
+      })
+      .where(and(eq(salaryHistory.id, same.id), eq(salaryHistory.tenantId, session.tenantId)));
+    await db.insert(auditLog).values({
+      tenantId: session.tenantId,
+      userId: session.userId,
+      action: "salary_corrected",
+      entityType: "employee",
+      entityId: input.employeeId,
+      beforeValue: { basicSalary: before, effectiveFrom: input.effectiveFrom },
+      afterValue: { basicSalary: corrected, effectiveFrom: input.effectiveFrom, reason: input.reason.trim(), salaryHistoryId: same.id },
+    });
+    revalidatePath(`/payroll/employees/${input.employeeId}`);
+    return;
+  }
 
   const previousSalary = (await getCurrentSalary(session.tenantId, input.employeeId)) ?? 0;
   const newSalary = computeNewSalary(previousSalary, input.changeType, input.changeValue, input.newFixedSalary);

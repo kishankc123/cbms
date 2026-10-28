@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, accountingPeriods, employees, journalEntries, payrollLines, payrollRuns } from "@/db/schema";
+import { accounts, accountingPeriods, auditLog, employees, journalEntries, payrollLines, payrollRuns, salaryHistory } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createPayment, voidPayment } from "@/lib/ledger/payments-engine";
 import { getEmployeePayableBalance, activePayrollEntries } from "@/lib/payroll/accrual";
@@ -14,7 +14,8 @@ vi.mock("@/lib/session", () => ({
   can: () => true,
 }));
 
-const { createEmployee, updateEmployee } = await import("./employees/actions");
+const { createEmployee, updateEmployee, addSalaryChange } = await import("./employees/actions");
+const { getSalaryAsOf } = await import("@/lib/payroll/salary");
 const { setAttendance } = await import("./employees/attendance-actions");
 const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun, revertRunToDraft } = await import("./salary-sheet/actions");
 
@@ -171,4 +172,50 @@ describe("employment window", () => {
     expect(joiner).toBeGreaterThan(0);
     expect(joiner).toBeLessThan(full);
   });
+});
+
+describe("changing an employee's basic salary", () => {
+  let employeeId: string;
+  const change = (over: Partial<Parameters<typeof addSalaryChange>[0]>) =>
+    addSalaryChange({ employeeId, changeType: "new_fixed", changeValue: 0, newFixedSalary: 25000, effectiveFrom: "2026-03-01", reason: "Increment", notes: "", ...over });
+  const rows = () => db.select().from(salaryHistory).where(and(eq(salaryHistory.tenantId, org.tenantId), eq(salaryHistory.employeeId, employeeId)));
+
+  beforeAll(async () => {
+    await createEmployee(empInput("SAL-1", "Salary Test", { joiningDate: "2026-02-01", initialSalary: 20000 }));
+    employeeId = (await findEmployee("SAL-1")).id;
+  });
+
+  it("a new salary from a later date is a new entry, and earlier months keep the old salary", async () => {
+    await change({});
+    expect(await getSalaryAsOf(org.tenantId, employeeId, "2026-03-05")).toBe(25000);
+    expect(await getSalaryAsOf(org.tenantId, employeeId, "2026-02-15")).toBe(20000);
+    expect((await rows()).length).toBe(2);
+  });
+
+  it("won't add a second salary on a date that already has one, unless it is a correction", async () => {
+    await expect(change({ newFixedSalary: 26000 })).rejects.toThrow(/already recorded from 2026-03-01/);
+    expect((await rows()).length).toBe(2);
+    await change({ newFixedSalary: 26000, replaceSameDate: true, reason: "Correction" });
+    expect(await getSalaryAsOf(org.tenantId, employeeId, "2026-03-05")).toBe(26000);
+    expect((await rows()).length).toBe(2); // corrected in place, not a third entry
+    const logged = await db.select().from(auditLog).where(and(eq(auditLog.entityId, employeeId), eq(auditLog.action, "salary_corrected")));
+    expect(logged).toHaveLength(1);
+    expect(logged[0].beforeValue).toMatchObject({ basicSalary: 25000 });
+    expect(logged[0].afterValue).toMatchObject({ basicSalary: 26000, reason: "Correction" });
+  });
+
+  it("the first salary can be corrected too, and stays the first salary", async () => {
+    await change({ effectiveFrom: "2026-02-01", newFixedSalary: 21000, replaceSameDate: true, reason: "Typing mistake" });
+    expect(await getSalaryAsOf(org.tenantId, employeeId, "2026-02-15")).toBe(21000);
+    expect((await rows()).find((r) => r.effectiveFrom === "2026-02-01")!.changeType).toBe("initial");
+  });
+
+  it("refuses a correction once payroll has been finalized from that date, and a salary of zero", async () => {
+    const run = await generatePayrollRun({ month: 3, year: 2026, calendar: "AD", employeeIds: [employeeId] });
+    await finalize(run);
+    await expect(change({ effectiveFrom: "2026-03-01", newFixedSalary: 27000, replaceSameDate: true })).rejects.toThrow(/already been finalized/);
+    expect(await getSalaryAsOf(org.tenantId, employeeId, "2026-03-05")).toBe(26000);
+    await expect(change({ effectiveFrom: "2026-05-01", newFixedSalary: 0 })).rejects.toThrow(/greater than zero/);
+    await expect(change({ effectiveFrom: "2026-05-01", reason: "  " })).rejects.toThrow(/Reason is required/);
+  }, 150_000);
 });
