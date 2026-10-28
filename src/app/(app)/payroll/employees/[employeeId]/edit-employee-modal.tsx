@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
-import { updateEmployee } from "../actions";
+import { addSalaryChange, updateEmployee } from "../actions";
+import { todayIso } from "@/lib/calendar";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 const EMPLOYMENT_TYPES = [
@@ -38,7 +39,11 @@ type Employee = {
   bankAccountNumber: string | null;
 };
 
-export function EditEmployeeModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+/**
+ * `currentSalary` is null for someone who may not see salaries, so the basic salary field is not shown. `salaryDates` are the dates a
+ * salary is already recorded from: changing the amount on one of those dates corrects that salary instead of adding a new one.
+ */
+export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClose }: { employee: Employee; currentSalary: number | null; salaryDates: string[]; onClose: () => void }) {
   const router = useRouter();
   const [employeeCode, setEmployeeCode] = useState(employee.employeeCode);
   const [fullName, setFullName] = useState(employee.fullName);
@@ -56,7 +61,13 @@ export function EditEmployeeModal({ employee, onClose }: { employee: Employee; o
   );
   const [bankName, setBankName] = useState(employee.bankName ?? "");
   const [bankAccountNumber, setBankAccountNumber] = useState(employee.bankAccountNumber ?? "");
+  const [basicSalary, setBasicSalary] = useState(currentSalary === null ? "" : currentSalary.toFixed(2));
+  const [effectiveFrom, setEffectiveFrom] = useState(todayIso());
+  const [salaryReason, setSalaryReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const newSalary = parseFloat(basicSalary);
+  const salaryChanged = currentSalary !== null && Number.isFinite(newSalary) && Math.abs(newSalary - currentSalary) >= 0.005;
+  const replacing = salaryChanged && salaryDates.includes(effectiveFrom);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
 
@@ -71,6 +82,18 @@ export function EditEmployeeModal({ employee, onClose }: { employee: Employee; o
   async function handleSave() {
     if (!employeeCode.trim() || !fullName.trim()) {
       report("Employee ID and full name are required.", null);
+      return;
+    }
+    if (currentSalary !== null && !(newSalary > 0)) {
+      report("Enter a basic salary greater than zero.", null);
+      return;
+    }
+    if (salaryChanged && !effectiveFrom) {
+      report("Choose the date the new salary starts from.", null);
+      return;
+    }
+    if (salaryChanged && !salaryReason.trim()) {
+      report("Say why the salary is changing, for example Increment or Correction.", null);
       return;
     }
     setSaving(true);
@@ -92,6 +115,9 @@ export function EditEmployeeModal({ employee, onClose }: { employee: Employee; o
         bankName,
         bankAccountNumber,
       });
+      if (salaryChanged) {
+        await addSalaryChange({ employeeId: employee.id, changeType: "new_fixed", changeValue: 0, newFixedSalary: newSalary, effectiveFrom, reason: salaryReason, notes: "", replaceSameDate: replacing });
+      }
       router.refresh();
       onClose();
     } catch (e) {
@@ -182,6 +208,35 @@ export function EditEmployeeModal({ employee, onClose }: { employee: Employee; o
             <label className="block text-xs text-gray-500 mb-1">Bank Account Number</label>
             <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
+          {currentSalary !== null && (
+            <div className="col-span-2 space-y-3 rounded border border-gray-200 p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Basic Salary</label>
+                  <input type="number" min="0" step="0.01" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                </div>
+                {salaryChanged && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">New salary starts from</label>
+                    <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                  </div>
+                )}
+              </div>
+              {salaryChanged && (
+                <>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
+                    <input value={salaryReason} onChange={(e) => setSalaryReason(e.target.value)} placeholder="For example Increment, or Correction of a typing mistake" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {replacing
+                      ? `This corrects the salary already recorded from ${effectiveFrom}. It is allowed until payroll has been finalized from that date, and the correction is kept in the audit log.`
+                      : "Saved in Salary History from that date. Earlier months keep the salary they were paid at."}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

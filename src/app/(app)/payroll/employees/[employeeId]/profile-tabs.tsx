@@ -51,7 +51,7 @@ export function ProfileTabs(props: {
         ))}
       </div>
 
-      {tab === "profile" && <ProfilePanel employee={props.employee} currentSalary={props.currentSalary} />}
+      {tab === "profile" && <ProfilePanel employee={props.employee} currentSalary={props.currentSalary} salaryDates={props.salaryRecords.map((r) => r.effectiveFrom)} />}
       {tab === "salary" && props.currentSalary !== null && (
         <SalaryHistoryPanel employeeId={props.employee.id} currentSalary={props.currentSalary} records={props.salaryRecords} />
       )}
