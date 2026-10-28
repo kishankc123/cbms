@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, bankAccounts, bankReconciliations, bankStatementLines, journalEntries, journalLines } from "@/db/schema";
+import { accounts, auditLog, bankAccounts, bankReconciliations, bankStatementLines, journalEntries, journalLines } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -125,9 +125,9 @@ describe("matching", () => {
   it("can't create a transaction against the bank account itself", async () => {
     await importRows(["2026-09-04,Interest,7"]);
     const line = (await stmtLines()).find((l) => l.description === "Interest")!;
-    await expect(A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, type: "other", description: "Interest", offsetAccountId: bankLedgerId })).rejects.toThrow(/bank account itself/);
+    await expect(A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "Interest", splits: [{ offsetAccountId: bankLedgerId, amount: 7 }] })).rejects.toThrow(/bank account itself/);
     const before = (await db.select().from(journalEntries).where(eq(journalEntries.tenantId, org.tenantId))).length;
-    await A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, type: "other", description: "Interest", offsetAccountId: salesId });
+    await A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "Interest", splits: [{ offsetAccountId: salesId, amount: 7 }] });
     expect((await db.select().from(journalEntries).where(eq(journalEntries.tenantId, org.tenantId))).length).toBe(before + 1);
     expect((await stmtLines()).find((l) => l.id === line.id)!.matchStatus).toBe("matched");
   });
@@ -171,5 +171,158 @@ describe("marking a period reconciled", () => {
     await expect(assertNoLaterPayments(org.tenantId, "sales_invoice", "00000000-0000-0000-0000-0000000000aa", "invoice")).rejects.toThrow(/unmatch it/);
     // and a new statement can't add transactions inside it
     await expect(A.confirmStatementImport({ bankAccountId: b2.id, fileName: "s.csv", base64: csv(["2026-08-20,Late,9"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" })).rejects.toThrow(/already reconciled/);
+  });
+});
+
+describe("the Home overview of bank accounts", () => {
+  it("gives each account the same balances and counts as its own reconciliation screen, and only this organization's accounts", async () => {
+    const overview = await A.getReconciliationOverview();
+    const mine = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.tenantId, org.tenantId));
+    expect(overview.length).toBeGreaterThan(0);
+    expect(overview.every((a) => mine.some((m) => m.id === a.id))).toBe(true);
+    for (const a of overview) {
+      const ws = await A.getReconciliationWorkspace(a.id);
+      expect(a.statementBalance).toBe(ws.statementBalance);
+      expect(a.ledgerBalance).toBe(ws.ledgerBalance);
+      expect(a.difference).toBe(ws.difference);
+      expect(a.unreconciled).toBe(ws.statementLines.filter((l) => l.matchStatus !== "matched").length);
+      expect(a.updatedUpTo).toBe(ws.statementLines.length ? ws.statementLines.map((l) => l.transactionDate).sort().pop() : null);
+      expect(a.kind).toBe("bank");
+    }
+  }, 120_000);
+});
+
+describe("the single list: OK all, and what a match was made to", () => {
+  const refCsv = (rows: string[]) => Buffer.from(["Date,Description,Amount,Reference", ...rows].join("\n")).toString("base64");
+  const post = async (date: string, amount: number, referenceNumber: string, memo: string) => {
+    const entry = await postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "manual", createdBy: org.userId, referenceNumber, memo, lines: [{ accountId: bankLedgerId, debitAmount: amount }, { accountId: salesId, creditAmount: amount }] });
+    return (await db.select().from(journalLines).where(and(eq(journalLines.journalEntryId, entry.id), eq(journalLines.accountId, bankLedgerId))))[0];
+  };
+
+  it("confirms only the exact suggestions, leaves the rest, and shows each confirmed bank line what it was matched to", async () => {
+    // two exact matches (same amount, same day, same reference, same words) and one bank line with nothing in the books
+    await post("2026-11-03", 1234.5, "REF-OKA", "Sale to Alpha");
+    await post("2026-11-03", 2345.5, "REF-OKB", "Sale to Beta");
+    await A.confirmStatementImport({
+      bankAccountId: bankId,
+      fileName: "ok-all.csv",
+      base64: refCsv(["2026-11-03,Sale to Alpha,1234.50,REF-OKA", "2026-11-03,Sale to Beta,2345.50,REF-OKB", "2026-11-03,Nothing in the books,99.99,"]),
+      mapping: { date: "Date", description: "Description", amount: "Amount", reference: "Reference" },
+      saveAsTemplateName: "",
+    });
+
+    const result = await A.confirmExactMatches(bankId);
+    expect(result.confirmed).toBeGreaterThanOrEqual(2);
+
+    const lines = await stmtLines();
+    const alpha = lines.find((l) => l.description === "Sale to Alpha")!;
+    const orphan = lines.find((l) => l.description === "Nothing in the books")!;
+    expect(alpha.matchStatus).toBe("matched");
+    expect(orphan.matchStatus).toBe("unmatched");
+
+    const ws = await A.getReconciliationWorkspace(bankId);
+    const shown = ws.statementLines.find((l) => l.id === alpha.id)!;
+    expect(ws.matches[shown.matchId!]).toEqual([{ date: "2026-11-03", text: "Sale to Alpha", amount: 1234.5 }]);
+
+    // nothing exact is left to confirm, so asking again confirms nothing and breaks nothing
+    expect(await A.confirmExactMatches(bankId)).toEqual({ confirmed: 0, skipped: 0 });
+  }, 150_000);
+});
+
+describe("creating a transaction from a bank line: split, comment, and only the difference", () => {
+  const csvOf = (rows: string[]) => Buffer.from(["Date,Description,Amount", ...rows].join("\n")).toString("base64");
+  const bring = async (rows: string[]) =>
+    A.confirmStatementImport({ bankAccountId: bankId, fileName: "t.csv", base64: csvOf(rows), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" });
+  const lineOf = async (description: string) => (await stmtLines()).find((l) => l.description === description)!;
+  let otherIncomeId: string;
+  let miscExpenseId: string;
+  const linesOfEntry = async (memo: string) => {
+    const [entry] = await db.select().from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.memo, memo)));
+    return db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
+  };
+
+  beforeAll(async () => {
+    otherIncomeId = (await acct(org.tenantId, "4100")).id;
+    miscExpenseId = (await acct(org.tenantId, "5900")).id;
+  });
+
+  it("splits one bank line over several accounts, with a comment, and matches it", async () => {
+    await bring(["2026-12-01,Mixed deposit,100"]);
+    const line = await lineOf("Mixed deposit");
+    await A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "Shop sales and a refund", splits: [{ offsetAccountId: salesId, amount: 60 }, { offsetAccountId: otherIncomeId, amount: 40 }] });
+    expect((await lineOf("Mixed deposit")).matchStatus).toBe("matched");
+    const posted = await linesOfEntry("Shop sales and a refund");
+    expect(posted).toHaveLength(3);
+    expect(posted.filter((l) => l.accountId === bankLedgerId).map((l) => Number(l.debitAmount))).toEqual([100]);
+    expect(posted.filter((l) => l.accountId === salesId).map((l) => Number(l.creditAmount))).toEqual([60]);
+    expect(posted.filter((l) => l.accountId === otherIncomeId).map((l) => Number(l.creditAmount))).toEqual([40]);
+  });
+
+  it("refuses amounts that don't add up, with the numbers in the message", async () => {
+    await bring(["2026-12-02,Short split,100"]);
+    const line = await lineOf("Short split");
+    await expect(A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "x", splits: [{ offsetAccountId: salesId, amount: 60 }] })).rejects.toThrow(/add up to 60.00, but this transaction is for 100.00/);
+    await expect(A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "x", splits: [] })).rejects.toThrow(/Select the account/);
+    expect((await lineOf("Short split")).matchStatus).toBe("unmatched");
+  });
+
+  it("records only the difference when entries already cover part of the line, and matches everything together", async () => {
+    // a deposit of 1,490: two receipts of 700 and 800 are in the books, and the bank kept a 10 fee
+    const r1 = await dr("2026-12-03", 700, crypto.randomUUID());
+    const r2 = await dr("2026-12-03", 800, crypto.randomUUID());
+    await bring(["2026-12-03,Deposit less fee,1490"]);
+    const line = await lineOf("Deposit less fee");
+    await A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "Bank fee on deposit", alongsideJournalLineIds: [r1.id, r2.id], splits: [{ offsetAccountId: miscExpenseId, amount: 10 }] });
+    // the new entry is the 10 fee going out of the bank (the deposit is 10 short of the receipts)
+    const fee = await linesOfEntry("Bank fee on deposit");
+    expect(fee.filter((l) => l.accountId === bankLedgerId).map((l) => Number(l.creditAmount))).toEqual([10]);
+    expect(fee.filter((l) => l.accountId === miscExpenseId).map((l) => Number(l.debitAmount))).toEqual([10]);
+    expect((await lineOf("Deposit less fee")).matchStatus).toBe("matched");
+  });
+
+  it("refuses to record a difference when the chosen entries already cover the whole line", async () => {
+    const r = await dr("2026-12-04", 55, crypto.randomUUID());
+    await bring(["2026-12-04,Exactly covered,55"]);
+    const line = await lineOf("Exactly covered");
+    await expect(A.createBankTransaction({ statementLineId: line.id, bankAccountId: bankId, comment: "x", alongsideJournalLineIds: [r.id], splits: [{ offsetAccountId: salesId, amount: 1 }] })).rejects.toThrow(/already add up to the whole bank amount/);
+  });
+
+  it("offers each account with where it sits, and marks a heading that has sub-accounts", async () => {
+    const options = await A.getOffsetAccountOptions();
+    const bankGroup = options.find((o) => o.code === "1010")!;
+    expect(bankGroup.hasChildren).toBe(true); // the test bank is a sub-account of the Bank group
+    expect(options.find((o) => o.code === "4100")).toMatchObject({ category: "income", subCategory: "Revenue", hasChildren: false });
+  });
+});
+
+describe("flagging a bank line for review", () => {
+  const csvOf = (rows: string[]) => Buffer.from(["Date,Description,Amount", ...rows].join("\n")).toString("base64");
+
+  it("flags with a note, shows it on the line and the Home count, and takes it off again", async () => {
+    await A.confirmStatementImport({ bankAccountId: bankId, fileName: "flag.csv", base64: csvOf(["2027-01-05,Looks odd,321.09"]), mapping: { date: "Date", description: "Description", amount: "Amount" }, saveAsTemplateName: "" });
+    const line = (await stmtLines()).find((l) => l.description === "Looks odd")!;
+    const flaggedNow = async () => (await A.getReconciliationWorkspace(bankId)).statementLines.find((l) => l.id === line.id)!;
+    const homeCount = async () => (await A.getReconciliationOverview()).find((a) => a.id === bankId)!.flagged;
+    expect(await flaggedNow()).toMatchObject({ flagged: false, flagNote: null });
+    const before = await homeCount();
+
+    await A.setLineFlag({ statementLineId: line.id, flagged: true, note: "  Customer says this was not theirs  " });
+    expect(await flaggedNow()).toMatchObject({ flagged: true, flagNote: "Customer says this was not theirs" });
+    expect(await homeCount()).toBe(before + 1);
+    expect((await db.select().from(auditLog).where(and(eq(auditLog.entityId, line.id), eq(auditLog.action, "bank_line_flagged")))).length).toBe(1);
+
+    // flagging changes nothing about matching or the books
+    expect((await stmtLines()).find((l) => l.id === line.id)!.matchStatus).toBe("unmatched");
+
+    await A.setLineFlag({ statementLineId: line.id, flagged: false });
+    expect(await flaggedNow()).toMatchObject({ flagged: false, flagNote: null });
+    expect(await homeCount()).toBe(before);
+    expect((await db.select().from(auditLog).where(and(eq(auditLog.entityId, line.id), eq(auditLog.action, "bank_line_unflagged")))).length).toBe(1);
+  }, 150_000);
+
+  it("refuses a note that is too long, and a line that isn't there", async () => {
+    const line = (await stmtLines()).find((l) => l.description === "Looks odd")!;
+    await expect(A.setLineFlag({ statementLineId: line.id, flagged: true, note: "x".repeat(301) })).rejects.toThrow(/under 300 characters/);
+    await expect(A.setLineFlag({ statementLineId: "00000000-0000-0000-0000-000000000000", flagged: true })).rejects.toThrow(/not found/);
   });
 });

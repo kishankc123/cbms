@@ -5,68 +5,83 @@ import {
   getReconciliationWorkspace,
   getSuggestedMatchesForAccount,
   confirmMatch,
+  confirmExactMatches,
   unmatch,
   markReconciled,
   previewReconciliation,
   reopenReconciliation,
   listReconciliationHistory,
+  type MatchedEntry,
   type StatementLineRow,
   type UnmatchedLedgerRow,
 } from "./actions";
 import type { MatchCandidate } from "@/lib/banking/matching";
 import { UploadStatementModal } from "./upload-statement-modal";
-import { CreateBankTransactionModal } from "./create-bank-transaction-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
+import { LinePanel } from "./line-panel";
+import type { AccountOption } from "./account-picker";
+import { NewPaymentModal } from "../payments/new-payment-modal";
+import { getPaymentFormOptions } from "../payments/actions";
+import { COMBINATION_WINDOW_DAYS, findCombination } from "@/lib/banking/combinations";
+import { DifferencePanel } from "./difference-panel";
+import { FlagDialog, FlagIcon } from "./flag-dialog";
 
 import { todayIso } from "@/lib/calendar";
 import { DatePicker } from "@/components/calendar/date-picker";
-import { ConfirmDialog } from "../sales/confirm-dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { StatusPill } from "@/components/ui/status-pill";
 import { useProblem } from "@/components/problem-dialog";
 import { D, DT } from "@/components/calendar/date-text";
 type BankAccountOption = { id: string; label: string };
-type OffsetAccount = { id: string; code: string; name: string; category: string };
+type PaymentOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 type Workspace = Awaited<ReturnType<typeof getReconciliationWorkspace>>;
 type Reconciliation = Awaited<ReturnType<typeof listReconciliationHistory>>[number];
 
-const TABS = ["all", "matched", "suggested", "unmatched_bank", "unmatched_ledger", "exceptions"] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = {
-  all: "All",
-  matched: "Matched",
-  suggested: "Suggested Matches",
-  unmatched_bank: "Unmatched Bank",
-  unmatched_ledger: "Unmatched Ledger",
-  exceptions: "Exceptions",
+// What each bank line is waiting for: nothing (matched), your OK (an exact or a likely match found), or a transaction to be found or created.
+type State = "matched" | "exact" | "likely" | "none";
+type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null; combo: UnmatchedLedgerRow[] };
+type Filter = "todo" | "matched" | "flagged" | "all";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "todo", label: "To do" },
+  { key: "matched", label: "Matched" },
+  { key: "flagged", label: "Flagged" },
+  { key: "all", label: "All" },
+];
+
+// Green: an exact match (or already matched). Amber: a likely match that needs your OK. Red: nothing found.
+const TONE: Record<State, string> = {
+  matched: "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-text)]",
+  exact: "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-text)]",
+  likely: "border-[var(--status-action-border)] bg-[var(--status-action-bg)] text-[var(--status-action-text)]",
+  none: "border-[var(--status-critical-border)] bg-[var(--status-critical-bg)] text-[var(--status-critical-text)]",
 };
 
-const EXCEPTION_DAYS = 15;
+const OLD_AFTER_DAYS = 15;
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: "bad" | "good" }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${tone === "bad" ? "text-red-600" : tone === "good" ? "text-green-600" : "text-gray-900"}`}>{value}</p>
-    </div>
-  );
+function differenceText(difference: number, hasStatement: boolean) {
+  if (!hasStatement) return "Upload a statement to compare it with your books.";
+  if (Math.abs(difference) < 0.005) return "The bank balance matches your books.";
+  return difference > 0 ? "The bank balance is higher than your books." : "The bank balance is lower than your books.";
 }
 
-export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bankAccounts: BankAccountOption[]; offsetAccounts: OffsetAccount[] }) {
+export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bankAccounts: BankAccountOption[]; offsetAccounts: AccountOption[] }) {
+  const ask = useConfirm();
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, MatchCandidate>>({});
   const [history, setHistory] = useState<Reconciliation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("all");
+  const [filter, setFilter] = useState<Filter>("todo");
   const [showUpload, setShowUpload] = useState(false);
-  const [creatingForLine, setCreatingForLine] = useState<StatementLineRow | null>(null);
+  const [findingFor, setFindingFor] = useState<StatementLineRow | null>(null);
+  const [recording, setRecording] = useState<{ line: StatementLineRow; options: PaymentOptions } | null>(null);
   const [classifyingLine, setClassifyingLine] = useState<UnmatchedLedgerRow | null>(null);
-  const [selectedBankLines, setSelectedBankLines] = useState<Set<string>>(new Set());
-  const [selectedLedgerLines, setSelectedLedgerLines] = useState<Set<string>>(new Set());
+  const [showDifference, setShowDifference] = useState(false);
+  const [flagging, setFlagging] = useState<StatementLineRow | null>(null);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
   const [reconcileEnd, setReconcileEnd] = useState(todayIso());
-  const [confirmReconcile, setConfirmReconcile] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showReopen, setShowReopen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
@@ -77,16 +92,10 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
     if (!bankAccountId) return;
     setLoading(true);
     try {
-      const [ws, sugg, hist] = await Promise.all([
-        getReconciliationWorkspace(bankAccountId),
-        getSuggestedMatchesForAccount(bankAccountId),
-        listReconciliationHistory(bankAccountId),
-      ]);
+      const [ws, sugg, hist] = await Promise.all([getReconciliationWorkspace(bankAccountId), getSuggestedMatchesForAccount(bankAccountId), listReconciliationHistory(bankAccountId)]);
       setWorkspace(ws);
       setSuggestions(sugg);
       setHistory(hist);
-      setSelectedBankLines(new Set());
-      setSelectedLedgerLines(new Set());
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to load", null);
     } finally {
@@ -99,67 +108,50 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankAccountId]);
 
-  function toggleBankLine(id: string) {
-    setSelectedBankLines((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-  function toggleLedgerLine(id: string) {
-    setSelectedLedgerLines((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function handleConfirmSuggested(line: StatementLineRow, candidate: MatchCandidate) {
+  // Runs one change, then reloads the list; a refusal is shown as a plain message.
+  async function run(job: () => Promise<unknown>, failure: string) {
     setBusy(true);
     try {
-      await confirmMatch({
-        bankAccountId,
-        statementLineIds: [line.id],
-        journalLineIds: [candidate.journalLineId],
-        matchType: candidate.tier,
-        confidence: candidate.score,
-      });
+      await job();
       await load();
     } catch (e) {
-      report(e instanceof Error ? e.message : "Failed to confirm match", null);
+      report(e instanceof Error ? e.message : failure, null);
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleUnmatch(matchId: string | null) {
-    if (!matchId) return;
-    setBusy(true);
+  const confirmSuggested = (line: StatementLineRow, c: MatchCandidate) =>
+    run(() => confirmMatch({ bankAccountId, statementLineIds: [line.id], journalLineIds: [c.journalLineId], matchType: c.tier, confidence: c.score }), "Failed to confirm the match");
+
+  const confirmCombination = (line: StatementLineRow, entries: UnmatchedLedgerRow[]) =>
+    run(() => confirmMatch({ bankAccountId, statementLineIds: [line.id], journalLineIds: entries.map((e) => e.journalLineId), matchType: "suggested" }), "Failed to confirm the match");
+
+  // The receipt or payment form from Payments, filled in from the bank line, for money from a customer or to a supplier.
+  async function recordPayment(line: StatementLineRow) {
+    setFindingFor(null);
     try {
-      await unmatch(matchId);
-      await load();
+      setRecording({ line, options: await getPaymentFormOptions() });
     } catch (e) {
-      report(e instanceof Error ? e.message : "Failed to unmatch", null);
-    } finally {
-      setBusy(false);
+      report(e instanceof Error ? e.message : "The payments form couldn't be opened.", null);
     }
   }
 
-  async function handleManualMatch() {
-    if (selectedBankLines.size === 0 || selectedLedgerLines.size === 0) return;
+  async function unmatchLine(line: StatementLineRow) {
+    if (!line.matchId) return;
+    if (!(await ask("Undo this match? The bank line and the book entry go back to the list.", { confirmLabel: "Undo match", danger: true }))) return;
+    await run(() => unmatch(line.matchId!), "Failed to undo the match");
+  }
+
+  async function okAll(count: number) {
+    if (!(await ask(`Confirm all ${count} exact match${count === 1 ? "" : "es"}? Each has the same amount and a matching entry in your books.`, { confirmLabel: "OK all" }))) return;
     setBusy(true);
     try {
-      await confirmMatch({
-        bankAccountId,
-        statementLineIds: [...selectedBankLines],
-        journalLineIds: [...selectedLedgerLines],
-        matchType: "manual",
-      });
+      const r = await confirmExactMatches(bankAccountId);
       await load();
+      if (r.skipped > 0) report(`${r.confirmed} confirmed. ${r.skipped} couldn't be confirmed (for example, they fall in a period that is already reconciled), so they are still in the list.`, null);
     } catch (e) {
-      report(e instanceof Error ? e.message : "Failed to match — check the selected amounts agree", null);
+      report(e instanceof Error ? e.message : "Failed to confirm the matches", null);
     } finally {
       setBusy(false);
     }
@@ -175,22 +167,10 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         return;
       }
       const outstanding = p.unmatchedLedger.length;
-      setConfirmReconcile(
-        `Mark this account reconciled from ${p.periodStart} to ${p.periodEnd}? Statement balance ${fmt(p.statementBalance)}, ledger balance ${fmt(p.ledgerBalance)}${
-          outstanding > 0 ? `, with ${outstanding} explained ledger item(s) not yet on the statement` : ""
-        }. Nothing can be posted to this bank account inside the period afterwards unless it is reopened.`
-      );
-    } catch (e) {
-      report(e instanceof Error ? e.message : "Failed to check the reconciliation", null);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function performMarkReconciled() {
-    setConfirmReconcile(null);
-    setBusy(true);
-    try {
+      const message = `Mark this account reconciled from ${p.periodStart} to ${p.periodEnd}? Statement balance ${fmt(p.statementBalance)}, ledger balance ${fmt(p.ledgerBalance)}${
+        outstanding > 0 ? `, with ${outstanding} explained ledger item(s) not yet on the statement` : ""
+      }. Nothing can be posted to this bank account inside the period afterwards unless it is reopened.`;
+      if (!(await ask(message, { confirmLabel: "Mark reconciled" }))) return;
       await markReconciled({ bankAccountId, periodEnd: reconcileEnd });
       await load();
     } catch (e) {
@@ -201,437 +181,290 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   }
 
   async function handleReopen(reconciliationId: string) {
-    setBusy(true);
-    try {
+    await run(async () => {
       await reopenReconciliation({ reconciliationId, reason: reopenReason });
       setShowReopen(false);
       setReopenReason("");
-      await load();
-    } catch (e) {
-      report(e instanceof Error ? e.message : "Failed to reopen", null);
-    } finally {
-      setBusy(false);
-    }
+    }, "Failed to reopen");
   }
 
-  if (!workspace && loading) return <p className="text-sm text-gray-400">Loading...</p>;
+  if (!workspace && loading) return <p className="text-sm text-[var(--text-secondary)]">Loading...</p>;
   if (!workspace) return null;
 
   const latest = history[0];
   const isLocked = latest?.status === "reconciled";
   const lockedThrough = history.filter((h) => h.status === "reconciled").reduce((m, h) => (h.periodEnd > m ? h.periodEnd : m), "");
   const lockedOn = (date: string) => Boolean(lockedThrough) && date <= lockedThrough;
+  const hasStatement = workspace.statementLines.length > 0;
 
-  const unmatchedBank = workspace.statementLines.filter((l) => l.matchStatus !== "matched");
-  const suggestedRows = unmatchedBank.filter((l) => suggestions[l.id]);
-  const trueUnmatchedBank = unmatchedBank.filter((l) => !suggestions[l.id]);
-  const exceptions = unmatchedBank.filter((l) => {
-    const days = (new Date(today).getTime() - new Date(l.transactionDate).getTime()) / 86400000;
-    return days > EXCEPTION_DAYS;
+  // One bank line can be several payments at once: when no single entry matches, look for entries that add up to it. These are only
+  // ever shown as a likely match; nothing is matched until the person says OK.
+  const combos: Record<string, UnmatchedLedgerRow[]> = {};
+  {
+    const taken = new Set(Object.values(suggestions).map((c) => c.journalLineId));
+    let pool = workspace.unmatchedLedger.filter((l) => !taken.has(l.journalLineId));
+    const window = COMBINATION_WINDOW_DAYS * 86400000;
+    for (const line of workspace.statementLines.filter((l) => l.matchStatus === "unmatched" && !suggestions[l.id]).sort((a, b) => a.transactionDate.localeCompare(b.transactionDate))) {
+      const near = pool.filter((l) => Math.abs(new Date(l.entryDate).getTime() - new Date(line.transactionDate).getTime()) <= window);
+      const ids = findCombination(near.map((l) => ({ id: l.journalLineId, cents: Math.round(l.signedAmount * 100), date: l.entryDate })), Math.round(line.amount * 100), line.transactionDate);
+      if (ids) {
+        combos[line.id] = near.filter((l) => ids.includes(l.journalLineId));
+        pool = pool.filter((l) => !ids.includes(l.journalLineId));
+      }
+    }
+  }
+  const rows: Row[] = workspace.statementLines.map((line) => {
+    if (line.matchStatus !== "unmatched") return { line, state: "matched", entries: workspace.matches[line.matchId ?? ""] ?? [], suggestion: null, combo: [] };
+    const suggestion = suggestions[line.id] ?? null;
+    const combo = combos[line.id] ?? [];
+    return { line, state: suggestion ? (suggestion.tier === "exact" ? "exact" : "likely") : combo.length ? "likely" : "none", entries: [], suggestion, combo };
   });
+  const todo = rows.filter((r) => r.state !== "matched");
+  const exactCount = todo.filter((r) => r.state === "exact" && !lockedOn(r.line.transactionDate)).length;
+  const flaggedCount = rows.filter((r) => r.line.flagged).length;
+  const shown = rows.filter((r) => (filter === "todo" ? r.state !== "matched" : filter === "matched" ? r.state === "matched" : filter === "flagged" ? r.line.flagged : true));
+  const unmatchedBank = workspace.statementLines.filter((l) => l.matchStatus === "unmatched");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Bank Account:</label>
-          <select
-            value={bankAccountId}
-            onChange={(e) => setBankAccountId(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-          >
-            {bankAccounts.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowUpload(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
-        >
+        {bankAccounts.length > 1 ? (
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-[var(--text-secondary)]">Bank Account:</label>
+            <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]">
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <span />
+        )}
+        <button type="button" onClick={() => setShowUpload(true)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
           Upload Statement
         </button>
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
-        <SummaryCard label="Bank Statement Balance" value={fmt(workspace.statementBalance)} />
-        <SummaryCard label="Ledger Balance" value={fmt(workspace.ledgerBalance)} />
-        <SummaryCard label="Matched" value={fmt(workspace.matchedAmount)} tone="good" />
-        <SummaryCard label="Unmatched" value={fmt(workspace.unmatchedBankAmount)} tone="bad" />
-        <SummaryCard label="Difference" value={fmt(workspace.difference)} tone={Math.abs(workspace.difference) > 0.01 ? "bad" : "good"} />
+      <div className="grid gap-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-[var(--text-secondary)]">Balance per bank statement</p>
+          <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">{fmt(workspace.statementBalance)}</p>
+          <p className="text-xs text-[var(--text-secondary)]">{lockedThrough ? <>Reconciled up to <D value={lockedThrough} /></> : "Not reconciled yet"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--text-secondary)]">Balance per your books</p>
+          <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">{fmt(workspace.ledgerBalance)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--text-secondary)]">Difference</p>
+          <p className={`text-xl font-semibold tabular-nums ${Math.abs(workspace.difference) < 0.005 ? "text-green-700" : "text-red-600"}`}>{fmt(workspace.difference)}</p>
+          <p className="text-xs text-[var(--text-secondary)]">{differenceText(workspace.difference, hasStatement)}</p>
+          {hasStatement && Math.abs(workspace.difference) >= 0.005 && (
+            <button type="button" onClick={() => setShowDifference(true)} className="mt-1 text-xs text-[var(--color-primary)] hover:underline">
+              Why is there a difference?
+            </button>
+          )}
+        </div>
       </div>
 
       {isLocked && (
-        <div className="flex items-center justify-between rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <div className="flex items-center justify-between rounded border border-[var(--status-action-border)] bg-[var(--status-action-bg)] px-4 py-2 text-sm text-[var(--status-action-text)]">
           <span>
             Reconciled through <D value={latest.periodEnd} /> by an admin on <DT value={latest.reconciledAt} dateOnly />.
           </span>
-          <button type="button" onClick={() => setShowReopen(true)} className="text-amber-900 underline">
+          <button type="button" onClick={() => setShowReopen(true)} className="underline">
             Reopen
           </button>
         </div>
       )}
 
-      <div className="inline-flex flex-wrap rounded-full bg-gray-100 p-1">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-              tab === t ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {TAB_LABELS[t]}
-            {t === "suggested" && suggestedRows.length > 0 && ` (${suggestedRows.length})`}
-            {t === "unmatched_bank" && trueUnmatchedBank.length > 0 && ` (${trueUnmatchedBank.length})`}
-            {t === "unmatched_ledger" && workspace.unmatchedLedger.length > 0 && ` (${workspace.unmatchedLedger.length})`}
-            {t === "exceptions" && exceptions.length > 0 && ` (${exceptions.length})`}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`rounded-full px-4 py-1.5 text-sm transition-colors ${filter === f.key ? "bg-[var(--card-bg)] font-medium text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+            >
+              {f.label}
+              {f.key === "todo" && todo.length > 0 ? ` (${todo.length})` : ""}
+              {f.key === "flagged" && flaggedCount > 0 ? ` (${flaggedCount})` : ""}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-success-text)]" /> Exact match</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-action-text)]" /> Likely match, needs your OK</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-critical-text)]" /> Nothing found</span>
+          {exactCount > 0 && (
+            <button type="button" disabled={busy} onClick={() => okAll(exactCount)} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              OK all {exactCount} exact
+            </button>
+          )}
+        </div>
       </div>
 
-      {tab === "all" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Description</th>
-              <th className="px-4 py-2 font-medium">Reference</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workspace.statementLines.map((l) => (
-              <tr key={l.id} className="border-t border-gray-100">
-                <td className="px-4 py-2"><D value={l.transactionDate} /></td>
-                <td className="px-4 py-2">{l.description || "—"}</td>
-                <td className="px-4 py-2">{l.reference || "—"}</td>
-                <td className="px-4 py-2">{fmt(l.amount)}</td>
-                <td className="px-4 py-2 capitalize">{suggestions[l.id] && l.matchStatus === "unmatched" ? "suggested" : l.matchStatus}</td>
-              </tr>
-            ))}
-            {workspace.statementLines.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                  No statement transactions imported yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {tab === "matched" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Description</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {workspace.statementLines
-              .filter((l) => l.matchStatus === "matched")
-              .map((l) => (
-                <tr key={l.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2"><D value={l.transactionDate} /></td>
-                  <td className="px-4 py-2">{l.description || "—"}</td>
-                  <td className="px-4 py-2">{fmt(l.amount)}</td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      disabled={busy || lockedOn(l.transactionDate)}
-                      onClick={() => handleUnmatch(l.matchId)}
-                      className="text-xs text-red-600 hover:underline disabled:opacity-40"
-                    >
-                      Unmatch
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            {workspace.statementLines.filter((l) => l.matchStatus === "matched").length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                  Nothing matched yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {tab === "suggested" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Bank line</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium">Suggested ledger match</th>
-              <th className="px-4 py-2 font-medium">Confidence</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {suggestedRows.map((l) => {
-              const c = suggestions[l.id];
-              return (
-                <tr key={l.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2">
-                    <D value={l.transactionDate} /> — {l.description || "—"}
-                  </td>
-                  <td className="px-4 py-2">{fmt(l.amount)}</td>
-                  <td className="px-4 py-2">
-                    <D value={c.entryDate} /> — {c.memo || c.description || "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={c.tier === "exact" ? "text-green-600 font-medium" : "text-amber-600"}>
-                      {c.tier === "exact" ? "Exact" : "Suggested"} ({c.score}%)
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      disabled={busy || lockedOn(l.transactionDate)}
-                      onClick={() => handleConfirmSuggested(l, c)}
-                      className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40"
-                    >
-                      Confirm match
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {suggestedRows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                  No suggested matches
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {tab === "unmatched_bank" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium"></th>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Description</th>
-              <th className="px-4 py-2 font-medium">Reference</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {trueUnmatchedBank.map((l) => (
-              <tr key={l.id} className="border-t border-gray-100">
-                <td className="px-4 py-2">
-                  <input type="checkbox" checked={selectedBankLines.has(l.id)} onChange={() => toggleBankLine(l.id)} disabled={lockedOn(l.transactionDate)} />
-                </td>
-                <td className="px-4 py-2"><D value={l.transactionDate} /></td>
-                <td className="px-4 py-2">{l.description || "—"}</td>
-                <td className="px-4 py-2">{l.reference || "—"}</td>
-                <td className="px-4 py-2">{fmt(l.amount)}</td>
-                <td className="px-4 py-2 text-right">
-                  <p className="text-xs text-gray-400 mb-1">Bank transaction not found in ledger</p>
+      <div className="space-y-2">
+        {shown.map((r, i) => {
+          const days = Math.floor((new Date(today).getTime() - new Date(r.line.transactionDate).getTime()) / 86400000);
+          const locked = lockedOn(r.line.transactionDate);
+          const match: MatchedEntry[] =
+            r.state === "matched"
+              ? r.entries
+              : r.suggestion
+                ? [{ date: r.suggestion.entryDate, text: r.suggestion.memo || r.suggestion.description || r.suggestion.referenceNumber || "Ledger entry", amount: r.suggestion.signedAmount }]
+                : r.combo.map((l) => ({ date: l.entryDate, text: l.memo || l.description || l.referenceNumber || "Ledger entry", amount: l.signedAmount }));
+          return (
+            <div key={r.line.id} className="grid grid-cols-[2rem_1fr_1fr] items-stretch gap-2 lg:grid-cols-[2rem_1fr_1fr_11rem]">
+              <div className="flex items-center justify-center text-xs text-[var(--text-secondary)]">{i + 1}</div>
+              <div className={`rounded-lg border px-3 py-2 text-sm ${TONE[r.state]}`}>
+                <p className="flex items-center justify-between gap-2 text-xs opacity-80">
+                  <span>
+                    <D value={r.line.transactionDate} />
+                    {r.state !== "matched" && days > OLD_AFTER_DAYS ? ` · ${days} days old` : ""}
+                  </span>
                   <button
                     type="button"
-                    disabled={lockedOn(l.transactionDate)}
-                    onClick={() => setCreatingForLine(l)}
-                    className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40"
+                    onClick={() => setFlagging(r.line)}
+                    title={r.line.flagged ? "Flagged for review. Click to see the note or remove the flag." : "Flag this transaction for review"}
+                    aria-label={r.line.flagged ? "Flagged for review" : "Flag this transaction"}
+                    className={r.line.flagged ? "text-red-600" : "opacity-60 hover:opacity-100"}
                   >
-                    Create Transaction
+                    <FlagIcon filled={r.line.flagged} />
                   </button>
-                </td>
-              </tr>
-            ))}
-            {trueUnmatchedBank.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                  Nothing unmatched
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+                </p>
+                <p className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate">{r.line.description || "—"}</span>
+                  <span className="shrink-0 tabular-nums">{fmt(r.line.amount)}</span>
+                </p>
+                {r.line.flagged && r.line.flagNote && <p className="mt-1 text-xs italic opacity-90">Flagged: {r.line.flagNote}</p>}
+              </div>
+              <div className={`rounded-lg border px-3 py-2 text-sm ${TONE[r.state]}`}>
+                {match.length === 0 ? (
+                  <p className="flex h-full items-center justify-center">No transaction found</p>
+                ) : (
+                  match.map((m, k) => (
+                    <div key={k}>
+                      <p className="text-xs opacity-80">
+                        <D value={m.date} />
+                        {r.state === "likely" && r.suggestion ? ` · ${r.suggestion.score}% sure` : ""}
+                        {r.combo.length > 1 && k === 0 ? ` · ${r.combo.length} entries add up to ${fmt(r.line.amount)}` : ""}
+                      </p>
+                      <p className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 truncate">{m.text}</span>
+                        <span className="shrink-0 tabular-nums">{fmt(m.amount)}</span>
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="col-span-3 flex items-center justify-end gap-2 lg:col-span-1 lg:flex-col lg:items-stretch lg:justify-center">
+                {r.state === "matched" ? (
+                  <>
+                    <StatusPill tone="success">Matched</StatusPill>
+                    <button type="button" disabled={busy || locked} onClick={() => unmatchLine(r.line)} className="text-xs text-red-600 hover:underline disabled:opacity-40">
+                      Undo match
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {(r.suggestion || r.combo.length > 0) && (
+                      <button type="button" disabled={busy || locked} onClick={() => (r.suggestion ? confirmSuggested(r.line, r.suggestion) : confirmCombination(r.line, r.combo))} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+                        OK
+                      </button>
+                    )}
+                    <button type="button" disabled={busy || locked} onClick={() => setFindingFor(r.line)} className="rounded border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-muted-bg)] disabled:opacity-40">
+                      Find or create
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {shown.length === 0 && (
+          <p className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-6 text-center text-sm text-[var(--text-secondary)]">
+            {!hasStatement ? "No statement transactions imported yet. Upload your bank statement to begin." : filter === "todo" ? "Nothing left to do. Every bank line is matched." : "Nothing here."}
+          </p>
+        )}
+      </div>
 
-      {tab === "unmatched_ledger" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium"></th>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Description</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium">Classification</th>
-              <th className="px-4 py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {workspace.unmatchedLedger.map((l) => (
-              <tr key={l.journalLineId} className="border-t border-gray-100">
-                <td className="px-4 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedLedgerLines.has(l.journalLineId)}
-                    onChange={() => toggleLedgerLine(l.journalLineId)}
-                    disabled={lockedOn(l.entryDate)}
-                  />
-                </td>
-                <td className="px-4 py-2"><D value={l.entryDate} /></td>
-                <td className="px-4 py-2">{l.memo || l.description || "—"}</td>
-                <td className="px-4 py-2">{fmt(l.signedAmount)}</td>
-                <td className="px-4 py-2 capitalize">{l.classification?.replace(/_/g, " ") ?? "—"}</td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    type="button"
-                    disabled={lockedOn(l.entryDate)}
-                    onClick={() => setClassifyingLine(l)}
-                    className="text-xs text-gray-600 hover:underline disabled:opacity-40"
-                  >
-                    Classify
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {workspace.unmatchedLedger.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                  Nothing unmatched
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {tab === "exceptions" && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Description</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium">Days outstanding</th>
-            </tr>
-          </thead>
-          <tbody>
-            {exceptions.map((l) => {
-              const days = Math.floor((new Date(today).getTime() - new Date(l.transactionDate).getTime()) / 86400000);
-              return (
-                <tr key={l.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2"><D value={l.transactionDate} /></td>
-                  <td className="px-4 py-2">{l.description || "—"}</td>
-                  <td className="px-4 py-2">{fmt(l.amount)}</td>
-                  <td className="px-4 py-2 text-red-600">{days} days</td>
-                </tr>
-              );
-            })}
-            {exceptions.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                  No exceptions
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {(selectedBankLines.size > 0 || selectedLedgerLines.size > 0) && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg border border-gray-300 bg-white shadow-lg px-5 py-3 flex items-center gap-4 text-sm">
-          <span>
-            {selectedBankLines.size} bank line{selectedBankLines.size === 1 ? "" : "s"} · {selectedLedgerLines.size} ledger line
-            {selectedLedgerLines.size === 1 ? "" : "s"} selected
-          </span>
-          <button
-            type="button"
-            disabled={busy || selectedBankLines.size === 0 || selectedLedgerLines.size === 0}
-            onClick={handleManualMatch}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40"
-          >
-            Match selected
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedBankLines(new Set());
-              setSelectedLedgerLines(new Set());
-            }}
-            className="text-gray-500 hover:underline"
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-        <p className="text-xs text-gray-500">
-          {history.length > 0 ? `${history.length} past reconciliation${history.length === 1 ? "" : "s"} on record` : "No reconciliations recorded yet"}
-        </p>
+      <div className="flex items-center justify-between border-t border-[var(--card-border)] pt-4">
+        <p className="text-xs text-[var(--text-secondary)]">{history.length > 0 ? `${history.length} past reconciliation${history.length === 1 ? "" : "s"} on record` : "No reconciliations recorded yet"}</p>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Reconcile up to</label>
+          <label className="text-xs text-[var(--text-secondary)]">Reconcile up to</label>
           <DatePicker max={today} value={reconcileEnd} onChange={setReconcileEnd} className="w-36 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleMarkReconciled}
-            className="rounded bg-gray-900 hover:bg-gray-800 text-white text-sm px-4 py-1.5 disabled:opacity-50"
-          >
+          <button type="button" disabled={busy} onClick={handleMarkReconciled} className="rounded bg-gray-900 px-4 py-1.5 text-sm text-white hover:bg-gray-800 disabled:opacity-50">
             Mark Reconciled
           </button>
         </div>
       </div>
 
       {dialog}
-      {confirmReconcile && <ConfirmDialog message={confirmReconcile} onYes={performMarkReconciled} onNo={() => setConfirmReconcile(null)} />}
 
       {showUpload && <UploadStatementModal bankAccountId={bankAccountId} onClose={() => setShowUpload(false)} onImported={load} />}
-      {creatingForLine && (
-        <CreateBankTransactionModal
+      {findingFor && (
+        <LinePanel
           bankAccountId={bankAccountId}
-          line={creatingForLine}
-          offsetAccounts={offsetAccounts}
-          onClose={() => setCreatingForLine(null)}
-          onCreated={load}
+          bankLedgerId={workspace.bankAccount.chartOfAccountsLink}
+          line={findingFor}
+          ledger={workspace.unmatchedLedger}
+          accounts={offsetAccounts}
+          locked={lockedOn(findingFor.transactionDate)}
+          onClose={() => setFindingFor(null)}
+          onDone={load}
+          onRecordPayment={() => recordPayment(findingFor)}
+          onFlag={() => setFlagging(findingFor)}
         />
       )}
-      {classifyingLine && (
-        <ClassifyLedgerModal bankAccountId={bankAccountId} line={classifyingLine} onClose={() => setClassifyingLine(null)} onClassified={load} />
+      {recording && (
+        <NewPaymentModal
+          formOptions={recording.options}
+          fixedDirection={recording.line.amount >= 0 ? "money_in" : "money_out"}
+          prefill={{ amount: Math.abs(recording.line.amount), date: recording.line.transactionDate, accountId: workspace.bankAccount.chartOfAccountsLink }}
+          onCancel={() => setRecording(null)}
+          onDone={() => {
+            setRecording(null);
+            load();
+          }}
+        />
       )}
+      {showDifference && (
+        <DifferencePanel
+          statementBalance={workspace.statementBalance}
+          ledgerBalance={workspace.ledgerBalance}
+          unmatchedBank={unmatchedBank}
+          unmatchedLedger={workspace.unmatchedLedger}
+          locked={lockedOn}
+          onClassify={(l) => {
+            setShowDifference(false);
+            setClassifyingLine(l);
+          }}
+          onClose={() => setShowDifference(false)}
+        />
+      )}
+      {flagging && <FlagDialog line={flagging} onClose={() => setFlagging(null)} onDone={load} />}
+      {classifyingLine && <ClassifyLedgerModal bankAccountId={bankAccountId} line={classifyingLine} onClose={() => setClassifyingLine(null)} onClassified={load} />}
 
       {showReopen && latest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowReopen(false)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Reopen reconciliation</h2>
-            <p className="text-xs text-gray-500">Admin-only. This is recorded with your name, the time, and the reason below.</p>
-            <textarea
-              value={reopenReason}
-              onChange={(e) => setReopenReason(e.target.value)}
-              placeholder="Reason for reopening"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              rows={3}
-            />
+          <div className="relative w-full max-w-sm space-y-3 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Reopen reconciliation</h2>
+            <p className="text-xs text-[var(--text-secondary)]">Admin-only. This is recorded with your name, the time, and the reason below.</p>
+            <textarea value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Reason for reopening" className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" rows={3} />
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setShowReopen(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+              <button type="button" onClick={() => setShowReopen(false)} className="rounded px-4 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
                 Cancel
               </button>
               <button
                 type="button"
                 disabled={busy || !reopenReason.trim()}
                 onClick={() => handleReopen(latest.id)}
-                className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+                className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
               >
                 Reopen
               </button>

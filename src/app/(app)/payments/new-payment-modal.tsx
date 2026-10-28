@@ -64,6 +64,7 @@ export function NewPaymentModal({
   onCancel,
   fixedDirection,
   editing,
+  prefill,
 }: {
   formOptions: FormOptions;
   onDone: () => void;
@@ -71,11 +72,13 @@ export function NewPaymentModal({
   fixedDirection?: Direction;
   /** When given, the form edits this payment (its kind cannot change) instead of recording a new one. */
   editing?: EditingPayment;
+  /** Opens a new payment with these filled in (from a bank line being reconciled). */
+  prefill?: { amount: number; date: string; accountId: string };
 }) {
   const [direction, setDirection] = useState<Direction>(editing?.direction ?? fixedDirection ?? "money_in");
   const [paymentType, setPaymentType] = useState<string>(editing?.paymentType ?? (fixedDirection === "money_out" ? "supplier_payment" : "customer_payment"));
-  const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? today());
-  const [accountId, setAccountId] = useState(editing?.accountId ?? "");
+  const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? prefill?.date ?? today());
+  const [accountId, setAccountId] = useState(editing?.accountId ?? prefill?.accountId ?? "");
   const [paymentModeId, setPaymentModeId] = useState(editing?.paymentModeId ?? "");
   const [paymentModeName, setPaymentModeName] = useState(editing?.paymentModeName ?? "");
   const [transferToAccountId, setTransferToAccountId] = useState(editing?.transferToAccountId ?? "");
@@ -95,7 +98,7 @@ export function NewPaymentModal({
   const [advYear, setAdvYear] = useState(editing?.advanceMonth?.year ?? currentMonth.year);
   const [advInfo, setAdvInfo] = useState<{ outstanding: number; basic: number } | null>(null);
   const [partyOtherName, setPartyOtherName] = useState(editing?.partyOtherName ?? "");
-  const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [amount, setAmount] = useState(editing ? String(editing.amount) : prefill ? prefill.amount.toFixed(2) : "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(editing?.attachmentUrl ?? "");

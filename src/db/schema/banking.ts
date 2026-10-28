@@ -69,6 +69,10 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
   // (or an overlapping date range) being imported twice.
   dedupeHash: text("dedupe_hash").notNull(),
   matchStatus: matchStatusEnum("match_status").notNull().default("unmatched"),
+  // Flagged for review: someone wants a second look at this line, with a note saying why. It has no effect on matching.
+  flaggedAt: timestamp("flagged_at", { withTimezone: true }),
+  flaggedBy: uuid("flagged_by").references(() => users.id),
+  flagNote: text("flag_note"),
 });
 
 export const reconciliationMatchTypeEnum = pgEnum("reconciliation_match_type", ["exact", "suggested", "manual"]);

@@ -19,6 +19,7 @@ import {
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
+import { logAuditEvent } from "@/lib/audit";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { syncBankOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
 import { SYSTEM_ACCOUNT_CODES } from "@/lib/ledger/chart-rules";
@@ -36,11 +37,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export async function getOffsetAccountOptions() {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
-  return db
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name, category: accounts.category })
+  const rows = await db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name, category: accounts.category, subCategory: accounts.subCategory, parentAccountId: accounts.parentAccountId })
     .from(accounts)
     .where(and(eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)))
     .orderBy(accounts.code);
+  // An account with sub-accounts is a heading, not somewhere to post to.
+  const parents = new Set(rows.map((r) => r.parentAccountId).filter((id): id is string => Boolean(id)));
+  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, category: r.category, subCategory: r.subCategory, hasChildren: parents.has(r.id) }));
 }
 
 export async function getBankAccountLedgerOptions() {
@@ -79,6 +83,74 @@ export async function listBankAccounts() {
     .innerJoin(accounts, eq(accounts.id, bankAccounts.chartOfAccountsLink))
     .where(eq(bankAccounts.tenantId, session.tenantId))
     .orderBy(asc(bankAccounts.accountName));
+}
+
+export type AccountOverview = {
+  id: string;
+  label: string;
+  accountNumber: string | null;
+  currency: string;
+  /** "bank" for an account under Bank, "wallet" for the rest of Cash (e-wallets and the like). */
+  kind: "bank" | "wallet";
+  statementBalance: number;
+  ledgerBalance: number;
+  difference: number;
+  /** Statement lines still to be matched. */
+  unreconciled: number;
+  /** The date of the latest statement line, or null when no statement has been imported. */
+  updatedUpTo: string | null;
+  /** Lines flagged for review. */
+  flagged: number;
+};
+
+/** Every active bank and wallet account with where its reconciliation stands, for the Home screen. */
+export async function getReconciliationOverview(): Promise<AccountOverview[]> {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
+  const accountList = (await listBankAccounts()).filter((b) => b.isActive);
+  if (accountList.length === 0) return [];
+
+  const [statement, ledger] = await Promise.all([
+    db
+      .select({
+        id: bankStatementLines.bankAccountId,
+        total: sql<string>`coalesce(sum(${bankStatementLines.amount}), 0)`,
+        unreconciled: sql<number>`count(*) filter (where ${bankStatementLines.matchStatus} <> 'matched')`,
+        latest: sql<string | null>`max(${bankStatementLines.transactionDate})`,
+        flagged: sql<number>`count(*) filter (where ${bankStatementLines.flaggedAt} is not null)`,
+      })
+      .from(bankStatementLines)
+      .where(and(eq(bankStatementLines.tenantId, session.tenantId), inArray(bankStatementLines.bankAccountId, accountList.map((b) => b.id))))
+      .groupBy(bankStatementLines.bankAccountId),
+    // The account's balance counts every posting, reversed ones and their reversals included: they cancel out.
+    db
+      .select({ id: journalLines.accountId, net: sql<string>`coalesce(sum(${journalLines.debitAmount} - ${journalLines.creditAmount}), 0)` })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+      .where(and(eq(journalEntries.tenantId, session.tenantId), inArray(journalLines.accountId, accountList.map((b) => b.chartOfAccountsLink))))
+      .groupBy(journalLines.accountId),
+  ]);
+  const stmt = new Map(statement.map((r) => [r.id, r]));
+  const book = new Map(ledger.map((r) => [r.id, Number(r.net)]));
+
+  return accountList.map((b) => {
+    const s = stmt.get(b.id);
+    const statementBalance = round2(Number(b.openingBalance) + Number(s?.total ?? 0));
+    const ledgerBalance = round2(book.get(b.chartOfAccountsLink) ?? 0);
+    return {
+      id: b.id,
+      label: `${b.bankName && b.bankName !== b.accountName ? b.bankName + " — " : ""}${b.accountName}`,
+      accountNumber: b.accountNumber,
+      currency: b.currency,
+      kind: b.ledgerCode.startsWith("1010") ? "bank" : "wallet",
+      statementBalance,
+      ledgerBalance,
+      difference: round2(statementBalance - ledgerBalance),
+      unreconciled: Number(s?.unreconciled ?? 0),
+      updatedUpTo: s?.latest ?? null,
+      flagged: Number(s?.flagged ?? 0),
+    };
+  });
 }
 
 export type BankAccountInput = {
@@ -355,6 +427,9 @@ export async function confirmStatementImport(input: ConfirmImportInput): Promise
 // ---------- Reconciliation workspace ----------
 
 export type StatementLineRow = {
+  /** Flagged for review, and the note saying why. */
+  flagged: boolean;
+  flagNote: string | null;
   id: string;
   transactionDate: string;
   description: string | null;
@@ -363,6 +438,9 @@ export type StatementLineRow = {
   matchStatus: string;
   matchId: string | null;
 };
+
+/** A ledger entry a confirmed match was made to, for showing beside the bank line. */
+export type MatchedEntry = { date: string; text: string; amount: number };
 
 export type UnmatchedLedgerRow = {
   journalLineId: string;
@@ -465,6 +543,27 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
     );
   const matchIdByStatementLine = new Map(matchLinesForStatement.map((r) => [r.statementLineId, r.matchId]));
 
+  // What each confirmed match was made to, so the list can show the book entry beside the bank line.
+  const matchIds = [...new Set(matchLinesForStatement.map((r) => r.matchId))];
+  const matchedEntryRows = matchIds.length
+    ? await db
+        .select({
+          matchId: bankReconciliationMatchJournalLines.matchId,
+          date: journalEntries.entryDate,
+          memo: journalEntries.memo,
+          description: journalLines.description,
+          reference: journalEntries.referenceNumber,
+          debit: journalLines.debitAmount,
+          credit: journalLines.creditAmount,
+        })
+        .from(bankReconciliationMatchJournalLines)
+        .innerJoin(journalLines, eq(journalLines.id, bankReconciliationMatchJournalLines.journalLineId))
+        .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+        .where(and(eq(journalEntries.tenantId, session.tenantId), inArray(bankReconciliationMatchJournalLines.matchId, matchIds)))
+    : [];
+  const matches: Record<string, MatchedEntry[]> = {};
+  for (const r of matchedEntryRows) (matches[r.matchId] ??= []).push({ date: r.date, text: r.memo || r.description || r.reference || "Ledger entry", amount: round2(Number(r.debit) - Number(r.credit)) });
+
   const statementRows: StatementLineRow[] = statementLines.map((l) => ({
     id: l.id,
     transactionDate: l.transactionDate,
@@ -472,6 +571,8 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
     reference: l.reference,
     amount: Number(l.amount),
     matchStatus: l.matchStatus,
+    flagged: l.flaggedAt !== null,
+    flagNote: l.flagNote,
     matchId: matchIdByStatementLine.get(l.id) ?? null,
   }));
 
@@ -497,6 +598,7 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
       chartOfAccountsLink: bankAccount.chartOfAccountsLink,
     },
     statementLines: statementRows,
+    matches,
     unmatchedLedger,
     statementBalance,
     ledgerBalance,
@@ -542,6 +644,35 @@ export async function getSuggestedMatchesForAccount(bankAccountId: string): Prom
     if (candidates.length > 0) result[line.id] = candidates[0];
   }
   return result;
+}
+
+/**
+ * "OK all": confirms every exact suggestion in one go. The server works the suggestions out itself, so only matches it would
+ * itself call exact are made; a ledger entry is never given to two bank lines, and one that can't be confirmed (a reconciled
+ * period, say) is skipped and counted.
+ */
+export async function confirmExactMatches(bankAccountId: string): Promise<{ confirmed: number; skipped: number }> {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const suggestions = await getSuggestedMatchesForAccount(bankAccountId);
+  const used = new Set<string>();
+  let confirmed = 0;
+  let skipped = 0;
+  for (const [statementLineId, c] of Object.entries(suggestions)) {
+    if (c.tier !== "exact") continue;
+    if (used.has(c.journalLineId)) {
+      skipped++;
+      continue;
+    }
+    try {
+      await confirmMatch({ bankAccountId, statementLineIds: [statementLineId], journalLineIds: [c.journalLineId], matchType: "exact", confidence: c.score });
+      used.add(c.journalLineId);
+      confirmed++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { confirmed, skipped };
 }
 
 export async function getSuggestedMatchesForLine(statementLineId: string): Promise<MatchCandidate[]> {
@@ -705,17 +836,20 @@ async function isPeriodLocked(bankAccountId: string, date: string): Promise<bool
 export type CreateBankTransactionInput = {
   statementLineId: string;
   bankAccountId: string;
-  type: "payment" | "receipt" | "bank_charge" | "transfer" | "other";
-  description: string;
-  offsetAccountId: string;
+  /** Where the money goes (or comes from). Several accounts make a split; together they add up to the amount. */
+  splits: { offsetAccountId: string; amount: number }[];
+  comment: string;
+  /**
+   * Book entries that already cover part of this bank line (say five of six receipts, or a deposit less a bank fee). The new
+   * transaction is then only for what they leave, and everything is matched to the bank line together.
+   */
+  alongsideJournalLineIds?: string[];
 };
 
-// A unified poster for the "money showed up in the bank but nothing's in
-// the ledger yet" case — posts a plain two-line entry against the bank's
-// ledger account and the chosen offset account, then immediately links it
-// to the statement line that prompted it (a manual, 100%-confidence match).
-// Everything is checked before posting, and if the match can't be made the entry is taken back —
-// so a failed attempt never leaves an entry behind for a retry to duplicate.
+// A unified poster for the "money showed up in the bank but nothing's in the ledger yet" case — posts an entry against the bank's
+// ledger account and the chosen offset accounts, then immediately links it (with any entries it sits alongside) to the statement
+// line that prompted it, as a manual match. Everything is checked before posting, and if the match can't be made the entry is
+// taken back — so a failed attempt never leaves an entry behind for a retry to duplicate.
 export async function createBankTransaction(input: CreateBankTransactionInput) {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "create")) throw new Error("Not permitted");
@@ -736,39 +870,58 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
   if (line.matchStatus === "matched") throw new Error("This line is already matched");
   if (await isPeriodLocked(bankAccount.id, line.transactionDate)) throw new Error(`${line.transactionDate} falls inside a reconciled period — reopen that reconciliation first`);
 
-  const [offset] = await db
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.id, input.offsetAccountId), eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)))
-    .limit(1);
-  if (!offset) throw new Error("Select the account this transaction belongs to (the offset account)");
-  if (offset.id === bankAccount.chartOfAccountsLink) {
-    throw new Error("The offset account can't be the bank account itself — use Payments > Inter-Transfer to move money between your own accounts");
-  }
-  if (["1100", "2000"].some((c) => offset.code === c || offset.code.startsWith(c + "."))) {
-    throw new Error("Customer and supplier accounts are settled through Payments — record a payment or receipt instead");
+  // What the new entry has to cover: the whole bank line, or what the chosen entries leave of it.
+  const alongside = [...new Set(input.alongsideJournalLineIds ?? [])];
+  const covered = alongside.length
+    ? (
+        await db
+          .select({ debit: journalLines.debitAmount, credit: journalLines.creditAmount })
+          .from(journalLines)
+          .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+          .where(and(inArray(journalLines.id, alongside), eq(journalEntries.tenantId, session.tenantId), eq(journalLines.accountId, bankAccount.chartOfAccountsLink)))
+      ).reduce((sum, r) => sum + Number(r.debit) - Number(r.credit), 0)
+    : 0;
+  const bankSide = round2(Number(line.amount) - covered);
+  if (Math.abs(bankSide) < 0.005) throw new Error("The entries you chose already add up to the whole bank amount, so there is nothing left to record");
+
+  const splits = input.splits.filter((p) => p.offsetAccountId || p.amount);
+  if (splits.length === 0) throw new Error("Select the account this transaction belongs to");
+  if (splits.some((p) => !(p.amount > 0))) throw new Error("Enter an amount greater than zero for each account");
+  const splitTotal = round2(splits.reduce((sum, p) => sum + p.amount, 0));
+  if (Math.abs(splitTotal - Math.abs(bankSide)) > 0.005) {
+    throw new Error(`The amounts add up to ${splitTotal.toFixed(2)}, but this transaction is for ${Math.abs(bankSide).toFixed(2)}`);
   }
 
-  const amount = Math.abs(Number(line.amount));
-  const moneyIn = Number(line.amount) > 0;
-  const lines: PostLineInput[] = moneyIn
-    ? [
-        { accountId: bankAccount.chartOfAccountsLink, debitAmount: amount, description: input.description || undefined },
-        { accountId: offset.id, creditAmount: amount, description: input.description || undefined },
-      ]
-    : [
-        { accountId: offset.id, debitAmount: amount, description: input.description || undefined },
-        { accountId: bankAccount.chartOfAccountsLink, creditAmount: amount, description: input.description || undefined },
-      ];
+  const offsets = await db
+    .select()
+    .from(accounts)
+    .where(and(inArray(accounts.id, splits.map((p) => p.offsetAccountId)), eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)));
+  for (const p of splits) {
+    const offset = offsets.find((o) => o.id === p.offsetAccountId);
+    if (!offset) throw new Error("Select the account this transaction belongs to");
+    if (offset.id === bankAccount.chartOfAccountsLink) {
+      throw new Error("The account can't be the bank account itself — use Payments > Inter-Transfer to move money between your own accounts");
+    }
+    if (["1100", "2000"].some((c) => offset.code === c || offset.code.startsWith(c + "."))) {
+      throw new Error("Customer and supplier accounts are settled through Payments — record a receipt or payment instead");
+    }
+  }
+
+  const moneyIn = bankSide > 0;
+  const memo = input.comment.trim() || "Bank reconciliation";
+  const bankLineInput: PostLineInput = moneyIn
+    ? { accountId: bankAccount.chartOfAccountsLink, debitAmount: Math.abs(bankSide), description: memo }
+    : { accountId: bankAccount.chartOfAccountsLink, creditAmount: Math.abs(bankSide), description: memo };
+  const offsetLines: PostLineInput[] = splits.map((p) => (moneyIn ? { accountId: p.offsetAccountId, creditAmount: p.amount, description: memo } : { accountId: p.offsetAccountId, debitAmount: p.amount, description: memo }));
 
   const entry = await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: line.transactionDate,
     sourceType: "bank_adjustment",
     referenceNumber: line.reference ?? undefined,
-    memo: input.description || `${input.type.replace("_", " ")} from bank reconciliation`,
+    memo,
     createdBy: session.userId,
-    lines,
+    lines: [bankLineInput, ...offsetLines],
   });
 
   try {
@@ -779,7 +932,7 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
     await confirmMatch({
       bankAccountId: bankAccount.id,
       statementLineIds: [line.id],
-      journalLineIds: [bankLine.id],
+      journalLineIds: [bankLine.id, ...alongside],
       matchType: "manual",
     });
   } catch (e) {
@@ -789,6 +942,43 @@ export async function createBankTransaction(input: CreateBankTransactionInput) {
 
   revalidatePath("/bank-reconciliation");
   revalidatePath("/journal");
+}
+
+// ---------- Flagging ----------
+
+const FLAG_NOTE_MAX = 300;
+
+/**
+ * Flags a bank line for review, with a note saying why, or takes the flag off. A flag is only a marker for a second look: it has no
+ * effect on matching or on the books, so it can be set on a line in a reconciled period too.
+ */
+export async function setLineFlag(input: { statementLineId: string; flagged: boolean; note?: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const note = (input.note ?? "").trim();
+  if (note.length > FLAG_NOTE_MAX) throw new Error(`Keep the note under ${FLAG_NOTE_MAX} characters.`);
+
+  const [line] = await db
+    .select({ id: bankStatementLines.id, flaggedAt: bankStatementLines.flaggedAt, flagNote: bankStatementLines.flagNote })
+    .from(bankStatementLines)
+    .where(and(eq(bankStatementLines.id, input.statementLineId), eq(bankStatementLines.tenantId, session.tenantId)))
+    .limit(1);
+  if (!line) throw new Error("Statement line not found");
+
+  await db
+    .update(bankStatementLines)
+    .set(input.flagged ? { flaggedAt: new Date(), flaggedBy: session.userId, flagNote: note || null } : { flaggedAt: null, flaggedBy: null, flagNote: null })
+    .where(and(eq(bankStatementLines.id, line.id), eq(bankStatementLines.tenantId, session.tenantId)));
+  await logAuditEvent({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    action: input.flagged ? "bank_line_flagged" : "bank_line_unflagged",
+    entityType: "bank_statement_line",
+    entityId: line.id,
+    before: line.flaggedAt ? { note: line.flagNote } : null,
+    after: input.flagged ? { note: note || null } : null,
+  });
+  revalidatePath("/bank-reconciliation");
 }
 
 // ---------- Classification ----------
