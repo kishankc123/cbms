@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { complianceAuthorities, complianceEntityTypes, complianceTaxTypes } from "@/db/schema";
+import { complianceAuthorities, complianceEntityTypes, complianceTaxHeads, complianceTaxTypes } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 
 // The three lists a country is set up with: company types, taxes and authorities. They share the same shape (a key
@@ -10,6 +10,7 @@ export const SETUP_SECTIONS = {
   "company-types": { title: "Company types", singular: "company type", table: complianceEntityTypes },
   taxes: { title: "Taxes", singular: "tax", table: complianceTaxTypes },
   authorities: { title: "Authorities", singular: "authority", table: complianceAuthorities },
+  "tds-headings": { title: "TDS headings", singular: "TDS heading", table: complianceTaxHeads },
 } as const;
 export type SetupSection = keyof typeof SETUP_SECTIONS;
 export const isSetupSection = (s: string): s is SetupSection => s in SETUP_SECTIONS;
@@ -17,7 +18,7 @@ export const isSetupSection = (s: string): s is SetupSection => s in SETUP_SECTI
 // Every one of the three tables has these columns; taxes also have the authority and "registrable" columns.
 type Shared = typeof complianceAuthorities;
 const tableOf = (section: SetupSection) => SETUP_SECTIONS[section].table as unknown as Shared;
-export type SetupRow = { id: string; key: string; name: string; isActive: boolean; authorityKey?: string | null; isRegistrable?: boolean };
+export type SetupRow = { id: string; key: string; name: string; isActive: boolean; authorityKey?: string | null; isRegistrable?: boolean; kind?: string; module?: string; sortOrder?: number };
 
 /** What every country starts with: VAT and Income tax. Anything else is added by hand. */
 export const DEFAULT_TAX_TYPES = [

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { ymdOf, monthNames } from "@/lib/calendar";
-import { PUBLISHABLE_TAX_TYPES, type PublishableTaxType, type RateVersion } from "@/lib/compliance/platform-tax-rate-types";
+import type { RateVersion } from "@/lib/compliance/platform-tax-rate-types";
 import { adminCard, adminField } from "../../ui";
 import { editPublishedRate, publishRate, type TaxRateAdminData } from "./actions";
 
@@ -20,9 +20,9 @@ type Draft = { rate: string; effectiveFrom: string; source: string; isVerified: 
 const blankDraft: Draft = { rate: "", effectiveFrom: "", source: "", isVerified: false };
 
 /** `only` limits the cards to some taxes; `organizations` is the table of what each organization is using. */
-export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxRateAdminData; only?: PublishableTaxType[]; organizations?: boolean }) {
+export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxRateAdminData; only?: string[]; organizations?: boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState<PublishableTaxType | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const [editing, setEditing] = useState<{ id: string; isVerified: boolean; source: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
   const country = data.country;
   const rates = data.rates;
 
-  async function publish(type: PublishableTaxType) {
+  async function publish(type: string) {
     setBusy(true);
     setMessage(null);
     try {
@@ -68,8 +68,8 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
     }
   }
 
-  const versionsOf = (type: PublishableTaxType): RateVersion[] => rates[type];
-  const shownTypes = PUBLISHABLE_TAX_TYPES.filter((t) => !only || only.includes(t.key));
+  const versionsOf = (type: string): RateVersion[] => rates.versions[type] ?? [];
+  const shownTypes = rates.types.filter((t) => !only || only.includes(t.key));
 
   return (
     <div className="space-y-5">
@@ -205,7 +205,7 @@ export function TaxRatesAdmin({ data, only, organizations = true }: { data: TaxR
       {organizations && (
       <section className={`${adminCard} p-5`}>
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Organizations in {country.name}</h2>
-        <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. An organization with its own rate can change it itself; one on the published rate cannot.</p>
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. Only you can change a rate. An organization marked own was set before rates were published, and keeps it until you publish a rate for it.</p>
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-[var(--text-secondary)]">
             <tr>

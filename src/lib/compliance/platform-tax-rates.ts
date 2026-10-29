@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { complianceCountries, platformTaxRates, taxRates, tenants } from "@/db/schema";
+import { complianceCountries, complianceTaxHeads, platformTaxRates, taxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { addDays } from "@/lib/calendar";
-import { PUBLISHABLE_TAX_TYPES, type PublishableTaxType, type RateVersion } from "./platform-tax-rate-types";
+import { BASE_RATE_TYPES, headRateKey, type RateType, type RateVersion } from "./platform-tax-rate-types";
 
 // Tax rates published for a whole country by a platform administrator. One timeline per country and tax type; a new version starts
 // after the one in force, which is closed the day before. Publishing a version also writes it into every organization of the
@@ -11,33 +11,43 @@ import { PUBLISHABLE_TAX_TYPES, type PublishableTaxType, type RateVersion } from
 // on the same rate from the same date. An organization that already has a rate starting on or after the new date is left alone and
 // listed, never overwritten.
 
-export { PUBLISHABLE_TAX_TYPES, type PublishableTaxType, type RateVersion } from "./platform-tax-rate-types";
+export { BASE_RATE_TYPES, type RateType, type RateVersion } from "./platform-tax-rate-types";
 
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s + "T00:00:00Z").getTime());
-const taxTypeLabel = (k: string) => PUBLISHABLE_TAX_TYPES.find((t) => t.key === k)?.label ?? k;
+
+/** Everything this country publishes a rate for: VAT, Income tax, and one rate per active TDS heading that is paid by percentage. */
+export async function rateTypesFor(countryCode: string): Promise<RateType[]> {
+  const heads = await db
+    .select({ taxTypeKey: complianceTaxHeads.taxTypeKey, key: complianceTaxHeads.key, name: complianceTaxHeads.name })
+    .from(complianceTaxHeads)
+    .where(and(eq(complianceTaxHeads.countryCode, countryCode), eq(complianceTaxHeads.isActive, true), eq(complianceTaxHeads.kind, "rate")))
+    .orderBy(asc(complianceTaxHeads.sortOrder), asc(complianceTaxHeads.name));
+  return [...BASE_RATE_TYPES, ...heads.map((h) => ({ key: headRateKey(h.taxTypeKey, h.key), label: `${h.name} ${h.taxTypeKey.toUpperCase()}` }))];
+}
 
 /** The published rates of one country, per tax type, oldest first; and how each organization's rate compares to the one in force. */
 export async function listPlatformTaxRates(countryCode: string, today: string) {
   const rows = await db.select().from(platformTaxRates).where(eq(platformTaxRates.countryCode, countryCode)).orderBy(asc(platformTaxRates.effectiveFrom));
-  const versions = (type: PublishableTaxType): RateVersion[] =>
+  const types = await rateTypesFor(countryCode);
+  const versions = (type: string): RateVersion[] =>
     rows
       .filter((r) => r.taxTypeKey === type)
       .map((r) => ({ id: r.id, rate: Number(r.rate), effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo, isVerified: r.isVerified, source: r.source, inForce: r.effectiveFrom <= today && (!r.effectiveTo || r.effectiveTo >= today) }));
-  const byType = Object.fromEntries(PUBLISHABLE_TAX_TYPES.map((t) => [t.key, versions(t.key)])) as Record<PublishableTaxType, RateVersion[]>;
+  const byType: Record<string, RateVersion[]> = Object.fromEntries(types.map((t) => [t.key, versions(t.key)]));
 
   const orgs = await db.select({ id: tenants.id, name: tenants.companyName }).from(tenants).where(eq(tenants.countryCode, countryCode)).orderBy(asc(tenants.companyName));
   const open = orgs.length ? await db.select().from(taxRates).where(and(inArray(taxRates.tenantId, orgs.map((o) => o.id)), isNull(taxRates.effectiveTo))) : [];
   const organizations = orgs.map((o) => {
-    const rateOf = (type: PublishableTaxType) => {
+    const rateOf = (type: string) => {
       const r = open.find((x) => x.tenantId === o.id && x.taxTypeKey === type);
       return r ? { rate: Number(r.rate), source: r.source as "manual" | "platform", effectiveFrom: r.effectiveFrom } : null;
     };
-    const rates = Object.fromEntries(PUBLISHABLE_TAX_TYPES.map((t) => [t.key, rateOf(t.key)])) as Record<PublishableTaxType, ReturnType<typeof rateOf>>;
-    const latest = (type: PublishableTaxType) => byType[type][byType[type].length - 1];
-    const follows = (type: PublishableTaxType, r: ReturnType<typeof rateOf>) => !latest(type) || (r !== null && r.source === "platform" && Math.abs(r.rate - latest(type).rate) < 0.005);
-    return { id: o.id, name: o.name, rates, followsPublished: PUBLISHABLE_TAX_TYPES.every((t) => follows(t.key, rates[t.key])) };
+    const rates: Record<string, ReturnType<typeof rateOf>> = Object.fromEntries(types.map((t) => [t.key, rateOf(t.key)]));
+    const latest = (type: string) => byType[type][byType[type].length - 1];
+    const follows = (type: string, r: ReturnType<typeof rateOf>) => !latest(type) || (r !== null && r.source === "platform" && Math.abs(r.rate - latest(type).rate) < 0.005);
+    return { id: o.id, name: o.name, rates, followsPublished: types.every((t) => follows(t.key, rates[t.key])) };
   });
-  return { ...byType, organizations };
+  return { types, versions: byType, organizations };
 }
 export type PlatformTaxRates = Awaited<ReturnType<typeof listPlatformTaxRates>>;
 
@@ -49,7 +59,9 @@ export type PublishResult = { ok: true; organizationsUpdated: number; skipped: {
  * force (rates form one timeline, never inserted into the middle of history), and be a different rate.
  */
 export async function publishTaxRate(adminId: string, input: PublishInput): Promise<PublishResult> {
-  if (!PUBLISHABLE_TAX_TYPES.some((t) => t.key === input.taxTypeKey)) return { ok: false, error: "Choose a tax that has a rate." };
+  const types = await rateTypesFor(input.countryCode);
+  const label = types.find((t) => t.key === input.taxTypeKey)?.label;
+  if (!label) return { ok: false, error: "Choose a tax or heading that has a rate." };
   if (!Number.isFinite(input.rate) || input.rate < 0 || input.rate > 100) return { ok: false, error: "The rate must be a number between 0 and 100." };
   if (!isDate(input.effectiveFrom)) return { ok: false, error: "Enter a valid date for the rate to start from." };
   const [country] = await db.select({ code: complianceCountries.code }).from(complianceCountries).where(and(eq(complianceCountries.code, input.countryCode), eq(complianceCountries.isActive, true))).limit(1);
@@ -77,7 +89,7 @@ export async function publishTaxRate(adminId: string, input: PublishInput): Prom
   for (const org of orgs) {
     const [open] = await db.select().from(taxRates).where(and(eq(taxRates.tenantId, org.id), eq(taxRates.taxTypeKey, input.taxTypeKey), isNull(taxRates.effectiveTo))).limit(1);
     if (open && open.effectiveFrom >= input.effectiveFrom) {
-      skipped.push({ name: org.name, reason: `already has a ${taxTypeLabel(input.taxTypeKey)} rate starting ${open.effectiveFrom}, on or after this date` });
+      skipped.push({ name: org.name, reason: `already has a ${label} rate starting ${open.effectiveFrom}, on or after this date` });
       continue;
     }
     await db.transaction(async (tx) => {

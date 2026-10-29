@@ -71,15 +71,11 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
         // Every tax rate a document could ever be taxed at must have a rate history behind it from day one — an
         // organization is never left relying on a fallback default with no versioned row to change from.
         // When the platform has published rates for the country, the organization starts from those versions (so it is on the same rates
-        // from the same dates as everyone else); a tax type with none published starts at the default rate.
+        // from the same dates as everyone else), for every tax and TDS heading; VAT with none published starts at the default rate.
         const published = await publishedVersionsFor(t.countryCode, tx);
-        const startingRates = (taxTypeKey: "vat" | "tds", fallback: string) => {
-          const versions = published.filter((p) => p.taxTypeKey === taxTypeKey);
-          return versions.length > 0
-            ? versions.map((p) => ({ tenantId: t.id, taxTypeKey, rate: p.rate, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo, source: "platform", createdBy: ownerUserId }))
-            : [{ tenantId: t.id, taxTypeKey, rate: fallback, effectiveFrom: "2000-01-01", createdBy: ownerUserId }];
-        };
-        await tx.insert(taxRates).values([...startingRates("vat", t.vatRate), ...startingRates("tds", t.tdsRate)]);
+        const startingRates = published.map((p) => ({ tenantId: t.id, taxTypeKey: p.taxTypeKey, rate: p.rate, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo, source: "platform", createdBy: ownerUserId }));
+        if (!published.some((p) => p.taxTypeKey === "vat")) startingRates.push({ tenantId: t.id, taxTypeKey: "vat", rate: t.vatRate, effectiveFrom: "2000-01-01", effectiveTo: null, source: "manual", createdBy: ownerUserId });
+        await tx.insert(taxRates).values(startingRates);
         return t;
       });
 

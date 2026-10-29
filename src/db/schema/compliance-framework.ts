@@ -95,6 +95,27 @@ export const complianceTaxTypes = pgTable(
   (t) => [uniqueIndex("compliance_tax_types_country_key").on(t.countryCode, t.key)]
 );
 
+/**
+ * The headings a tax is split into for a country, each with a rate of its own: TDS is not one rate but Rent, Services, Salary and so on.
+ * A heading's rate is published under the key "<taxTypeKey>.<key>" (tds.rent). kind "slabs" is a heading whose tax comes from income
+ * slabs by fiscal year (salary) instead of one percentage. module is where organizations meet it ("payroll", "expenses").
+ */
+export const complianceTaxHeads = pgTable(
+  "compliance_tax_heads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    taxTypeKey: text("tax_type_key").notNull().default("tds"),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull().default("rate"),
+    module: text("module").notNull().default("expenses"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+  },
+  (t) => [uniqueIndex("compliance_tax_heads_country_type_key").on(t.countryCode, t.taxTypeKey, t.key)]
+);
+
 export const requirementFrequencyEnum = pgEnum("requirement_frequency", ["monthly", "quarterly", "annual", "one_time", "event_based"]);
 
 export const complianceRequirementTemplates = pgTable(
