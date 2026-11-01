@@ -13,7 +13,17 @@ const choice = { method: "flat", bearer: "collected", priceBasis: "inclusive", p
 const save = (over: Record<string, string> = {}) => saveModuleTax(admin.userId, { countryCode: CODE, moduleKey: "sales", taxTypeKey: "vat", ...choice, ...over });
 const rows = async () => (await listModuleTaxes(CODE)).rows;
 
+// Whatever an interrupted earlier run left behind is cleared first.
+async function clear() {
+  await db.delete(auditLog).where(and(eq(auditLog.entityType, "module_tax"), like(auditLog.entityId, CODE + ":%")));
+  await db.delete(complianceModuleTaxes).where(eq(complianceModuleTaxes.countryCode, CODE));
+  await db.delete(complianceTaxHeads).where(eq(complianceTaxHeads.countryCode, CODE));
+  await db.delete(complianceTaxTypes).where(eq(complianceTaxTypes.countryCode, CODE));
+  await db.delete(complianceCountries).where(eq(complianceCountries.code, CODE));
+}
+
 beforeAll(async () => {
+  await clear();
   await db.insert(complianceCountries).values({ code: CODE, name: "Module tax test country", currency: "ZZZ", statutoryCalendar: "AD", fiscalYearStartMonth: 1 }).onConflictDoNothing();
   await db.insert(complianceTaxTypes).values([
     { countryCode: CODE, key: "vat", name: "VAT" },
@@ -27,12 +37,8 @@ beforeAll(async () => {
   admin = await createTempOrg("ZZ Module Taxes");
 });
 afterAll(async () => {
-  await db.delete(auditLog).where(and(eq(auditLog.entityType, "module_tax"), like(auditLog.entityId, CODE + ":%")));
-  await admin.remove();
-  await db.delete(complianceModuleTaxes).where(eq(complianceModuleTaxes.countryCode, CODE));
-  await db.delete(complianceTaxHeads).where(eq(complianceTaxHeads.countryCode, CODE));
-  await db.delete(complianceTaxTypes).where(eq(complianceTaxTypes.countryCode, CODE));
-  await db.delete(complianceCountries).where(eq(complianceCountries.code, CODE));
+  await admin?.remove();
+  await clear();
 });
 
 describe("applicable taxes by module", () => {
