@@ -31,6 +31,9 @@ type RowAccount = {
   isActive: boolean;
   category?: "asset" | "liability" | "equity" | "income" | "expense";
   subCategory?: string | null;
+  /** The TDS heading set on this account, and the one its group has (what it follows when none is set). */
+  tdsHeadKey?: string | null;
+  parentTdsHeadKey?: string | null;
   system: boolean;
 };
 
@@ -62,7 +65,7 @@ export function AccountRowActions({ account, showSubCategory, onError }: { accou
         <AccountEditModal
           defaultOpen
           onClose={() => setEditing(false)}
-          initial={{ id: account.id, name: account.name, isActive: account.isActive, category: account.category, subCategory: account.subCategory, system: account.system }}
+          initial={{ id: account.id, name: account.name, isActive: account.isActive, category: account.category, subCategory: account.subCategory, tdsHeadKey: account.tdsHeadKey ?? null, parentTdsHeadKey: account.parentTdsHeadKey ?? null, system: account.system }}
           showSubCategory={showSubCategory}
         />
       )}

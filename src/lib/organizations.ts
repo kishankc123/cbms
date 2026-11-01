@@ -1,8 +1,8 @@
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { tenants, accounts, memberships, subscriptions, taxRates, complianceCountries } from "@/db/schema";
+import { tenants, memberships, subscriptions, taxRates, complianceCountries, complianceTaxHeads } from "@/db/schema";
 import { publishedVersionsFor } from "@/lib/compliance/platform-tax-rates";
-import { DEFAULT_CHART_OF_ACCOUNTS } from "@/lib/ledger/default-chart-of-accounts";
+import { insertDefaultChart } from "@/lib/ledger/insert-default-chart";
 import { logAuditEvent } from "@/lib/audit";
 import { ensurePanRegistration } from "@/lib/compliance/registrations";
 import { requirePan } from "@/lib/pan";
@@ -57,15 +57,8 @@ export async function createOrganization(info: BusinessInfo, ownerUserId: string
           })
           .returning();
 
-        await tx.insert(accounts).values(
-          DEFAULT_CHART_OF_ACCOUNTS.map((a) => ({
-            tenantId: t.id,
-            code: a.code,
-            name: a.name,
-            category: a.category,
-            subCategory: a.subCategory,
-          }))
-        );
+        const heads = await tx.select({ key: complianceTaxHeads.key }).from(complianceTaxHeads).where(and(eq(complianceTaxHeads.countryCode, t.countryCode), eq(complianceTaxHeads.taxTypeKey, "tds"), eq(complianceTaxHeads.isActive, true)));
+        await insertDefaultChart(tx, t.id, new Set(heads.map((h) => h.key)));
         await tx.insert(memberships).values({ userId: ownerUserId, tenantId: t.id, role: "owner" });
         await tx.insert(subscriptions).values({ tenantId: t.id, plan: "trial", status: "trial", trialEndsAt: new Date(Date.now() + 30 * 86400000) });
         // Every tax rate a document could ever be taxed at must have a rate history behind it from day one — an

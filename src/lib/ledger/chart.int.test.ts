@@ -6,6 +6,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { ChartError, createAccountEntry, createSubGroupEntry, deleteAccountEntry, insertChildAccount, listAccountsWithBalances, updateAccountEntry } from "./chart";
 import { createSubAccount } from "./control-accounts";
 import { postJournalEntry } from "./post";
+import { effectiveTdsHead, listTdsHeads, tdsHeadLookup } from "./tds-links";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 const byCode = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
@@ -151,5 +152,33 @@ describe("chart of accounts (database)", () => {
     const updated = rows.find((r) => r.action === "account_updated")!;
     expect(updated.beforeValue).toMatchObject({ name: "Audited" });
     expect(updated.afterValue).toMatchObject({ name: "Audited (renamed)" });
+  });
+});
+
+describe("TDS headings on accounts", () => {
+  it("a new organization starts with the standard categories, linked to the headings its country offers", async () => {
+    const rent = await byCode("5100");
+    const fees = await byCode("5700");
+    const legal = await byCode("5700.02");
+    expect(rent.tdsHeadKey).toBe("rent");
+    expect(fees.tdsHeadKey).toBe("services");
+    expect(legal).toMatchObject({ parentAccountId: fees.id, tdsHeadKey: null });
+    const headOf = await tdsHeadLookup(org.tenantId);
+    expect(headOf(legal.id)).toBe("services"); // follows its group
+    expect(headOf((await byCode("5800.01")).id)).toBeNull(); // Telephone has none
+    expect((await listTdsHeads(org.tenantId)).map((h) => h.key)).toEqual(["payroll", "rent", "services"]);
+  });
+
+  it("an account can follow its group, be exempt, or use another heading; only expense accounts and real headings are accepted", async () => {
+    const fees = await byCode("5700");
+    const kid = await createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: fees.id, name: "ZZ Exempt fee", tdsHeadKey: "none" });
+    const all = await db.select().from(accounts).where(eq(accounts.tenantId, org.tenantId));
+    expect(effectiveTdsHead(all, kid.id)).toBeNull();
+    await updateAccountEntry(org.tenantId, org.userId, { id: kid.id, name: "ZZ Exempt fee", isActive: true, tdsHeadKey: "rent" });
+    expect((await byCode(kid.code)).tdsHeadKey).toBe("rent");
+    await updateAccountEntry(org.tenantId, org.userId, { id: kid.id, name: "ZZ Exempt fee", isActive: true, tdsHeadKey: null });
+    expect((await byCode(kid.code)).tdsHeadKey).toBeNull();
+    await rejects(updateAccountEntry(org.tenantId, org.userId, { id: kid.id, name: "ZZ Exempt fee", isActive: true, tdsHeadKey: "nonsense" }), /heading/i);
+    await rejects(createSubGroupEntry(org.tenantId, org.userId, { parentAccountId: (await byCode("1010")).id, name: "ZZ Bank", tdsHeadKey: "rent" }), /expense accounts only/i);
   });
 });

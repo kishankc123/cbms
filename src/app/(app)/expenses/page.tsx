@@ -92,7 +92,6 @@ export default async function ExpensesPage() {
         categoryAccounts={categoryAccounts}
         cashBankAccounts={cashBankAccounts}
         vatRate={taxDefaults.vatRate}
-        tdsRate={taxDefaults.tdsRate}
       />
       </ExpensesTabs>
     </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createAccount } from "./actions";
+import { AddAccountDialog } from "./add-account-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { AccountRowActions, Balance, SystemBadge, TYPE_LABEL } from "./shared";
 import { ACCOUNT_SUB_CATEGORIES } from "@/lib/ledger/account-sub-categories";
@@ -13,6 +12,7 @@ type Account = {
   name: string;
   category: "asset" | "liability" | "equity" | "income" | "expense";
   subCategory: string | null;
+  tdsHeadKey: string | null;
   isActive: boolean;
   /** Balance including every account beneath it. */
   total: number;
@@ -23,19 +23,14 @@ type Account = {
 type SortField = "code" | "name" | "category" | "total";
 
 export function AccountsTable({ accounts }: { accounts: Account[] }) {
-  const router = useRouter();
   const [subCategoryFilter, setSubCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("code");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [subCategory, setSubCategory] = useState<string>(ACCOUNT_SUB_CATEGORIES[0].label);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!filtersOpen) return;
@@ -64,46 +59,10 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
     }
   }
 
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const r = await createAccount({ code, name, subCategory });
-      if (!r.ok) return report(r.error, /name/i.test(r.error) ? '[data-field="newName"]' : /categor|type/i.test(r.error) ? '[data-field="newCategory"]' : '[data-field="newCode"]');
-      setCode("");
-      setName("");
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
-        <form onSubmit={add} className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Code</label>
-            <input data-field="newCode" value={code} onChange={(e) => setCode(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Name</label>
-            <input data-field="newName" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Category</label>
-            <select data-field="newCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-[180px]">
-              {ACCOUNT_SUB_CATEGORIES.map((sc) => (
-                <option key={sc.label} value={sc.label}>
-                  {sc.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" disabled={busy} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
-            Add account
-          </button>
-        </form>
+        <AddAccountDialog label="Add account" startInside={false} groups={accounts.filter((a) => a.isActive).map((a) => ({ id: a.id, code: a.code, name: a.name, category: a.category, tdsHeadKey: a.tdsHeadKey }))} />
 
         <div className="relative" ref={filterRef}>
           <button

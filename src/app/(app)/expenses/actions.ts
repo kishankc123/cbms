@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
-import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { getCurrentTaxRate, getTaxRate } from "@/lib/compliance/tax-rates";
+import { headRateKey } from "@/lib/compliance/platform-tax-rate-types";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
@@ -19,6 +20,7 @@ import {
   buildPostingLines,
   computeExpenseTotals,
   createExpenseCore,
+  tdsHeadForExpense,
   validateExpenseInput,
   type ExpenseBillType,
   type ExpenseInput,
@@ -148,6 +150,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
       taxableAmount: totals.subtotal.toFixed(2),
       vatAmount: totals.vatAmount.toFixed(2),
       tdsAmount: totals.tdsAmount.toFixed(2),
+      tdsHeadKey: await tdsHeadForExpense(session.tenantId, input.categoryAccountId, totals.tdsAmount),
       otherTaxAmount: totals.otherTaxAmount.toFixed(2),
       subtotal: totals.subtotal.toFixed(2),
       total: totals.total.toFixed(2),
@@ -359,6 +362,12 @@ export async function voidExpense(formData: FormData) {
 export async function getExpenseTaxDefaults() {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "view")) throw new Error("Not permitted");
-  const [vatRate, tdsRate] = await Promise.all([getCurrentTaxRate(session.tenantId, "vat"), getCurrentTaxRate(session.tenantId, "tds")]);
-  return { vatRate, tdsRate };
+  return { vatRate: await getCurrentTaxRate(session.tenantId, "vat") };
+}
+
+/** The rate of a TDS heading on a given date (0 when none is published), for the Expense form. */
+export async function getTdsRateOn(headKey: string, date: string): Promise<number> {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "view")) throw new Error("Not permitted");
+  return getTaxRate(session.tenantId, headRateKey("tds", headKey), date);
 }

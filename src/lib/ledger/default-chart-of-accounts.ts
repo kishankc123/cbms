@@ -7,6 +7,10 @@ export type DefaultAccount = {
   name: string;
   category: Category;
   subCategory?: string;
+  /** Code of the group this account sits in (a group has none). */
+  parentCode?: string;
+  /** TDS heading to link to when the country offers it; the accounts inside a group follow the group. */
+  tdsHead?: string;
 };
 
 // A general-purpose small-business template. Admins can add/edit/deactivate
@@ -38,11 +42,21 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccount[] = [
 
   // Expenses
   { code: "5000", name: "Cost of Goods Sold", category: "expense", subCategory: "Cost of goods sold" },
-  { code: "5100", name: "Rent", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5100", name: "Rent", category: "expense", subCategory: "Indirect expenses", tdsHead: "rent" },
   { code: "5200", name: "Salaries", category: "expense", subCategory: "Indirect expenses" },
   { code: "5300", name: "Utilities", category: "expense", subCategory: "Indirect expenses" },
   { code: "5400", name: "Office Supplies", category: "expense", subCategory: "Indirect expenses" },
   { code: "5500", name: "Depreciation Expense", category: "expense", subCategory: "Indirect expenses" },
   { code: "5600", name: "Loss on Disposal of Assets", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5700", name: "Professional & Service Fees", category: "expense", subCategory: "Indirect expenses", tdsHead: "services" },
+  { code: "5700.01", name: "Audit & Accounting Fees", category: "expense", subCategory: "Indirect expenses", parentCode: "5700" },
+  { code: "5700.02", name: "Legal Fees", category: "expense", subCategory: "Indirect expenses", parentCode: "5700" },
+  { code: "5700.03", name: "Consultancy Fees", category: "expense", subCategory: "Indirect expenses", parentCode: "5700" },
+  { code: "5700.04", name: "Repairs & Maintenance", category: "expense", subCategory: "Indirect expenses", parentCode: "5700" },
+  { code: "5700.05", name: "Advertising & Marketing", category: "expense", subCategory: "Indirect expenses", parentCode: "5700" },
+  { code: "5800", name: "Communication, Travel & Insurance", category: "expense", subCategory: "Indirect expenses" },
+  { code: "5800.01", name: "Telephone & Internet", category: "expense", subCategory: "Indirect expenses", parentCode: "5800" },
+  { code: "5800.02", name: "Travel & Transport", category: "expense", subCategory: "Indirect expenses", parentCode: "5800" },
+  { code: "5800.03", name: "Insurance", category: "expense", subCategory: "Indirect expenses", parentCode: "5800" },
   { code: "5900", name: "Miscellaneous Expense", category: "expense", subCategory: "Indirect expenses" },
 ];

@@ -18,7 +18,7 @@ import { D } from "@/components/calendar/date-text";
 import { DateDisplayControl, useDateDisplay } from "@/components/calendar/report-dates";
 import { exportDateColumns, exportDateHeaders, type DateDisplayMode } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
-type CategoryAccount = { id: string; code: string; name: string };
+type CategoryAccount = { id: string; code: string; name: string; tdsHeadKey?: string | null };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 
 type ExpenseRow = {
@@ -74,7 +74,6 @@ export function ExpensesTable({
   categoryAccounts,
   cashBankAccounts,
   vatRate,
-  tdsRate,
 }: {
   expenses: ExpenseRow[];
   vendors: Vendor[];
@@ -82,7 +81,6 @@ export function ExpensesTable({
   categoryAccounts: CategoryAccount[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
-  tdsRate: number;
 }) {
   const [exportDates, setExportDates] = useDateDisplay();
   const [showNewForm, setShowNewForm] = useState(false);
@@ -339,7 +337,6 @@ export function ExpensesTable({
           categoryAccounts={categoryAccounts}
           cashBankAccounts={cashBankAccounts}
           vatRate={vatRate}
-          tdsRate={tdsRate}
           onClose={() => setShowNewForm(false)}
         />
       )}
@@ -350,7 +347,6 @@ export function ExpensesTable({
           categoryAccounts={categoryAccounts}
           cashBankAccounts={cashBankAccounts}
           vatRate={vatRate}
-          tdsRate={tdsRate}
           initial={editData}
           onClose={() => setEditData(null)}
         />

@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { db } from "./index";
-import { users, memberships, tenants, subscriptions, accounts } from "./schema";
-import { DEFAULT_CHART_OF_ACCOUNTS } from "../lib/ledger/default-chart-of-accounts";
+import { users, memberships, tenants, subscriptions } from "./schema";
+import { insertDefaultChart } from "../lib/ledger/insert-default-chart";
 
 async function main() {
   const superAdminEmail = "super@cbms.local";
@@ -29,15 +29,7 @@ async function main() {
     })
     .returning();
 
-  await db.insert(accounts).values(
-    DEFAULT_CHART_OF_ACCOUNTS.map((a) => ({
-      tenantId: demoTenant.id,
-      code: a.code,
-      name: a.name,
-      category: a.category,
-      subCategory: a.subCategory,
-    }))
-  );
+  await insertDefaultChart(db, demoTenant.id, new Set());
   await db.insert(subscriptions).values({ tenantId: demoTenant.id });
 
   const [demoOwner] = await db

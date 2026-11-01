@@ -9,6 +9,7 @@ import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
 import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
+import { tdsHeadLookup } from "@/lib/ledger/tds-links";
 
 // An expense: the rules, the amounts and the ledger entry. They live here so the Add form, the edit form and Import Expenses
 // all post the same way. Kept out of the "use server" action file so these are plain helpers, not callable endpoints.
@@ -36,6 +37,11 @@ export type ExpenseInput = {
   otherTaxAmount: number;
   payments: ExpensePaymentLine[];
 };
+
+/** The TDS heading a withheld amount belongs to: the one set on the category (or its group), kept so deposits and reports can be by heading. */
+export async function tdsHeadForExpense(tenantId: string, categoryAccountId: string, tdsAmount: number): Promise<string | null> {
+  return tdsAmount > 0 ? (await tdsHeadLookup(tenantId))(categoryAccountId) : null;
+}
 
 export async function validateExpenseInput(tenantId: string, input: ExpenseInput, excludeExpenseId?: string) {
   if (input.taxableAmount <= 0) throw new Error("Taxable amount must be greater than zero");
@@ -183,6 +189,7 @@ export async function createExpenseCore(
           taxableAmount: totals.subtotal.toFixed(2),
           vatAmount: totals.vatAmount.toFixed(2),
           tdsAmount: totals.tdsAmount.toFixed(2),
+          tdsHeadKey: await tdsHeadForExpense(tenantId, input.categoryAccountId, totals.tdsAmount),
           otherTaxAmount: totals.otherTaxAmount.toFixed(2),
           subtotal: totals.subtotal.toFixed(2),
           total: totals.total.toFixed(2),
