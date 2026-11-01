@@ -25,7 +25,7 @@ export async function rateTypesFor(countryCode: string): Promise<RateType[]> {
   return [...BASE_RATE_TYPES, ...heads.map((h) => ({ key: headRateKey(h.taxTypeKey, h.key), label: `${h.name} ${h.taxTypeKey.toUpperCase()}` }))];
 }
 
-async function fiscalCalendar(countryCode: string) {
+export async function fiscalCalendar(countryCode: string) {
   const [c] = await db.select({ calendar: complianceCountries.statutoryCalendar, startMonth: complianceCountries.fiscalYearStartMonth }).from(complianceCountries).where(eq(complianceCountries.code, countryCode)).limit(1);
   return { calendar: (c?.calendar ?? "AD") as CalendarSystem, startMonth: c?.startMonth ?? 1 };
 }
@@ -181,7 +181,7 @@ export async function publishedVersionsFor(countryCode: string, executor: Pick<t
   return executor.select().from(platformTaxRates).where(eq(platformTaxRates.countryCode, countryCode)).orderBy(asc(platformTaxRates.effectiveFrom), desc(platformTaxRates.createdAt));
 }
 
-const CARRY_FORWARD_DAYS = 60;
+export const CARRY_FORWARD_DAYS = 60;
 
 /**
  * Starts next fiscal year's rates from the ones in force: once the year is within 60 days of ending, every rate with a published version

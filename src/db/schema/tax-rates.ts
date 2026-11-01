@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, date, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, numeric, date, timestamp, boolean, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
 import { complianceCountries } from "./compliance-framework";
 
@@ -71,4 +71,39 @@ export const platformTaxRateDrafts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("platform_tax_rate_drafts_country_type_from").on(t.countryCode, t.taxTypeKey, t.effectiveFrom)]
+);
+
+// Slab tables (salary TDS): like a rate, published for a whole country in numbered versions, but a version is a set of income slabs per
+// taxpayer class instead of one percentage. `tables` is { single: [{ upTo, rate }], couple: [...] }, the last slab open-ended (upTo null).
+// Organizations do not get a copy: payroll reads the version in force on the pay date and records which one it used.
+export const platformSlabVersions = pgTable(
+  "platform_slab_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    /** The TDS heading these slabs belong to (a heading of kind "slabs", for example "payroll"). */
+    headKey: text("head_key").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    tables: jsonb("tables").notNull(),
+    isVerified: boolean("is_verified").notNull().default(false),
+    source: text("source"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_slab_versions_country_head_from").on(t.countryCode, t.headKey, t.effectiveFrom)]
+);
+
+// Next fiscal year's slabs, carried forward and waiting to be edited and confirmed. Changes nothing until confirmed.
+export const platformSlabDrafts = pgTable(
+  "platform_slab_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    headKey: text("head_key").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    tables: jsonb("tables").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_slab_drafts_country_head_from").on(t.countryCode, t.headKey, t.effectiveFrom)]
 );

@@ -11,6 +11,7 @@ import { getCountryPageData } from "@/app/admin/setup/countries/actions";
 import { adminCard, AdminHeader, Facts } from "../../ui";
 import { getTaxRateAdminData } from "../tax-rates/actions";
 import { TaxRatesAdmin } from "../tax-rates/tax-rates-admin";
+import { SlabsAdmin } from "../tax-rates/slabs-admin";
 import { FiscalYearFilter } from "./fiscal-year-filter";
 import { getPenaltyAdminData } from "../penalties/actions";
 import { PenaltiesAdmin } from "../penalties/penalties-admin";
@@ -156,10 +157,7 @@ async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: strin
           {selectedHead && (
             <>
               {selectedHead.kind === "slabs" ? (
-                <section className={`${adminCard} space-y-1 p-5`}>
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">{selectedHead.name} TDS</h2>
-                  <p className="text-sm text-[var(--text-secondary)]">This heading is worked out from income slabs, which differ by fiscal year, not from one percentage. Slab setup comes in the next step.</p>
-                </section>
+                fiscalYear && <SlabsAdmin data={rates} headKey={selectedHead.key} headName={selectedHead.name} fiscalYear={fiscalYear} />
               ) : (
                 <TaxRatesAdmin data={rates} only={[headRateKey("tds", selectedHead.key)]} fiscalYear={fiscalYear} />
               )}

@@ -708,6 +708,13 @@
       "when": 1793521225066,
       "tag": "0100_rate_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1793526485397,
+      "tag": "0101_slab_versions",
+      "breakpoints": true
     }
   ]
 }

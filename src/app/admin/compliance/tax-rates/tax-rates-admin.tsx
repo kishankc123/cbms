@@ -10,7 +10,7 @@ import { confirmDraft, editPublishedRate, publishRate, type TaxRateAdminData } f
 
 const pct = (n: number) => `${n.toFixed(2)}%`;
 // Dates are stored as real (AD) dates; in Nepal the Bikram Sambat date is what people recognize, so show both.
-function bothDates(iso: string | null) {
+export function bothDates(iso: string | null) {
   if (!iso) return "—";
   const bs = ymdOf("BS", iso);
   return bs ? `${iso} (${bs.day} ${monthNames("BS")[bs.month - 1]} ${bs.year} BS)` : iso;
