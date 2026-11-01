@@ -1,7 +1,8 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { complianceObligations, complianceTaxAssessments, complianceTaxTypes, paymentAllocations, payments, tenants } from "@/db/schema";
-import { getTdsReport, getVatReturn } from "./reports";
+import { getVatReturn } from "./reports";
+import { tdsWithheldByHeading } from "./tds-by-heading";
 import { savedVatNetPayables } from "./vat-worksheet";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -12,8 +13,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const AMOUNT_SOURCES: Record<string, (tenantId: string, from: string, to: string) => Promise<number>> = {
   // Net VAT payable for the period (a net credit is not "due").
   vat_return: async (tenantId, from, to) => Math.max(0, (await getVatReturn(tenantId, from, to)).netVatPayable),
-  // Tax withheld at source on the period's expenses.
-  tds_withheld: async (tenantId, from, to) => (await getTdsReport(tenantId, from, to)).totalTds,
+  // Tax withheld at source in the period: on expenses, and from salaries in payroll (all headings).
+  tds_withheld: async (tenantId, from, to) => (await tdsWithheldByHeading(tenantId, from, to)).total,
 };
 
 export type ObligationAmounts = {

@@ -127,6 +127,8 @@ export const paymentAllocations = pgTable("payment_allocations", {
   targetType: paymentAllocationTargetEnum("target_type").notNull(),
   targetId: uuid("target_id").notNull(),
   allocatedAmount: numeric("allocated_amount", { precision: 18, scale: 2 }).notNull(),
+  // A TDS deposit is split by heading: the heading (Salary, Rent...) this part of the payment deposits. null = not by heading.
+  tdsHeadKey: text("tds_head_key"),
 });
 
 // A sales return (credit due to the customer) or purchase return (credit due from the supplier) applied against

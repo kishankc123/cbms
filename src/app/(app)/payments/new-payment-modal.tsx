@@ -238,7 +238,7 @@ export function NewPaymentModal({
         // invoice links are dropped — what it settles now follows the party's ledger.
         const result = await updatePayment(editing.id, {
           ...fields,
-          allocations: config.showAllocation ? allocations : editing.allocations.filter((a) => a.targetType === "tax_obligation").map((a) => ({ targetType: "tax_obligation" as const, targetId: a.targetId, allocatedAmount: a.allocatedAmount })),
+          allocations: config.showAllocation ? allocations : editing.allocations.filter((a) => a.targetType === "tax_obligation").map((a) => ({ targetType: "tax_obligation" as const, targetId: a.targetId, allocatedAmount: a.allocatedAmount, tdsHeadKey: a.tdsHeadKey })),
         });
         if (!result.changed) {
           report("Nothing was changed, so there is nothing to save.", null);

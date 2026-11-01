@@ -4,6 +4,7 @@ import { employees, journalEntries, journalLines, payrollLines, type payrollRuns
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { getOrCreateEmployeeAdvanceAccountId } from "@/lib/ledger/advance-accounts";
 import { getOrCreateSalaryExpenseAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
+import { getOrCreateTdsHeadPayableAccount, payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 
 type Run = typeof payrollRuns.$inferSelect;
@@ -43,7 +44,8 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
   const totalDeductions = lines.reduce((s, l) => s + Number(l.deductions), 0);
   const deductionsAccount = totalDeductions > 0 ? await getOrCreatePayrollDeductionsAccount(tenantId) : null;
   const totalTds = lines.reduce((s, l) => s + Number(l.tdsAmount), 0);
-  const tdsAccount = totalTds > 0 ? await getOrCreateSalaryTdsPayableAccount(tenantId) : null;
+  const payrollHead = totalTds > 0 ? await payrollTdsHeadKey(tenantId) : null;
+  const tdsAccount = totalTds > 0 ? (payrollHead ? await getOrCreateTdsHeadPayableAccount(tenantId, payrollHead) : await getOrCreateSalaryTdsPayableAccount(tenantId)) : null;
 
   const postLines: PostLineInput[] = [];
   for (const line of lines) {

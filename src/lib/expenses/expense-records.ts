@@ -10,6 +10,7 @@ import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
 import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
 import { tdsHeadLookup } from "@/lib/ledger/tds-links";
+import { getOrCreateTdsHeadPayableAccount } from "@/lib/ledger/tds-payable-accounts";
 
 // An expense: the rules, the amounts and the ledger entry. They live here so the Add form, the edit form and Import Expenses
 // all post the same way. Kept out of the "use server" action file so these are plain helpers, not callable endpoints.
@@ -118,7 +119,9 @@ export async function buildPostingLines(
   }
 
   if (totals.tdsAmount > 0) {
-    const tdsPayable = await getOrCreateTdsPayableAccount(tenantId);
+    // Withheld TDS is owed under its own heading (Rent, Services...), so a deposit can clear exactly that heading.
+    const headKey = await tdsHeadForExpense(tenantId, categoryAccountId, totals.tdsAmount);
+    const tdsPayable = headKey ? await getOrCreateTdsHeadPayableAccount(tenantId, headKey) : await getOrCreateTdsPayableAccount(tenantId);
     lines.push({ accountId: tdsPayable.id, creditAmount: totals.tdsAmount, description: `TDS on expense ${expenseNumber}` });
   }
 

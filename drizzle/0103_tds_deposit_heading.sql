@@ -1,0 +1,1 @@
+ALTER TABLE "payment_allocations" ADD COLUMN "tds_head_key" text;
