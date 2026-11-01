@@ -56,3 +56,19 @@ export const platformTaxRates = pgTable(
   },
   (t) => [uniqueIndex("platform_tax_rates_country_type_from").on(t.countryCode, t.taxTypeKey, t.effectiveFrom)]
 );
+
+// Next fiscal year's rates, carried forward from the version in force and waiting for an administrator to edit and confirm them. A draft
+// changes nothing: until it is confirmed (which publishes it as a normal version), the rate that was in force keeps applying.
+export const platformTaxRateDrafts = pgTable(
+  "platform_tax_rate_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    taxTypeKey: text("tax_type_key").notNull(),
+    rate: numeric("rate", { precision: 5, scale: 2 }).notNull(),
+    /** The first day of the fiscal year the draft is for. */
+    effectiveFrom: date("effective_from").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_tax_rate_drafts_country_type_from").on(t.countryCode, t.taxTypeKey, t.effectiveFrom)]
+);

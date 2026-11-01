@@ -78,6 +78,7 @@ const PLATFORM: Record<string, string> = {
   compliance_requirement_templates: "platform compliance configuration",
   compliance_penalty_rules: "platform compliance configuration",
   platform_tax_rates: "published by platform administrators; copied into each organization as tax_rates",
+  platform_tax_rate_drafts: "carried-forward platform rates waiting for an administrator to confirm them",
 };
 /** Tables where tenant_id may be NULL: rows that belong to the platform, not an organization. */
 const NULLABLE_TENANT_OK: Record<string, string> = {

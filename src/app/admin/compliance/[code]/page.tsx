@@ -16,7 +16,7 @@ import { PenaltiesAdmin } from "../penalties/penalties-admin";
 import { getTemplateAdminData } from "../templates/actions";
 import { TemplatesAdmin } from "../templates/templates-admin";
 
-export default async function AdminCountryCompliancePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string; tax?: string; head?: string; view?: string }> }) {
+export default async function AdminCountryCompliancePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string; tax?: string; head?: string; view?: string; fy?: string }> }) {
   await requirePlatformAdmin();
   const code = (await params).code.toUpperCase();
   const query = await searchParams;
@@ -72,7 +72,7 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
         </div>
       )}
 
-      {tab === "tax" && <TaxTab code={code} tax={query.tax} head={query.head} view={query.view === "penalties" ? "penalties" : "setup"} />}
+      {tab === "tax" && <TaxTab code={code} tax={query.tax} head={query.head} fy={query.fy} view={query.view === "penalties" ? "penalties" : "setup"} />}
 
       {tab === "statutory" && (
         <div className="space-y-4">
@@ -89,7 +89,7 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
 // One tax at a time: pick the tax, then Setup (its rate, how it is filed and its deadlines) or Penalty & fines. TDS is not one rate: it is
 // split into headings (Payroll, Rent, Services...), each with a rate of its own, so a heading is picked first. The taxes and headings come
 // from the country's setup lists, so one added there appears here. The choice lives in the address, so each view can be bookmarked.
-async function TaxTab({ code, tax, head, view }: { code: string; tax?: string; head?: string; view: "setup" | "penalties" }) {
+async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: string; head?: string; fy?: string; view: "setup" | "penalties" }) {
   const [taxes, rates, penalties, templates, headRows] = await Promise.all([listSetup(code, "taxes"), getTaxRateAdminData(code), getPenaltyAdminData(code), getTemplateAdminData(code), listSetup(code, "tds-headings")]);
   // The taxes that have a rate come first, in their usual order (VAT, TDS, Income tax); the rest follow by name.
   const order = ["vat", "tds", "income_tax"];
@@ -101,7 +101,10 @@ async function TaxTab({ code, tax, head, view }: { code: string; tax?: string; h
   const hasHeads = selected.key === "tds";
   const heads = headRows.rows.filter((h) => h.isActive);
   const selectedHead = hasHeads ? heads.find((h) => h.key === head) ?? heads[0] : undefined;
-  const link = (key: string, headKey: string | undefined, v: string) => `/admin/compliance/${code}?tab=tax&tax=${key}${headKey ? `&head=${headKey}` : ""}&view=${v}`;
+  const years = rates.years;
+  const currentYear = years.find((y) => y.from <= rates.today && rates.today <= y.to) ?? years[0];
+  const fiscalYear = years.find((y) => String(y.startYear) === fy) ?? currentYear;
+  const link = (key: string, headKey: string | undefined, v: string, year = fiscalYear?.startYear) => `/admin/compliance/${code}?tab=tax&tax=${key}${headKey ? `&head=${headKey}` : ""}&view=${v}${year ? `&fy=${year}` : ""}`;
   const hasRate = BASE_RATE_TYPES.some((t) => t.key === selected.key);
   const hasPenalties = PENALTY_TYPES.some((t) => t.key === selected.key && !(STATUTORY_PENALTIES as readonly string[]).includes(t.key));
   const pill = (active: boolean) => `rounded-full px-4 py-1.5 text-sm ${active ? "bg-[var(--color-primary)] text-white" : "bg-[var(--surface-muted-bg)] text-[var(--text-secondary)]"}`;
@@ -127,6 +130,20 @@ async function TaxTab({ code, tax, head, view }: { code: string; tax?: string; h
           </Link>
         </div>
       )}
+      {view === "setup" && years.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-[var(--text-secondary)]">Fiscal year</span>
+          {years.map((y) => {
+            const toConfirm = rates.drafts.filter((d) => d.effectiveFrom === y.from).length;
+            return (
+              <Link key={y.startYear} href={link(selected.key, selectedHead?.key, view, y.startYear)} className={pill(y.startYear === fiscalYear?.startYear)}>
+                {y.label}
+                {toConfirm > 0 && <span className="ml-2 text-xs">{toConfirm} to confirm</span>}
+              </Link>
+            );
+          })}
+        </div>
+      )}
       <div className="flex gap-1 border-b border-[var(--card-border)]">
         {([["setup", "Setup"], ["penalties", "Penalty & fines"]] as const).map(([v, label]) => (
           <Link key={v} href={link(selected.key, selectedHead?.key, v)} className={`px-4 py-2 text-sm ${view === v ? "border-b-2 border-[var(--color-primary)] font-medium text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
@@ -146,14 +163,14 @@ async function TaxTab({ code, tax, head, view }: { code: string; tax?: string; h
                   <p className="text-sm text-[var(--text-secondary)]">This heading is worked out from income slabs, which differ by fiscal year, not from one percentage. Slab setup comes in the next step.</p>
                 </section>
               ) : (
-                <TaxRatesAdmin data={rates} only={[headRateKey("tds", selectedHead.key)]} />
+                <TaxRatesAdmin data={rates} only={[headRateKey("tds", selectedHead.key)]} fiscalYear={fiscalYear} />
               )}
               <p className="text-sm text-[var(--text-secondary)]">
                 Used in: <span className="text-[var(--text-primary)]">{selectedHead.module === "payroll" ? "Payroll (salary sheet and payslip)" : "Expenses"}</span>
               </p>
             </>
           )}
-          {hasRate && <TaxRatesAdmin data={rates} only={[selected.key]} />}
+          {hasRate && <TaxRatesAdmin data={rates} only={[selected.key]} fiscalYear={fiscalYear} />}
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">{hasHeads ? "TDS filing and deadlines (all headings)" : "Filing and deadlines"}</h2>
             <p className="text-sm text-[var(--text-secondary)]">How {selected.name} is filed (for example monthly or quarterly) and when each return or payment is due. Switch one off with Edit → Active.</p>

@@ -14,4 +14,8 @@ export const BASE_RATE_TYPES: RateType[] = [
 /** The key a heading's rate is published and stored under. */
 export const headRateKey = (taxTypeKey: string, headKey: string) => `${taxTypeKey}.${headKey}`;
 
-export type RateVersion = { id: string; rate: number; effectiveFrom: string; effectiveTo: string | null; isVerified: boolean; source: string | null; inForce: boolean };
+/** A fiscal year of a country: `startYear` identifies it, `from`/`to` are its real (AD) first and last days. */
+export type FiscalYear = { startYear: number; label: string; from: string; to: string };
+
+/** `version` counts the versions that start in the same fiscal year (v1 is the first, v2 a change made during the year). */
+export type RateVersion = { fiscalYear: string; version: number; id: string; rate: number; effectiveFrom: string; effectiveTo: string | null; isVerified: boolean; source: string | null; inForce: boolean };
