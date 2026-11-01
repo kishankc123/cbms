@@ -83,7 +83,7 @@ export async function currentPenaltyRates(countryCode: string, today: IsoDate = 
 
 export type NewVersionInput = { countryCode: string; taxTypeKey: PenaltyTypeKey; /** The year the fiscal year starts in, e.g. 2083 for 2083/84. */ fiscalYearStart: number; form: FormValues; isVerified: boolean; source: string };
 
-/** Adds a version that starts on the first day of the chosen fiscal year, after the latest existing one, and ends the one before it. */
+/** Adds a version that starts on the first day of the chosen fiscal year: after the latest existing one (ending it), or before the earliest one (for a year nothing was set for). */
 export async function createPenaltyVersion(adminId: string, input: NewVersionInput): Promise<Result> {
   if (!penaltyType(input.taxTypeKey)) return fail("Unknown penalty type.");
   const years = await fiscalYearsOf(input.countryCode);
@@ -98,16 +98,17 @@ export async function createPenaltyVersion(adminId: string, input: NewVersionInp
     .where(and(eq(compliancePenaltyRules.countryCode, input.countryCode), eq(compliancePenaltyRules.taxTypeKey, input.taxTypeKey)))
     .orderBy(asc(compliancePenaltyRules.effectiveFrom));
   const latest = existing[existing.length - 1];
-  if (latest && range.from <= latest.effectiveFrom) {
+  const backfill = existing.length > 0 && range.from < existing[0].effectiveFrom;
+  if (latest && !backfill && range.from <= latest.effectiveFrom) {
     const fy = fiscalYearOf(years.calendar, years.month, latest.effectiveFrom);
     return fail(`Versions are added in order. The latest version starts ${fy && fy.from === latest.effectiveFrom ? `in fiscal year ${fy.label}` : "from the original date"}; choose a later fiscal year.`);
   }
 
   const [created] = await db.transaction(async (tx) => {
-    if (latest) await tx.update(compliancePenaltyRules).set({ effectiveTo: addDays(range.from, -1) }).where(eq(compliancePenaltyRules.id, latest.id));
+    if (latest && !backfill) await tx.update(compliancePenaltyRules).set({ effectiveTo: addDays(range.from, -1) }).where(eq(compliancePenaltyRules.id, latest.id));
     return tx
       .insert(compliancePenaltyRules)
-      .values({ countryCode: input.countryCode, taxTypeKey: input.taxTypeKey, effectiveFrom: range.from, params: checked.params, isVerified: input.isVerified, source: input.source.trim() || null })
+      .values({ countryCode: input.countryCode, taxTypeKey: input.taxTypeKey, effectiveFrom: range.from, effectiveTo: backfill ? addDays(existing[0].effectiveFrom, -1) : null, params: checked.params, isVerified: input.isVerified, source: input.source.trim() || null })
       .returning({ id: compliancePenaltyRules.id });
   });
   await logAuditEvent({ userId: adminId, action: "penalty_rule_created", entityType: "penalty_rule", entityId: created.id, after: { country: input.countryCode, type: input.taxTypeKey, from: range.from, fiscalYear: range.label, params: checked.params, verified: input.isVerified, source: input.source.trim() || null } });

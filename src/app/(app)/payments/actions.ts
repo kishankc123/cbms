@@ -140,7 +140,7 @@ export async function createPayment(input: CreatePaymentActionInput) {
 }
 
 export type UpdatePaymentActionInput = Omit<UpdatePaymentInput, "allocations"> & {
-  allocations?: (PaymentAllocationInput | { targetType: "tax_obligation"; targetId: string; allocatedAmount: number })[];
+  allocations?: (PaymentAllocationInput | { targetType: "tax_obligation"; targetId: string; allocatedAmount: number; tdsHeadKey?: string | null })[];
 };
 
 // Editing needs the Payments "edit" permission. The kind of payment cannot change; what changed is written to the audit log.
@@ -380,6 +380,7 @@ export async function getPaymentDetail(paymentId: string) {
       targetId: a.targetId,
       label: target?.label ?? "—",
       allocatedAmount: Number(a.allocatedAmount),
+      tdsHeadKey: a.tdsHeadKey,
       outstandingAfter: target ? round2(target.total - target.amountPaid) : null,
     };
   });

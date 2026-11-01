@@ -209,6 +209,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
             {panel === "payment" && options && (
               <PaymentPanel
                 balance={d.amounts.balance}
+                breakdown={d.tdsBreakdown}
                 options={options}
                 busy={busy}
                 onCancel={() => setPanel("none")}
@@ -293,6 +294,32 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
               )}
             </section>
 
+            {d.tdsBreakdown && d.tdsBreakdown.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-900">By heading</h3>
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-gray-500">
+                    <tr>
+                      <th className="py-1 pr-2 font-medium">Heading</th>
+                      <th className="py-1 pr-2 text-right font-medium">Withheld</th>
+                      <th className="py-1 pr-2 text-right font-medium">Deposited</th>
+                      <th className="py-1 text-right font-medium">Still to deposit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.tdsBreakdown.map((r) => (
+                      <tr key={r.key ?? "none"} className="border-t border-gray-100">
+                        <td className="py-1.5 pr-2">{r.name}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.withheld)}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.deposited)}</td>
+                        <td className="py-1.5 text-right tabular-nums">{fmt(r.remaining)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
             <section className="space-y-2">
               <h3 className="text-sm font-semibold text-gray-900">Payments</h3>
               {d.payments.length === 0 ? (
@@ -352,18 +379,23 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
   );
 }
 
+type Breakdown = { key: string | null; name: string; withheld: number; deposited: number; remaining: number }[];
+
 function PaymentPanel({
   balance,
+  breakdown,
   options,
   busy,
   onCancel,
   onSubmit,
 }: {
   balance: number;
+  /** A TDS deposit: what is left to deposit for each heading. The payment is then split by heading. */
+  breakdown?: Breakdown | null;
   options: Options;
   busy: boolean;
   onCancel: () => void;
-  onSubmit: (v: { amount: number; paymentDate: string; accountId: string; paymentModeId?: string | null; paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other"; referenceNumber: string; chequeNumber?: string }) => void;
+  onSubmit: (v: { amount: number; headAmounts?: { key: string | null; amount: number }[]; paymentDate: string; accountId: string; paymentModeId?: string | null; paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other"; referenceNumber: string; chequeNumber?: string }) => void;
 }) {
   const [amount, setAmount] = useState(balance > 0 ? balance.toFixed(2) : "");
   const [paymentDate, setPaymentDate] = useState(todayIso());
@@ -373,21 +405,51 @@ function PaymentPanel({
   const method = modeName ? methodForMode(modeName) : "bank_transfer";
   const [reference, setReference] = useState("");
   const [cheque, setCheque] = useState("");
-  const value = Number(amount);
+  // Paying by heading: each heading starts at what is left for it. Changing the total shares it across the headings in proportion.
+  const headings = (breakdown ?? []).filter((r) => r.remaining > 0 || r.withheld > 0);
+  const hk = (k: string | null) => k ?? "";
+  const [byHead, setByHead] = useState<Record<string, string>>(() => Object.fromEntries(headings.map((r) => [hk(r.key), r.remaining.toFixed(2)])));
+  const headTotal = Math.round(headings.reduce((s, r) => s + (Number(byHead[hk(r.key)]) || 0), 0) * 100) / 100;
+  function shareTotal(total: number) {
+    const left = headings.reduce((s, r) => s + r.remaining, 0);
+    let given = 0;
+    const next: Record<string, string> = {};
+    headings.forEach((r, i) => {
+      const part = i === headings.length - 1 ? Math.round((total - given) * 100) / 100 : left > 0 ? Math.round(((total * r.remaining) / left) * 100) / 100 : 0;
+      given += part;
+      next[hk(r.key)] = Math.max(part, 0).toFixed(2);
+    });
+    setByHead(next);
+  }
+  const byHeading = headings.length > 0;
+  const value = byHeading ? headTotal : Number(amount);
 
   return (
     <section className="space-y-3 rounded-lg border border-[var(--color-primary)]/30 bg-blue-50/30 p-4">
       <h3 className="text-sm font-semibold text-gray-900">Record payment</h3>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Amount</label>
-          <input type="number" step="0.01" min="0" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <label className="block text-xs text-gray-500 mb-1">{byHeading ? "Total depositing" : "Amount"}</label>
+          <input type="number" step="0.01" min="0" className={input} value={byHeading ? String(headTotal) : amount} onChange={(e) => (byHeading ? shareTotal(Number(e.target.value) || 0) : setAmount(e.target.value))} />
           {balance > 0 && <p className="mt-1 text-xs text-gray-400">Balance {fmt(balance)}</p>}
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Date</label>
           <DatePicker value={paymentDate} onChange={setPaymentDate} className={input} />
         </div>
+        {byHeading && (
+          <div className="col-span-2 space-y-1.5 rounded border border-gray-200 bg-white p-3">
+            <p className="text-xs text-gray-500">Deposited for each heading</p>
+            {headings.map((r) => (
+              <div key={hk(r.key)} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-gray-700">
+                  {r.name} <span className="text-xs text-gray-400">· {fmt(r.remaining)} left</span>
+                </span>
+                <input type="number" step="0.01" min="0" className={`${input} w-32 text-right`} value={byHead[hk(r.key)] ?? ""} onChange={(e) => setByHead({ ...byHead, [hk(r.key)]: e.target.value })} />
+              </div>
+            ))}
+          </div>
+        )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Paid from (mode and account)</label>
           <PaymentModeSelect
@@ -418,7 +480,7 @@ function PaymentPanel({
         <button
           type="button"
           disabled={busy || !(value > 0) || !accountId || !paymentDate}
-          onClick={() => onSubmit({ amount: value, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
+          onClick={() => onSubmit({ amount: value, headAmounts: byHeading ? headings.map((r) => ({ key: r.key, amount: Number(byHead[hk(r.key)]) || 0 })) : undefined, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
           className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
         >
           {busy ? "Recording..." : "Record payment"}

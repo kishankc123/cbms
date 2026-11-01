@@ -13,6 +13,7 @@ import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { createPayment } from "@/lib/ledger/payments-engine";
 import { recordTaxAssessment, voidTaxAssessment } from "@/lib/compliance/assessments";
 import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/tax-amounts";
+import { tdsDepositBreakdown } from "@/lib/compliance/tds-by-heading";
 import { effectiveStatus, type ObligationStatus } from "@/lib/compliance/engine/status";
 import { generateObligations } from "@/lib/compliance/engine/generate";
 
@@ -135,6 +136,8 @@ export async function getTaxObligationDetail(id: string) {
       enteredAmount: ob.amountDue ?? "",
     },
     amounts: a,
+    // A TDS deposit item: what was withheld, deposited and is left, by heading (Salary, Rent, Services...).
+    tdsBreakdown: ob.taxTypeKey === "tds" ? await tdsDepositBreakdown(session.tenantId, ob) : null,
     charges: charges.map((c) => ({ id: c.id, kind: c.kind, date: c.assessmentDate, amount: Number(c.amount), description: c.description ?? "", reference: c.referenceNumber ?? "", status: c.status })),
     payments: paid.map((p) => ({ paymentId: p.paymentId, number: p.paymentNumber, date: p.paymentDate, reference: p.referenceNumber ?? "", amount: Number(p.allocated), voided: p.status === "voided" })),
   };
@@ -215,6 +218,8 @@ export async function updateTaxObligation(id: string, patch: ObligationPatch) {
 export type ObligationPaymentInput = {
   obligationId: string;
   amount: number;
+  /** A TDS deposit split by heading: the amount deposited for each heading (key null = TDS not assigned to a heading). It sets the total. */
+  headAmounts?: { key: string | null; amount: number }[];
   paymentDate: string;
   accountId: string;
   paymentModeId?: string | null;
@@ -232,6 +237,18 @@ export type ObligationPaymentInput = {
 export async function recordObligationPayment(input: ObligationPaymentInput) {
   const session = await requireTenantSession();
   if (!can(session, "compliance", "edit") || !can(session, "payments", "create")) throw new Error("Not permitted");
+  // A TDS deposit is split by heading, and no heading can be paid more than is left to deposit for it.
+  const byHeading = (input.headAmounts ?? []).filter((h) => h.amount > 0);
+  if (byHeading.length > 0) {
+    const [ob] = await db.select().from(complianceObligations).where(and(eq(complianceObligations.id, input.obligationId), eq(complianceObligations.tenantId, session.tenantId))).limit(1);
+    if (!ob || ob.taxTypeKey !== "tds") throw new Error("Only a TDS item can be paid by heading");
+    const rows = await tdsDepositBreakdown(session.tenantId, ob);
+    for (const h of byHeading) {
+      const row = rows.find((r) => r.key === h.key);
+      if (!row || h.amount > row.remaining + 0.005) throw new Error(`${row?.name ?? "That heading"}: only ${(row?.remaining ?? 0).toFixed(2)} is left to deposit`);
+    }
+    input = { ...input, amount: Math.round(byHeading.reduce((s, h) => s + h.amount, 0) * 100) / 100 };
+  }
   if (!(input.amount > 0)) throw new Error("Amount must be greater than zero");
 
   const number = await buildNextPaymentNumber(session.tenantId, "money_out");
@@ -247,7 +264,7 @@ export async function recordObligationPayment(input: ObligationPaymentInput) {
     referenceNumber: input.referenceNumber.trim() || null,
     amount: input.amount,
     description: "Tax payment",
-    allocations: [{ targetType: "tax_obligation", targetId: input.obligationId, allocatedAmount: input.amount }],
+    allocations: byHeading.length > 0 ? byHeading.map((h) => ({ targetType: "tax_obligation" as const, targetId: input.obligationId, allocatedAmount: h.amount, tdsHeadKey: h.key })) : [{ targetType: "tax_obligation", targetId: input.obligationId, allocatedAmount: input.amount }],
     confirmDuplicate: input.confirmDuplicate,
   });
   // A near-identical payment was just recorded: nothing was posted; ask the user to confirm.

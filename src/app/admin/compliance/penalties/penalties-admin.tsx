@@ -8,6 +8,7 @@ import { D } from "@/components/calendar/date-text";
 import { ConfirmDialog } from "@/app/(app)/sales/confirm-dialog";
 import { PENALTY_TYPES, PERMIT_ACTIONS, summarize, toForm, type FormValues, type PenaltyTypeKey, type PermitAction } from "@/lib/compliance/penalty-types";
 import type { Version } from "@/lib/compliance/penalty-admin";
+import type { FiscalYear } from "@/lib/compliance/platform-tax-rate-types";
 import { adminCard, adminField } from "../../ui";
 import { addPenaltyVersion, editPenaltyVersion, removePenaltyVersion, type PenaltyAdminData } from "./actions";
 
@@ -15,8 +16,8 @@ type Editing = { id: string | null; type: PenaltyTypeKey; started: boolean; fisc
 
 const blankTier = { upToMonths: "", ratePercent: "", action: "restricted" as PermitAction };
 
-/** `only` limits the sections to some penalty types. */
-export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: readonly PenaltyTypeKey[] }) {
+/** `only` limits the sections to some penalty types; `fiscalYear` shows only the versions in force at some point in that year. */
+export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminData; only?: readonly PenaltyTypeKey[]; fiscalYear?: FiscalYear }) {
   const router = useRouter();
   const { report, reportError, dialog } = useProblem();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -31,7 +32,8 @@ export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: 
     const versions = timeline[type];
     const latest = versions[versions.length - 1];
     const latestFrom = latest?.effectiveFrom ?? "";
-    const firstFree = data.fiscalYears.find((f) => f.from > latestFrom);
+    // With a fiscal year chosen on the screen, the new version is for that year; otherwise the first year after the latest one.
+    const firstFree = fiscalYear ? data.fiscalYears.find((f) => f.startYear === fiscalYear.startYear) ?? data.fiscalYears.find((f) => f.from > latestFrom) : data.fiscalYears.find((f) => f.from > latestFrom);
     // The new version starts from a copy of the latest figures, so only what changed has to be typed.
     setEditing({ id: null, type, started: false, fiscalYearStart: firstFree?.startYear ?? null, form: toForm(type, latest?.params), isVerified: false, source: "" });
   }
@@ -87,7 +89,7 @@ export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: 
               <p className="text-sm text-[var(--text-secondary)]">{t.description}</p>
             </div>
             <button type="button" onClick={() => startAdd(t.key)} className="shrink-0 rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
-              New version
+              {fiscalYear && !timeline[t.key].some((v) => v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from)) ? "Set for this year" : "New version"}
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -102,7 +104,7 @@ export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: 
                 </tr>
               </thead>
               <tbody>
-                {[...timeline[t.key]].reverse().map((v) => (
+                {[...timeline[t.key]].filter((v) => !fiscalYear || (v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from))).reverse().map((v) => (
                   <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className="font-medium">{v.fiscalYear ? `FY ${v.fiscalYear}` : "Original"}</span>
@@ -141,10 +143,10 @@ export function PenaltiesAdmin({ data, only }: { data: PenaltyAdminData; only?: 
                     </td>
                   </tr>
                 ))}
-                {timeline[t.key].length === 0 && (
+                {timeline[t.key].filter((v) => !fiscalYear || (v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from))).length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-5 text-center text-[var(--text-secondary)]">
-                      No figures yet. Add the first version.
+                      Not set{fiscalYear ? ` for ${fiscalYear.label}` : ""}. Use “{fiscalYear ? "Set for this year" : "New version"}” to add the figures.
                     </td>
                   </tr>
                 )}

@@ -17,6 +17,7 @@ export default async function AdminCountryPage({ params }: { params: Promise<{ c
     { title: "Company types", count: counts.companyTypes, note: "Private Limited, Sole Proprietorship and so on.", href: `/admin/setup/countries/${country.code}/company-types` },
     { title: "Taxes", count: counts.taxTypes, note: "The tax types, like VAT and Income tax.", href: `/admin/setup/countries/${country.code}/taxes` },
     { title: "Authorities", count: counts.authorities, note: "The tax offices and regulators.", href: `/admin/setup/countries/${country.code}/authorities` },
+    { title: "TDS headings", count: counts.tdsHeadings, note: "Payroll, Rent, Services and so on. Each has its own rate.", href: `/admin/setup/countries/${country.code}/tds-headings` },
     { title: "Compliance setup", count: counts.taxRates + counts.deadlines + counts.penalties, note: "Tax rates, deadlines, fines and penalties.", href: `/admin/compliance/${country.code}` },
   ];
 

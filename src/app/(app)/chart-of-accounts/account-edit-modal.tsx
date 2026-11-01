@@ -2,7 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { updateAccount } from "./actions";
+import { getTdsHeads, updateAccount } from "./actions";
+import { TdsLinkField } from "./tds-link-field";
+import type { TdsHead } from "@/lib/ledger/tds-links";
 import { useProblem } from "@/components/problem-dialog";
 import { ACCOUNT_SUB_CATEGORIES, guessSubCategory } from "@/lib/ledger/account-sub-categories";
 
@@ -12,6 +14,8 @@ type Initial = {
   isActive: boolean;
   category?: "asset" | "liability" | "equity" | "income" | "expense";
   subCategory?: string | null;
+  tdsHeadKey?: string | null;
+  parentTdsHeadKey?: string | null;
   system?: boolean;
 };
 
@@ -41,6 +45,10 @@ export function AccountEditModal({
         ? guessSubCategory(initial.category, initial.subCategory)
         : "";
   const [subCategory, setSubCategory] = useState(matched);
+  const [tds, setTds] = useState<string | null>(initial.tdsHeadKey ?? null);
+  const [heads, setHeads] = useState<TdsHead[]>([]);
+  const chosenCategory = showSubCategory ? ACCOUNT_SUB_CATEGORIES.find((sc) => sc.label === subCategory)?.category : initial.category;
+  const inherited = initial.parentTdsHeadKey && initial.parentTdsHeadKey !== "none" ? heads.find((h) => h.key === initial.parentTdsHeadKey) ?? null : null;
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
   const [busy, setBusy] = useState(false);
@@ -49,6 +57,10 @@ export function AccountEditModal({
     setOpen(false);
     onClose?.();
   }
+
+  useEffect(() => {
+    if (open) getTdsHeads().then(setHeads);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,9 +75,9 @@ export function AccountEditModal({
   async function save() {
     setBusy(true);
     try {
-      const r = await updateAccount({ id: initial.id, name, isActive, ...(showSubCategory ? { subCategory } : {}) });
+      const r = await updateAccount({ id: initial.id, name, isActive, ...(showSubCategory ? { subCategory } : {}), ...(chosenCategory === "expense" ? { tdsHeadKey: tds } : {}) });
       if (!r.ok) {
-        report(r.error, /categor|type/i.test(r.error) ? '[data-field="editCategory"]' : '[data-field="editName"]');
+        report(r.error, /TDS|heading/i.test(r.error) ? '[data-field="tdsHead"]' : /categor|type/i.test(r.error) ? '[data-field="editCategory"]' : '[data-field="editName"]');
         return;
       }
       close();
@@ -114,6 +126,8 @@ export function AccountEditModal({
                   </select>
                 </div>
               )}
+
+              {chosenCategory === "expense" && <TdsLinkField heads={heads} value={tds} onChange={setTds} inherited={inherited} />}
 
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={isActive} disabled={initial.system} onChange={(e) => setIsActive(e.target.checked)} />

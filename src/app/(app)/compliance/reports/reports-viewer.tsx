@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useErrorDialog } from "@/components/problem-dialog";
 import { generateReport } from "../actions";
 import type { ComplianceReportType } from "@/lib/compliance/reports";
@@ -203,13 +203,13 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
   }
 
   if (type === "tds_report") {
-    const r = result as { rows: { expenseNumber: string; expenseDate: string; payee: string; taxableAmount: string; tdsAmount: string }[]; totalTaxable: number; totalTds: number };
+    const r = result as { rows: { expenseNumber: string; expenseDate: string; payee: string; taxableAmount: string; tdsAmount: string; heading: string }[]; byHeading: { key: string | null; name: string; taxable: number; withheld: number }[]; totalTaxable: number; totalTds: number };
     return (
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Expense #</th>
+              <th className="px-4 py-2 font-medium">Reference</th>
               <DateHead mode={mode} />
               <th className="px-4 py-2 font-medium">Payee</th>
               <th className="px-4 py-2 font-medium">Taxable amount</th>
@@ -217,15 +217,35 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
             </tr>
           </thead>
           <tbody>
-            {r.rows.map((row, i) => (
-              <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-2 font-mono">{row.expenseNumber}</td>
-                <DateCells mode={mode} value={row.expenseDate} />
-                <td className="px-4 py-2">{row.payee}</td>
-                <td className="px-4 py-2">{fmt(Number(row.taxableAmount))}</td>
-                <td className="px-4 py-2">{fmt(Number(row.tdsAmount))}</td>
-              </tr>
+            {r.byHeading.map((h) => (
+              <Fragment key={h.key ?? "none"}>
+                <tr className="border-t border-gray-200 bg-gray-50 font-medium">
+                  <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
+                    {h.name}
+                  </td>
+                  <td className="px-4 py-2">{fmt(h.taxable)}</td>
+                  <td className="px-4 py-2">{fmt(h.withheld)}</td>
+                </tr>
+                {r.rows
+                  .filter((row) => row.heading === h.name)
+                  .map((row, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="py-2 pl-8 pr-4 font-mono">{row.expenseNumber}</td>
+                      <DateCells mode={mode} value={row.expenseDate} />
+                      <td className="px-4 py-2">{row.payee}</td>
+                      <td className="px-4 py-2">{fmt(Number(row.taxableAmount))}</td>
+                      <td className="px-4 py-2">{fmt(Number(row.tdsAmount))}</td>
+                    </tr>
+                  ))}
+              </Fragment>
             ))}
+            {r.rows.length === 0 && (
+              <tr>
+                <td colSpan={4 + dateColumnCount(mode)} className="px-4 py-6 text-center text-gray-400">
+                  No TDS was withheld in this period
+                </td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">

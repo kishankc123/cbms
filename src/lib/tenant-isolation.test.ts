@@ -74,9 +74,14 @@ const PLATFORM: Record<string, string> = {
   compliance_categories: "platform compliance configuration",
   compliance_authorities: "platform compliance configuration",
   compliance_tax_types: "platform compliance configuration",
+  compliance_tax_heads: "platform compliance configuration",
   compliance_requirement_templates: "platform compliance configuration",
   compliance_penalty_rules: "platform compliance configuration",
   platform_tax_rates: "published by platform administrators; copied into each organization as tax_rates",
+  compliance_module_taxes: "which taxes apply in which module of a country, set by platform administrators",
+  platform_slab_versions: "salary-tax slabs published by platform administrators; payroll reads the version in force",
+  platform_slab_drafts: "carried-forward platform slabs waiting for an administrator to confirm them",
+  platform_tax_rate_drafts: "carried-forward platform rates waiting for an administrator to confirm them",
 };
 /** Tables where tenant_id may be NULL: rows that belong to the platform, not an organization. */
 const NULLABLE_TENANT_OK: Record<string, string> = {
@@ -173,7 +178,6 @@ const BASELINE: Record<string, number> = {
   "lib/compliance/platform-tax-rates.ts": 1,
   "lib/compliance/tax-accounts.ts": 1,
   "lib/compliance/tax-amounts.ts": 1,
-  "lib/compliance/tax-rates.ts": 1,
   "lib/compliance/template-admin.ts": 1,
   "lib/compliance/vat-worksheet-store.ts": 3,
   "lib/expenses/expense-records.ts": 1,

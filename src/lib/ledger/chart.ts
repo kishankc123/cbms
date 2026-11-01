@@ -5,6 +5,7 @@ import { NORMAL_BALANCE } from "@/db/schema/accounts";
 import { logAuditEvent } from "@/lib/audit";
 import { ensureBankAccountFor } from "@/lib/banking/auto-link";
 import { categoryForSubCategory } from "./account-sub-categories";
+import { isKnownTdsHead } from "./tds-links";
 import { descendantIds, isSystemAccount, nextChildCode, rollUpBalances, validateTopLevelCode } from "./chart-rules";
 
 /** A rule of the chart was broken; the message is safe to show to the user. */
@@ -69,7 +70,7 @@ async function lineCount(tenantId: string, accountIds: string[]): Promise<number
 export async function insertChildAccount(
   tenantId: string,
   parent: Pick<Account, "id" | "code" | "category" | "subCategory">,
-  fields: { name: string; isActive?: boolean }
+  fields: { name: string; isActive?: boolean; tdsHeadKey?: string | null }
 ): Promise<Account> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const existing = await db.select({ code: accounts.code }).from(accounts).where(eq(accounts.tenantId, tenantId));
@@ -77,7 +78,7 @@ export async function insertChildAccount(
     try {
       const [created] = await db
         .insert(accounts)
-        .values({ tenantId, code, name: fields.name, category: parent.category, subCategory: parent.subCategory, parentAccountId: parent.id, isActive: fields.isActive ?? true })
+        .values({ tenantId, code, name: fields.name, category: parent.category, subCategory: parent.subCategory, parentAccountId: parent.id, isActive: fields.isActive ?? true, tdsHeadKey: fields.tdsHeadKey ?? null })
         .returning();
       return created;
     } catch (e) {
@@ -93,9 +94,17 @@ export async function nextChildCodeFor(client: Client, tenantId: string, parentC
   return nextChildCode(existing.map((e) => e.code), parentCode);
 }
 
+/** The heading to store on an account: null (nothing set), "none" (exempt) or a heading the country offers. Only expense accounts can have one. */
+async function checkTdsHead(tenantId: string, category: Account["category"], key: string | null | undefined): Promise<string | null> {
+  if (!key) return null;
+  if (category !== "expense") throw new ChartError("TDS is withheld on expense accounts only.");
+  if (!(await isKnownTdsHead(tenantId, key))) throw new ChartError("Choose one of the TDS headings.");
+  return key;
+}
+
 // ---------------------------------------------------------------- create
 
-export async function createAccountEntry(tenantId: string, userId: string, input: { code: string; name: string; subCategory: string }) {
+export async function createAccountEntry(tenantId: string, userId: string, input: { code: string; name: string; subCategory: string; tdsHeadKey?: string | null }) {
   const code = input.code.trim();
   const name = input.name.trim();
   const codeError = validateTopLevelCode(code);
@@ -103,28 +112,30 @@ export async function createAccountEntry(tenantId: string, userId: string, input
   if (!name) throw new ChartError("Name is required");
   const category = categoryForSubCategory(input.subCategory);
   if (!category) throw new ChartError("Choose a category");
+  const tdsHeadKey = await checkTdsHead(tenantId, category, input.tdsHeadKey);
 
   const [dup] = await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, code))).limit(1);
   if (dup) throw new ChartError(`An account with code ${code} already exists`);
 
   let created: Account;
   try {
-    [created] = await db.insert(accounts).values({ tenantId, code, name, category, subCategory: input.subCategory }).returning();
+    [created] = await db.insert(accounts).values({ tenantId, code, name, category, subCategory: input.subCategory, tdsHeadKey }).returning();
   } catch (e) {
     if (isUniqueViolation(e)) throw new ChartError(`An account with code ${code} already exists`);
     throw e;
   }
-  await logAuditEvent({ tenantId, userId, action: "account_created", entityType: "chart_account", entityId: created.id, after: { code, name, category, subCategory: input.subCategory } });
+  await logAuditEvent({ tenantId, userId, action: "account_created", entityType: "chart_account", entityId: created.id, after: { code, name, category, subCategory: input.subCategory, tdsHeadKey } });
   return created;
 }
 
-export async function createSubGroupEntry(tenantId: string, userId: string, input: { parentAccountId: string; name: string }) {
+export async function createSubGroupEntry(tenantId: string, userId: string, input: { parentAccountId: string; name: string; tdsHeadKey?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new ChartError("Name is required");
   const parent = await loadAccount(tenantId, input.parentAccountId);
   if (!parent.isActive) throw new ChartError("The group is inactive");
-  const created = await insertChildAccount(tenantId, parent, { name });
-  await logAuditEvent({ tenantId, userId, action: "account_created", entityType: "chart_account", entityId: created.id, after: { code: created.code, name, parent: parent.code } });
+  const tdsHeadKey = await checkTdsHead(tenantId, parent.category, input.tdsHeadKey);
+  const created = await insertChildAccount(tenantId, parent, { name, tdsHeadKey });
+  await logAuditEvent({ tenantId, userId, action: "account_created", entityType: "chart_account", entityId: created.id, after: { code: created.code, name, parent: parent.code, tdsHeadKey } });
   // A new account under Bank is linked to Bank Reconciliation straight away.
   await ensureBankAccountFor(tenantId, created);
   return created;
@@ -132,7 +143,7 @@ export async function createSubGroupEntry(tenantId: string, userId: string, inpu
 
 // ---------------------------------------------------------------- update
 
-export async function updateAccountEntry(tenantId: string, userId: string, input: { id: string; name: string; isActive: boolean; subCategory?: string | null }) {
+export async function updateAccountEntry(tenantId: string, userId: string, input: { id: string; name: string; isActive: boolean; subCategory?: string | null; tdsHeadKey?: string | null }) {
   const account = await loadAccount(tenantId, input.id);
   const name = input.name.trim();
   if (!name) throw new ChartError("Name is required");
@@ -140,7 +151,7 @@ export async function updateAccountEntry(tenantId: string, userId: string, input
   const all = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId));
   const below = descendantIds(all, account.id);
   const system = isSystemAccount(account, await roleAccountIds(tenantId));
-  const patch: { name: string; isActive: boolean; category?: Account["category"]; subCategory?: string } = { name, isActive: input.isActive };
+  const patch: { name: string; isActive: boolean; category?: Account["category"]; subCategory?: string; tdsHeadKey?: string | null } = { name, isActive: input.isActive };
 
   // ---- category / sub-category
   if (input.subCategory !== undefined && input.subCategory !== null && input.subCategory !== (account.subCategory ?? "")) {
@@ -155,6 +166,12 @@ export async function updateAccountEntry(tenantId: string, userId: string, input
       patch.category = category;
     }
     patch.subCategory = input.subCategory;
+  }
+
+  // ---- TDS heading (undefined leaves it alone; null or an empty value clears it). Past expenses keep what was applied to them.
+  if (input.tdsHeadKey !== undefined) {
+    const heading = await checkTdsHead(tenantId, patch.category ?? account.category, input.tdsHeadKey || null);
+    if (heading !== (account.tdsHeadKey ?? null)) patch.tdsHeadKey = heading;
   }
 
   // ---- active / inactive
@@ -183,7 +200,7 @@ export async function updateAccountEntry(tenantId: string, userId: string, input
   });
 
   const changed = (k: keyof typeof patch) => patch[k] !== undefined && patch[k] !== (account as Record<string, unknown>)[k];
-  const keys = (["name", "isActive", "category", "subCategory"] as const).filter(changed);
+  const keys = (["name", "isActive", "category", "subCategory", "tdsHeadKey"] as const).filter((k) => (k === "tdsHeadKey" ? "tdsHeadKey" in patch : changed(k)));
   if (keys.length > 0) {
     await logAuditEvent({
       tenantId,

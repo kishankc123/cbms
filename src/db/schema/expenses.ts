@@ -57,6 +57,8 @@ export const expenses = pgTable("expenses", {
   taxableAmount: numeric("taxable_amount", { precision: 18, scale: 2 }).notNull(),
   vatAmount: numeric("vat_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   tdsAmount: numeric("tds_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  // Which TDS heading the withheld amount belongs to, so TDS can be reported and deposited by heading.
+  tdsHeadKey: text("tds_head_key"),
   otherTaxAmount: numeric("other_tax_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   // subtotal = taxableAmount; total = subtotal + vatAmount + otherTaxAmount;
   // amountPayable = total - tdsAmount (TDS is withheld from the payee, not

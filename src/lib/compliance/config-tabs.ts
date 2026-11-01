@@ -3,6 +3,7 @@
 export const COMPLIANCE_TABS = [
   { key: "overview", label: "Overview", categories: [] as string[] },
   { key: "tax", label: "Tax & rates", categories: ["tax"] },
+  { key: "modules", label: "Modules", categories: [] as string[] },
   { key: "statutory", label: "Statutory", categories: ["statutory", "ownership", "company"] },
   { key: "local", label: "Local compliance", categories: ["local"] },
 ] as const;

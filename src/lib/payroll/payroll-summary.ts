@@ -18,6 +18,8 @@ export type PayrollSummaryRunRow = {
   overtimeAmount: number;
   benefitsAmount: number;
   advanceRecovered: number;
+  /** Salary TDS withheld in the run. */
+  tdsAmount: number;
   netPay: number;
 };
 
@@ -68,6 +70,7 @@ export async function payrollSummary(tenantId: string, periodStart: Date, period
         overtimeAmount: round2(runLines.reduce((s, l) => s + Number(l.overtimeAmount), 0)),
         benefitsAmount: round2(runLines.reduce((s, l) => s + Number(l.benefitsAmount), 0)),
         advanceRecovered: round2(runLines.reduce((s, l) => s + Number(l.advanceRecovered), 0)),
+        tdsAmount: round2(runLines.reduce((s, l) => s + Number(l.tdsAmount), 0)),
         netPay: round2(runLines.reduce((s, l) => s + Number(l.netPay), 0)),
       };
     })

@@ -19,6 +19,9 @@ type Employee = {
   employmentStatus: string;
   bankName: string | null;
   bankAccountNumber: string | null;
+  taxStatus?: string | null;
+  priorIncome?: string;
+  priorTds?: string;
 };
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -56,6 +59,9 @@ export function ProfilePanel({ employee, currentSalary, salaryDates }: { employe
         <Field label="Employment Status" value={employee.employmentStatus.replace("_", " ")} />
         <Field label="Bank Name" value={employee.bankName ?? ""} />
         <Field label="Bank Account Number" value={employee.bankAccountNumber ?? ""} />
+        <Field label="Tax status (salary TDS)" value={employee.taxStatus ? (employee.taxStatus === "couple" ? "Couple" : "Single") : "Not chosen (Single is used)"} />
+        {Number(employee.priorIncome ?? 0) > 0 && <Field label="Income from earlier employer this year" value={Number(employee.priorIncome).toFixed(2)} />}
+        {Number(employee.priorTds ?? 0) > 0 && <Field label="TDS withheld by earlier employer" value={Number(employee.priorTds).toFixed(2)} />}
         {currentSalary !== null && <Field label="Current Basic Salary" value={currentSalary.toFixed(2)} />}
       </div>
 

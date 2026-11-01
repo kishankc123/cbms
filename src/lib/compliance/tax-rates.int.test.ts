@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, customers, items, journalEntries, journalLines, purchaseBills, salesInvoices, taxRates, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { changeTaxRate, getCurrentTaxRateInfo, getTaxRate, getTaxRateHistory } from "./tax-rates";
+import { getCurrentTaxRateInfo, getOpenTaxRate, getTaxRate, getTaxRateHistory } from "./tax-rates";
+import { setOwnTaxRate } from "@/test/org-tax-rate";
 import { salesVatRate } from "@/lib/sales/vat";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -51,14 +52,8 @@ describe("versioned tax rates", () => {
     expect(history[0].effectiveTo).toBeNull();
   });
 
-  it("refuses a no-op change, a change effective on or before the current rate's start, and an out-of-range rate", async () => {
-    await expect(changeTaxRate(org.tenantId, org.userId, { taxTypeKey: "vat", rate: 13, effectiveFrom: "2026-10-01" })).rejects.toThrow(/already the current rate/);
-    await expect(changeTaxRate(org.tenantId, org.userId, { taxTypeKey: "vat", rate: 15, effectiveFrom: "1999-01-01" })).rejects.toThrow(/must take effect after/);
-    await expect(changeTaxRate(org.tenantId, org.userId, { taxTypeKey: "vat", rate: 150, effectiveFrom: "2026-10-01" })).rejects.toThrow(/between 0 and 100/);
-  });
-
-  it("changing the rate closes the old row and starts a new one — old dates keep the old rate, new dates get the new one", async () => {
-    await changeTaxRate(org.tenantId, org.userId, { taxTypeKey: "vat", rate: 15, effectiveFrom: "2026-10-01", reason: "Government rate change" });
+  it("a new rate closes the old row and starts a new one — old dates keep the old rate, new dates get the new one", async () => {
+    await setOwnTaxRate(org.tenantId, org.userId, { taxTypeKey: "vat", rate: 15, effectiveFrom: "2026-10-01" });
 
     expect(await getTaxRate(org.tenantId, "vat", "2026-09-30")).toBe(13);
     expect(await getTaxRate(org.tenantId, "vat", "2026-10-01")).toBe(15);
@@ -77,12 +72,21 @@ describe("versioned tax rates", () => {
     expect(await salesVatRate(org.tenantId, "2026-10-15")).toBe(15);
   });
 
-  it("a rate published by a platform administrator can't be self-serve changed by the organization", async () => {
-    // Not built yet, but the column already exists — this proves the guard works the moment something sets it.
-    await db.update(taxRates).set({ source: "platform" }).where(and(eq(taxRates.tenantId, org.tenantId), eq(taxRates.taxTypeKey, "tds")));
-    const info = await getCurrentTaxRateInfo(org.tenantId, "tds");
-    expect(info.source).toBe("platform");
-    await expect(changeTaxRate(org.tenantId, org.userId, { taxTypeKey: "tds", rate: 5, effectiveFrom: "2026-11-01" })).rejects.toThrow(/published by your administrator/);
+  it("an organization has no way to change a rate: the compliance actions only read", async () => {
+    const actions = await import("../../app/(app)/compliance/tax-rate-actions");
+    expect(Object.keys(actions).sort()).toEqual(["getTaxRateInfo", "getTaxRatesOverview", "listTaxRateHistory"]);
+  });
+});
+
+describe("what the organization sees, by tax and TDS heading", () => {
+  it("lists VAT, Income tax and every TDS heading of its country, with no rate where none is published", async () => {
+    const { getTaxRatesOverview } = await import("../../app/(app)/compliance/tax-rate-actions");
+    const lines = await getTaxRatesOverview();
+    expect(lines.find((l) => l.key === "vat")).toMatchObject({ label: "VAT", group: null, rate: 15 });
+    expect(lines.find((l) => l.key === "income_tax")).toMatchObject({ rate: null });
+    expect(lines.find((l) => l.key === "tds.rent")).toMatchObject({ label: "Rent", group: "TDS", slabs: false, rate: null });
+    expect(lines.find((l) => l.key === "tds.payroll")).toMatchObject({ label: "Payroll", group: "TDS", slabs: true, rate: null });
+    expect(await getOpenTaxRate(org.tenantId, "tds.rent")).toBeNull();
   });
 });
 

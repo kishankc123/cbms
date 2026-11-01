@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import { createExpense, getTdsRateOn, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
@@ -15,7 +15,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 type Vendor = { id: string; name: string };
 // Only lowest-level accounts are offered; `group` is the account they sit under, if any.
-type CategoryAccount = { id: string; code: string; name: string; group?: string | null };
+type CategoryAccount = { id: string; code: string; name: string; group?: string | null; tdsHeadKey?: string | null };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
@@ -69,7 +69,6 @@ export function ExpenseFormModal({
   categoryAccounts,
   cashBankAccounts,
   vatRate,
-  tdsRate,
   initial,
   onClose,
 }: {
@@ -77,7 +76,6 @@ export function ExpenseFormModal({
   categoryAccounts: CategoryAccount[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
-  tdsRate: number;
   initial?: InitialExpense;
   onClose: () => void;
 }) {
@@ -109,6 +107,18 @@ export function ExpenseFormModal({
   const ask = useConfirm();
   const { problem, report, dialog } = useProblem();
 
+  // The TDS heading follows the chosen category (set on it or its group in the Chart of Accounts); its rate is the platform's, on the expense date.
+  const tdsHead = categoryAccounts.find((c) => c.id === categoryAccountId)?.tdsHeadKey ?? null;
+  const [fetchedRate, setFetchedRate] = useState(0);
+  useEffect(() => {
+    let live = true;
+    if (tdsHead) getTdsRateOn(tdsHead, expenseDate).then((r) => live && setFetchedRate(r));
+    return () => {
+      live = false;
+    };
+  }, [tdsHead, expenseDate]);
+  const tdsRate = tdsHead ? fetchedRate : 0;
+
   // Auto-fills VAT/TDS from the tenant's configured rates as the taxable
   // amount or treatment changes — never hard-coded, and the user can still
   // type their own figure, which then stops the auto-fill for that field.
@@ -124,7 +134,7 @@ export function ExpenseFormModal({
       setTdsAmount(round2(amount * (tdsRate / 100)).toFixed(2));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taxableAmount, taxTreatment, billType]);
+  }, [taxableAmount, taxTreatment, billType, tdsRate]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -381,7 +391,7 @@ export function ExpenseFormModal({
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">TDS ({tdsRate}% default)</label>
+              <label className="block text-xs text-gray-500 mb-1">TDS {tdsHead ? `(${tdsRate}% on this category)` : "(not on this category)"}</label>
               <input
                 type="number"
                 step="0.01"

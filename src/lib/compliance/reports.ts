@@ -1,6 +1,7 @@
-import { and, eq, ne, gte, lte } from "drizzle-orm";
+import { NOT_ASSIGNED, tdsHeadNames, tdsWithheldLines, totalsByHeading } from "./tds-by-heading";
+import { and, eq, ne, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { assetDisposals, salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
+import { accounts, assetDisposals, salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -130,29 +131,24 @@ export async function getVatReturn(tenantId: string, from: string, to: string) {
   };
 }
 
+// TDS withheld in the period, by heading: expenses and salaries together. Every row keeps its heading, so the report can be grouped and each
+// heading's total deposited separately; TDS from before headings existed shows as "Not assigned".
 export async function getTdsReport(tenantId: string, from: string, to: string) {
-  const rows = await db
-    .select({
-      expenseNumber: expenses.expenseNumber,
-      expenseDate: expenses.expenseDate,
-      vendorId: expenses.vendorId,
-      payeeName: expenses.payeeName,
-      taxableAmount: expenses.taxableAmount,
-      tdsAmount: expenses.tdsAmount,
-      status: expenses.status,
-    })
-    .from(expenses)
-    .where(and(eq(expenses.tenantId, tenantId), gte(expenses.expenseDate, from), lte(expenses.expenseDate, to), ne(expenses.status, "void")))
-    .orderBy(expenses.expenseDate);
-
-  const withdrawn = rows.filter((r) => Number(r.tdsAmount) > 0);
-  const vendorList = await db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId));
-  const nameById = Object.fromEntries(vendorList.map((v) => [v.id, v.name]));
-
+  const names = await tdsHeadNames(tenantId);
+  const lines = await tdsWithheldLines(tenantId, from, to);
   return {
-    rows: withdrawn.map((r) => ({ ...r, payee: r.vendorId ? nameById[r.vendorId] ?? r.payeeName ?? "—" : r.payeeName ?? "—" })),
-    totalTaxable: round2(withdrawn.reduce((s, r) => s + Number(r.taxableAmount), 0)),
-    totalTds: round2(withdrawn.reduce((s, r) => s + Number(r.tdsAmount), 0)),
+    rows: lines.map((l) => ({
+      expenseNumber: l.reference,
+      expenseDate: l.date,
+      payee: l.payee,
+      taxableAmount: l.taxable.toFixed(2),
+      tdsAmount: l.tds.toFixed(2),
+      heading: l.headKey ? names.get(l.headKey) ?? l.headKey : NOT_ASSIGNED,
+      kind: l.kind,
+    })),
+    byHeading: totalsByHeading(lines, names),
+    totalTaxable: round2(lines.reduce((t, l) => t + l.taxable, 0)),
+    totalTds: round2(lines.reduce((t, l) => t + l.tds, 0)),
   };
 }
 
@@ -162,19 +158,21 @@ export async function getTdsReport(tenantId: string, from: string, to: string) {
 // without its now-excluded original, breaking the cancellation. Reversals
 // are self-canceling by construction, so the correct balance is just the
 // unfiltered sum (same approach as the dashboard's trial balance check).
-async function getAccountBalance(tenantId: string, codes: string[], name: string) {
+// With `includeChildren`, the accounts under it count too (TDS Payable has one per heading: Salary, Rent, Services...).
+async function getAccountBalance(tenantId: string, codes: string[], name: string, includeChildren = false) {
   const account = await findControlAccount(tenantId, codes, name);
   if (!account) return 0;
+  const ids = [account.id, ...(includeChildren ? (await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, account.id)))).map((a) => a.id) : [])];
   const lines = await db
     .select({ debit: journalLines.debitAmount, credit: journalLines.creditAmount })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
-    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalLines.accountId, account.id)));
+    .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, ids)));
   return round2(lines.reduce((s, l) => s + Number(l.credit) - Number(l.debit), 0));
 }
 
 export async function getTdsPayableBalance(tenantId: string) {
-  return getAccountBalance(tenantId, ["2320"], "TDS Payable");
+  return getAccountBalance(tenantId, ["2320"], "TDS Payable", true);
 }
 
 export async function getVatPayableBalance(tenantId: string) {

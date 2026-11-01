@@ -37,6 +37,9 @@ type Employee = {
   employmentStatus: string;
   bankName: string | null;
   bankAccountNumber: string | null;
+  taxStatus?: string | null;
+  priorIncome?: string;
+  priorTds?: string;
 };
 
 /**
@@ -61,6 +64,9 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
   );
   const [bankName, setBankName] = useState(employee.bankName ?? "");
   const [bankAccountNumber, setBankAccountNumber] = useState(employee.bankAccountNumber ?? "");
+  const [taxStatus, setTaxStatus] = useState(employee.taxStatus ?? "");
+  const [priorIncome, setPriorIncome] = useState(Number(employee.priorIncome ?? 0) ? String(Number(employee.priorIncome)) : "");
+  const [priorTds, setPriorTds] = useState(Number(employee.priorTds ?? 0) ? String(Number(employee.priorTds)) : "");
   const [basicSalary, setBasicSalary] = useState(currentSalary === null ? "" : currentSalary.toFixed(2));
   const [effectiveFrom, setEffectiveFrom] = useState(todayIso());
   const [salaryReason, setSalaryReason] = useState("");
@@ -114,6 +120,9 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
         employmentStatus,
         bankName,
         bankAccountNumber,
+        taxStatus,
+        priorIncome,
+        priorTds,
       });
       if (salaryChanged) {
         await addSalaryChange({ employeeId: employee.id, changeType: "new_fixed", changeValue: 0, newFixedSalary: newSalary, effectiveFrom, reason: salaryReason, notes: "", replaceSameDate: replacing });
@@ -207,6 +216,22 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bank Account Number</label>
             <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Tax status (salary TDS)</label>
+            <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+              <option value="">Not chosen (Single is used)</option>
+              <option value="single">Single</option>
+              <option value="couple">Couple</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Income from earlier employer this fiscal year</label>
+            <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">TDS already withheld by earlier employer</label>
+            <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           {currentSalary !== null && (
             <div className="col-span-2 space-y-3 rounded border border-gray-200 p-3">

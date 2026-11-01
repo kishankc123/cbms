@@ -37,6 +37,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { todayIso } from "@/lib/calendar";
 import { ensureTaxPayableAccount } from "@/lib/compliance/tax-accounts";
+import { getOrCreateTdsHeadPayableAccount } from "./tds-payable-accounts";
 import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/tax-amounts";
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getOrCreateExpensePayableAccount } from "./expense-accounts";
@@ -81,7 +82,7 @@ export const ALLOCATABLE_TYPES: PaymentType[] = ["expense_payment"];
 // Types that need a second ("to") account instead of/alongside a party.
 export const TRANSFER_TYPES: PaymentType[] = ["bank_transfer", "cash_withdrawal"];
 
-export type AllocationInput = { targetType: PaymentAllocationTarget; targetId: string; allocatedAmount: number };
+export type AllocationInput = { targetType: PaymentAllocationTarget; targetId: string; allocatedAmount: number; /** A TDS deposit: which heading this part deposits (its own payable account is cleared). */ tdsHeadKey?: string | null };
 
 export type CreatePaymentInput = {
   direction: PaymentDirection;
@@ -238,7 +239,8 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
         const perAccount = new Map<string, number>();
         for (const a of linked) {
           const taxTypeKey = typeById.get(a.targetId);
-          const account = taxTypeKey ? await ensureTaxPayableAccount(tenantId, taxTypeKey) : null;
+          // A TDS deposit split by heading clears each heading's own payable account.
+          const account = a.tdsHeadKey && taxTypeKey === "tds" ? await getOrCreateTdsHeadPayableAccount(tenantId, a.tdsHeadKey) : taxTypeKey ? await ensureTaxPayableAccount(tenantId, taxTypeKey) : null;
           if (!account) throw new Error("This compliance item's tax type has no payable account configured");
           perAccount.set(account.id, round2((perAccount.get(account.id) ?? 0) + a.allocatedAmount));
         }
@@ -599,7 +601,7 @@ export async function createPayment(
     const allocations = input.allocations ?? [];
     if (allocations.length > 0) {
       await db.insert(paymentAllocations).values(
-        allocations.map((a) => ({ paymentId: paymentRow.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }))
+        allocations.map((a) => ({ paymentId: paymentRow.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), tdsHeadKey: a.tdsHeadKey ?? null }))
       );
       for (const a of allocations) {
         await applyAllocationToTarget(tenantId, a);
@@ -777,7 +779,7 @@ function inputFromRow(p: PaymentRow, allocs: AllocationRow[], advance: typeof st
     description: p.description,
     notes: p.notes,
     attachmentUrl: p.attachmentUrl,
-    allocations: allocs.map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: Number(a.allocatedAmount) })),
+    allocations: allocs.map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: Number(a.allocatedAmount), tdsHeadKey: a.tdsHeadKey })),
     advanceMonth: advance ? { calendar: advance.forCalendar as CalendarSystem, month: advance.forMonth, year: advance.forYear } : null,
   };
 }
@@ -928,7 +930,7 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
 
     const allocations = input.allocations ?? [];
     if (allocations.length > 0) {
-      await db.insert(paymentAllocations).values(allocations.map((a) => ({ paymentId, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) })));
+      await db.insert(paymentAllocations).values(allocations.map((a) => ({ paymentId, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), tdsHeadKey: a.tdsHeadKey ?? null })));
       for (const a of allocations) {
         await applyAllocationToTarget(tenantId, a);
         progress.newApplied.push(a);
@@ -990,7 +992,7 @@ async function restoreAfterFailedEdit(
       }
     }
     if (oldAllocs.length > 0) {
-      await db.insert(paymentAllocations).values(oldAllocs.map((a) => ({ paymentId: old.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount })));
+      await db.insert(paymentAllocations).values(oldAllocs.map((a) => ({ paymentId: old.id, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount, tdsHeadKey: a.tdsHeadKey })));
     }
     const { id: _id, tenantId: _tenant, ...oldValues } = old;
     void _id;

@@ -23,6 +23,9 @@ export const accounts = pgTable(
   subCategory: text("sub_category"),
   parentAccountId: uuid("parent_account_id").references((): AnyPgColumn => accounts.id),
   isActive: boolean("is_active").notNull().default(true),
+  // The TDS heading (rent, services...) withheld on payments to this account. Accounts below inherit it. "none" marks an exemption inside
+  // a group that has one; null means nothing is set here.
+  tdsHeadKey: text("tds_head_key"),
   },
   // An account code identifies one account in an organization; lookups by code depend on it.
   (t) => [uniqueIndex("accounts_tenant_code").on(t.tenantId, t.code)]

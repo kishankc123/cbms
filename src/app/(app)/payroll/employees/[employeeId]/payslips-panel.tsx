@@ -7,10 +7,14 @@ type Payslip = {
   basicSalary: string;
   grossPay: string;
   advanceRecovered: string;
+  tdsAmount: string;
+  tdsDetail: unknown;
   netPay: string;
 };
 
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
+import { TdsCell } from "../../tds-working";
 
 export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
   return (
@@ -20,6 +24,7 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
           <th className="px-4 py-2 font-medium">Period</th>
           <th className="px-4 py-2 font-medium">Basic Salary</th>
           <th className="px-4 py-2 font-medium">Gross Pay</th>
+          <th className="px-4 py-2 font-medium">TDS</th>
           <th className="px-4 py-2 font-medium">Advance Recovered</th>
           <th className="px-4 py-2 font-medium">Net Pay</th>
           <th className="px-4 py-2 font-medium">Status</th>
@@ -33,6 +38,9 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
             </td>
             <td className="px-4 py-2">{Number(p.basicSalary).toFixed(2)}</td>
             <td className="px-4 py-2">{Number(p.grossPay).toFixed(2)}</td>
+            <td className="px-4 py-2">
+              <TdsCell amount={Number(p.tdsAmount)} working={(p.tdsDetail as TdsWorking | null) ?? null} title={payrollPeriodLabel(p)} />
+            </td>
             <td className="px-4 py-2">{Number(p.advanceRecovered).toFixed(2)}</td>
             <td className="px-4 py-2">{Number(p.netPay).toFixed(2)}</td>
             <td className="px-4 py-2 capitalize">{p.status}</td>
@@ -40,7 +48,7 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
         ))}
         {payslips.length === 0 && (
           <tr>
-            <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+            <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
               No finalized payslips yet
             </td>
           </tr>

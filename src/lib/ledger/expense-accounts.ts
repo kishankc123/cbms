@@ -1,3 +1,4 @@
+import { tdsHeadLookup } from "./tds-links";
 import { alias } from "drizzle-orm/pg-core";
 import { and, eq, inArray, ne, notLike, notExists } from "drizzle-orm";
 import { db } from "@/db";
@@ -55,5 +56,6 @@ export async function getExpenseCategoryAccounts(tenantId: string) {
       )
     )
     .orderBy(accounts.code);
-  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, subCategory: r.subCategory, group: r.parentCode ? `${r.parentCode} — ${r.parentName}` : null }));
+  const headOf = await tdsHeadLookup(tenantId);
+  return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, subCategory: r.subCategory, group: r.parentCode ? `${r.parentCode} — ${r.parentName}` : null, tdsHeadKey: headOf(r.id) }));
 }

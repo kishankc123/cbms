@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createSubGroupAccount } from "../actions";
+import { AddAccountDialog, type GroupChoice } from "../add-account-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { AccountRowActions, Balance, SystemBadge } from "../shared";
 
-type Group = { id: string; code: string; name: string };
+type Group = GroupChoice;
 type SubGroup = {
   id: string;
   code: string;
@@ -14,54 +12,21 @@ type SubGroup = {
   category: "asset" | "liability" | "equity" | "income" | "expense";
   isActive: boolean;
   parentAccountId: string | null;
+  tdsHeadKey: string | null;
   /** This account's own balance (its group's total includes it). */
   own: number;
   system: boolean;
 };
 
 export function SubGroupsTable({ groups, subGroups, groupById }: { groups: Group[]; subGroups: SubGroup[]; groupById: Record<string, Group> }) {
-  const router = useRouter();
-  const [parentId, setParentId] = useState("");
-  const [name, setName] = useState("");
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
-  const [busy, setBusy] = useState(false);
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const r = await createSubGroupAccount({ parentAccountId: parentId, name });
-      if (!r.ok) return report(r.error, /name/i.test(r.error) ? '[data-field="sgName"]' : '[data-field="sgParent"]');
-      setName("");
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="space-y-3">
-      <form onSubmit={add} className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Group</label>
-          <select data-field="sgParent" value={parentId} onChange={(e) => setParentId(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-[220px]">
-            <option value="">Select group</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.code} — {g.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Name</label>
-          <input data-field="sgName" value={name} onChange={(e) => setName(e.target.value)} required className="rounded border border-gray-300 px-2 py-1.5 text-sm w-56" />
-        </div>
-        <button type="submit" disabled={busy || !parentId} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
-          Add sub-group
-        </button>
-      </form>
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <AddAccountDialog label="Add sub-group" startInside groups={groups} />
+      </div>
 
       {dialog}
 
@@ -90,7 +55,7 @@ export function SubGroupsTable({ groups, subGroups, groupById }: { groups: Group
               </td>
               <td className="px-4 py-2">{sg.isActive ? "Active" : "Inactive"}</td>
               <td className="px-4 py-2 text-right">
-                <AccountRowActions account={sg} showSubCategory={false} onError={(message) => report(message)} />
+                <AccountRowActions account={{ ...sg, parentTdsHeadKey: sg.parentAccountId ? groupById[sg.parentAccountId]?.tdsHeadKey ?? null : null }} showSubCategory={false} onError={(message) => report(message)} />
               </td>
             </tr>
           ))}

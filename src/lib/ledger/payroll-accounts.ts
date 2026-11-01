@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { findControlAccount, createSubAccount } from "./control-accounts";
+import { getOrCreateTdsPayableAccount } from "./expense-accounts";
 
 // The shared expense account all payroll runs debit — a top-level account
 // under the "Indirect expenses" sub-category, per the tenant's chart layout.
@@ -37,6 +38,15 @@ export async function getOrCreateSalaryPayableGroup(tenantId: string) {
     .values({ tenantId, code: "2300", name: "Salary Payable", category: "liability", subCategory: "Current liabilities" })
     .returning();
   return created;
+}
+
+// Where salary TDS withheld from employees is credited: its own account under TDS Payable, so it stays apart from the TDS withheld on
+// rent and service bills and can be deposited and reported by heading.
+export const SALARY_TDS_ACCOUNT_NAME = "TDS Payable — Salary";
+export async function getOrCreateSalaryTdsPayableAccount(tenantId: string) {
+  const parent = await getOrCreateTdsPayableAccount(tenantId);
+  const [existing] = await db.select().from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, parent.id), eq(accounts.name, SALARY_TDS_ACCOUNT_NAME))).limit(1);
+  return existing ?? (await createSubAccount(tenantId, parent, SALARY_TDS_ACCOUNT_NAME));
 }
 
 // A liability account for payroll deductions withheld from employees (tax,

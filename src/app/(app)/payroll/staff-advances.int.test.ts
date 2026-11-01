@@ -3,12 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, employees, payments, payrollLines, staffAdvanceRecoveries, staffAdvances } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
+import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
 import { createPayment, voidPayment } from "@/lib/ledger/payments-engine";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
 import { getEmployeeAdvanceBalance } from "@/lib/ledger/advance-accounts";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
+let dropCountry: () => Promise<void>;
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/session", () => ({
@@ -46,12 +48,14 @@ async function expectConsistent(employeeId: string) {
 
 beforeAll(async () => {
   org = await createTempOrg("ZZ Staff Advance Test");
+  dropCountry = await useCountryWithoutSlabs(org.tenantId, "ZQ");
   cashId = (await acct("1000")).id;
   await createEmployee(empInput("A-1", "Chandra"));
   chandra = (await findEmployee("A-1")).id;
 });
 afterAll(async () => {
   await org.remove();
+  await dropCountry();
 });
 
 describe("staff advances", () => {

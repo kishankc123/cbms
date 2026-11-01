@@ -1,7 +1,7 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { complianceAuthorities, compliancePenaltyRules, complianceRequirementTemplates, complianceEntityTypes, complianceTaxTypes, complianceCountries, platformTaxRates, tenants } from "@/db/schema";
+import { complianceAuthorities, compliancePenaltyRules, complianceRequirementTemplates, complianceEntityTypes, complianceTaxHeads, complianceTaxTypes, complianceCountries, platformTaxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { seedDefaultTaxes } from "@/lib/country-setup";
 import { COMPLIANCE_TABS } from "@/lib/compliance/config-tabs";
@@ -54,7 +54,7 @@ export async function countrySummary(code: string) {
   const [country] = await db.select().from(complianceCountries).where(eq(complianceCountries.code, code)).limit(1);
   if (!country) return null;
   const total = async (table: PgTable, column: PgColumn) => (await db.select({ n: count() }).from(table).where(eq(column, code)))[0].n;
-  const [organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates] = await Promise.all([
+  const [organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates, tdsHeadings] = await Promise.all([
     total(tenants, tenants.countryCode),
     total(complianceEntityTypes, complianceEntityTypes.countryCode),
     total(complianceTaxTypes, complianceTaxTypes.countryCode),
@@ -62,8 +62,9 @@ export async function countrySummary(code: string) {
     total(complianceRequirementTemplates, complianceRequirementTemplates.countryCode),
     total(compliancePenaltyRules, compliancePenaltyRules.countryCode),
     total(platformTaxRates, platformTaxRates.countryCode),
+    total(complianceTaxHeads, complianceTaxHeads.countryCode),
   ]);
-  return { country, counts: { organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates } };
+  return { country, counts: { organizations, companyTypes, taxTypes, authorities, deadlines, penalties, taxRates, tdsHeadings } };
 }
 
 export async function setFiscalYearStart(adminId: string, code: string, month: number): Promise<{ ok: true } | { ok: false; error: string }> {

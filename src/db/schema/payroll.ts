@@ -23,6 +23,11 @@ export const employees = pgTable("employees", {
   employmentStatus: employmentStatusEnum("employment_status").notNull().default("active"),
   bankName: text("bank_name"),
   bankAccountNumber: text("bank_account_number"),
+  // Which salary-tax slabs apply: "single" or "couple". null = not chosen yet (payroll uses Single and flags it).
+  taxStatus: text("tax_status"),
+  // For someone who joined after the fiscal year began: what the earlier employer paid and withheld in the same fiscal year.
+  priorIncome: numeric("prior_income", { precision: 18, scale: 2 }).notNull().default("0"),
+  priorTds: numeric("prior_tds", { precision: 18, scale: 2 }).notNull().default("0"),
   // The Chart of Accounts liability sub-account this employee posts salary
   // accruals to — a sub-group under the tenant's Salary Payable group,
   // created alongside the employee (see payroll-accounts.ts).
@@ -151,6 +156,11 @@ export const payrollLines = pgTable("payroll_lines", {
   grossPay: numeric("gross_pay", { precision: 18, scale: 2 }).notNull(),
   // Staff advances recovered from this pay; net pay = gross - deductions - advance recovered.
   advanceRecovered: numeric("advance_recovered", { precision: 18, scale: 2 }).notNull().default("0"),
+  // Salary TDS withheld this month, the pay it was worked out on (null on runs made before salary TDS existed: gross pay then),
+  // and the full working (slab version, projection, slab by slab) so a payslip can always be explained.
+  taxablePay: numeric("taxable_pay", { precision: 18, scale: 2 }),
+  tdsAmount: numeric("tds_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  tdsDetail: jsonb("tds_detail"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 

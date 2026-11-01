@@ -44,7 +44,24 @@ export type EmployeeInput = {
   employmentStatus: EmploymentStatus;
   bankName: string;
   bankAccountNumber: string;
+  /** Salary-tax slabs: "single" or "couple" (empty = not chosen yet). */
+  taxStatus?: string;
+  /** For someone who joined after the fiscal year began: what the earlier employer paid and withheld in it. */
+  priorIncome?: string;
+  priorTds?: string;
 };
+
+// The tax fields, checked: a known status and amounts that are not negative.
+function taxFields(input: Pick<EmployeeInput, "taxStatus" | "priorIncome" | "priorTds">) {
+  const status = (input.taxStatus ?? "").trim();
+  if (status && status !== "single" && status !== "couple") throw new Error("Choose Single or Couple for the tax status");
+  const amount = (label: string, v: string | undefined) => {
+    const n = v && v.trim() ? Number(v) : 0;
+    if (!Number.isFinite(n) || n < 0) throw new Error(`${label} has to be an amount of zero or more`);
+    return n.toFixed(2);
+  };
+  return { taxStatus: status || null, priorIncome: amount("Income from the earlier employer", input.priorIncome), priorTds: amount("TDS withheld by the earlier employer", input.priorTds) };
+}
 
 // An employee ID (code) is unique within the organization.
 async function assertEmployeeCodeFree(tenantId: string, employeeCode: string, excludeEmployeeId?: string) {
@@ -105,6 +122,7 @@ export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> 
           employmentStatus: input.employmentStatus,
           bankName: input.bankName.trim() || null,
           bankAccountNumber: input.bankAccountNumber.trim() || null,
+          ...taxFields(input),
         })
         .returning();
     } catch (e) {
@@ -185,6 +203,7 @@ export async function updateEmployee(input: EmployeeInput & { employeeId: string
       employmentStatus: input.employmentStatus,
       bankName: input.bankName.trim() || null,
       bankAccountNumber: input.bankAccountNumber.trim() || null,
+      ...taxFields(input),
     })
     .where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId)));
 

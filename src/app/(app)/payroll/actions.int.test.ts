@@ -3,10 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, accountingPeriods, auditLog, employees, journalEntries, payrollLines, payrollRuns, salaryHistory } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
+import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
 import { createPayment, voidPayment } from "@/lib/ledger/payments-engine";
 import { getEmployeePayableBalance, activePayrollEntries } from "@/lib/payroll/accrual";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
+let dropCountry: () => Promise<void>;
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/session", () => ({
@@ -53,10 +55,12 @@ const salaryPayment = (employeeId: string, amount: number) =>
 
 beforeAll(async () => {
   org = await createTempOrg("ZZ Payroll Test");
+  dropCountry = await useCountryWithoutSlabs(org.tenantId, "ZV");
   cashId = (await acct("1000")).id;
 });
 afterAll(async () => {
   await org.remove();
+  await dropCountry();
 });
 
 describe("employees", () => {
