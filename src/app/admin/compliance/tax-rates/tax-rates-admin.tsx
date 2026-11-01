@@ -120,6 +120,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
           const latest = versions[versions.length - 1];
           const shown = versions.filter(inYear);
           const carried = fiscalYear && shown.length === 0 ? versions.filter((v) => v.effectiveFrom < fiscalYear.from).pop() : undefined;
+          const yearRate = fiscalYear ? versions.filter((v) => v.effectiveFrom <= fiscalYear.to).pop() : inForce;
           const draftOf = fiscalYear ? data.drafts.find((d) => d.taxTypeKey === t.key && d.effectiveFrom === fiscalYear.from) : undefined;
           const edited = draftOf ? { rate: confirming[t.key]?.rate ?? String(draftOf.rate), effectiveFrom: confirming[t.key]?.effectiveFrom ?? draftOf.effectiveFrom } : null;
           return (
@@ -127,12 +128,12 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t.label}</h2>
-                  <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{inForce ? pct(inForce.rate) : "Not published"}</p>
-                  <p className="text-xs text-[var(--text-secondary)]">{inForce ? `In force since ${bothDates(inForce.effectiveFrom)}` : "Organizations are using their own rate."}</p>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{yearRate ? pct(yearRate.rate) : "Not set"}</p>
+                  <p className="text-xs text-[var(--text-secondary)]">{yearRate ? `${fiscalYear ? "Applies in this year from" : "In force since"} ${bothDates(fiscalYear && yearRate.effectiveFrom < fiscalYear.from ? fiscalYear.from : yearRate.effectiveFrom)}` : fiscalYear ? "No rate is set for this year." : "Organizations are using their own rate."}</p>
                 </div>
                 {open !== t.key && (
                   <button type="button" onClick={() => { setOpen(t.key); setDraft(blankDraft); setMessage(null); }} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
-                    {fiscalYear ? `Publish v${shown.length + 1}` : "Publish a new rate"}
+                    {fiscalYear ? (yearRate ? `Publish v${shown.length + 1}` : "Set the rate") : "Publish a new rate"}
                   </button>
                 )}
               </div>
@@ -146,7 +147,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                     </label>
                     <label className="text-xs text-[var(--text-secondary)]">
                       Starts on
-                      <input type="date" min={fiscalYear && (!latest || fiscalYear.from > latest.effectiveFrom) ? fiscalYear.from : latest?.effectiveFrom} max={fiscalYear?.to} value={draft.effectiveFrom} onChange={(e) => setDraft({ ...draft, effectiveFrom: e.target.value })} className={`${adminField} mt-1 w-full`} />
+                      <input type="date" min={fiscalYear ? fiscalYear.from : latest?.effectiveFrom} max={fiscalYear?.to} value={draft.effectiveFrom} onChange={(e) => setDraft({ ...draft, effectiveFrom: e.target.value })} className={`${adminField} mt-1 w-full`} />
                     </label>
                   </div>
                   <label className="block text-xs text-[var(--text-secondary)]">
@@ -194,7 +195,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                 </div>
               )}
 
-              {fiscalYear && shown.length === 0 && !draftOf && <p className="text-sm text-[var(--text-secondary)]">{carried ? `No version starts in ${fiscalYear?.label}. ${pct(carried.rate)} (v${carried.version} of ${carried.fiscalYear}) continues.` : `Nothing is published for ${fiscalYear?.label} yet.`}</p>}
+              {fiscalYear && shown.length === 0 && !draftOf && <p className="text-sm text-[var(--text-secondary)]">{carried ? `No version starts in ${fiscalYear?.label}. ${pct(carried.rate)} (v${carried.version} of ${carried.fiscalYear}) continues.` : `Not set. Use “Set the rate” to publish the rate for ${fiscalYear?.label}.`}</p>}
 
               {shown.length > 0 && (
                 <table className="w-full text-sm">

@@ -11,6 +11,7 @@ import { getCountryPageData } from "@/app/admin/setup/countries/actions";
 import { adminCard, AdminHeader, Facts } from "../../ui";
 import { getTaxRateAdminData } from "../tax-rates/actions";
 import { TaxRatesAdmin } from "../tax-rates/tax-rates-admin";
+import { FiscalYearFilter } from "./fiscal-year-filter";
 import { getPenaltyAdminData } from "../penalties/actions";
 import { PenaltiesAdmin } from "../penalties/penalties-admin";
 import { getTemplateAdminData } from "../templates/actions";
@@ -130,26 +131,23 @@ async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: strin
           </Link>
         </div>
       )}
-      {view === "setup" && years.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-[var(--text-secondary)]">Fiscal year</span>
-          {years.map((y) => {
-            const toConfirm = rates.drafts.filter((d) => d.effectiveFrom === y.from).length;
-            return (
-              <Link key={y.startYear} href={link(selected.key, selectedHead?.key, view, y.startYear)} className={pill(y.startYear === fiscalYear?.startYear)}>
-                {y.label}
-                {toConfirm > 0 && <span className="ml-2 text-xs">{toConfirm} to confirm</span>}
-              </Link>
-            );
-          })}
+      <div className="flex items-end justify-between gap-3 border-b border-[var(--card-border)]">
+        <div className="flex gap-1">
+          {([["setup", "Setup"], ["penalties", "Penalty & fines"]] as const).map(([v, label]) => (
+            <Link key={v} href={link(selected.key, selectedHead?.key, v)} className={`px-4 py-2 text-sm ${view === v ? "border-b-2 border-[var(--color-primary)] font-medium text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
+              {label}
+            </Link>
+          ))}
         </div>
-      )}
-      <div className="flex gap-1 border-b border-[var(--card-border)]">
-        {([["setup", "Setup"], ["penalties", "Penalty & fines"]] as const).map(([v, label]) => (
-          <Link key={v} href={link(selected.key, selectedHead?.key, v)} className={`px-4 py-2 text-sm ${view === v ? "border-b-2 border-[var(--color-primary)] font-medium text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
-            {label}
-          </Link>
-        ))}
+        {fiscalYear && (
+          <div className="pb-1.5">
+            <FiscalYearFilter
+              years={years.map((y) => ({ startYear: y.startYear, label: y.label, toConfirm: rates.drafts.filter((d) => d.effectiveFrom === y.from).length }))}
+              selected={fiscalYear.startYear}
+              hrefFor={Object.fromEntries(years.map((y) => [y.startYear, link(selected.key, selectedHead?.key, view, y.startYear)]))}
+            />
+          </div>
+        )}
       </div>
 
       {view === "setup" ? (
@@ -180,7 +178,7 @@ async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: strin
       ) : hasPenalties ? (
         <div className="space-y-3">
           {hasHeads && <p className="rounded bg-[var(--surface-muted-bg)] px-4 py-2 text-sm text-[var(--text-secondary)]">These fines apply to all TDS headings. Changing them here changes them for every heading.</p>}
-          <PenaltiesAdmin data={penalties} only={[selected.key as (typeof PENALTY_TYPES)[number]["key"]]} />
+          <PenaltiesAdmin data={penalties} only={[selected.key as (typeof PENALTY_TYPES)[number]["key"]]} fiscalYear={fiscalYear} />
         </div>
       ) : (
         <p className={`${adminCard} p-5 text-sm text-[var(--text-secondary)]`}>No fines are set up for {selected.name} yet.</p>

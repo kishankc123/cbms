@@ -95,4 +95,11 @@ describe("penalty rule versions", () => {
     expect(actions.has("penalty_rule_updated")).toBe(true);
     expect(actions.has("penalty_rule_deleted")).toBe(true);
   });
+
+  it("a year nothing was set for can be filled in before the first version, but never in the middle", async () => {
+    expect(await createPenaltyVersion(adminId, { countryCode: AD_CODE, taxTypeKey: "vat", fiscalYearStart: 2024, form: vatForm("15"), isVerified: false, source: "" })).toEqual({ ok: true });
+    const v = (await listPenaltyTimeline(AD_CODE, "2026-10-08")).vat;
+    expect(v.map((x) => [x.effectiveFrom, x.effectiveTo])).toEqual([["2024-07-01", "2026-06-30"], ["2026-07-01", null]]);
+    expect(await createPenaltyVersion(adminId, { countryCode: AD_CODE, taxTypeKey: "vat", fiscalYearStart: 2025, form: vatForm("15"), isVerified: false, source: "" })).toMatchObject({ ok: false });
+  });
 });

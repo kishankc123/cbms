@@ -30,23 +30,20 @@ async function fiscalCalendar(countryCode: string) {
   return { calendar: (c?.calendar ?? "AD") as CalendarSystem, startMonth: c?.startMonth ?? 1 };
 }
 
-/** The fiscal years worth showing: last year, this year and next year, plus any older year in which a version started. */
+/** The first fiscal year offered: every year from here up to next year can be looked at, and set if nothing is published for it. */
+const FIRST_FISCAL_YEAR: Record<string, number> = { BS: 2061, AD: 2004 };
+
+/** Every fiscal year from the first one up to one year ahead of the current one. */
 export async function fiscalYearsFor(countryCode: string, today: string): Promise<FiscalYear[]> {
   const { calendar, startMonth } = await fiscalCalendar(countryCode);
   const current = fiscalYearOf(calendar, startMonth, today);
   if (!current) return [];
-  const starts = await db.selectDistinct({ from: platformTaxRates.effectiveFrom }).from(platformTaxRates).where(eq(platformTaxRates.countryCode, countryCode));
-  const wanted = new Set([current.startYear - 1, current.startYear, current.startYear + 1]);
-  for (const s of starts) {
-    const y = fiscalYearOf(calendar, startMonth, s.from)?.startYear;
-    if (y !== undefined) wanted.add(y);
+  const years: FiscalYear[] = [];
+  for (let y = Math.min(FIRST_FISCAL_YEAR[calendar] ?? current.startYear - 1, current.startYear - 1); y <= current.startYear + 1; y++) {
+    const r = fiscalYearRange(calendar, startMonth, y);
+    if (r) years.push({ startYear: y, label: r.label, from: r.from, to: r.to });
   }
-  return [...wanted]
-    .sort((a, b) => a - b)
-    .flatMap((y) => {
-      const r = fiscalYearRange(calendar, startMonth, y);
-      return r ? [{ startYear: y, label: r.label, from: r.from, to: r.to }] : [];
-    });
+  return years;
 }
 
 /** The published rates of one country, per tax type, oldest first; and how each organization's rate compares to the one in force. */
@@ -103,14 +100,17 @@ export async function publishTaxRate(adminId: string, input: PublishInput): Prom
     .from(platformTaxRates)
     .where(and(eq(platformTaxRates.countryCode, input.countryCode), eq(platformTaxRates.taxTypeKey, input.taxTypeKey), isNull(platformTaxRates.effectiveTo)))
     .limit(1);
-  if (current) {
+  // Versions are added after the latest one, or before the earliest one (for a year nothing was published for) — never in the middle.
+  const [earliest] = await db.select().from(platformTaxRates).where(and(eq(platformTaxRates.countryCode, input.countryCode), eq(platformTaxRates.taxTypeKey, input.taxTypeKey))).orderBy(asc(platformTaxRates.effectiveFrom)).limit(1);
+  const backfill = Boolean(earliest) && input.effectiveFrom < earliest.effectiveFrom;
+  if (current && !backfill) {
     if (input.effectiveFrom <= current.effectiveFrom) return { ok: false, error: `The new rate has to start after ${current.effectiveFrom}, when the current one started.` };
     if (!input.carryForward && Math.abs(Number(current.rate) - input.rate) < 0.005) return { ok: false, error: `That is already the current rate (${Number(current.rate)}%).` };
   }
 
   await db.transaction(async (tx) => {
-    if (current) await tx.update(platformTaxRates).set({ effectiveTo: addDays(input.effectiveFrom, -1) }).where(eq(platformTaxRates.id, current.id));
-    await tx.insert(platformTaxRates).values({ countryCode: input.countryCode, taxTypeKey: input.taxTypeKey, rate: input.rate.toFixed(2), effectiveFrom: input.effectiveFrom, isVerified: input.isVerified, source: input.source.trim() || null, createdBy: adminId });
+    if (current && !backfill) await tx.update(platformTaxRates).set({ effectiveTo: addDays(input.effectiveFrom, -1) }).where(eq(platformTaxRates.id, current.id));
+    await tx.insert(platformTaxRates).values({ countryCode: input.countryCode, taxTypeKey: input.taxTypeKey, rate: input.rate.toFixed(2), effectiveFrom: input.effectiveFrom, effectiveTo: backfill ? addDays(earliest.effectiveFrom, -1) : null, isVerified: input.isVerified, source: input.source.trim() || null, createdBy: adminId });
   });
 
   // Every organization of the country.
@@ -118,6 +118,14 @@ export async function publishTaxRate(adminId: string, input: PublishInput): Prom
   let updated = 0;
   const skipped: { name: string; reason: string }[] = [];
   for (const org of orgs) {
+    if (backfill) {
+      // An earlier start: the organization gets it only for the stretch before its own first rate.
+      const [first] = await db.select().from(taxRates).where(and(eq(taxRates.tenantId, org.id), eq(taxRates.taxTypeKey, input.taxTypeKey))).orderBy(asc(taxRates.effectiveFrom)).limit(1);
+      if (first && first.effectiveFrom <= input.effectiveFrom) continue;
+      await db.insert(taxRates).values({ tenantId: org.id, taxTypeKey: input.taxTypeKey, rate: input.rate.toFixed(2), effectiveFrom: input.effectiveFrom, effectiveTo: first ? addDays(first.effectiveFrom, -1) : null, source: "platform", createdBy: adminId });
+      updated++;
+      continue;
+    }
     const [open] = await db.select().from(taxRates).where(and(eq(taxRates.tenantId, org.id), eq(taxRates.taxTypeKey, input.taxTypeKey), isNull(taxRates.effectiveTo))).limit(1);
     if (open && open.effectiveFrom >= input.effectiveFrom) {
       skipped.push({ name: org.name, reason: `already has a ${label} rate starting ${open.effectiveFrom}, on or after this date` });

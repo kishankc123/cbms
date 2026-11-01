@@ -29,7 +29,8 @@ describe("rates by fiscal year", () => {
     expect(await publish({ rate: 14, effectiveFrom: "2026-07-01" })).toMatchObject({ ok: true });
     const versions = (await listPlatformTaxRates(CODE, "2026-10-10")).versions.vat;
     expect(versions.map((v) => [v.fiscalYear, v.version, v.rate])).toEqual([["2026", 1, 13], ["2026", 2, 14]]);
-    expect((await fiscalYearsFor(CODE, "2026-10-10")).map((y) => y.label)).toEqual(["2025", "2026", "2027"]);
+    const years = (await fiscalYearsFor(CODE, "2026-10-10")).map((y) => y.label);
+    expect([years[0], years[years.length - 1], years.length]).toEqual(["2004", "2027", 24]); // every year from the first one to one ahead
   });
 
   it("does not start next year's rates early, then carries each rate forward as a draft that changes nothing", async () => {
@@ -61,5 +62,13 @@ describe("rates by fiscal year", () => {
     expect(await confirmCarryForward(admin.userId, { draftId: draft.id, rate: 15, effectiveFrom: "2028-04-01", source: "Budget", isVerified: true })).toMatchObject({ ok: true });
     const versions = (await listPlatformTaxRates(CODE, "2028-05-01")).versions.vat;
     expect(versions[versions.length - 1]).toMatchObject({ fiscalYear: "2028", version: 1, rate: 15, effectiveFrom: "2028-04-01", inForce: true });
+  });
+
+  it("a year before the first published version can be set, but a year between two versions cannot", async () => {
+    expect(await publish({ taxTypeKey: "income_tax", rate: 25, effectiveFrom: "2026-01-01" })).toMatchObject({ ok: true });
+    expect(await publish({ taxTypeKey: "income_tax", rate: 20, effectiveFrom: "2024-01-01" })).toMatchObject({ ok: true });
+    const v = (await listPlatformTaxRates(CODE, "2026-10-10")).versions.income_tax;
+    expect(v.map((x) => [x.effectiveFrom, x.effectiveTo, x.rate])).toEqual([["2024-01-01", "2025-12-31", 20], ["2026-01-01", null, 25]]);
+    expect(await publish({ taxTypeKey: "income_tax", rate: 22, effectiveFrom: "2025-03-01" })).toMatchObject({ ok: false });
   });
 });
