@@ -40,6 +40,9 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const [employmentStatus, setEmploymentStatus] = useState<(typeof EMPLOYMENT_STATUSES)[number]["value"]>("active");
   const [bankName, setBankName] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [taxStatus, setTaxStatus] = useState("single");
+  const [priorIncome, setPriorIncome] = useState("");
+  const [priorTds, setPriorTds] = useState("");
   const [initialSalary, setInitialSalary] = useState("");
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why.
@@ -76,6 +79,9 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         employmentStatus,
         bankName,
         bankAccountNumber,
+        taxStatus,
+        priorIncome,
+        priorTds,
         initialSalary: parseFloat(initialSalary) || 0,
       });
       router.refresh();
@@ -166,6 +172,22 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Bank Account Number</label>
           <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Tax status (salary TDS)</label>
+          <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <option value="">Not chosen (Single is used)</option>
+            <option value="single">Single</option>
+            <option value="couple">Couple</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Income from earlier employer this fiscal year</label>
+          <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">TDS already withheld by earlier employer</label>
+          <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Initial Basic Salary</label>

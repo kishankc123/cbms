@@ -31,9 +31,10 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
       overtimeAmount: acc.overtimeAmount + r.overtimeAmount,
       benefitsAmount: acc.benefitsAmount + r.benefitsAmount,
       advanceRecovered: acc.advanceRecovered + r.advanceRecovered,
+      tdsAmount: acc.tdsAmount + r.tdsAmount,
       netPay: acc.netPay + r.netPay,
     }),
-    { employeeCount: 0, grossPay: 0, allowances: 0, deductions: 0, overtimeAmount: 0, benefitsAmount: 0, advanceRecovered: 0, netPay: 0 }
+    { employeeCount: 0, grossPay: 0, allowances: 0, deductions: 0, overtimeAmount: 0, benefitsAmount: 0, advanceRecovered: 0, tdsAmount: 0, netPay: 0 }
   );
 
   return (
@@ -57,6 +58,7 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
             <th className="px-4 py-2 font-medium text-right">Overtime</th>
             <th className="px-4 py-2 font-medium text-right">Benefits</th>
             <th className="px-4 py-2 font-medium text-right">Deductions</th>
+            <th className="px-4 py-2 font-medium text-right">TDS</th>
             <th className="px-4 py-2 font-medium text-right">Advance Recovered</th>
             <th className="px-4 py-2 font-medium text-right">Net Pay</th>
             <th className="px-4 py-2 font-medium"></th>
@@ -72,6 +74,7 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
               <td className="px-4 py-2 text-right">{fmt(r.overtimeAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(r.benefitsAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(r.deductions)}</td>
+              <td className="px-4 py-2 text-right">{fmt(r.tdsAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(r.advanceRecovered)}</td>
               <td className="px-4 py-2 text-right font-medium">{fmt(r.netPay)}</td>
               <td className="px-4 py-2 whitespace-nowrap">
@@ -83,7 +86,7 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
           ))}
           {runs.length === 0 && (
             <tr>
-              <td colSpan={10} className="px-4 py-6 text-center text-gray-400">
+              <td colSpan={11} className="px-4 py-6 text-center text-gray-400">
                 No finalized payroll runs in this period
               </td>
             </tr>
@@ -99,6 +102,7 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
               <td className="px-4 py-2 text-right">{fmt(totals.overtimeAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(totals.benefitsAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(totals.deductions)}</td>
+              <td className="px-4 py-2 text-right">{fmt(totals.tdsAmount)}</td>
               <td className="px-4 py-2 text-right">{fmt(totals.advanceRecovered)}</td>
               <td className="px-4 py-2 text-right">{fmt(totals.netPay)}</td>
               <td className="px-4 py-2"></td>

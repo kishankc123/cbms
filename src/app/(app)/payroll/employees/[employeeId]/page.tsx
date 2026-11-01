@@ -68,6 +68,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         basicSalary: payrollLines.basicSalary,
         grossPay: payrollLines.grossPay,
         advanceRecovered: payrollLines.advanceRecovered,
+        tdsAmount: payrollLines.tdsAmount,
+        tdsDetail: payrollLines.tdsDetail,
         netPay: payrollLines.netPay,
       })
       .from(payrollLines)

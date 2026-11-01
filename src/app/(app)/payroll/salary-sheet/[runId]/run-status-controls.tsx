@@ -25,12 +25,15 @@ export function RunStatusControls({
   month,
   year,
   calendar,
+  slabsMissing = false,
 }: {
   runId: string;
   status: string;
   month: number;
   year: number;
   calendar: "AD" | "BS";
+  /** The run took no salary TDS because no slabs are published: finalizing asks first. */
+  slabsMissing?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -38,8 +41,10 @@ export function RunStatusControls({
   const { report, dialog } = useProblem();
   const [reversing, setReversing] = useState(false);
   const [reason, setReason] = useState("");
+  const ask = useConfirm();
 
   async function handleAdvance() {
+    if (status === "approved" && slabsMissing && !(await ask("No salary-tax slabs are published for this fiscal year, so no TDS was taken from anyone. Finalize anyway?", { confirmLabel: "Finalize without TDS" }))) return;
     setBusy(true);
     try {
       await advanceRunStatus({ runId });
@@ -63,7 +68,6 @@ export function RunStatusControls({
     }
   }
 
-  const ask = useConfirm();
   async function handleRecalculate() {
     if (!(await ask("Recalculate this payroll run from the latest salary, benefits, and attendance records?", { confirmLabel: "Recalculate" }))) return;
     setBusy(true);

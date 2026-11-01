@@ -12,6 +12,9 @@ import { getOrCreateSettings } from "@/lib/payroll/settings";
 import { reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, removeRunRecoveries } from "@/lib/payroll/staff-advances";
+import { slabsOn } from "@/lib/compliance/slabs";
+import { computeMonthlyTds, earlierInFiscalYear, payrollTaxContext, type TdsWorking } from "@/lib/payroll/salary-tax";
+import type { TaxpayerClass } from "@/lib/compliance/slab-tables";
 import { postPayrollAccrual, activePayrollEntries, getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { todayIso } from "@/lib/calendar";
 
@@ -105,6 +108,10 @@ export async function generatePayrollRun(input: GenerateRunInput) {
   const components = await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId));
   const allowanceTotal = components.filter((c) => c.type === "allowance").reduce((s, c) => s + Number(c.amount), 0);
   const deductionTotal = components.filter((c) => c.type === "deduction").reduce((s, c) => s + Number(c.amount), 0);
+  const taxableAllowanceTotal = components.filter((c) => c.type === "allowance" && c.taxable).reduce((s, c) => s + Number(c.amount), 0);
+  // Salary TDS: the fiscal year this pay falls in, the months left in it, and the slabs in force on the pay date (null = none published).
+  const taxCtx = await payrollTaxContext(session.tenantId, periodStart);
+  const slabInfo = taxCtx.headKey ? await slabsOn(taxCtx.countryCode, taxCtx.headKey, periodEnd) : null;
 
   const periodDates = eachDate(periodStart, periodEnd);
   const totalPeriodDays = periodDates.length;
@@ -184,10 +191,28 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     );
 
     const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal);
+
+    // Salary TDS: projected for the year, less what was already withheld, split over the months left. It can't be more than the pay itself.
+    const taxablePay = round2(proratedBasic + benefitsAmount + taxableAllowanceTotal);
+    const taxpayerClass: TaxpayerClass = employee.taxStatus === "couple" ? "couple" : "single";
+    const earlier = taxCtx.fy ? await earlierInFiscalYear(session.tenantId, employee.id, taxCtx.fy.from, periodStart, run.id) : { earned: 0, withheld: 0 };
+    const joinedThisYear = Boolean(taxCtx.fy && employee.joiningDate >= taxCtx.fy.from); // earlier-employer figures only count in the year the person joined
+    const working = computeMonthlyTds({
+      taxablePay,
+      earnedBefore: earlier.earned,
+      withheldBefore: earlier.withheld,
+      priorIncome: joinedThisYear ? Number(employee.priorIncome) : 0,
+      priorTds: joinedThisYear ? Number(employee.priorTds) : 0,
+      monthsLeft: taxCtx.monthsLeft,
+      slabs: slabInfo?.tables[taxpayerClass] ?? null,
+      rounding: settings.roundingRule,
+    });
+    const tdsAmount = Math.min(working.tds, Math.max(round2(grossPay - deductionTotal), 0));
+    const tdsDetail: TdsWorking = { ...working, tds: tdsAmount, taxpayerClass, classAssumed: !employee.taxStatus, slabVersion: slabInfo ? { id: slabInfo.id, label: slabInfo.label } : null };
     // Staff advances taken against this month (or earlier ones still unrecovered) come out of the pay, oldest first, but never
     // more than the employee takes home — anything left over is recovered from later months.
-    const { total: advanceRecovered } = await planEmployeeRecovery(session.tenantId, employee.id, periodEnd, grossPay - deductionTotal, run.id);
-    const netPay = round2(grossPay - deductionTotal - advanceRecovered);
+    const { total: advanceRecovered } = await planEmployeeRecovery(session.tenantId, employee.id, periodEnd, grossPay - deductionTotal - tdsAmount, run.id);
+    const netPay = round2(grossPay - deductionTotal - tdsAmount - advanceRecovered);
 
     await db.insert(payrollLines).values({
       tenantId: session.tenantId,
@@ -204,6 +229,9 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       benefitsAmount: benefitsAmount.toFixed(2),
       grossPay: grossPay.toFixed(2),
       advanceRecovered: advanceRecovered.toFixed(2),
+      taxablePay: taxablePay.toFixed(2),
+      tdsAmount: tdsAmount.toFixed(2),
+      tdsDetail,
       netPay: netPay.toFixed(2),
     });
   }

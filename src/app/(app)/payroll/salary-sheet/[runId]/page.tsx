@@ -8,6 +8,8 @@ import { RunStatusControls } from "./run-status-controls";
 import { D } from "@/components/calendar/date-text";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { getRunRecoveryBreakdown } from "@/lib/payroll/staff-advances";
+import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
+import { TdsCell } from "../../tds-working";
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
@@ -38,6 +40,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       advanceRecovered: payrollLines.advanceRecovered,
       benefitsAmount: payrollLines.benefitsAmount,
       grossPay: payrollLines.grossPay,
+      tdsAmount: payrollLines.tdsAmount,
+      tdsDetail: payrollLines.tdsDetail,
       netPay: payrollLines.netPay,
     })
     .from(payrollLines)
@@ -45,6 +49,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
     .where(eq(payrollLines.payrollRunId, runId));
 
   const totalNet = lines.reduce((s, l) => s + Number(l.netPay), 0);
+  const workingOf = (l: (typeof lines)[number]) => (l.tdsDetail as TdsWorking | null) ?? null;
+  const slabsMissing = lines.some((l) => workingOf(l)?.missing === "slabs");
+  const assumedStatus = lines.filter((l) => workingOf(l)?.classAssumed).length;
   const hasAdvances = lines.some((l) => Number(l.advanceRecovered) > 0);
   const recoveries = hasAdvances ? await getRunRecoveryBreakdown(session.tenantId, run) : [];
   const nameOf = new Map(lines.map((l) => [l.employeeId, l.fullName]));
@@ -60,8 +67,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
             <D value={run.periodStart} /> – <D value={run.periodEnd} />
           </p>
         </div>
-        <RunStatusControls runId={run.id} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} />
+        <RunStatusControls runId={run.id} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} slabsMissing={slabsMissing} />
       </div>
+
+      {slabsMissing && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">Salary-tax slabs are not set for this fiscal year, so no TDS was taken in this run. Once the platform administrator has published them, recalculate the run.</p>}
+      {assumedStatus > 0 && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{assumedStatus} employee{assumedStatus === 1 ? " has" : "s have"} no tax status, so the Single slabs were used. Choose Single or Couple on the employee&apos;s profile, then recalculate.</p>}
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="w-full text-sm">
@@ -77,6 +87,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
               <th className="px-3 py-2 font-medium whitespace-nowrap">Benefits</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Deductions</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Gross Pay</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">TDS</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Advance Recovered</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Net Pay</th>
             </tr>
@@ -96,13 +107,16 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.benefitsAmount).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.deductions).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.grossPay).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <TdsCell amount={Number(l.tdsAmount)} working={workingOf(l)} title={l.fullName} />
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.advanceRecovered).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.netPay).toFixed(2)}</td>
               </tr>
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={13} className="px-4 py-6 text-center text-gray-400">
                   No lines in this run
                 </td>
               </tr>
@@ -111,7 +125,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           {lines.length > 0 && (
             <tfoot>
               <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                <td colSpan={11} className="px-3 py-2 text-right">
+                <td colSpan={12} className="px-3 py-2 text-right">
                   Total Net Pay
                 </td>
                 <td className="px-3 py-2">{totalNet.toFixed(2)}</td>

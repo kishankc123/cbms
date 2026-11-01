@@ -66,3 +66,17 @@ export function slabTax(slabs: readonly Slab[], income: number): number {
   }
   return round2(tax);
 }
+
+/** The same working as slabTax, slab by slab: how much of the income fell in each slab and the tax on it (for a payslip). */
+export function slabBreakdown(slabs: readonly Slab[], income: number): { from: number; to: number | null; rate: number; amount: number; tax: number }[] {
+  const rows: { from: number; to: number | null; rate: number; amount: number; tax: number }[] = [];
+  let from = 0;
+  for (const s of slabs) {
+    const top = s.upTo === null ? Math.max(income, from) : Math.min(Math.max(income, from), s.upTo);
+    const amount = round2(Math.max(top - from, 0));
+    rows.push({ from, to: s.upTo, rate: s.rate, amount, tax: round2(amount * (s.rate / 100)) });
+    if (s.upTo === null) break;
+    from = s.upTo;
+  }
+  return rows;
+}

@@ -56,15 +56,15 @@ export async function planEmployeeRecovery(tenantId: string, employeeId: string,
   return { total: round2(parts.reduce((s, p) => s + p.amount, 0)), parts };
 }
 
-/** The advances a run recovers, worked out from its lines: gross - deductions is what can be recovered from each employee. */
+/** The advances a run recovers, worked out from its lines: gross - deductions - TDS is what can be recovered from each employee. */
 async function planRun(tenantId: string, run: Run) {
   const lines = await db
-    .select({ id: payrollLines.id, employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, advanceRecovered: payrollLines.advanceRecovered })
+    .select({ id: payrollLines.id, employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, tdsAmount: payrollLines.tdsAmount, advanceRecovered: payrollLines.advanceRecovered })
     .from(payrollLines)
     .where(eq(payrollLines.payrollRunId, run.id));
   const plans = [];
   for (const l of lines) {
-    const plan = await planEmployeeRecovery(tenantId, l.employeeId, run.periodEnd, Number(l.grossPay) - Number(l.deductions), run.id);
+    const plan = await planEmployeeRecovery(tenantId, l.employeeId, run.periodEnd, Number(l.grossPay) - Number(l.deductions) - Number(l.tdsAmount), run.id);
     plans.push({ line: l, ...plan });
   }
   return plans;

@@ -42,9 +42,9 @@ export async function listSlabVersions(countryCode: string, headKey: string, tod
 }
 
 /** The slabs that apply on a date (what payroll uses), or null when nothing is published for it. */
-export async function slabsOn(countryCode: string, headKey: string, date: string): Promise<{ id: string; tables: SlabTables } | null> {
+export async function slabsOn(countryCode: string, headKey: string, date: string): Promise<{ id: string; label: string; tables: SlabTables } | null> {
   const found = (await listSlabVersions(countryCode, headKey, date)).filter((v) => v.effectiveFrom <= date && (!v.effectiveTo || v.effectiveTo >= date))[0];
-  return found ? { id: found.id, tables: found.tables } : null;
+  return found ? { id: found.id, label: `v${found.version} of ${found.fiscalYear}`, tables: found.tables } : null;
 }
 
 async function isSlabHead(countryCode: string, headKey: string) {
