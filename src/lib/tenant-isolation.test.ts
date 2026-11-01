@@ -78,6 +78,7 @@ const PLATFORM: Record<string, string> = {
   compliance_requirement_templates: "platform compliance configuration",
   compliance_penalty_rules: "platform compliance configuration",
   platform_tax_rates: "published by platform administrators; copied into each organization as tax_rates",
+  compliance_module_taxes: "which taxes apply in which module of a country, set by platform administrators",
   platform_slab_versions: "salary-tax slabs published by platform administrators; payroll reads the version in force",
   platform_slab_drafts: "carried-forward platform slabs waiting for an administrator to confirm them",
   platform_tax_rate_drafts: "carried-forward platform rates waiting for an administrator to confirm them",

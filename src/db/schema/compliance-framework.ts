@@ -472,3 +472,32 @@ export const shareLagatEntries = pgTable("share_lagat_entries", {
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Which taxes apply in which module of a country, and how: one row per module and tax. The calculation method, who bears the tax,
+ * whether the price includes it and where it posts. Rates and slabs are not here; they stay in the dated platform rates.
+ * isActive false = the tax is not applied in that module. Modules still follow their own code for now: this is what the platform
+ * administrator records and sees, and what modules will read as they are moved over one at a time.
+ */
+export const complianceModuleTaxes = pgTable(
+  "compliance_module_taxes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    /** sales | purchases | expenses | payroll | assets | returns */
+    moduleKey: text("module_key").notNull(),
+    taxTypeKey: text("tax_type_key").notNull(),
+    /** flat | heading | slab */
+    method: text("method").notNull(),
+    /** collected | claimable | borne | withheld | reverses */
+    bearer: text("bearer").notNull(),
+    /** inclusive | exclusive | on_amount */
+    priceBasis: text("price_basis").notNull(),
+    /** output_vat | input_vat | tds_payable | tax_payable */
+    postsTo: text("posts_to").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("compliance_module_taxes_country_module_tax").on(t.countryCode, t.moduleKey, t.taxTypeKey)]
+);

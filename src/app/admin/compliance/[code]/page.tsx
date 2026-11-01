@@ -13,12 +13,15 @@ import { getTaxRateAdminData } from "../tax-rates/actions";
 import { TaxRatesAdmin } from "../tax-rates/tax-rates-admin";
 import { SlabsAdmin } from "../tax-rates/slabs-admin";
 import { FiscalYearFilter } from "./fiscal-year-filter";
+import { ModulesAdmin } from "../modules/modules-admin";
+import { listModuleTaxes } from "@/lib/compliance/module-tax-admin";
+import { TAX_MODULES } from "@/lib/compliance/module-taxes";
 import { getPenaltyAdminData } from "../penalties/actions";
 import { PenaltiesAdmin } from "../penalties/penalties-admin";
 import { getTemplateAdminData } from "../templates/actions";
 import { TemplatesAdmin } from "../templates/templates-admin";
 
-export default async function AdminCountryCompliancePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string; tax?: string; head?: string; view?: string; fy?: string }> }) {
+export default async function AdminCountryCompliancePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string; tax?: string; head?: string; view?: string; fy?: string; module?: string }> }) {
   await requirePlatformAdmin();
   const code = (await params).code.toUpperCase();
   const query = await searchParams;
@@ -76,6 +79,8 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
 
       {tab === "tax" && <TaxTab code={code} tax={query.tax} head={query.head} fy={query.fy} view={query.view === "penalties" ? "penalties" : "setup"} />}
 
+      {tab === "modules" && <ModulesTab code={code} countryName={country.name} module={query.module} />}
+
       {tab === "statutory" && (
         <div className="space-y-4">
           <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("statutory")} addable />
@@ -84,6 +89,24 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
       )}
 
       {tab === "local" && <TemplatesAdmin data={await getTemplateAdminData(code)} categoryKeys={categoriesOf("local")} addable />}
+    </div>
+  );
+}
+
+// Which taxes apply in which module of the country, and how: pick the module, then see and edit its taxes. The rates stay in Tax & rates.
+async function ModulesTab({ code, countryName, module }: { code: string; countryName: string; module?: string }) {
+  const data = await listModuleTaxes(code);
+  const selected = TAX_MODULES.find((m) => m.key === module)?.key ?? TAX_MODULES[0].key;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {TAX_MODULES.map((m) => (
+          <Link key={m.key} href={`/admin/compliance/${code}?tab=modules&module=${m.key}`} className={`rounded-full px-4 py-1.5 text-sm ${m.key === selected ? "bg-[var(--color-primary)] text-white" : "bg-[var(--surface-muted-bg)] text-[var(--text-secondary)]"}`}>
+            {m.label}
+          </Link>
+        ))}
+      </div>
+      <ModulesAdmin key={selected} countryCode={code} countryName={countryName} moduleKey={selected} data={data} />
     </div>
   );
 }
