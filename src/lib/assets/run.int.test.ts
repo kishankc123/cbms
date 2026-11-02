@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, assetCategories, assetEvents, assets, journalEntries, journalLines } from "@/db/schema";
@@ -35,6 +35,9 @@ async function addAsset(name: string, cost: number, months: number, start: strin
 }
 
 beforeAll(async () => {
+  // These tests are about September and October 2026, so "today" is fixed at 6 October 2026: a month counts as over only once it has ended, and a reversal is dated today.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
   org = await createTempOrg("ZZ Asset Run");
   await ensureAssetSetup(org.tenantId);
   categoryId = (await db.select().from(assetCategories).where(eq(assetCategories.tenantId, org.tenantId)))[0].id;
@@ -42,6 +45,7 @@ beforeAll(async () => {
   await addAsset("Asset B", 60000, 6, "2026-08-05"); // 10,000 a month from August
 });
 afterAll(async () => {
+  vi.useRealTimers();
   await org.remove();
 });
 

@@ -6,6 +6,8 @@ import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
 import { createPayment } from "@/lib/ledger/payments-engine";
+import { moveStock } from "@/lib/inventory/stock";
+import { randomUUID } from "crypto";
 import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -147,11 +149,12 @@ describe("stockable purchases", () => {
   });
 
   it("stock that has already been sold can't be taken back out by voiding", async () => {
-    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Gadget", purchasePrice: "10", sellingPrice: "20", stockQuantity: "0" }).returning();
+    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Gadget", purchasePrice: "10", sellingPrice: "20", stockQuantity: "0", itemType: "product", inventoryTracking: true }).returning();
     await createPurchaseInvoice({ invoiceNumber: "S-STK", invoiceDate: "2026-09-07", vendorId: vendorB, billType: "no_bill", lines: [line(10, 5, item.id)], payments: [] });
-    await db.update(items).set({ stockQuantity: "2" }).where(eq(items.id, item.id)); // 3 of the 5 were sold
+    // 3 of the 5 were sold: a real sale in the stock history, the way a sales invoice records it
+    await moveStock(org.tenantId, { type: "sale", date: "2026-09-08", sourceType: "sale", sourceId: randomUUID(), userId: org.userId }, [{ itemId: item.id, quantity: -3 }]);
     const bill = (await bills()).find((b) => b.billNumber === "S-STK")!;
-    await expect(voidBill(Object.assign(new FormData(), { get: () => bill.id }) as unknown as FormData)).rejects.toThrow(/in stock/);
+    await expect(voidBill(Object.assign(new FormData(), { get: () => bill.id }) as unknown as FormData)).rejects.toThrow(/Gadget would drop to -3/);
     expect((await bills()).find((b) => b.id === bill.id)!.status).not.toBe("void");
   });
 });
