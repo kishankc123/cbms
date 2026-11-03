@@ -2,13 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Receipt } from "lucide-react";
 import { voidInvoice } from "./actions";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 import { RowMenu } from "@/components/row-menu";
-import { ConfirmDialog } from "./confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
-
 import { D } from "@/components/calendar/date-text";
+import { DatePicker } from "@/components/calendar/date-picker";
+import { todayIso } from "@/lib/calendar";
+import { Button } from "@/components/ui/button";
+import { controlClass, Select } from "@/components/ui/field";
+import { Amount, DataTable, RowActions, SortableTh, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -19,8 +29,18 @@ type Invoice = {
   invoiceDate: string;
   dueDate?: string | null;
   total: string;
+  amountPaid: string;
   status: string;
 };
+
+const STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
+  { value: "unpaid", label: "Unpaid" },
+  { value: "partially_paid", label: "Partially paid" },
+  { value: "paid", label: "Paid" },
+  { value: "overdue", label: "Overdue" },
+  { value: "void", label: "Void" },
+];
 
 // How the invoice was paid: the mode of each payment received (Cash, Fonepay, ...). A void invoice says so; one with nothing
 // received yet says Unpaid.
@@ -28,6 +48,23 @@ function paidBy(inv: Invoice, modes: string[] | undefined) {
   if (inv.status === "void") return "Void";
   return modes && modes.length > 0 ? modes.join(", ") : "Unpaid";
 }
+
+// What the list's status badge and the status filter say: paid, part paid, late or simply unpaid.
+function stateOf(inv: Invoice, today: string): "void" | "paid" | "overdue" | "partially_paid" | "unpaid" {
+  if (inv.status === "void") return "void";
+  if (inv.status === "paid") return "paid";
+  if (inv.status === "overdue" || (inv.dueDate && inv.dueDate < today)) return "overdue";
+  return inv.status === "partially_paid" ? "partially_paid" : "unpaid";
+}
+const BADGE: Record<ReturnType<typeof stateOf>, { tone: StatusTone; label: string }> = {
+  void: { tone: "neutral", label: "Void" },
+  paid: { tone: "success", label: "Paid" },
+  overdue: { tone: "critical", label: "Overdue" },
+  partially_paid: { tone: "pending", label: "Partially paid" },
+  unpaid: { tone: "action", label: "Unpaid" },
+};
+
+const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
 type SortKey = "date" | "invoiceNumber" | "customer" | "total" | "mode";
 type SortDir = "asc" | "desc";
@@ -52,17 +89,21 @@ export function InvoicesTable({
   vatRate: number;
 }) {
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [voidingInvoice, setVoidingInvoice] = useState<Invoice | null>(null);
   const router = useRouter();
+  const ask = useConfirm();
   const { report, dialog } = useProblem();
+  const today = useMemo(() => todayIso(), []);
+  const filtering = Boolean(search || dateFrom || dateTo || customerFilter || statusFilter);
 
-  async function confirmVoid() {
-    const invoice = voidingInvoice;
-    setVoidingInvoice(null);
-    if (!invoice) return;
+  async function voidRow(invoice: Invoice) {
+    if (!(await ask(`Void invoice ${invoice.invoiceNumber}?`, { danger: true, confirmLabel: "Void" }))) return;
     const fd = new FormData();
     fd.set("invoiceId", invoice.id);
     try {
@@ -81,17 +122,37 @@ export function InvoicesTable({
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     }
   }
+  const dirOf = (key: SortKey) => (sortKey === key ? sortDir : null);
+
+  function clearFilters() {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setCustomerFilter("");
+    setStatusFilter("");
+  }
+
+  const summary = useMemo(() => {
+    const live = invoiceList.filter((i) => i.status !== "void");
+    const owing = (i: Invoice) => Math.max(Number(i.total) - Number(i.amountPaid), 0);
+    return {
+      total: live.reduce((s, i) => s + Number(i.total), 0),
+      received: live.reduce((s, i) => s + Number(i.amountPaid), 0),
+      outstanding: live.reduce((s, i) => s + owing(i), 0),
+      overdue: live.filter((i) => stateOf(i, today) === "overdue").reduce((s, i) => s + owing(i), 0),
+    };
+  }, [invoiceList, today]);
 
   const sorted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let rows = !q
-      ? invoiceList
-      : invoiceList.filter(
-          (inv) =>
-            inv.invoiceNumber.toLowerCase().includes(q) ||
-            (customerById[inv.customerId]?.name ?? "").toLowerCase().includes(q) ||
-            inv.total.toLowerCase().includes(q)
-        );
+    let rows = invoiceList.filter((inv) => {
+      if (q && !(inv.invoiceNumber.toLowerCase().includes(q) || (customerById[inv.customerId]?.name ?? "").toLowerCase().includes(q) || inv.total.toLowerCase().includes(q))) return false;
+      if (dateFrom && inv.invoiceDate < dateFrom) return false;
+      if (dateTo && inv.invoiceDate > dateTo) return false;
+      if (customerFilter && inv.customerId !== customerFilter) return false;
+      if (statusFilter && stateOf(inv, today) !== statusFilter) return false;
+      return true;
+    });
 
     if (sortKey) {
       rows = [...rows].sort((a, b) => {
@@ -122,111 +183,114 @@ export function InvoicesTable({
         return sortDir === "asc" ? cmp : -cmp;
       });
     }
-
     return rows;
-  }, [invoiceList, paymentModes, customerById, search, sortKey, sortDir]);
-
-  function sortIndicator(key: SortKey) {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ▲" : " ▼";
-  }
+  }, [invoiceList, paymentModes, customerById, search, dateFrom, dateTo, customerFilter, statusFilter, today, sortKey, sortDir]);
 
   return (
-    <>
-      <div className="flex justify-end mb-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by customer, invoice #, amount..."
-          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-72"
-        />
-      </div>
+    <div className="space-y-4">
+      <StatStrip
+        items={[
+          { label: "Total sales", value: fmt(summary.total) },
+          { label: "Received", value: fmt(summary.received) },
+          { label: "Outstanding", value: fmt(summary.outstanding), tone: summary.outstanding > 0.005 ? "warning" : "default" },
+          { label: "Overdue", value: fmt(summary.overdue), tone: summary.overdue > 0.005 ? "danger" : "default" },
+        ]}
+      />
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("date")}
-            >
-              Date{sortIndicator("date")}
-            </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("invoiceNumber")}
-            >
-              Invoice #{sortIndicator("invoiceNumber")}
-            </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("customer")}
-            >
-              Customer{sortIndicator("customer")}
-            </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("total")}
-            >
-              Amount{sortIndicator("total")}
-            </th>
-            <th
-              className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-              onClick={() => toggleSort("mode")}
-            >
-              Mode of payment{sortIndicator("mode")}
-            </th>
-            <th className="px-2.5 py-1.5 font-medium"></th>
-          </tr>
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search customer, invoice # or amount" />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink-2">From</span>
+          <DatePicker value={dateFrom} onChange={setDateFrom} className={`${controlClass} w-40`} />
+          <span className="text-xs text-ink-2">To</span>
+          <DatePicker value={dateTo} onChange={setDateTo} className={`${controlClass} w-40`} />
+        </div>
+        <Select aria-label="Customer" value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="w-44">
+          <option value="">All customers</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Select aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-36">
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
+
+      <DataTable stickyHeader>
+        <thead>
+          <Tr className="hover:bg-transparent">
+            <SortableTh direction={dirOf("date")} onSort={() => toggleSort("date")}>
+              Date
+            </SortableTh>
+            <SortableTh direction={dirOf("invoiceNumber")} onSort={() => toggleSort("invoiceNumber")}>
+              Invoice #
+            </SortableTh>
+            <SortableTh direction={dirOf("customer")} onSort={() => toggleSort("customer")}>
+              Customer
+            </SortableTh>
+            <SortableTh align="right" direction={dirOf("total")} onSort={() => toggleSort("total")}>
+              Amount
+            </SortableTh>
+            <SortableTh direction={dirOf("mode")} onSort={() => toggleSort("mode")}>
+              Mode of payment
+            </SortableTh>
+            <Th>Status</Th>
+            <Th className="w-10" />
+          </Tr>
         </thead>
         <tbody>
-          {sorted.map((inv) => (
-            <tr key={inv.id} className="border-t border-gray-100">
-              <td className="px-2.5 py-1.5"><D value={inv.invoiceDate} /></td>
-              <td className="px-2.5 py-1.5 font-mono">{inv.invoiceNumber}</td>
-              <td className="px-2.5 py-1.5">{customerById[inv.customerId]?.name ?? "—"}</td>
-              <td className="px-2.5 py-1.5">
-                {Number(inv.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </td>
-              <td className={`px-4 py-2 ${inv.status === "void" ? "text-gray-400" : paymentModes[inv.id]?.length ? "" : "text-gray-500"}`}>{paidBy(inv, paymentModes[inv.id])}</td>
-              <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
-                <RowMenu
-                  items={[
-                    { label: "Edit", onClick: () => setEditingId(inv.id), hidden: inv.status === "void" },
-                    { label: "Void", onClick: () => setVoidingInvoice(inv), danger: true, hidden: inv.status === "void" },
-                  ]}
-                />
-              </td>
-            </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                No invoices yet
-              </td>
-            </tr>
-          )}
+          {sorted.map((inv) => {
+            const badge = BADGE[stateOf(inv, today)];
+            const modes = paymentModes[inv.id];
+            return (
+              <Tr key={inv.id}>
+                <Td className="whitespace-nowrap">
+                  <D value={inv.invoiceDate} />
+                </Td>
+                <Td className="font-mono text-xs">{inv.invoiceNumber}</Td>
+                <Td className="max-w-56 truncate">{customerById[inv.customerId]?.name ?? "—"}</Td>
+                <Td numeric className="font-medium">
+                  <Amount value={Number(inv.total)} />
+                </Td>
+                <Td className="text-ink-2">{inv.status !== "void" && modes?.length ? modes.join(", ") : "—"}</Td>
+                <Td>
+                  <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
+                </Td>
+                <Td className="whitespace-nowrap">
+                  <RowActions>
+                    <RowMenu
+                      items={[
+                        { label: "Edit", onClick: () => setEditingId(inv.id), hidden: inv.status === "void" },
+                        { label: "Void", onClick: () => voidRow(inv), danger: true, hidden: inv.status === "void" },
+                      ]}
+                    />
+                  </RowActions>
+                </Td>
+              </Tr>
+            );
+          })}
         </tbody>
-      </table>
+      </DataTable>
+      {sorted.length === 0 &&
+        (invoiceList.length === 0 ? (
+          <EmptyState icon={Receipt} title="No invoices yet" description="Record a sale from the Add new tab and its invoice will be listed here." />
+        ) : (
+          <EmptyState icon={Receipt} title="No invoices match" description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
+        ))}
 
-      {editingId && (
-        <EditSingleInvoiceModal
-          invoiceId={editingId}
-          customers={customers}
-          items={items}
-          cashBankAccounts={cashBankAccounts}
-          customerBalances={customerBalances}
-          vatRate={vatRate}
-          onClose={() => setEditingId(null)}
-        />
-      )}
-      {voidingInvoice && (
-        <ConfirmDialog
-          message={`Void invoice ${voidingInvoice.invoiceNumber}?`}
-          onYes={confirmVoid}
-          onNo={() => setVoidingInvoice(null)}
-        />
-      )}
+      {editingId && <EditSingleInvoiceModal invoiceId={editingId} customers={customers} items={items} cashBankAccounts={cashBankAccounts} customerBalances={customerBalances} vatRate={vatRate} onClose={() => setEditingId(null)} />}
       {dialog}
-    </>
+    </div>
   );
 }

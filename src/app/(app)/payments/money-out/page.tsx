@@ -22,15 +22,10 @@ export default async function MoneyOutPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Money Out</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Record and manage money paid by the business.</p>
-        </div>
-      </div>
-
+    <div>
       <PaymentsWorkspace
+        title="Money out"
+        description="Record and manage money paid by the business."
         formOptions={formOptions}
         initialPayments={initialPayments}
         initialSummary={summary}

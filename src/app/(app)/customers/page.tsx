@@ -36,10 +36,6 @@ export default async function CustomersPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Customers</h1>
-
-      <CustomersTable customers={rows} />
-    </div>
+    <CustomersTable customers={rows} />
   );
 }

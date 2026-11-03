@@ -2,9 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Plus, Users } from "lucide-react";
 import { createCustomer } from "./actions";
 import { CustomerFormModal } from "./customer-form-modal";
 import { DateRangeControl, type DateFilter } from "./date-range-control";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/field";
+import { Amount, DataTable, RowActions, SortableTh, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Customer = {
   id: string;
@@ -47,26 +55,26 @@ function computePeriod(c: Customer, filter: DateFilter) {
 
 export function CustomersTable({ customers }: { customers: Customer[] }) {
   const [search, setSearch] = useState("");
+  const [balanceFilter, setBalanceFilter] = useState<"" | "owing" | "settled">("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [dateFilter, setDateFilter] = useState<DateFilter>({ mode: "all", from: "", to: "" });
+  const filtering = Boolean(search || balanceFilter || dateFilter.mode !== "all");
 
-  const rows = useMemo(
-    () => customers.map((c) => ({ ...c, ...computePeriod(c, dateFilter) })),
-    [customers, dateFilter]
-  );
+  const rows = useMemo(() => customers.map((c) => ({ ...c, ...computePeriod(c, dateFilter) })), [customers, dateFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows
       .filter((c) => !q || c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q))
+      .filter((c) => (balanceFilter === "owing" ? c.outstanding > 0.005 : balanceFilter === "settled" ? Math.abs(c.outstanding) <= 0.005 : true))
       .sort((a, b) => {
         const cmp = sortField === "name" ? a.name.localeCompare(b.name) : a.outstanding - b.outstanding;
         return sortDir === "asc" ? cmp : -cmp;
       });
-  }, [rows, search, sortField, sortDir]);
+  }, [rows, search, balanceFilter, sortField, sortDir]);
 
-  // The cards add up the customers shown below, for the date range chosen.
+  // The figures add up the customers shown below, for the date range chosen.
   const totals = useMemo(
     () => ({
       sales: filtered.reduce((s, c) => s + c.sales, 0),
@@ -84,118 +92,109 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
       setSortDir("asc");
     }
   }
+  const dirOf = (field: SortField) => (field === sortField ? sortDir : null);
 
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {[
-          { label: "Total sales", value: totals.sales },
-          { label: "Total payment received", value: totals.paid },
-          { label: "Total outstanding", value: totals.outstanding, emphasis: true },
-        ].map((c) => (
-          <div key={c.label} className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs text-gray-500">{c.label}</p>
-            <p className={`mt-1 text-xl font-semibold ${c.emphasis && c.value > 0.005 ? "text-amber-700" : "text-gray-900"}`}>{fmt(c.value)}</p>
-          </div>
-        ))}
-      </div>
+  function clearFilters() {
+    setSearch("");
+    setBalanceFilter("");
+    setDateFilter({ mode: "all", from: "", to: "" });
+  }
 
-      <div className="flex items-center justify-between gap-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search customers..."
-          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-64"
-        />
-        <div className="flex items-center gap-2">
-          <DateRangeControl value={dateFilter} onChange={setDateFilter} />
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="Customers"
+        description="Who owes you, and what they have bought and paid."
+        primary={
           <CustomerFormModal
             title="Add customer"
             action={createCustomer}
             trigger={(open) => (
-              <button
-                type="button"
-                onClick={open}
-                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
-              >
+              <Button variant="primary" icon={<Plus size={14} />} onClick={open}>
                 Add customer
-              </button>
+              </Button>
             )}
           />
-        </div>
-      </div>
+        }
+      />
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <SortableHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
-            <th className="px-2.5 py-1.5 font-medium">Opening</th>
-            <th className="px-2.5 py-1.5 font-medium">Sales</th>
-            <th className="px-2.5 py-1.5 font-medium">Paid</th>
-            <SortableHeader
-              label="Outstanding (AR)"
-              field="outstanding"
-              sortField={sortField}
-              sortDir={sortDir}
-              onSort={toggleSort}
-            />
-            <th className="px-2.5 py-1.5 font-medium"></th>
-          </tr>
+      <StatStrip
+        items={[
+          { label: "Total sales", value: fmt(totals.sales) },
+          { label: "Total payment received", value: fmt(totals.paid) },
+          { label: "Total outstanding", value: fmt(totals.outstanding), tone: totals.outstanding > 0.005 ? "warning" : "default" },
+        ]}
+      />
+
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search name or phone" />
+        <Select aria-label="Balance" value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value as "" | "owing" | "settled")} className="w-40">
+          <option value="">All customers</option>
+          <option value="owing">Owing money</option>
+          <option value="settled">Settled</option>
+        </Select>
+        <DateRangeControl value={dateFilter} onChange={setDateFilter} />
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
+
+      <DataTable stickyHeader>
+        <thead>
+          <Tr className="hover:bg-transparent">
+            <SortableTh direction={dirOf("name")} onSort={() => toggleSort("name")}>
+              Name
+            </SortableTh>
+            <Th align="right">Opening</Th>
+            <Th align="right">Sales</Th>
+            <Th align="right">Paid</Th>
+            <SortableTh align="right" direction={dirOf("outstanding")} onSort={() => toggleSort("outstanding")}>
+              Outstanding (AR)
+            </SortableTh>
+            <Th className="w-24" />
+          </Tr>
         </thead>
         <tbody>
           {filtered.map((c) => (
-            <tr key={c.id} className="border-t border-gray-100">
-              <td className="px-2.5 py-1.5">{c.name}</td>
-              <td className="px-2.5 py-1.5">{fmt(c.opening)}</td>
-              <td className="px-2.5 py-1.5">{fmt(c.sales)}</td>
-              <td className="px-2.5 py-1.5">{fmt(c.paid)}</td>
-              <td className="px-2.5 py-1.5">{fmt(c.outstanding)}</td>
-              <td className="px-2.5 py-1.5">
-                <Link href={`/customers/${c.id}`} className="text-xs text-[var(--accent-text)] hover:underline">
-                  View profile
+            <Tr key={c.id}>
+              <Td className="font-medium">
+                <Link href={`/customers/${c.id}`} className="hover:underline">
+                  {c.name}
                 </Link>
-              </td>
-            </tr>
+              </Td>
+              <Td numeric>
+                <Amount value={c.opening} />
+              </Td>
+              <Td numeric>
+                <Amount value={c.sales} />
+              </Td>
+              <Td numeric>
+                <Amount value={c.paid} />
+              </Td>
+              <Td numeric className="font-medium">
+                <Amount value={c.outstanding} />
+              </Td>
+              <Td className="whitespace-nowrap text-right">
+                <RowActions>
+                  <Link href={`/customers/${c.id}`} className="text-xs text-accent-text hover:underline">
+                    View profile
+                  </Link>
+                </RowActions>
+              </Td>
+            </Tr>
           ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                No customers match
-              </td>
-            </tr>
-          )}
         </tbody>
-      </table>
+      </DataTable>
+      {filtered.length === 0 &&
+        (customers.length === 0 ? (
+          <EmptyState icon={Users} title="No customers yet" description="Add a customer, or record a sale and add them there." />
+        ) : (
+          <EmptyState icon={Users} title="No customers match" description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
+        ))}
     </div>
-  );
-}
-
-function SortableHeader({
-  label,
-  field,
-  sortField,
-  sortDir,
-  onSort,
-}: {
-  label: string;
-  field: SortField;
-  sortField: SortField;
-  sortDir: "asc" | "desc";
-  onSort: (field: SortField) => void;
-}) {
-  const active = field === sortField;
-  return (
-    <th className="px-2.5 py-1.5 font-medium">
-      <button
-        type="button"
-        onClick={() => onSort(field)}
-        className={`flex items-center gap-1 hover:text-gray-900 ${active ? "text-gray-900" : ""}`}
-      >
-        {label}
-        <span className="text-[10px] w-3 inline-block">{active ? (sortDir === "asc" ? "▲" : "▼") : ""}</span>
-      </button>
-    </th>
   );
 }
