@@ -10,7 +10,7 @@ export default async function PenaltiesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Fines & Penalties</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Fines & Penalties</h1>
         <p className="mt-0.5 text-sm text-gray-500">Work out the late-filing penalty, late-payment penalty and interest for a period, and record it against the tax type.</p>
       </div>
       <PenaltyRates />

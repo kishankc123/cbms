@@ -86,7 +86,7 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search transfer no. or reference..."
-          className="w-full max-w-md rounded border border-gray-300 px-3 py-1.5 text-sm"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full max-w-md"
         />
       </div>
 

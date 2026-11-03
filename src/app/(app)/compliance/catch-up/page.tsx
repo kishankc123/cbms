@@ -10,7 +10,7 @@ export default async function CatchupPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Compliance Checklist</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance Checklist</h1>
         <p className="mt-0.5 text-sm text-gray-500">What was already filed before you started using the system. Periods up to your answer are marked filed; everything after stays on your list.</p>
       </div>
       <ComplianceProfileNotice />

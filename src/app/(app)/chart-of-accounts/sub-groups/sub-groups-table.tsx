@@ -33,28 +33,28 @@ export function SubGroupsTable({ groups, subGroups, groupById }: { groups: Group
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Code</th>
-            <th className="px-4 py-2 font-medium">Name</th>
-            <th className="px-4 py-2 font-medium">Group</th>
-            <th className="px-4 py-2 font-medium text-right">Balance</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Code</th>
+            <th className="px-2.5 py-1.5 font-medium">Name</th>
+            <th className="px-2.5 py-1.5 font-medium">Group</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Balance</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {subGroups.map((sg) => (
             <tr key={sg.id} className={`border-t border-gray-100 ${sg.isActive ? "" : "text-gray-400"}`}>
-              <td className="px-4 py-2 font-mono">{sg.code}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5 font-mono">{sg.code}</td>
+              <td className="px-2.5 py-1.5">
                 {sg.name}
                 {sg.system && <SystemBadge />}
               </td>
-              <td className="px-4 py-2">{sg.parentAccountId ? groupById[sg.parentAccountId]?.name ?? "—" : "—"}</td>
-              <td className="px-4 py-2 text-right tabular-nums">
+              <td className="px-2.5 py-1.5">{sg.parentAccountId ? groupById[sg.parentAccountId]?.name ?? "—" : "—"}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums">
                 <Balance value={sg.own} />
               </td>
-              <td className="px-4 py-2">{sg.isActive ? "Active" : "Inactive"}</td>
-              <td className="px-4 py-2 text-right">
+              <td className="px-2.5 py-1.5">{sg.isActive ? "Active" : "Inactive"}</td>
+              <td className="px-2.5 py-1.5 text-right">
                 <AccountRowActions account={{ ...sg, parentTdsHeadKey: sg.parentAccountId ? groupById[sg.parentAccountId]?.tdsHeadKey ?? null : null }} showSubCategory={false} onError={(message) => report(message)} />
               </td>
             </tr>

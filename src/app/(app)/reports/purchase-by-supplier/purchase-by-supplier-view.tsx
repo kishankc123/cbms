@@ -33,7 +33,7 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
@@ -41,18 +41,18 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Supplier</th>
-            <th className="px-4 py-2 font-medium text-right">Bills</th>
-            <th className="px-4 py-2 font-medium text-right">Total Billed</th>
-            <th className="px-4 py-2 font-medium text-right">Returns</th>
-            <th className="px-4 py-2 font-medium text-right">Return Amount</th>
-            <th className="px-4 py-2 font-medium text-right">Net Purchases</th>
+            <th className="px-2.5 py-1.5 font-medium">Supplier</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Bills</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Total Billed</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Returns</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Return Amount</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Net Purchases</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.vendorId} className="border-t border-gray-100">
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 {r.accountId ? (
                   <AccountLink accountId={r.accountId} from={from} to={to}>
                     {r.vendorName}
@@ -61,11 +61,11 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
                   r.vendorName
                 )}
               </td>
-              <td className="px-4 py-2 text-right">{r.billCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.totalBilled)}</td>
-              <td className="px-4 py-2 text-right">{r.returnCount || ""}</td>
-              <td className="px-4 py-2 text-right">{r.returnAmount ? fmt(r.returnAmount) : ""}</td>
-              <td className="px-4 py-2 text-right font-medium">{fmt(r.netPurchases)}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.billCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.totalBilled)}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.returnCount || ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.returnAmount ? fmt(r.returnAmount) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right font-medium">{fmt(r.netPurchases)}</td>
             </tr>
           ))}
           {rows.length === 0 && (
@@ -79,12 +79,12 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right">{totals.billCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.totalBilled)}</td>
-              <td className="px-4 py-2 text-right">{totals.returnCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.returnAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.netPurchases)}</td>
+              <td className="px-2.5 py-1.5">Total</td>
+              <td className="px-2.5 py-1.5 text-right">{totals.billCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.totalBilled)}</td>
+              <td className="px-2.5 py-1.5 text-right">{totals.returnCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.returnAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.netPurchases)}</td>
             </tr>
           </tfoot>
         )}

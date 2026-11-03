@@ -35,14 +35,14 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Transfer {t.transferNumber}</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Transfer {t.transferNumber}</h1>
           <p className="mt-0.5 text-sm text-gray-500">Inter-Transfer</p>
         </div>
         <div className="flex items-center gap-2">
           <StatusPill tone={t.status === "posted" ? "success" : "critical"}>{t.status}</StatusPill>
           {t.status === "posted" && (
             <>
-              <Link href={`/payments/inter-transfer/${t.id}/edit`} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">Edit</Link>
+              <Link href={`/payments/inter-transfer/${t.id}/edit`} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">Edit</Link>
               <VoidButton transferId={t.id} transferNumber={t.transferNumber} />
             </>
           )}

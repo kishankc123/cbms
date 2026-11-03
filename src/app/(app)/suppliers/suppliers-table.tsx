@@ -107,7 +107,7 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search suppliers..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-64"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-64"
         />
         <div className="flex items-center gap-2">
           <DateRangeControl value={dateFilter} onChange={setDateFilter} />
@@ -118,7 +118,7 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
               <button
                 type="button"
                 onClick={open}
-                className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
               >
                 Add supplier
               </button>
@@ -131,9 +131,9 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
             <SortableHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
-            <th className="px-4 py-2 font-medium">Opening</th>
-            <th className="px-4 py-2 font-medium">Purchases</th>
-            <th className="px-4 py-2 font-medium">Paid</th>
+            <th className="px-2.5 py-1.5 font-medium">Opening</th>
+            <th className="px-2.5 py-1.5 font-medium">Purchases</th>
+            <th className="px-2.5 py-1.5 font-medium">Paid</th>
             <SortableHeader
               label="Outstanding (AP)"
               field="outstanding"
@@ -141,18 +141,18 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
               sortDir={sortDir}
               onSort={toggleSort}
             />
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((s) => (
             <tr key={s.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{s.name}</td>
-              <td className="px-4 py-2">{fmt(s.opening)}</td>
-              <td className="px-4 py-2">{fmt(s.purchases)}</td>
-              <td className="px-4 py-2">{fmt(s.paid)}</td>
-              <td className="px-4 py-2">{fmt(s.outstanding)}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">{s.name}</td>
+              <td className="px-2.5 py-1.5">{fmt(s.opening)}</td>
+              <td className="px-2.5 py-1.5">{fmt(s.purchases)}</td>
+              <td className="px-2.5 py-1.5">{fmt(s.paid)}</td>
+              <td className="px-2.5 py-1.5">{fmt(s.outstanding)}</td>
+              <td className="px-2.5 py-1.5">
                 <Link href={`/suppliers/${s.id}`} className="text-xs text-[var(--accent-text)] hover:underline">
                   View profile
                 </Link>
@@ -187,7 +187,7 @@ function SortableHeader({
 }) {
   const active = field === sortField;
   return (
-    <th className="px-4 py-2 font-medium">
+    <th className="px-2.5 py-1.5 font-medium">
       <button
         type="button"
         onClick={() => onSort(field)}

@@ -92,7 +92,7 @@ export function EditUserForm({ data }: { data: MemberForEdit }) {
               {saving ? "Saving..." : "Save changes"}
             </button>
           )}
-          <Link href="/settings/users" className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <Link href="/settings/users" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             {data.locked ? "Back" : "Cancel"}
           </Link>
           {saved && <span className="text-sm text-green-700">Saved.</span>}

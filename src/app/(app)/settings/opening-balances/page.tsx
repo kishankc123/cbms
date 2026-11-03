@@ -10,7 +10,7 @@ export default async function OpeningBalancesPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Opening balances</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Opening balances</h1>
       <ReadOnlyNotice canEdit={canEdit} />
       <OpeningBalancesForm sheet={sheet} canSave={canEdit} />
     </div>

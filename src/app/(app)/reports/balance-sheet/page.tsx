@@ -22,7 +22,7 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Balance Sheet</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Balance Sheet</h1>
       </div>
       <ReportFilter from={to} to={to} fiscal={fiscal} asOfOnly />
 
@@ -33,63 +33,63 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
         <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
           <tbody>
             <tr className="bg-gray-50">
-              <td className="px-4 py-2 font-medium" colSpan={2}>Assets</td>
+              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Assets</td>
             </tr>
             {bs.assets.map((r) => (
               <tr key={r.accountId} className="border-t border-gray-100">
-                <td className="px-4 py-2 pl-8">
+                <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
                   </AccountLink>
                 </td>
-                <td className="px-4 py-2 text-right">{r.amount.toFixed(2)}</td>
+                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
               </tr>
             ))}
             <tr className="border-t border-gray-200 font-medium">
-              <td className="px-4 py-2">Total Assets</td>
-              <td className="px-4 py-2 text-right">{bs.totalAssets.toFixed(2)}</td>
+              <td className="px-2.5 py-1.5">Total Assets</td>
+              <td className="px-2.5 py-1.5 text-right">{bs.totalAssets.toFixed(2)}</td>
             </tr>
             <tr className="bg-gray-50">
-              <td className="px-4 py-2 font-medium" colSpan={2}>Liabilities</td>
+              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Liabilities</td>
             </tr>
             {bs.liabilities.map((r) => (
               <tr key={r.accountId} className="border-t border-gray-100">
-                <td className="px-4 py-2 pl-8">
+                <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
                   </AccountLink>
                 </td>
-                <td className="px-4 py-2 text-right">{r.amount.toFixed(2)}</td>
+                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
               </tr>
             ))}
             <tr className="border-t border-gray-200 font-medium">
-              <td className="px-4 py-2">Total Liabilities</td>
-              <td className="px-4 py-2 text-right">{bs.totalLiabilities.toFixed(2)}</td>
+              <td className="px-2.5 py-1.5">Total Liabilities</td>
+              <td className="px-2.5 py-1.5 text-right">{bs.totalLiabilities.toFixed(2)}</td>
             </tr>
             <tr className="bg-gray-50">
-              <td className="px-4 py-2 font-medium" colSpan={2}>Equity</td>
+              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Equity</td>
             </tr>
             {bs.equity.map((r) => (
               <tr key={r.accountId} className="border-t border-gray-100">
-                <td className="px-4 py-2 pl-8">
+                <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
                   </AccountLink>
                 </td>
-                <td className="px-4 py-2 text-right">{r.amount.toFixed(2)}</td>
+                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
               </tr>
             ))}
             <tr className="border-t border-gray-100">
-              <td className="px-4 py-2 pl-8">Retained Earnings (current)</td>
-              <td className="px-4 py-2 text-right">{bs.retainedEarnings.toFixed(2)}</td>
+              <td className="px-2.5 py-1.5 pl-8">Retained Earnings (current)</td>
+              <td className="px-2.5 py-1.5 text-right">{bs.retainedEarnings.toFixed(2)}</td>
             </tr>
             <tr className="border-t border-gray-200 font-medium">
-              <td className="px-4 py-2">Total Equity</td>
-              <td className="px-4 py-2 text-right">{bs.totalEquity.toFixed(2)}</td>
+              <td className="px-2.5 py-1.5">Total Equity</td>
+              <td className="px-2.5 py-1.5 text-right">{bs.totalEquity.toFixed(2)}</td>
             </tr>
             <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="px-4 py-2">Total Liabilities + Equity</td>
-              <td className="px-4 py-2 text-right">{(bs.totalLiabilities + bs.totalEquity).toFixed(2)}</td>
+              <td className="px-2.5 py-1.5">Total Liabilities + Equity</td>
+              <td className="px-2.5 py-1.5 text-right">{(bs.totalLiabilities + bs.totalEquity).toFixed(2)}</td>
             </tr>
           </tbody>
         </table>

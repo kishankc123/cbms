@@ -164,7 +164,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           </p>
         </div>
         {!editor && (
-          <button type="button" onClick={() => open({ draftId: null, effectiveFrom: "", source: "", isVerified: false, rows: yearVersion || before ? copyOf((yearVersion ?? before).tables) : blank() })} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+          <button type="button" onClick={() => open({ draftId: null, effectiveFrom: "", source: "", isVerified: false, rows: yearVersion || before ? copyOf((yearVersion ?? before).tables) : blank() })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {yearVersion ? `Publish v${shown.length + 1}` : "Set the slabs"}
           </button>
         )}
@@ -209,7 +209,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           </label>
           <p className="text-xs text-[var(--text-secondary)]">Payroll in {country.name} uses these slabs from the start date. The earlier slabs end the day before.</p>
           <div className="flex gap-2">
-            <button type="button" disabled={busy || !editor.effectiveFrom} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" disabled={busy || !editor.effectiveFrom} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               {busy ? "Publishing…" : editor.draftId ? "Confirm and publish" : "Publish"}
             </button>
             <button type="button" disabled={busy} onClick={() => setEditor(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
@@ -250,7 +250,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
                       <input type="checkbox" checked={notes.isVerified} onChange={(e) => setNotes({ ...notes, isVerified: e.target.checked })} /> Verified against current law
                     </label>
                     <div className="flex gap-2">
-                      <button type="button" disabled={busy} onClick={saveNotes} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white disabled:opacity-50">
+                      <button type="button" disabled={busy} onClick={saveNotes} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                         Save
                       </button>
                       <button type="button" onClick={() => setNotes(null)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700">

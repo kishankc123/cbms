@@ -138,7 +138,7 @@ export function InvoicesTable({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by customer, invoice #, amount..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-72"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-72"
         />
       </div>
 
@@ -175,20 +175,20 @@ export function InvoicesTable({
             >
               Mode of payment{sortIndicator("mode")}
             </th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((inv) => (
             <tr key={inv.id} className="border-t border-gray-100">
-              <td className="px-4 py-2"><D value={inv.invoiceDate} /></td>
-              <td className="px-4 py-2 font-mono">{inv.invoiceNumber}</td>
-              <td className="px-4 py-2">{customerById[inv.customerId]?.name ?? "—"}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5"><D value={inv.invoiceDate} /></td>
+              <td className="px-2.5 py-1.5 font-mono">{inv.invoiceNumber}</td>
+              <td className="px-2.5 py-1.5">{customerById[inv.customerId]?.name ?? "—"}</td>
+              <td className="px-2.5 py-1.5">
                 {Number(inv.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
               <td className={`px-4 py-2 ${inv.status === "void" ? "text-gray-400" : paymentModes[inv.id]?.length ? "" : "text-gray-500"}`}>{paidBy(inv, paymentModes[inv.id])}</td>
-              <td className="px-4 py-2 text-right whitespace-nowrap">
+              <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
                 <RowMenu
                   items={[
                     { label: "Edit", onClick: () => setEditingId(inv.id), hidden: inv.status === "void" },

@@ -23,7 +23,7 @@ export default async function CashBookPage({ searchParams }: { searchParams: Pro
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Cash Book</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Cash Book</h1>
       </div>
       <CashBookView accountLabels={accountLabels} openingBalance={openingBalance} lines={lines} from={from} to={to} fiscal={fiscal} />
     </div>

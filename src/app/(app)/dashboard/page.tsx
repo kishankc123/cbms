@@ -93,7 +93,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* The greeting is the page heading. */}
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
           {greetingFor(new Date())}, {user.name}
         </h1>
         {"allTime" in activeFiscalYear ? (

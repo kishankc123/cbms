@@ -163,7 +163,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
           </div>
           <p className="text-xs text-[var(--text-secondary)]">Modules keep following their own rules for now; the platform records this and modules will read it as they are moved over one at a time. It reaches {reach}.</p>
           <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               {busy ? "Saving…" : "Save"}
             </button>
             <button type="button" disabled={busy} onClick={() => setEditing(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">

@@ -38,25 +38,25 @@ export function HistoryList({ history, canUndo, onChanged, onUndo, noun }: { his
       <table className="w-full text-sm">
         <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
           <tr>
-            <th className="px-4 py-2 font-medium">File</th>
-            <th className="px-4 py-2 font-medium">When</th>
-            <th className="px-4 py-2 text-right font-medium">{noun === "bill" ? "Bills" : noun === "expense" ? "Expenses" : "Invoices"}</th>
-            <th className="px-4 py-2 text-right font-medium">Total</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2" />
+            <th className="px-2.5 py-1.5 font-medium">File</th>
+            <th className="px-2.5 py-1.5 font-medium">When</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">{noun === "bill" ? "Bills" : noun === "expense" ? "Expenses" : "Invoices"}</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Total</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5" />
           </tr>
         </thead>
         <tbody>
           {history.map((h) => (
             <tr key={h.id} className="border-t border-[var(--card-border)]">
-              <td className="px-4 py-2">{h.fileName}</td>
-              <td className="px-4 py-2 text-[var(--text-secondary)]">{new Date(h.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{h.invoiceCount}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{money(h.total)}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">{h.fileName}</td>
+              <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{new Date(h.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums">{h.invoiceCount}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums">{money(h.total)}</td>
+              <td className="px-2.5 py-1.5">
                 <StatusPill tone={TONE[h.status as keyof typeof TONE] ?? "pending"}>{LABEL[h.status as keyof typeof LABEL] ?? h.status}</StatusPill>
               </td>
-              <td className="px-4 py-2 text-right">
+              <td className="px-2.5 py-1.5 text-right">
                 {canUndo && h.active > 0 && (
                   <button type="button" onClick={() => setUndoing(h)} className="text-sm text-red-600 hover:underline">
                     Undo import

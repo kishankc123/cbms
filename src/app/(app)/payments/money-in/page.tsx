@@ -25,7 +25,7 @@ export default async function MoneyInPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Money In</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Money In</h1>
           <p className="mt-0.5 text-sm text-gray-500">Record and manage money received by the business.</p>
         </div>
       </div>

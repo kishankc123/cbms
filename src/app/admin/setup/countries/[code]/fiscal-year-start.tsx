@@ -39,7 +39,7 @@ export function FiscalYearStart({ code, calendar, month }: { code: string; calen
           ))}
         </select>
       </label>
-      <button type="button" disabled={busy || value === month} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+      <button type="button" disabled={busy || value === month} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
         Save
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}

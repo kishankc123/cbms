@@ -110,35 +110,35 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Compliance</th>
-            <th className="px-4 py-2 font-medium">Period</th>
-            <th className="px-4 py-2 font-medium">Due date</th>
-            <th className="px-4 py-2 font-medium text-right">Amount due</th>
-            <th className="px-4 py-2 font-medium text-right">Balance</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Compliance</th>
+            <th className="px-2.5 py-1.5 font-medium">Period</th>
+            <th className="px-2.5 py-1.5 font-medium">Due date</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Amount due</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Balance</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((i) => (
             <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50/60 cursor-pointer" onClick={() => setOpenId(i.id)}>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 <span className="font-medium text-gray-900">{i.name}</span>
                 {i.taxTypeName && <span className="ml-2 text-xs text-gray-400">{i.taxTypeName}</span>}
               </td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 <PeriodLabel start={i.periodStart} end={i.periodEnd} fallback={i.period} />
               </td>
-              <td className="px-4 py-2 whitespace-nowrap">
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
                 <D value={i.dueDate} />
               </td>
-              <td className="px-4 py-2 text-right">{i.amountDue > 0 ? fmt(i.amountDue) : "—"}</td>
-              <td className="px-4 py-2 text-right">{i.amountDue > 0 ? fmt(i.balance) : "—"}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5 text-right">{i.amountDue > 0 ? fmt(i.amountDue) : "—"}</td>
+              <td className="px-2.5 py-1.5 text-right">{i.amountDue > 0 ? fmt(i.balance) : "—"}</td>
+              <td className="px-2.5 py-1.5">
                 <ObligationStatusPill status={i.effective} />
                 {i.filedBeforeSystem && <span className="mt-0.5 block text-[10px] text-gray-400">Filed before using this system</span>}
               </td>
-              <td className="px-4 py-2 text-right">
+              <td className="px-2.5 py-1.5 text-right">
                 <button type="button" className="text-xs text-[var(--accent-text)] hover:underline">
                   View
                 </button>

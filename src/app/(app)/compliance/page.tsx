@@ -12,7 +12,7 @@ export default async function CompliancePage({ searchParams }: { searchParams: P
   const data = await getComplianceDashboard(typeof sp.fy === "string" ? sp.fy : null);
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Compliance</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance</h1>
       <ComplianceProfileNotice />
       <ExcisePermitAlert />
       <CatchupPrompt />

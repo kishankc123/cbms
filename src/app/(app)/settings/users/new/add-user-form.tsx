@@ -122,7 +122,7 @@ export function AddUserForm({ data }: { data: AddUserData }) {
           <label className={settingsLabel}>Email address *</label>
           <div className="flex gap-2">
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={settingsInput} placeholder="person@example.com" autoComplete="off" />
-            <button type="submit" disabled={busy || !email.trim()} className="whitespace-nowrap rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            <button type="submit" disabled={busy || !email.trim()} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap">
               Find account
             </button>
           </div>

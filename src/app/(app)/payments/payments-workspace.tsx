@@ -164,13 +164,13 @@ export function PaymentsWorkspace({
         <button type="button" disabled className="rounded border border-gray-300 text-gray-400 text-sm px-4 py-1.5 cursor-not-allowed" title="Coming soon">
           Import
         </button>
-        <button type="button" onClick={handleExport} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
+        <button type="button" onClick={handleExport} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export
         </button>
         <button
           type="button"
           onClick={() => setShowNew(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           + New Payment
         </button>
@@ -187,7 +187,7 @@ export function PaymentsWorkspace({
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
               {DATE_PRESETS.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
@@ -199,11 +199,11 @@ export function PaymentsWorkspace({
             <>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">From</label>
-                <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">To</label>
-                <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
               </div>
             </>
           )}
@@ -216,7 +216,7 @@ export function PaymentsWorkspace({
                   setDirection(e.target.value as typeof direction);
                   setPaymentType("all");
                 }}
-                className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3"
               >
                 <option value="all">All</option>
                 <option value="money_in">Money In</option>
@@ -226,7 +226,7 @@ export function PaymentsWorkspace({
           )}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Payment Type</label>
-            <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
               <option value="all">All types</option>
               {typeOptions.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -237,7 +237,7 @@ export function PaymentsWorkspace({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Account</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
               <option value="">All accounts</option>
               {flatAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -248,7 +248,7 @@ export function PaymentsWorkspace({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Party</label>
-            <select value={partyType} onChange={(e) => setPartyType(e.target.value as typeof partyType)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={partyType} onChange={(e) => setPartyType(e.target.value as typeof partyType)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
               <option value="all">All parties</option>
               <option value="customer">Customer</option>
               <option value="supplier">Supplier</option>
@@ -258,7 +258,7 @@ export function PaymentsWorkspace({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
               {STATUS_FILTER_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
@@ -277,7 +277,7 @@ export function PaymentsWorkspace({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search payment no., party, reference, description, cheque no..."
-            className="w-full max-w-md rounded border border-gray-300 px-3 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full max-w-md"
           />
         </div>
       </div>

@@ -108,7 +108,7 @@ export function DraftBanner({ draft, what, summary, onRestore }: { draft: Draft<
         {summary ? ` (${summary})` : ""}. Starting something new replaces it.
       </span>
       <span className="flex gap-2">
-        <button type="button" onClick={onRestore} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white">
+        <button type="button" onClick={onRestore} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           Restore
         </button>
         <button type="button" onClick={draft.discard} className="rounded border border-amber-400 bg-white px-3 py-1 text-sm text-amber-900">

@@ -30,7 +30,7 @@ export function SetupTabs({ data }: { data: AssetSetupData }) {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${tab === t.id ? "bg-[var(--card-bg)] text-[var(--text-primary)] font-medium shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+            className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${tab === t.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
           >
             {t.label}
           </button>
@@ -151,7 +151,7 @@ function AccountsPanel({ data }: { data: AssetSetupData }) {
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-lg bg-[var(--card-bg)] p-5 shadow-lg space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
@@ -201,25 +201,25 @@ function CategoriesPanel({ data }: { data: AssetSetupData }) {
       <table className="w-full text-sm bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg overflow-hidden">
         <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
           <tr>
-            <th className="px-4 py-2 font-medium">Category</th>
-            <th className="px-4 py-2 font-medium">Default method</th>
-            <th className="px-4 py-2 font-medium text-right">Useful life</th>
-            <th className="px-4 py-2 font-medium text-right">Residual</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Category</th>
+            <th className="px-2.5 py-1.5 font-medium">Default method</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Useful life</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Residual</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {data.categories.map((c) => (
             <tr key={c.id} className={`border-t border-[var(--card-border)] ${c.isActive ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
-              <td className="px-4 py-2">{c.name}</td>
-              <td className="px-4 py-2">{METHOD_LABEL[c.method]}</td>
-              <td className="px-4 py-2 text-right">{c.lifeYears ? `${c.lifeYears} yr` : "—"}</td>
-              <td className="px-4 py-2 text-right">{c.method === "none" ? "—" : `${c.residualPercent}%`}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">{c.name}</td>
+              <td className="px-2.5 py-1.5">{METHOD_LABEL[c.method]}</td>
+              <td className="px-2.5 py-1.5 text-right">{c.lifeYears ? `${c.lifeYears} yr` : "—"}</td>
+              <td className="px-2.5 py-1.5 text-right">{c.method === "none" ? "—" : `${c.residualPercent}%`}</td>
+              <td className="px-2.5 py-1.5">
                 <StatusPill tone={c.isActive ? "success" : "action"}>{c.isActive ? "Active" : "Inactive"}</StatusPill>
               </td>
-              <td className="px-4 py-2 text-right">{data.canEdit && <RowMenu items={[{ label: "Edit", onClick: () => edit(c) }]} />}</td>
+              <td className="px-2.5 py-1.5 text-right">{data.canEdit && <RowMenu items={[{ label: "Edit", onClick: () => edit(c) }]} />}</td>
             </tr>
           ))}
         </tbody>
@@ -310,19 +310,19 @@ function LocationsPanel({ data }: { data: AssetSetupData }) {
       <table className="w-full text-sm bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg overflow-hidden max-w-2xl">
         <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
           <tr>
-            <th className="px-4 py-2 font-medium">Location</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Location</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {data.locations.map((l) => (
             <tr key={l.id} className={`border-t border-[var(--card-border)] ${l.isActive ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
-              <td className="px-4 py-2">{l.name}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">{l.name}</td>
+              <td className="px-2.5 py-1.5">
                 <StatusPill tone={l.isActive ? "success" : "action"}>{l.isActive ? "Active" : "Inactive"}</StatusPill>
               </td>
-              <td className="px-4 py-2 text-right">{data.canEdit && <RowMenu items={[{ label: "Edit", onClick: () => edit(l) }]} />}</td>
+              <td className="px-2.5 py-1.5 text-right">{data.canEdit && <RowMenu items={[{ label: "Edit", onClick: () => edit(l) }]} />}</td>
             </tr>
           ))}
           {data.locations.length === 0 && (

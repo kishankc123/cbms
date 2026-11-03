@@ -116,15 +116,15 @@ export function ItemsTable({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search items..."
-          className="ml-auto rounded border border-gray-300 px-3 py-1.5 text-sm w-64"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 ml-auto w-64"
         />
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">SN</th>
-            <th className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700" onClick={() => toggleSort("name")}>
+            <th className="px-2.5 py-1.5 font-medium">SN</th>
+            <th className="px-2.5 py-1.5 font-medium cursor-pointer select-none hover:text-gray-700" onClick={() => toggleSort("name")}>
               Items{sortIndicator("name")}
             </th>
             {isProduct && (
@@ -137,20 +137,20 @@ export function ItemsTable({
             )}
             {isProduct ? (
               <>
-                <th className="px-4 py-2 font-medium text-right">On hand</th>
-                <th className="px-4 py-2 font-medium text-right">Stock value</th>
+                <th className="px-2.5 py-1.5 font-medium text-right">On hand</th>
+                <th className="px-2.5 py-1.5 font-medium text-right">Stock value</th>
               </>
             ) : (
-              <th className="px-4 py-2 font-medium text-right">{rateLabel}</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">{rateLabel}</th>
             )}
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((it, i) => (
             <tr key={it.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{i + 1}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">{i + 1}</td>
+              <td className="px-2.5 py-1.5">
                 <div>
                   {it.name}
                   {!it.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
@@ -159,16 +159,16 @@ export function ItemsTable({
                 </div>
                 {it.revenueAccountId && <p className="text-xs text-gray-400">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
               </td>
-              {isProduct && <td className="px-4 py-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>}
+              {isProduct && <td className="px-2.5 py-1.5">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>}
               {isProduct ? (
                 <>
-                  <td className="px-4 py-2 text-right">{Number(it.stockQuantity)}</td>
-                  <td className="px-4 py-2 text-right">{Number(it.stockValue).toFixed(2)}</td>
+                  <td className="px-2.5 py-1.5 text-right">{Number(it.stockQuantity)}</td>
+                  <td className="px-2.5 py-1.5 text-right">{Number(it.stockValue).toFixed(2)}</td>
                 </>
               ) : (
-                <td className="px-4 py-2 text-right">{Number(it.sellingPrice).toFixed(2)}</td>
+                <td className="px-2.5 py-1.5 text-right">{Number(it.sellingPrice).toFixed(2)}</td>
               )}
-              <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
+              <td className="px-2.5 py-1.5 text-right space-x-3 whitespace-nowrap">
                 <button type="button" onClick={() => setEditingId(it.id)} className="text-xs text-gray-600 hover:underline">
                   Edit
                 </button>

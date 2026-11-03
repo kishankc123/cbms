@@ -189,7 +189,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
         </label>
         )}
         {addable && !fresh && (
-          <button type="button" onClick={startAdd} className="ml-auto rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+          <button type="button" onClick={startAdd} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 ml-auto">
             Add requirement
           </button>
         )}
@@ -228,7 +228,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
                 <StatusPill tone={t.isActive ? "success" : "pending"}>{t.isActive ? "active" : "inactive"}</StatusPill>
                 <StatusPill tone={t.isVerified ? "success" : "action"}>{t.isVerified ? "verified" : "unverified"}</StatusPill>
                 {openId !== t.id && (
-                  <button type="button" onClick={() => open(t)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                  <button type="button" onClick={() => open(t)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                     Edit
                   </button>
                 )}
@@ -386,7 +386,7 @@ export function TemplatesAdmin({ data, categoryKeys, taxKey, exceptTaxKeys, adda
 
                 {message && <p className={`rounded border px-3 py-2 text-sm ${message.tone === "ok" ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}>{message.text}</p>}
                 <div className="flex gap-2">
-                  <button type="button" disabled={busy} onClick={() => save(t)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => save(t)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     {busy ? "Saving…" : "Save"}
                   </button>
                   <button type="button" disabled={busy} onClick={close} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">

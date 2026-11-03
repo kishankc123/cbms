@@ -20,7 +20,7 @@ export default async function ServicesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Services</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Services</h1>
         <p className="mt-0.5 text-sm text-gray-500">Non-inventory items sold on an invoice — a Service line never moves stock, never carries a cost, and can&apos;t be purchased.</p>
       </div>
       <ItemsTabs itemType="service" itemsLabel="Services" rateLabel="Default billing rate" items={itemList} units={units} accounts={revenueAccounts} />

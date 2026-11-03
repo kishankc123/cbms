@@ -20,7 +20,7 @@ export default async function OtherItemsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Other</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Other</h1>
         <p className="mt-0.5 text-sm text-gray-500">Anything else sold on an invoice that isn&apos;t stocked — non-inventory, no cost basis, can&apos;t be purchased.</p>
       </div>
       <ItemsTabs itemType="other" itemsLabel="Other items" rateLabel="Default billing rate" items={itemList} units={units} accounts={revenueAccounts} />

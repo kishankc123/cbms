@@ -9,7 +9,7 @@ export default async function BankAccountSetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Bank Accounts</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Bank Accounts</h1>
       <BankAccountsTable bankAccounts={bankAccounts} ledgerOptions={ledgerOptions} />
     </div>
   );

@@ -62,7 +62,7 @@ export function OpeningAssetsPanel({ data }: { data: OpeningAssetsData }) {
           Assets you already owned when your books start ({formatDate(data.openingDate, calendar)}). Enter what each one cost and the depreciation already taken; depreciation carries on from the remaining life. Anything bought after that date is a purchase.
         </p>
         {data.canCreate && (
-          <button type="button" onClick={() => setEditing("new")} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
+          <button type="button" onClick={() => setEditing("new")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             Add opening asset
           </button>
         )}
@@ -87,32 +87,32 @@ export function OpeningAssetsPanel({ data }: { data: OpeningAssetsData }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">
-                <th className="px-4 py-2 font-medium">Code</th>
-                <th className="px-4 py-2 font-medium">Asset</th>
-                <th className="px-4 py-2 font-medium">Category</th>
-                <th className="px-4 py-2 font-medium">Bought</th>
-                <th className="px-4 py-2 text-right font-medium">Cost</th>
-                <th className="px-4 py-2 text-right font-medium">Accumulated</th>
-                <th className="px-4 py-2 text-right font-medium">Net book value</th>
-                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-2.5 py-1.5 font-medium">Code</th>
+                <th className="px-2.5 py-1.5 font-medium">Asset</th>
+                <th className="px-2.5 py-1.5 font-medium">Category</th>
+                <th className="px-2.5 py-1.5 font-medium">Bought</th>
+                <th className="px-2.5 py-1.5 text-right font-medium">Cost</th>
+                <th className="px-2.5 py-1.5 text-right font-medium">Accumulated</th>
+                <th className="px-2.5 py-1.5 text-right font-medium">Net book value</th>
+                <th className="px-2.5 py-1.5 font-medium">Status</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody>
               {data.assets.map((a) => (
                 <tr key={a.id} className={`border-b border-[var(--card-border)] last:border-0 ${a.status === "voided" ? "opacity-50" : ""}`}>
-                  <td className="px-4 py-2 font-medium">
+                  <td className="px-2.5 py-1.5 font-medium">
                     <Link href={`/assets/${a.id}`} className="text-[var(--accent-text)] hover:underline">
                       {a.assetCode}
                     </Link>
                   </td>
-                  <td className="px-4 py-2">{a.name}</td>
-                  <td className="px-4 py-2 text-[var(--text-secondary)]">{a.categoryName}</td>
-                  <td className="px-4 py-2 text-[var(--text-secondary)]">{a.purchaseDate ? formatDate(a.purchaseDate, calendar) : "—"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{money(a.cost)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{money(a.accumulated)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{money(a.netBookValue)}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-2.5 py-1.5">{a.name}</td>
+                  <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{a.categoryName}</td>
+                  <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{a.purchaseDate ? formatDate(a.purchaseDate, calendar) : "—"}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{money(a.cost)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{money(a.accumulated)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{money(a.netBookValue)}</td>
+                  <td className="px-2.5 py-1.5">
                     <StatusPill tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</StatusPill>
                   </td>
                   <td className="relative px-2">
@@ -142,12 +142,12 @@ export function OpeningAssetsPanel({ data }: { data: OpeningAssetsData }) {
             </tbody>
             <tfoot>
               <tr className="border-t border-[var(--card-border)] font-semibold">
-                <td className="px-4 py-2" colSpan={4}>
+                <td className="px-2.5 py-1.5" colSpan={4}>
                   Total ({live.length})
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(totals.cost)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(totals.accumulated)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(totals.nbv)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(totals.cost)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(totals.accumulated)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(totals.nbv)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -328,10 +328,10 @@ function OpeningAssetModal({ data, row, onClose, onSaved }: { data: OpeningAsset
         </div>
         {method !== "none" && amounts.fullyDepreciated && num(cost) > 0 && <p className="mt-3 text-xs text-[var(--text-secondary)]">Only the residual value is left, so this asset is recorded as fully depreciated.</p>}
         <div className="mt-5 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Cancel
           </button>
-          <button type="button" onClick={save} disabled={saving} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" onClick={save} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {saving ? "Saving..." : row ? "Save changes" : "Add opening asset"}
           </button>
         </div>

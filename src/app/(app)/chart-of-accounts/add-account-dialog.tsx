@@ -55,13 +55,13 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
         {label}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={close} />
-          <form onSubmit={save} className="relative w-full max-w-md space-y-4 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={close} />
+          <form onSubmit={save} className="relative w-full max-w-md space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Add account</h2>
               <button type="button" onClick={close} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -81,7 +81,7 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
             {inside ? (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Group</label>
-                <select data-field="newParent" value={parentId} onChange={(e) => { setParentId(e.target.value); setTds(null); }} required className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select data-field="newParent" value={parentId} onChange={(e) => { setParentId(e.target.value); setTds(null); }} required className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="">Select group</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
@@ -94,11 +94,11 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
               <div className="grid grid-cols-[6rem_1fr] gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Code</label>
-                  <input data-field="newCode" value={code} onChange={(e) => setCode(e.target.value)} required className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                  <input data-field="newCode" value={code} onChange={(e) => setCode(e.target.value)} required className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Category</label>
-                  <select data-field="newCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                  <select data-field="newCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                     {ACCOUNT_SUB_CATEGORIES.map((sc) => (
                       <option key={sc.label} value={sc.label}>
                         {sc.label}
@@ -111,7 +111,7 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Name</label>
-              <input data-field="newName" autoFocus value={name} onChange={(e) => setName(e.target.value)} required className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <input data-field="newName" autoFocus value={name} onChange={(e) => setName(e.target.value)} required className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
             </div>
 
             {isExpense && <TdsLinkField heads={heads} value={tds} onChange={setTds} inherited={inherited} />}
@@ -122,7 +122,7 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
               <button type="button" onClick={close} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="submit" disabled={busy || !name.trim() || (inside && !parentId)} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+              <button type="submit" disabled={busy || !name.trim() || (inside && !parentId)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {busy ? "Adding..." : "Add"}
               </button>
             </div>

@@ -56,7 +56,7 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Cash/Bank Movement</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Cash/Bank Movement</h1>
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
       <p className="text-sm text-gray-500">
@@ -68,25 +68,25 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
         <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Account</th>
-              <th className="px-4 py-2 font-medium text-right">Opening Balance</th>
-              <th className="px-4 py-2 font-medium text-right">Total In</th>
-              <th className="px-4 py-2 font-medium text-right">Total Out</th>
-              <th className="px-4 py-2 font-medium text-right">Closing Balance</th>
+              <th className="px-2.5 py-1.5 font-medium">Account</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Opening Balance</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Total In</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Total Out</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Closing Balance</th>
             </tr>
           </thead>
           <tbody>
             {accounts.map((a) => (
               <tr key={a.accountId} className="border-t border-gray-100">
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">
                   <AccountLink accountId={a.accountId} from={from} to={to}>
                     {a.code} — {a.name}
                   </AccountLink>
                 </td>
-                <td className="px-4 py-2 text-right">{fmt(a.openingBalance)}</td>
-                <td className="px-4 py-2 text-right">{fmt(a.totalIn)}</td>
-                <td className="px-4 py-2 text-right">{fmt(a.totalOut)}</td>
-                <td className="px-4 py-2 text-right">{fmt(a.closingBalance)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(a.openingBalance)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(a.totalIn)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(a.totalOut)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(a.closingBalance)}</td>
               </tr>
             ))}
             {accounts.length === 0 && (
@@ -98,11 +98,11 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
             )}
             {accounts.length > 0 && (
               <tr className="border-t-2 border-gray-300 font-medium">
-                <td className="px-4 py-2">Total</td>
-                <td className="px-4 py-2 text-right">{fmt(totalOpening)}</td>
-                <td className="px-4 py-2 text-right">{fmt(totalIn)}</td>
-                <td className="px-4 py-2 text-right">{fmt(totalOut)}</td>
-                <td className="px-4 py-2 text-right">{fmt(totalClosing)}</td>
+                <td className="px-2.5 py-1.5">Total</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalOpening)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalIn)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalOut)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalClosing)}</td>
               </tr>
             )}
           </tbody>
@@ -114,10 +114,10 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
         <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Type</th>
-              <th className="px-4 py-2 font-medium text-right">Total In</th>
-              <th className="px-4 py-2 font-medium text-right">Total Out</th>
-              <th className="px-4 py-2 font-medium"></th>
+              <th className="px-2.5 py-1.5 font-medium">Type</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Total In</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Total Out</th>
+              <th className="px-2.5 py-1.5 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -125,10 +125,10 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
               const source = resolveSourceLink(s.sourceType);
               return (
                 <tr key={s.sourceType} className="border-t border-gray-100">
-                  <td className="px-4 py-2">{SOURCE_TYPE_LABEL[s.sourceType] ?? s.sourceType}</td>
-                  <td className="px-4 py-2 text-right">{s.totalIn ? fmt(s.totalIn) : ""}</td>
-                  <td className="px-4 py-2 text-right">{s.totalOut ? fmt(s.totalOut) : ""}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-2.5 py-1.5">{SOURCE_TYPE_LABEL[s.sourceType] ?? s.sourceType}</td>
+                  <td className="px-2.5 py-1.5 text-right">{s.totalIn ? fmt(s.totalIn) : ""}</td>
+                  <td className="px-2.5 py-1.5 text-right">{s.totalOut ? fmt(s.totalOut) : ""}</td>
+                  <td className="px-2.5 py-1.5">
                     {source ? (
                       <Link href={source.href} className="text-xs text-[var(--accent-text)] hover:underline whitespace-nowrap">
                         {source.label}

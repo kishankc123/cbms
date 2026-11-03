@@ -13,15 +13,13 @@ export function SalesViewTabs({ initialView, addNew, invoices }: { initialView: 
   const [view, setView] = useState<SalesView>(initialView);
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-gray-100 p-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {VIEWS.map((v) => (
           <button
             key={v.id}
             type="button"
             onClick={() => setView(v.id)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-              view === v.id ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
+            className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${view === v.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
           >
             {v.label}
           </button>

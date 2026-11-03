@@ -23,7 +23,7 @@ export default async function SlowMovingStockPage({ searchParams }: { searchPara
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Slow/Non-moving Stock</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Slow/Non-moving Stock</h1>
       </div>
       <SlowMovingStockView rows={rows} asOf={asOf} thresholdDays={thresholdDays} fiscal={fiscal} />
     </div>

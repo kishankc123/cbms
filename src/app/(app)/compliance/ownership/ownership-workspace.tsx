@@ -88,7 +88,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
       {canEdit && (
         <div className="flex items-center justify-end gap-2">
           <div className="relative">
-            <button type="button" disabled={!data.capital.exists} onClick={() => setMenu((v) => !v)} className="rounded border border-gray-300 bg-white px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+            <button type="button" disabled={!data.capital.exists} onClick={() => setMenu((v) => !v)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
               + Record Capital Change ▾
             </button>
             {menu && (
@@ -117,7 +117,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               </div>
             )}
           </div>
-          <button type="button" disabled={!data.capital.exists} onClick={() => setDialog({ kind: "add" })} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40">
+          <button type="button" disabled={!data.capital.exists} onClick={() => setDialog({ kind: "add" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             + Add Shareholder
           </button>
         </div>
@@ -127,7 +127,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
           <p className="text-sm text-gray-600">Your capital structure isn&apos;t set up yet.</p>
           {canEdit && (
-            <button type="button" onClick={() => setDialog({ kind: "setup" })} className="mt-3 rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+            <button type="button" onClick={() => setDialog({ kind: "setup" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 mt-3">
               Set up capital
             </button>
           )}
@@ -275,7 +275,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               </div>
             </div>
             {canEdit && (
-              <button type="button" onClick={() => setDialog({ kind: "lagat" })} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+              <button type="button" onClick={() => setDialog({ kind: "lagat" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Record update
               </button>
             )}

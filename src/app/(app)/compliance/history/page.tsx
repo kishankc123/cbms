@@ -11,7 +11,7 @@ export default async function ComplianceHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Compliance History</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance History</h1>
         <p className="mt-0.5 text-sm text-gray-500">What changed in your compliance information, from what to what, by whom and when. Nothing here is ever deleted when a current value changes.</p>
       </div>
       <HistoryList items={items} />

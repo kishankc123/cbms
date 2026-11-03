@@ -117,7 +117,7 @@ export function BillsTable({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by supplier, bill #, amount..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-72"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-72"
         />
       </div>
 
@@ -154,18 +154,18 @@ export function BillsTable({
             >
               Mode of payment{sortIndicator("mode")}
             </th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((b) => (
             <tr key={b.id} className="border-t border-gray-100">
-              <td className="px-4 py-2"><D value={b.billDate} /></td>
-              <td className="px-4 py-2 font-mono">{b.billNumber}</td>
-              <td className="px-4 py-2">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
-              <td className="px-4 py-2">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              <td className="px-2.5 py-1.5"><D value={b.billDate} /></td>
+              <td className="px-2.5 py-1.5 font-mono">{b.billNumber}</td>
+              <td className="px-2.5 py-1.5">{vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "—"}</td>
+              <td className="px-2.5 py-1.5">{Number(b.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td className={`px-4 py-2 ${b.status === "void" ? "text-gray-400" : isOverdue(b, today) ? "font-medium text-red-600" : ""}`}>{paidBy(b, paymentModes[b.id])}</td>
-              <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
+              <td className="px-2.5 py-1.5 text-right space-x-3 whitespace-nowrap">
                 {b.status !== "void" && onEdit && (
                   <button type="button" onClick={() => onEdit(b.id)} className="text-xs text-gray-600 hover:underline">
                     Edit

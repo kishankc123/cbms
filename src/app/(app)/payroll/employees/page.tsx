@@ -34,7 +34,7 @@ export default async function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Employees</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Employees</h1>
       <EmployeesTabs
         employees={employeeList}
         currentSalaries={seesSalary ? Object.fromEntries(currentSalaryByEmployee) : null}

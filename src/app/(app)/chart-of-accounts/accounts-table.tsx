@@ -83,7 +83,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
             <div className="absolute right-0 top-full z-10 mt-2 w-64 space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Filter by category</label>
-                <select value={subCategoryFilter} onChange={(e) => setSubCategoryFilter(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={subCategoryFilter} onChange={(e) => setSubCategoryFilter(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="all">All categories</option>
                   {ACCOUNT_SUB_CATEGORIES.map((sc) => (
                     <option key={sc.label} value={sc.label}>
@@ -94,7 +94,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Filter by status</label>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="all">All statuses</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -125,27 +125,27 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
             <SortableHeader label="Code" field="code" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
             <SortableHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
             <SortableHeader label="Type" field="category" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
-            <th className="px-4 py-2 font-medium">Category</th>
+            <th className="px-2.5 py-1.5 font-medium">Category</th>
             <SortableHeader label="Balance" field="total" sortField={sortField} sortDir={sortDir} onSort={toggleSort} align="right" />
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((a) => (
             <tr key={a.id} className={`border-t border-gray-100 ${a.isActive ? "" : "text-gray-400"}`}>
-              <td className="px-4 py-2 font-mono">{a.code}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5 font-mono">{a.code}</td>
+              <td className="px-2.5 py-1.5">
                 {a.name}
                 {a.system && <SystemBadge />}
               </td>
-              <td className="px-4 py-2">{TYPE_LABEL[a.category]}</td>
-              <td className="px-4 py-2">{a.subCategory ?? "—"}</td>
-              <td className="px-4 py-2 text-right tabular-nums">
+              <td className="px-2.5 py-1.5">{TYPE_LABEL[a.category]}</td>
+              <td className="px-2.5 py-1.5">{a.subCategory ?? "—"}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums">
                 <Balance value={a.total} contra={a.contra} />
               </td>
-              <td className="px-4 py-2">{a.isActive ? "Active" : "Inactive"}</td>
-              <td className="px-4 py-2 text-right whitespace-nowrap">
+              <td className="px-2.5 py-1.5">{a.isActive ? "Active" : "Inactive"}</td>
+              <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
                 <AccountRowActions account={a} showSubCategory onError={(message) => report(message)} />
               </td>
             </tr>

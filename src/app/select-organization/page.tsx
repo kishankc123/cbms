@@ -20,7 +20,7 @@ export default async function SelectOrganizationPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md bg-white rounded-lg shadow p-8 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Select an Organization</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Select an Organization</h1>
           <p className="text-sm text-gray-500">Signed in as {user.email}</p>
         </div>
 

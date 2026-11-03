@@ -55,10 +55,10 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
         <p className="text-sm font-medium text-[var(--text-primary)]">{busy ? "Reading your file..." : "Drop a CSV or Excel file here"}</p>
         <p className="text-xs text-[var(--text-secondary)]">One row per {rowNoun}. Only a date and an amount are needed.</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <button type="button" disabled={busy} onClick={() => input.current?.click()} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={() => input.current?.click()} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             Choose file
           </button>
-          <button type="button" onClick={template} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={template} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Download template
           </button>
         </div>
@@ -88,7 +88,7 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
               placeholder={`Copy the cells in Excel or Google Sheets, header row included, and paste here.\n${pasteExample}`}
               className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 font-mono text-xs focus:border-[var(--color-primary)] focus:outline-none"
             />
-            <button type="button" disabled={busy || !pasted.trim()} onClick={usePasted} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+            <button type="button" disabled={busy || !pasted.trim()} onClick={usePasted} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               Use pasted data
             </button>
           </div>

@@ -57,10 +57,10 @@ export function CheckDialog({ result, onClose, onImport, busy, noun, partyLabel 
         )}
 
         <div className="mt-5 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Close
           </button>
-          <button type="button" disabled={busy || result.wouldImport === 0} onClick={onImport} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" disabled={busy || result.wouldImport === 0} onClick={onImport} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {busy ? "Importing..." : `Import ${result.wouldImport} now`}
           </button>
         </div>

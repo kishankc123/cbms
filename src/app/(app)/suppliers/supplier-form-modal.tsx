@@ -82,9 +82,9 @@ export function SupplierFormModal({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setOpen(false)} />
 
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4">
+          <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">{title}</h2>
               <button
@@ -107,7 +107,7 @@ export function SupplierFormModal({
                   required
                   autoFocus
                   defaultValue={initial?.name}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                 />
               </div>
               <div>
@@ -120,12 +120,12 @@ export function SupplierFormModal({
                   title="Exactly 9 digits"
                   placeholder="9 digits, if known"
                   defaultValue={initial?.panNumber}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                 />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Business type</label>
-                <select name="businessType" defaultValue={initial?.businessType ?? ""} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select name="businessType" defaultValue={initial?.businessType ?? ""} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="">Not set</option>
                   {PAYEE_TYPES.map((p) => (
                     <option key={p.key} value={p.key}>
@@ -140,7 +140,7 @@ export function SupplierFormModal({
                 <input
                   name="phone"
                   defaultValue={initial?.phone}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                 />
               </div>
               <div>
@@ -148,7 +148,7 @@ export function SupplierFormModal({
                 <input
                   name="details"
                   defaultValue={initial?.details}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                 />
               </div>
               <div>
@@ -160,7 +160,7 @@ export function SupplierFormModal({
                     step="0.01"
                     min="0"
                     defaultValue={initial ? Math.abs(initial.openingBalance) || undefined : undefined}
-                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
                   />
                   <input type="hidden" name="openingBalanceType" value={drCr} readOnly />
                   <div className="flex rounded border border-gray-300 overflow-hidden text-sm shrink-0">
@@ -194,7 +194,7 @@ export function SupplierFormModal({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Save"}
                 </button>

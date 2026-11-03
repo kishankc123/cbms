@@ -25,7 +25,7 @@ export default async function SalesByItemPage({ searchParams }: { searchParams: 
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Sales by Item/Service</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Sales by Item/Service</h1>
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
       <p className="text-sm text-gray-500">

@@ -38,7 +38,7 @@ export function FlagDialog({ line, onClose, onDone }: { line: StatementLineRow; 
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative w-full max-w-sm space-y-3 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
         <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--text-primary)]">
           <span className="text-red-600">
@@ -69,7 +69,7 @@ export function FlagDialog({ line, onClose, onDone }: { line: StatementLineRow; 
             <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
               Cancel
             </button>
-            <button type="button" disabled={busy} onClick={() => save(true)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => save(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               {line.flagged ? "Save note" : "Flag"}
             </button>
           </div>

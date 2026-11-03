@@ -242,7 +242,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         ) : (
           <span />
         )}
-        <button type="button" onClick={() => setShowUpload(true)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+        <button type="button" onClick={() => setShowUpload(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           Upload Statement
         </button>
       </div>
@@ -287,7 +287,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
               key={f.key}
               type="button"
               onClick={() => setFilter(f.key)}
-              className={`rounded-full px-4 py-1.5 text-sm transition-colors ${filter === f.key ? "bg-[var(--card-bg)] font-medium text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+              className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${filter === f.key ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
             >
               {f.label}
               {f.key === "todo" && todo.length > 0 ? ` (${todo.length})` : ""}
@@ -300,7 +300,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-action-text)]" /> Likely match, needs your OK</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-critical-text)]" /> Nothing found</span>
           {exactCount > 0 && (
-            <button type="button" disabled={busy} onClick={() => okAll(exactCount)} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => okAll(exactCount)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               OK all {exactCount} exact
             </button>
           )}
@@ -372,7 +372,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                 ) : (
                   <>
                     {(r.suggestion || r.combo.length > 0) && (
-                      <button type="button" disabled={busy || locked} onClick={() => (r.suggestion ? confirmSuggested(r.line, r.suggestion) : confirmCombination(r.line, r.combo))} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+                      <button type="button" disabled={busy || locked} onClick={() => (r.suggestion ? confirmSuggested(r.line, r.suggestion) : confirmCombination(r.line, r.combo))} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                         OK
                       </button>
                     )}
@@ -396,7 +396,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         <p className="text-xs text-[var(--text-secondary)]">{history.length > 0 ? `${history.length} past reconciliation${history.length === 1 ? "" : "s"} on record` : "No reconciliations recorded yet"}</p>
         <div className="flex items-center gap-2">
           <label className="text-xs text-[var(--text-secondary)]">Reconcile up to</label>
-          <DatePicker max={today} value={reconcileEnd} onChange={setReconcileEnd} className="w-36 rounded border border-gray-300 bg-white px-2 py-1 text-sm" />
+          <DatePicker max={today} value={reconcileEnd} onChange={setReconcileEnd} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-36" />
           <button type="button" disabled={busy} onClick={handleMarkReconciled} className="rounded bg-gray-900 px-4 py-1.5 text-sm text-white hover:bg-gray-800 disabled:opacity-50">
             Mark Reconciled
           </button>
@@ -451,11 +451,11 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
       {showReopen && latest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowReopen(false)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setShowReopen(false)} />
           <div className="relative w-full max-w-sm space-y-3 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Reopen reconciliation</h2>
             <p className="text-xs text-[var(--text-secondary)]">Admin-only. This is recorded with your name, the time, and the reason below.</p>
-            <textarea value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Reason for reopening" className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" rows={3} />
+            <textarea value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Reason for reopening" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" rows={3} />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowReopen(false)} className="rounded px-4 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
                 Cancel
@@ -464,7 +464,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                 type="button"
                 disabled={busy || !reopenReason.trim()}
                 onClick={() => handleReopen(latest.id)}
-                className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
               >
                 Reopen
               </button>

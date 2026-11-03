@@ -21,7 +21,7 @@ export default async function SalarySheetPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Salary sheet</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Salary sheet</h1>
       <SalarySheetTabs runs={runs} employees={employeeList} />
     </div>
   );

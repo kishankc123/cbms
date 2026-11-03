@@ -57,7 +57,7 @@ export function ReportsViewer({ allowedTypes }: { allowedTypes?: ComplianceRepor
               setType(e.target.value as ComplianceReportType);
               setResult(null);
             }}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3"
           >
             {types.map((r) => (
               <option key={r.value} value={r.value}>
@@ -70,16 +70,16 @@ export function ReportsViewer({ allowedTypes }: { allowedTypes?: ComplianceRepor
           <>
             <div>
               <label className="block text-xs text-gray-500 mb-1">From</label>
-              <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">To</label>
-              <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+              <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
             </div>
           </>
         )}
         <DateDisplayControl value={mode} onChange={setMode} />
-        <button type="button" disabled={loading} onClick={handleGenerate} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+        <button type="button" disabled={loading} onClick={handleGenerate} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {loading ? "Generating..." : "Generate"}
         </button>
       </div>
@@ -99,37 +99,37 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Invoice #</th>
+              <th className="px-2.5 py-1.5 font-medium">Invoice #</th>
               <DateHead mode={mode} />
-              <th className="px-4 py-2 font-medium">Customer</th>
-              <th className="px-4 py-2 font-medium">Subtotal</th>
-              <th className="px-4 py-2 font-medium">Tax</th>
-              <th className="px-4 py-2 font-medium">Total</th>
-              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">Customer</th>
+              <th className="px-2.5 py-1.5 font-medium">Subtotal</th>
+              <th className="px-2.5 py-1.5 font-medium">Tax</th>
+              <th className="px-2.5 py-1.5 font-medium">Total</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {r.rows.map((row, i) => (
               <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-2 font-mono">{row.invoiceNumber}</td>
+                <td className="px-2.5 py-1.5 font-mono">{row.invoiceNumber}</td>
                 <DateCells mode={mode} value={row.invoiceDate} />
-                <td className="px-4 py-2">{row.customerName}</td>
-                <td className="px-4 py-2">{fmt(Number(row.subtotal))}</td>
-                <td className="px-4 py-2">{fmt(Number(row.taxAmount))}</td>
-                <td className="px-4 py-2">{fmt(Number(row.total))}</td>
-                <td className="px-4 py-2 capitalize">{row.status.replace("_", " ")}</td>
+                <td className="px-2.5 py-1.5">{row.customerName}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.subtotal))}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.taxAmount))}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.total))}</td>
+                <td className="px-2.5 py-1.5 capitalize">{row.status.replace("_", " ")}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
+              <td className="px-2.5 py-1.5" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
-              <td className="px-4 py-2">{fmt(r.totalSubtotal)}</td>
-              <td className="px-4 py-2">{fmt(r.totalTax)}</td>
-              <td className="px-4 py-2">{fmt(r.totalAmount)}</td>
-              <td className="px-4 py-2"></td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalSubtotal)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalTax)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalAmount)}</td>
+              <td className="px-2.5 py-1.5"></td>
             </tr>
           </tfoot>
         </table>
@@ -144,37 +144,37 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Bill #</th>
+              <th className="px-2.5 py-1.5 font-medium">Bill #</th>
               <DateHead mode={mode} />
-              <th className="px-4 py-2 font-medium">Supplier</th>
-              <th className="px-4 py-2 font-medium">Subtotal</th>
-              <th className="px-4 py-2 font-medium">Tax</th>
-              <th className="px-4 py-2 font-medium">Total</th>
-              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">Supplier</th>
+              <th className="px-2.5 py-1.5 font-medium">Subtotal</th>
+              <th className="px-2.5 py-1.5 font-medium">Tax</th>
+              <th className="px-2.5 py-1.5 font-medium">Total</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {r.rows.map((row, i) => (
               <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-2 font-mono">{row.billNumber}</td>
+                <td className="px-2.5 py-1.5 font-mono">{row.billNumber}</td>
                 <DateCells mode={mode} value={row.billDate} />
-                <td className="px-4 py-2">{row.vendorName}</td>
-                <td className="px-4 py-2">{fmt(Number(row.subtotal))}</td>
-                <td className="px-4 py-2">{fmt(Number(row.taxAmount))}</td>
-                <td className="px-4 py-2">{fmt(Number(row.total))}</td>
-                <td className="px-4 py-2 capitalize">{row.status.replace("_", " ")}</td>
+                <td className="px-2.5 py-1.5">{row.vendorName}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.subtotal))}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.taxAmount))}</td>
+                <td className="px-2.5 py-1.5">{fmt(Number(row.total))}</td>
+                <td className="px-2.5 py-1.5 capitalize">{row.status.replace("_", " ")}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
+              <td className="px-2.5 py-1.5" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
-              <td className="px-4 py-2">{fmt(r.totalSubtotal)}</td>
-              <td className="px-4 py-2">{fmt(r.totalTax)}</td>
-              <td className="px-4 py-2">{fmt(r.totalAmount)}</td>
-              <td className="px-4 py-2"></td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalSubtotal)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalTax)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalAmount)}</td>
+              <td className="px-2.5 py-1.5"></td>
             </tr>
           </tfoot>
         </table>
@@ -209,22 +209,22 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Reference</th>
+              <th className="px-2.5 py-1.5 font-medium">Reference</th>
               <DateHead mode={mode} />
-              <th className="px-4 py-2 font-medium">Payee</th>
-              <th className="px-4 py-2 font-medium">Taxable amount</th>
-              <th className="px-4 py-2 font-medium">TDS</th>
+              <th className="px-2.5 py-1.5 font-medium">Payee</th>
+              <th className="px-2.5 py-1.5 font-medium">Taxable amount</th>
+              <th className="px-2.5 py-1.5 font-medium">TDS</th>
             </tr>
           </thead>
           <tbody>
             {r.byHeading.map((h) => (
               <Fragment key={h.key ?? "none"}>
                 <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                  <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
+                  <td className="px-2.5 py-1.5" colSpan={2 + dateColumnCount(mode)}>
                     {h.name}
                   </td>
-                  <td className="px-4 py-2">{fmt(h.taxable)}</td>
-                  <td className="px-4 py-2">{fmt(h.withheld)}</td>
+                  <td className="px-2.5 py-1.5">{fmt(h.taxable)}</td>
+                  <td className="px-2.5 py-1.5">{fmt(h.withheld)}</td>
                 </tr>
                 {r.rows
                   .filter((row) => row.heading === h.name)
@@ -232,9 +232,9 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
                     <tr key={i} className="border-t border-gray-100">
                       <td className="py-2 pl-8 pr-4 font-mono">{row.expenseNumber}</td>
                       <DateCells mode={mode} value={row.expenseDate} />
-                      <td className="px-4 py-2">{row.payee}</td>
-                      <td className="px-4 py-2">{fmt(Number(row.taxableAmount))}</td>
-                      <td className="px-4 py-2">{fmt(Number(row.tdsAmount))}</td>
+                      <td className="px-2.5 py-1.5">{row.payee}</td>
+                      <td className="px-2.5 py-1.5">{fmt(Number(row.taxableAmount))}</td>
+                      <td className="px-2.5 py-1.5">{fmt(Number(row.tdsAmount))}</td>
                     </tr>
                   ))}
               </Fragment>
@@ -249,11 +249,11 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="px-4 py-2" colSpan={2 + dateColumnCount(mode)}>
+              <td className="px-2.5 py-1.5" colSpan={2 + dateColumnCount(mode)}>
                 Total
               </td>
-              <td className="px-4 py-2">{fmt(r.totalTaxable)}</td>
-              <td className="px-4 py-2">{fmt(r.totalTds)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalTaxable)}</td>
+              <td className="px-2.5 py-1.5">{fmt(r.totalTds)}</td>
             </tr>
           </tfoot>
         </table>

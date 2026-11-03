@@ -113,7 +113,7 @@ export function ExcisePermitPanel() {
           <StatusPill tone={tone}>{label}</StatusPill>
         </div>
         {canEdit && s.unpaidYears.length > 0 && (
-          <button type="button" onClick={startRenewal} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+          <button type="button" onClick={startRenewal} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             Record renewal for FY {s.renewalFor.label}
           </button>
         )}
@@ -165,7 +165,7 @@ export function ExcisePermitPanel() {
           <input className={`${input} w-40`} inputMode="decimal" disabled={!canEdit} value={fee} onChange={(e) => setFee(e.target.value)} placeholder="Not set" />
         </div>
         {canEdit && (
-          <button type="button" disabled={busy || fee === (permit.standardFee != null ? String(permit.standardFee) : "")} onClick={saveFee} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <button type="button" disabled={busy || fee === (permit.standardFee != null ? String(permit.standardFee) : "")} onClick={saveFee} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Save fee
           </button>
         )}
@@ -213,8 +213,8 @@ export function ExcisePermitPanel() {
 
       {renewing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setRenewing(null)} />
-          <div className="relative w-full max-w-md space-y-3 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !busy && setRenewing(null)} />
+          <div className="relative w-full max-w-md space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Record renewal for FY {s.renewalFor.label}</h2>
             <div>
               <label className="mb-1 block text-xs text-gray-500">Date paid</label>
@@ -243,7 +243,7 @@ export function ExcisePermitPanel() {
               <button type="button" disabled={busy} onClick={() => setRenewing(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={busy} onClick={submitRenewal} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              <button type="button" disabled={busy} onClick={submitRenewal} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {busy ? "Saving..." : "Record renewal"}
               </button>
             </div>

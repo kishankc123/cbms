@@ -35,7 +35,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Ledger</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Ledger</h1>
       </div>
       <LedgerView
         accounts={list}

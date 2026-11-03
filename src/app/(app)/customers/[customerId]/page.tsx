@@ -34,7 +34,7 @@ export default async function CustomerProfilePage({ params }: { params: Promise<
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{customer.name}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{customer.name}</h1>
         <p className="text-sm text-gray-500">Customer</p>
       </div>
 

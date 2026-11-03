@@ -23,7 +23,7 @@ export default async function ItemsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Product</h1>
         <p className="mt-0.5 text-sm text-gray-500">Inventory-tracked items — the only type that ever moves stock or carries a cost.</p>
       </div>
       <ProductTabs />

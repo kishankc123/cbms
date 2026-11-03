@@ -8,7 +8,7 @@ export default async function PeriodsPage() {
   const periods = await listPeriods();
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Period Locking</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Period Locking</h1>
       <PeriodsTable periods={periods} />
     </div>
   );

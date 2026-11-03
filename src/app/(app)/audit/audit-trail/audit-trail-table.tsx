@@ -29,17 +29,17 @@ export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] })
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">From</label>
-          <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">To</label>
-          <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Entity type</label>
-          <input value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="e.g. accounting_period" className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="e.g. accounting_period" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
         </div>
-        <button type="button" disabled={loading} onClick={applyFilters} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+        <button type="button" disabled={loading} onClick={applyFilters} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {loading ? "Loading..." : "Filter"}
         </button>
       </div>
@@ -47,26 +47,26 @@ export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] })
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Date/Time</th>
-            <th className="px-4 py-2 font-medium">User</th>
-            <th className="px-4 py-2 font-medium">Action</th>
-            <th className="px-4 py-2 font-medium">Entity</th>
-            <th className="px-4 py-2 font-medium">Before</th>
-            <th className="px-4 py-2 font-medium">After</th>
+            <th className="px-2.5 py-1.5 font-medium">Date/Time</th>
+            <th className="px-2.5 py-1.5 font-medium">User</th>
+            <th className="px-2.5 py-1.5 font-medium">Action</th>
+            <th className="px-2.5 py-1.5 font-medium">Entity</th>
+            <th className="px-2.5 py-1.5 font-medium">Before</th>
+            <th className="px-2.5 py-1.5 font-medium">After</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((e) => (
             <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 whitespace-nowrap"><DT value={e.timestamp} /></td>
-              <td className="px-4 py-2">{e.userName}</td>
-              <td className="px-4 py-2">{e.action}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5 whitespace-nowrap"><DT value={e.timestamp} /></td>
+              <td className="px-2.5 py-1.5">{e.userName}</td>
+              <td className="px-2.5 py-1.5">{e.action}</td>
+              <td className="px-2.5 py-1.5">
                 {e.entityType}
                 {e.entityId ? ` (${e.entityId.slice(0, 8)})` : ""}
               </td>
-              <td className="px-4 py-2 max-w-[200px] truncate text-xs text-gray-500">{e.beforeValue ? JSON.stringify(e.beforeValue) : "—"}</td>
-              <td className="px-4 py-2 max-w-[200px] truncate text-xs text-gray-500">{e.afterValue ? JSON.stringify(e.afterValue) : "—"}</td>
+              <td className="px-2.5 py-1.5 max-w-[200px] truncate text-xs text-gray-500">{e.beforeValue ? JSON.stringify(e.beforeValue) : "—"}</td>
+              <td className="px-2.5 py-1.5 max-w-[200px] truncate text-xs text-gray-500">{e.afterValue ? JSON.stringify(e.afterValue) : "—"}</td>
             </tr>
           ))}
           {entries.length === 0 && (

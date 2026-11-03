@@ -42,7 +42,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Payroll Month</label>
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
             {monthNames(calendar).map((name, i) => (
               <option key={i} value={i + 1}>
                 {name}
@@ -52,7 +52,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Payroll Year{calendar === "BS" ? " (BS)" : ""}</label>
-          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
           type="button"
           onClick={handleGenerate}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Generating..." : "Generate salary sheet"}
         </button>

@@ -56,7 +56,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
 
       <div className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-lg space-y-5">
         <div className="flex items-center justify-between">
@@ -214,7 +214,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
 
             <div className="flex items-center justify-end gap-3 pt-2">
               {detail.canEdit && (
-                <button type="button" onClick={() => onEdit(detail)} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
+                <button type="button" onClick={() => onEdit(detail)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                   Edit
                 </button>
               )}
@@ -223,20 +223,20 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                   Void
                 </button>
               )}
-              <button type="button" onClick={onClose} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
+              <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                 Close
               </button>
             </div>
 
             {showVoid && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                <div className="absolute inset-0 bg-black/30" onClick={() => setShowVoid(false)} />
-                <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-3">
+                <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setShowVoid(false)} />
+                <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-3">
                   <h3 className="text-sm font-semibold text-gray-900">Void payment {detail.paymentNumber}</h3>
                   <p className="text-xs text-gray-500">This reverses its journal entry and rolls back any invoice/bill/expense allocation it made.</p>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Reason</label>
-                    <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                    <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                   </div>
                   {voidError && <p className="text-xs text-red-600">{voidError}</p>}
                   <div className="flex justify-end gap-2">

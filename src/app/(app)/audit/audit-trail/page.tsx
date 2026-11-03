@@ -8,7 +8,7 @@ export default async function AuditTrailPage() {
   const entries = await listAuditTrail({});
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Audit Trail</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Audit Trail</h1>
       <AuditTrailTable initialEntries={entries} />
     </div>
   );

@@ -91,8 +91,8 @@ export function UploadStatementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-3xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Upload Statement</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -113,7 +113,7 @@ export function UploadStatementModal({
                 onImported();
                 onClose();
               }}
-              className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-6 py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
             >
               Done
             </button>
@@ -143,7 +143,7 @@ export function UploadStatementModal({
                   <select
                     value={mapping[f.key] ?? ""}
                     onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                   >
                     <option value="">Not mapped</option>
                     {preview.headers.map((h) => (
@@ -162,7 +162,7 @@ export function UploadStatementModal({
                 value={saveAsTemplateName}
                 onChange={(e) => setSaveAsTemplateName(e.target.value)}
                 placeholder="e.g. Nabil Bank CSV"
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
               />
             </div>
 
@@ -200,7 +200,7 @@ export function UploadStatementModal({
                 type="button"
                 disabled={loading || !mapping.date || (!mapping.debit && !mapping.credit && !mapping.amount)}
                 onClick={handleImport}
-                className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
               >
                 {loading ? "Importing..." : "Import"}
               </button>

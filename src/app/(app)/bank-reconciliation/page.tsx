@@ -33,7 +33,7 @@ export default async function BankReconciliationHome() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Bank Reconciliation</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Bank Reconciliation</h1>
           {accounts.length > 0 && (
             <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
               You have {plural(banks, "bank account", "bank accounts")}
@@ -90,7 +90,7 @@ export default async function BankReconciliationHome() {
               </div>
 
               <div className="mt-4 flex justify-end">
-                <Link href={`/bank-reconciliation/${a.id}`} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+                <Link href={`/bank-reconciliation/${a.id}`} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                   View
                 </Link>
               </div>

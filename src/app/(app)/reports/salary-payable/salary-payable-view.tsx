@@ -24,7 +24,7 @@ export function SalaryPayableView({ rows, asOf }: { rows: SalaryPayableRow[]; as
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
@@ -32,14 +32,14 @@ export function SalaryPayableView({ rows, asOf }: { rows: SalaryPayableRow[]; as
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Employee</th>
-            <th className="px-4 py-2 font-medium text-right">Balance</th>
+            <th className="px-2.5 py-1.5 font-medium">Employee</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Balance</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.employeeId} className="border-t border-gray-100">
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 {r.accountId ? (
                   <AccountLink accountId={r.accountId} to={asOf}>
                     {r.employeeName}
@@ -48,7 +48,7 @@ export function SalaryPayableView({ rows, asOf }: { rows: SalaryPayableRow[]; as
                   r.employeeName
                 )}
               </td>
-              <td className="px-4 py-2 text-right">{fmt(r.balance)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.balance)}</td>
             </tr>
           ))}
           {rows.length === 0 && (
@@ -62,8 +62,8 @@ export function SalaryPayableView({ rows, asOf }: { rows: SalaryPayableRow[]; as
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right">{fmt(total)}</td>
+              <td className="px-2.5 py-1.5">Total</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(total)}</td>
             </tr>
           </tfoot>
         )}

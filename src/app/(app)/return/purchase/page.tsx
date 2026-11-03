@@ -22,7 +22,7 @@ export default async function PurchaseReturnPage({ searchParams }: { searchParam
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Purchase Return</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Purchase Return</h1>
         <p className="mt-0.5 text-sm text-gray-500">Credit notes for goods sent back to suppliers.</p>
       </div>
       <PurchaseReturnTabs vendors={vendorList} items={itemList} vatRate={vatRate} noteList={noteList} initialTab={view === "new" ? "new" : "notes"} />

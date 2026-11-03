@@ -42,7 +42,7 @@ export default async function CustomerStatementPage({ searchParams }: { searchPa
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Customer Statement</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Customer Statement</h1>
       </div>
       <CustomerStatementView customers={list} customerId={customerId} from={from} to={to} fiscal={fiscal} statement={statement} />
     </div>

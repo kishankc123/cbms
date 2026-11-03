@@ -5,7 +5,7 @@ export function NextStepNotice({ title, description }: { title: string; descript
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{title}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{title}</h1>
         <p className="mt-0.5 text-sm text-[var(--text-secondary)]">{description}</p>
       </div>
       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-8 text-center">

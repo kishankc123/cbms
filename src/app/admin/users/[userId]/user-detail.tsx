@@ -96,30 +96,30 @@ export function UserDetail({ data }: { data: AdminUser }) {
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
             <tr>
-              <th className="px-4 py-2 font-medium">Organization</th>
-              <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium">Their access</th>
-              <th className="px-4 py-2 font-medium">Organization</th>
-              <th className="px-4 py-2 font-medium">Joined</th>
+              <th className="px-2.5 py-1.5 font-medium">Organization</th>
+              <th className="px-2.5 py-1.5 font-medium">Role</th>
+              <th className="px-2.5 py-1.5 font-medium">Their access</th>
+              <th className="px-2.5 py-1.5 font-medium">Organization</th>
+              <th className="px-2.5 py-1.5 font-medium">Joined</th>
             </tr>
           </thead>
           <tbody>
             {data.organizations.map((o) => (
               <tr key={o.tenantId} className="border-t border-[var(--card-border)]">
-                <td className="px-4 py-2 font-medium">
+                <td className="px-2.5 py-1.5 font-medium">
                   <Link href={`/admin/organizations/${o.tenantId}`} className="text-[var(--accent-text)] hover:underline">
                     {o.name}
                   </Link>{" "}
                   <span className="text-xs font-normal text-[var(--text-secondary)]">{o.clientCode}</span>
                 </td>
-                <td className="px-4 py-2">{o.roleName}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">{o.roleName}</td>
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={o.status === "active" ? "success" : "action"}>{o.status === "active" ? "Active" : "Suspended"}</StatusPill>
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={o.orgStatus === "active" ? "success" : "critical"}>{o.orgStatus === "active" ? "Active" : o.orgStatus === "suspended" ? "Suspended" : "Cancelled"}</StatusPill>
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{when(o.joined)}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{when(o.joined)}</td>
               </tr>
             ))}
             {data.organizations.length === 0 && (

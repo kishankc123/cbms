@@ -99,7 +99,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
       <section className={`${card} p-4`}>
         <div className="mb-4 inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
           {KINDS.map((k) => (
-            <button key={k.id} type="button" onClick={() => setKind(k.id)} className={`rounded-full px-4 py-1.5 text-sm transition-colors ${kind === k.id ? "bg-[var(--card-bg)] font-medium text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
+            <button key={k.id} type="button" onClick={() => setKind(k.id)} className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${kind === k.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}>
               {k.title}
             </button>
           ))}
@@ -180,7 +180,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
         )}
 
         <div className="mt-5 flex justify-end">
-          <button type="button" onClick={save} disabled={saving} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" onClick={save} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {saving ? "Saving..." : kind === "sale" ? "Record sale" : kind === "write_off" ? "Write off asset" : "Record disposal"}
           </button>
         </div>
@@ -191,40 +191,40 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
             <tr>
-              <th className="px-4 py-2 font-medium">Reference</th>
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-4 py-2 font-medium">Type</th>
-              <th className="px-4 py-2 font-medium">Asset</th>
-              <th className="px-4 py-2 font-medium">Buyer</th>
-              <th className="px-4 py-2 text-right font-medium">Sale price</th>
-              <th className="px-4 py-2 text-right font-medium">Net book value</th>
-              <th className="px-4 py-2 text-right font-medium">Gain / (loss)</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2" />
+              <th className="px-2.5 py-1.5 font-medium">Reference</th>
+              <th className="px-2.5 py-1.5 font-medium">Date</th>
+              <th className="px-2.5 py-1.5 font-medium">Type</th>
+              <th className="px-2.5 py-1.5 font-medium">Asset</th>
+              <th className="px-2.5 py-1.5 font-medium">Buyer</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Sale price</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Net book value</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Gain / (loss)</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
+              <th className="px-2.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
             {data.disposals.map((d) => (
               <tr key={d.id} className={`border-t border-[var(--card-border)] ${d.status === "reversed" ? "opacity-50" : ""}`}>
-                <td className="px-4 py-2 font-medium">{d.reference}</td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">
+                <td className="px-2.5 py-1.5 font-medium">{d.reference}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   <D value={d.disposalDate} />
                 </td>
-                <td className="px-4 py-2">{KIND_LABEL[d.kind]}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">{KIND_LABEL[d.kind]}</td>
+                <td className="px-2.5 py-1.5">
                   <Link href={`/assets/${d.assetId}`} className="text-[var(--accent-text)] hover:underline">
                     {d.assetCode}
                   </Link>{" "}
                   {d.assetName}
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{d.customerName ?? "—"}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{d.kind === "sale" ? money(d.saleAmount) : "—"}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(d.netBookValue)}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{d.customerName ?? "—"}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{d.kind === "sale" ? money(d.saleAmount) : "—"}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(d.netBookValue)}</td>
                 <td className={`px-4 py-2 text-right tabular-nums ${d.gainLoss < 0 ? "text-red-600" : ""}`}>{d.gainLoss < 0 ? `(${money(-d.gainLoss)})` : money(d.gainLoss)}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={d.status === "posted" ? "success" : "critical"}>{d.status === "posted" ? "Posted" : "Reversed"}</StatusPill>
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-2.5 py-1.5 text-right">
                   {data.canReverse && d.status === "posted" && (
                     <button type="button" onClick={() => setReversing(d)} className="text-sm text-red-600 hover:underline">
                       Reverse

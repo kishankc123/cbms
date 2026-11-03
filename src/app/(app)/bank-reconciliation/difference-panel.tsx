@@ -36,7 +36,7 @@ export function DifferencePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Why is there a difference?</h2>

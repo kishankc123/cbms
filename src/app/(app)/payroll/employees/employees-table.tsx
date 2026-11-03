@@ -33,32 +33,32 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search employees..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-64"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-64"
         />
       </div>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Employee ID</th>
-            <th className="px-4 py-2 font-medium">Full Name</th>
-            <th className="px-4 py-2 font-medium">Department</th>
-            <th className="px-4 py-2 font-medium">Designation</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            {currentSalaries && <th className="px-4 py-2 font-medium">Current Basic Salary</th>}
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Employee ID</th>
+            <th className="px-2.5 py-1.5 font-medium">Full Name</th>
+            <th className="px-2.5 py-1.5 font-medium">Department</th>
+            <th className="px-2.5 py-1.5 font-medium">Designation</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            {currentSalaries && <th className="px-2.5 py-1.5 font-medium">Current Basic Salary</th>}
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((e) => (
             <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 font-mono">{e.employeeCode}</td>
-              <td className="px-4 py-2">{e.fullName}</td>
-              <td className="px-4 py-2">{e.department ?? "—"}</td>
-              <td className="px-4 py-2">{e.designation ?? "—"}</td>
-              <td className="px-4 py-2 capitalize">{e.employmentStatus.replace("_", " ")}</td>
-              {currentSalaries && <td className="px-4 py-2">{(currentSalaries[e.id] ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
-              <td className="px-4 py-2 text-right">
+              <td className="px-2.5 py-1.5 font-mono">{e.employeeCode}</td>
+              <td className="px-2.5 py-1.5">{e.fullName}</td>
+              <td className="px-2.5 py-1.5">{e.department ?? "—"}</td>
+              <td className="px-2.5 py-1.5">{e.designation ?? "—"}</td>
+              <td className="px-2.5 py-1.5 capitalize">{e.employmentStatus.replace("_", " ")}</td>
+              {currentSalaries && <td className="px-2.5 py-1.5">{(currentSalaries[e.id] ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
+              <td className="px-2.5 py-1.5 text-right">
                 <Link href={`/payroll/employees/${e.id}`} className="text-xs text-gray-600 hover:underline">
                   View profile
                 </Link>

@@ -35,7 +35,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Product</h1>
         <p className="text-sm text-gray-500">What is on hand, what it cost, and how it ties to the Inventory account.</p>
       </div>
       <ProductTabs />
@@ -71,28 +71,28 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Item</th>
-            <th className="px-4 py-2 font-medium">Unit</th>
-            <th className="px-4 py-2 text-right font-medium">On hand</th>
-            <th className="px-4 py-2 text-right font-medium">Average cost</th>
-            <th className="px-4 py-2 text-right font-medium">Value</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Item</th>
+            <th className="px-2.5 py-1.5 font-medium">Unit</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">On hand</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Average cost</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Value</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {shown.map((i) => (
             <tr key={i.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 {i.name}
                 {!i.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
                 {i.quantity < 0 && <span className="ml-2"><StatusPill tone="critical">Negative stock</StatusPill></span>}
                 {i.quantity === 0 && i.value !== 0 && <span className="ml-2"><StatusPill tone="pending">Value with no stock</StatusPill></span>}
               </td>
-              <td className="px-4 py-2 text-gray-500">{unitName.get(i.unitId ?? "") ?? "—"}</td>
-              <td className="px-4 py-2 text-right">{i.quantity}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.averageCost)}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.value)}</td>
-              <td className="px-4 py-2 text-right">
+              <td className="px-2.5 py-1.5 text-gray-500">{unitName.get(i.unitId ?? "") ?? "—"}</td>
+              <td className="px-2.5 py-1.5 text-right">{i.quantity}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.averageCost)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.value)}</td>
+              <td className="px-2.5 py-1.5 text-right">
                 <Link href={`/inventory/stock/${i.id}`} className="text-xs text-gray-600 hover:underline">
                   Stock card
                 </Link>

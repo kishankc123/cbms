@@ -132,7 +132,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <p className="text-xs text-[var(--text-secondary)]">{yearRate ? `${fiscalYear ? "Applies in this year from" : "In force since"} ${bothDates(fiscalYear && yearRate.effectiveFrom < fiscalYear.from ? fiscalYear.from : yearRate.effectiveFrom)}` : fiscalYear ? "No rate is set for this year." : "Organizations are using their own rate."}</p>
                 </div>
                 {open !== t.key && (
-                  <button type="button" onClick={() => { setOpen(t.key); setDraft(blankDraft); setMessage(null); }} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+                  <button type="button" onClick={() => { setOpen(t.key); setDraft(blankDraft); setMessage(null); }} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     {fiscalYear ? (yearRate ? `Publish v${shown.length + 1}` : "Set the rate") : "Publish a new rate"}
                   </button>
                 )}
@@ -163,7 +163,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                     {latest ? ` It has to start after ${latest.effectiveFrom}.` : ""}
                   </p>
                   <div className="flex gap-2">
-                    <button type="button" disabled={busy || !draft.rate || !draft.effectiveFrom} onClick={() => publish(t.key)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+                    <button type="button" disabled={busy || !draft.rate || !draft.effectiveFrom} onClick={() => publish(t.key)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                       {busy ? "Publishing…" : "Publish"}
                     </button>
                     <button type="button" disabled={busy} onClick={() => setOpen(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
@@ -189,7 +189,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                       <input type="date" min={fiscalYear?.from} max={fiscalYear?.to} value={edited.effectiveFrom} onChange={(e) => setConfirming({ ...confirming, [t.key]: { ...edited, effectiveFrom: e.target.value } })} className={`${adminField} mt-1 w-full`} />
                     </label>
                   </div>
-                  <button type="button" disabled={busy} onClick={() => confirm(draftOf.id, edited)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => confirm(draftOf.id, edited)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     {busy ? "Publishing…" : "Confirm and publish"}
                   </button>
                 </div>
@@ -218,7 +218,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                               <input type="checkbox" checked={editing.isVerified} onChange={(e) => setEditing({ ...editing, isVerified: e.target.checked })} /> Verified against current law
                             </label>
                             <div className="flex gap-2">
-                              <button type="button" disabled={busy} onClick={saveEdit} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white disabled:opacity-50">
+                              <button type="button" disabled={busy} onClick={saveEdit} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                                 Save
                               </button>
                               <button type="button" onClick={() => setEditing(null)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700">

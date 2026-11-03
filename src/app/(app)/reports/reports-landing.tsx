@@ -21,7 +21,7 @@ export function ReportsLanding({ categories }: { categories: ReportCategory[] })
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search reports…"
-        className="w-full max-w-sm rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full max-w-sm"
       />
 
       {filtered.length === 0 && <p className="text-sm text-gray-400">No reports match &quot;{search}&quot;.</p>}

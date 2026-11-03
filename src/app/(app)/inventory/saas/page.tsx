@@ -20,7 +20,7 @@ export default async function SaasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">SaaS</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">SaaS</h1>
         <p className="mt-0.5 text-sm text-gray-500">Subscription/SaaS items sold on an invoice — non-inventory, with a billing rate that can later be tied to a recurring subscription.</p>
       </div>
       <ItemsTabs itemType="saas" itemsLabel="SaaS items" rateLabel="Default billing rate" items={itemList} units={units} accounts={revenueAccounts} />

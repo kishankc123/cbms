@@ -22,7 +22,7 @@ export default async function SalesReturnPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Sales Return</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Sales Return</h1>
         <p className="mt-0.5 text-sm text-gray-500">Debit notes for goods returned or sales corrected.</p>
       </div>
       <SalesReturnTabs customers={customerList} items={itemList} vatRate={vatRate} noteList={noteList} initialTab={view === "new" ? "new" : "notes"} />

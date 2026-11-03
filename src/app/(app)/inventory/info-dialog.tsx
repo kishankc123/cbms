@@ -15,16 +15,16 @@ export function InfoDialog({ message, onOk }: { message: string; onOk: () => voi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onOk} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onOk} />
 
-      <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4 text-center">
+      <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4 text-center">
         <p className="text-sm text-gray-900">{message}</p>
         <div className="flex justify-center">
           <button
             type="button"
             onClick={onOk}
             autoFocus
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-6 py-1.5"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             OK
           </button>

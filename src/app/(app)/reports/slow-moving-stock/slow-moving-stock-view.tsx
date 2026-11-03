@@ -52,7 +52,7 @@ export function SlowMovingStockView({
       <ReportFilter from={asOf} to={asOf} fiscal={fiscal} asOfOnly>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Stale after</label>
-          <select value={thresholdDays} onChange={(e) => setThreshold(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={thresholdDays} onChange={(e) => setThreshold(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
             {THRESHOLDS.map((d) => (
               <option key={d} value={d}>
                 {d} days
@@ -66,7 +66,7 @@ export function SlowMovingStockView({
         <p className="text-sm text-gray-500">
           As of <D value={asOf} /> · {rows.length} item{rows.length === 1 ? "" : "s"} with no movement in {thresholdDays}+ days
         </p>
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
@@ -74,21 +74,21 @@ export function SlowMovingStockView({
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Item</th>
-            <th className="px-4 py-2 font-medium text-right">Qty on Hand</th>
-            <th className="px-4 py-2 font-medium text-right">Stock Value</th>
-            <th className="px-4 py-2 font-medium">Last Movement</th>
-            <th className="px-4 py-2 font-medium text-right">Days Idle</th>
+            <th className="px-2.5 py-1.5 font-medium">Item</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Qty on Hand</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Stock Value</th>
+            <th className="px-2.5 py-1.5 font-medium">Last Movement</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Days Idle</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.itemId} className="border-t border-gray-100">
-              <td className="px-4 py-2">{r.name}</td>
-              <td className="px-4 py-2 text-right">{fmtQty(r.quantity)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.stockValue)}</td>
-              <td className="px-4 py-2 whitespace-nowrap">{r.lastMovementDate ? <D value={r.lastMovementDate} /> : "Never"}</td>
-              <td className="px-4 py-2 text-right">{r.daysSinceMovement ?? "—"}</td>
+              <td className="px-2.5 py-1.5">{r.name}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmtQty(r.quantity)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.stockValue)}</td>
+              <td className="px-2.5 py-1.5 whitespace-nowrap">{r.lastMovementDate ? <D value={r.lastMovementDate} /> : "Never"}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.daysSinceMovement ?? "—"}</td>
             </tr>
           ))}
           {rows.length === 0 && (
@@ -102,9 +102,9 @@ export function SlowMovingStockView({
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2" colSpan={2}>Total</td>
-              <td className="px-4 py-2 text-right">{fmt(totalValue)}</td>
-              <td className="px-4 py-2" colSpan={2}></td>
+              <td className="px-2.5 py-1.5" colSpan={2}>Total</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totalValue)}</td>
+              <td className="px-2.5 py-1.5" colSpan={2}></td>
             </tr>
           </tfoot>
         )}

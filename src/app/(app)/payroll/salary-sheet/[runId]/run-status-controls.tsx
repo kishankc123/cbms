@@ -104,7 +104,7 @@ export function RunStatusControls({
           type="button"
           onClick={() => setReversing(true)}
           disabled={busy}
-          className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
         >
           Reverse run
         </button>
@@ -115,7 +115,7 @@ export function RunStatusControls({
             type="button"
             onClick={handleRecalculate}
             disabled={busy}
-            className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
           >
             Recalculate
           </button>
@@ -124,7 +124,7 @@ export function RunStatusControls({
               type="button"
               onClick={handleRevert}
               disabled={busy}
-              className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
             >
               Revert to draft
             </button>
@@ -133,7 +133,7 @@ export function RunStatusControls({
             type="button"
             onClick={handleAdvance}
             disabled={busy}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {busy ? "Working..." : NEXT_ACTION[status]}
           </button>
@@ -141,8 +141,8 @@ export function RunStatusControls({
       )}
       {reversing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setReversing(false)} />
-          <div className="relative w-full max-w-sm space-y-3 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setReversing(false)} />
+          <div className="relative w-full max-w-sm space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Reverse this payroll run</h2>
             <p className="text-xs text-gray-500">Its salary entry is reversed and the run goes back to draft so it can be corrected and finalized again. Not possible once an employee has been paid out of it.</p>
             <textarea
@@ -151,7 +151,7 @@ export function RunStatusControls({
               onChange={(e) => setReason(e.target.value)}
               placeholder="Reason for reversing"
               rows={3}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
             />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setReversing(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">

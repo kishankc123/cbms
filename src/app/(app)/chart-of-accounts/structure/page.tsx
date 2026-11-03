@@ -28,7 +28,7 @@ export default async function ChartStructurePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Chart of Accounts — Structure</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Chart of Accounts — Structure</h1>
         <p className="mt-0.5 text-sm text-gray-500">Every account and where it sits. A group&apos;s balance includes its sub-groups.</p>
       </div>
 

@@ -32,7 +32,7 @@ export function VerifyForm({ token }: { token: string }) {
     <div className="space-y-3">
       <p className="text-sm text-gray-600">Confirm that this is your email address.</p>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="button" onClick={run} disabled={state === "loading"} className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium disabled:opacity-50">
+      <button type="button" onClick={run} disabled={state === "loading"} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full">
         {state === "loading" ? "Verifying..." : "Verify email"}
       </button>
     </div>

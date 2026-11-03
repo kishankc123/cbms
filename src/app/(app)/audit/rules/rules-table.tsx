@@ -107,7 +107,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <button type="button" onClick={() => setShowNew(true)} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+        <button type="button" onClick={() => setShowNew(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           + New Rule
         </button>
       </div>
@@ -115,27 +115,27 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Name</th>
-            <th className="px-4 py-2 font-medium">Module</th>
-            <th className="px-4 py-2 font-medium">Check</th>
-            <th className="px-4 py-2 font-medium">Threshold</th>
-            <th className="px-4 py-2 font-medium">Severity</th>
-            <th className="px-4 py-2 font-medium">Action</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Name</th>
+            <th className="px-2.5 py-1.5 font-medium">Module</th>
+            <th className="px-2.5 py-1.5 font-medium">Check</th>
+            <th className="px-2.5 py-1.5 font-medium">Threshold</th>
+            <th className="px-2.5 py-1.5 font-medium">Severity</th>
+            <th className="px-2.5 py-1.5 font-medium">Action</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {rules.map((r) => (
             <tr key={r.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{r.name}</td>
-              <td className="px-4 py-2 capitalize">{r.applicableModule.replace("_", " ")}</td>
-              <td className="px-4 py-2">{CHECK_TYPES.find((c) => c.value === r.checkType)?.label ?? r.checkType}</td>
-              <td className="px-4 py-2">{r.thresholdValue ?? "—"}</td>
-              <td className="px-4 py-2 capitalize">{r.severity.replace("_", " ")}</td>
-              <td className="px-4 py-2 capitalize">{r.action.replace("_", " ")}</td>
-              <td className="px-4 py-2">{r.isActive ? "Active" : "Inactive"}</td>
-              <td className="px-4 py-2 text-right space-x-2 whitespace-nowrap">
+              <td className="px-2.5 py-1.5">{r.name}</td>
+              <td className="px-2.5 py-1.5 capitalize">{r.applicableModule.replace("_", " ")}</td>
+              <td className="px-2.5 py-1.5">{CHECK_TYPES.find((c) => c.value === r.checkType)?.label ?? r.checkType}</td>
+              <td className="px-2.5 py-1.5">{r.thresholdValue ?? "—"}</td>
+              <td className="px-2.5 py-1.5 capitalize">{r.severity.replace("_", " ")}</td>
+              <td className="px-2.5 py-1.5 capitalize">{r.action.replace("_", " ")}</td>
+              <td className="px-2.5 py-1.5">{r.isActive ? "Active" : "Inactive"}</td>
+              <td className="px-2.5 py-1.5 text-right space-x-2 whitespace-nowrap">
                 <button type="button" disabled={busy} onClick={() => toggleActive(r)} className="text-xs text-gray-600 hover:underline disabled:opacity-40">
                   {r.isActive ? "Deactivate" : "Activate"}
                 </button>
@@ -157,22 +157,22 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
 
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowNew(false)} />
-          <div className="relative w-full max-w-lg rounded-lg bg-white p-5 shadow-lg space-y-4">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setShowNew(false)} />
+          <div className="relative w-full max-w-lg rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
             <h2 className="text-base font-semibold text-gray-900">New rule</h2>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Rule name</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Category</label>
-                <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Documentation" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Documentation" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Applicable module</label>
-                <select value={applicableModule} onChange={(e) => setApplicableModule(e.target.value as RuleInput["applicableModule"])} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={applicableModule} onChange={(e) => setApplicableModule(e.target.value as RuleInput["applicableModule"])} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   {MODULES.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
@@ -182,11 +182,11 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </div>
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Description</label>
-                <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Condition</label>
-                <select value={checkType} onChange={(e) => setCheckType(e.target.value as RuleInput["checkType"])} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={checkType} onChange={(e) => setCheckType(e.target.value as RuleInput["checkType"])} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   {CHECK_TYPES.map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.label}
@@ -198,12 +198,12 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               {selectedCheck.needsThreshold && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Threshold</label>
-                  <input type="number" step="0.01" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                  <input type="number" step="0.01" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                 </div>
               )}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Severity</label>
-                <select value={severity} onChange={(e) => setSeverity(e.target.value as RuleInput["severity"])} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={severity} onChange={(e) => setSeverity(e.target.value as RuleInput["severity"])} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   {SEVERITIES.map((s) => (
                     <option key={s} value={s}>
                       {s.replace("_", " ")}
@@ -213,7 +213,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Action</label>
-                <select value={action} onChange={(e) => setAction(e.target.value as RuleInput["action"])} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={action} onChange={(e) => setAction(e.target.value as RuleInput["action"])} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   {ACTIONS.map((a) => (
                     <option key={a} value={a}>
                       {a.replace("_", " ")}
@@ -229,11 +229,11 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Effective date</label>
-                <DatePicker value={effectiveDate} onChange={(v) => setEffectiveDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={effectiveDate} onChange={(v) => setEffectiveDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Expiry date</label>
-                <DatePicker value={expiryDate} onChange={(v) => setExpiryDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <DatePicker value={expiryDate} onChange={(v) => setExpiryDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
             </div>
 
@@ -243,7 +243,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               <button type="button" onClick={() => setShowNew(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={busy || !name.trim()} onClick={handleCreate} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+              <button type="button" disabled={busy || !name.trim()} onClick={handleCreate} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Create
               </button>
             </div>

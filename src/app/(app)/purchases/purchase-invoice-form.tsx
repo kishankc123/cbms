@@ -381,7 +381,7 @@ export function PurchaseInvoiceForm({
                           addItem(item);
                           updateLine(i, "itemId", it.id, item);
                         }}
-                        className="w-[13.35rem] rounded border border-gray-300 bg-white px-1.5 py-1 text-sm"
+                        className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-[13.35rem]"
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
@@ -514,7 +514,7 @@ export function PurchaseInvoiceForm({
         <button
           type="button"
           onClick={() => setShowPayment(true)}
-          className="whitespace-nowrap rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap"
         >
           {payments.length > 0 ? "Edit Pay" : "Record Pay"}
         </button>
@@ -522,7 +522,7 @@ export function PurchaseInvoiceForm({
           type="button"
           onClick={performSave}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save"}
         </button>

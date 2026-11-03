@@ -50,7 +50,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md bg-white rounded-lg shadow p-8 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Create a business account</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Create a business account</h1>
           <p className="text-sm text-gray-500">
             Step {step} of 2 — {step === 1 ? "Business information" : "Primary administrator"}
           </p>
@@ -95,7 +95,7 @@ export default function RegisterPage() {
               </Field>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <button type="submit" className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium">
+            <button type="submit" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full">
               Continue
             </button>
           </form>
@@ -124,7 +124,7 @@ export default function RegisterPage() {
               <button type="button" onClick={() => setStep(1)} className="rounded border border-gray-300 text-gray-700 px-4 py-2 text-sm">
                 Back
               </button>
-              <button type="submit" disabled={loading} className="flex-1 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium disabled:opacity-50">
+              <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 flex-1">
                 {loading ? "Creating..." : "Create business account"}
               </button>
             </div>

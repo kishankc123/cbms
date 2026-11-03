@@ -18,7 +18,7 @@ export default async function PayrollSetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Payroll setup</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Payroll setup</h1>
       <SetupTabs settings={settings} components={components} />
     </div>
   );

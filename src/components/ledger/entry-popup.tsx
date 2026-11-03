@@ -32,7 +32,7 @@ export function EntryPopup({ entryId, scope, highlightAccountId, onClose }: { en
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div role="dialog" aria-label="Transaction" className="relative max-h-[88vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg bg-white p-5 shadow-lg">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -96,7 +96,7 @@ export function EntryPopup({ entryId, scope, highlightAccountId, onClose }: { en
               ) : (
                 <span />
               )}
-              <button type="button" onClick={onClose} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+              <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                 Close
               </button>
             </div>

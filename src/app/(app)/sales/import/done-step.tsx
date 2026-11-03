@@ -39,7 +39,7 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Link href={viewHref} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
+          <Link href={viewHref} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             View {noun}s
           </Link>
           {fixable > 0 && (
@@ -47,7 +47,7 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
               Fix and import the {fixable} remaining row{fixable === 1 ? "" : "s"}
             </button>
           )}
-          <button type="button" onClick={onAnother} className="rounded border border-gray-300 bg-white px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={onAnother} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Import another file
           </button>
         </div>

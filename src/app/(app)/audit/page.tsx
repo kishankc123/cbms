@@ -28,7 +28,7 @@ export default async function AuditOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Audit</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Audit</h1>
         <p className="mt-0.5 text-sm text-gray-500">Exceptions, locked periods, rules and the audit trail — what keeps your records clean.</p>
       </div>
 
@@ -64,17 +64,17 @@ export default async function AuditOverviewPage() {
         <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Action</th>
-              <th className="px-4 py-2 font-medium">By</th>
-              <th className="px-4 py-2 font-medium">When</th>
+              <th className="px-2.5 py-1.5 font-medium">Action</th>
+              <th className="px-2.5 py-1.5 font-medium">By</th>
+              <th className="px-2.5 py-1.5 font-medium">When</th>
             </tr>
           </thead>
           <tbody>
             {data.recentActivity.map((a) => (
               <tr key={a.id} className="border-t border-gray-100">
-                <td className="px-4 py-2">{ACTION_LABEL[a.action] ?? a.action}</td>
-                <td className="px-4 py-2">{a.userName}</td>
-                <td className="px-4 py-2 text-gray-500">{new Date(a.at).toLocaleString()}</td>
+                <td className="px-2.5 py-1.5">{ACTION_LABEL[a.action] ?? a.action}</td>
+                <td className="px-2.5 py-1.5">{a.userName}</td>
+                <td className="px-2.5 py-1.5 text-gray-500">{new Date(a.at).toLocaleString()}</td>
               </tr>
             ))}
             {data.recentActivity.length === 0 && (

@@ -35,11 +35,11 @@ export function VoidButton({ transferId, transferNumber }: { transferId: string;
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setOpen(false)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-3">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !busy && setOpen(false)} />
+          <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Void transfer {transferNumber}</h3>
             <p className="text-xs text-gray-500">The money is moved back and the accounting entry is reversed.</p>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
             {dialog}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} disabled={busy} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>

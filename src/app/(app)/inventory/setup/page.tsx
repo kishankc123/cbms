@@ -21,7 +21,7 @@ export default async function InventorySetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
+      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Product</h1>
       <ProductTabs />
       <SetupTabs units={units} groups={groups} categories={categories} allowNegativeStock={allowNegativeStock} />
     </div>

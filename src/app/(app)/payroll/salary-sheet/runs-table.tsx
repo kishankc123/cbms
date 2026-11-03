@@ -9,23 +9,23 @@ export function RunsTable({ runs }: { runs: Run[] }) {
     <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
       <thead className="bg-gray-50 text-left text-gray-500">
         <tr>
-          <th className="px-4 py-2 font-medium">Period</th>
-          <th className="px-4 py-2 font-medium">Date Range</th>
-          <th className="px-4 py-2 font-medium">Status</th>
-          <th className="px-4 py-2 font-medium"></th>
+          <th className="px-2.5 py-1.5 font-medium">Period</th>
+          <th className="px-2.5 py-1.5 font-medium">Date Range</th>
+          <th className="px-2.5 py-1.5 font-medium">Status</th>
+          <th className="px-2.5 py-1.5 font-medium"></th>
         </tr>
       </thead>
       <tbody>
         {runs.map((r) => (
           <tr key={r.id} className="border-t border-gray-100">
-            <td className="px-4 py-2">
+            <td className="px-2.5 py-1.5">
               {payrollPeriodLabel(r)}
             </td>
-            <td className="px-4 py-2">
+            <td className="px-2.5 py-1.5">
               <D value={r.periodStart} /> – <D value={r.periodEnd} />
             </td>
-            <td className="px-4 py-2 capitalize">{r.status}</td>
-            <td className="px-4 py-2 text-right">
+            <td className="px-2.5 py-1.5 capitalize">{r.status}</td>
+            <td className="px-2.5 py-1.5 text-right">
               <Link href={`/payroll/salary-sheet/${r.id}`} className="text-xs text-gray-600 hover:underline">
                 View
               </Link>

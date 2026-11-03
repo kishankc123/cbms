@@ -88,7 +88,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               <h2 className="text-lg font-medium text-[var(--text-primary)]">{t.label}</h2>
               <p className="text-sm text-[var(--text-secondary)]">{t.description}</p>
             </div>
-            <button type="button" onClick={() => startAdd(t.key)} className="shrink-0 rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+            <button type="button" onClick={() => startAdd(t.key)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 shrink-0">
               {fiscalYear && !timeline[t.key].some((v) => v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from)) ? "Set for this year" : "New version"}
             </button>
           </div>
@@ -158,7 +158,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
 
       {editing && spec && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setEditing(null)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !saving && setEditing(null)} />
           <div className="relative max-h-[88vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-lg bg-[var(--card-bg)] p-5 shadow-lg">
             <h2 className="text-lg font-medium text-[var(--text-primary)]">
               {spec.label}: {editing.id ? (editing.started ? "verification and source" : "edit version") : "new version"}
@@ -246,7 +246,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               <button type="button" disabled={saving} onClick={() => setEditing(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={saving} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              <button type="button" disabled={saving} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>

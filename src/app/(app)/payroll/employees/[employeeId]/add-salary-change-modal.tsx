@@ -81,9 +81,9 @@ export function AddSalaryChangeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
 
-      <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="relative w-full max-w-md rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Add salary change</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -98,7 +98,7 @@ export function AddSalaryChangeModal({
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Change Type</label>
-            <select value={changeType} onChange={(e) => setChangeType(e.target.value as ChangeType)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={changeType} onChange={(e) => setChangeType(e.target.value as ChangeType)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
               {CHANGE_TYPES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -116,7 +116,7 @@ export function AddSalaryChangeModal({
                 min="0"
                 value={newFixedSalary}
                 onChange={(e) => setNewFixedSalary(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
               />
             </div>
           ) : (
@@ -130,7 +130,7 @@ export function AddSalaryChangeModal({
                 min="0"
                 value={changeValue}
                 onChange={(e) => setChangeValue(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
               />
             </div>
           )}
@@ -144,15 +144,15 @@ export function AddSalaryChangeModal({
 
           <div>
             <label className="block text-xs text-gray-500 mb-1">Effective From Date</label>
-            <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Reason</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
         </div>
 
@@ -164,7 +164,7 @@ export function AddSalaryChangeModal({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save"}
           </button>

@@ -44,7 +44,7 @@ export function DateRangeControl({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
       >
         {label}
       </button>
@@ -86,11 +86,11 @@ export function DateRangeControl({
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">From</label>
-                <DatePicker value={draftFrom} onChange={(v) => setDraftFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
+                <DatePicker value={draftFrom} onChange={(v) => setDraftFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">To</label>
-                <DatePicker value={draftTo} onChange={(v) => setDraftTo(v)} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
+                <DatePicker value={draftTo} onChange={(v) => setDraftTo(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
             </div>
             <button
@@ -100,7 +100,7 @@ export function DateRangeControl({
                 onChange({ mode: "range", from: draftFrom, to: draftTo });
                 setOpen(false);
               }}
-              className="w-full rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-3 py-1.5 disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full"
             >
               Apply range
             </button>

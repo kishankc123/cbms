@@ -93,9 +93,9 @@ export function AccountEditModal({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => close()} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => close()} />
 
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4">
+          <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Edit account</h2>
               <button type="button" onClick={() => close()} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -108,13 +108,13 @@ export function AccountEditModal({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input data-field="editName" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input data-field="editName" autoFocus value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
 
               {showSubCategory && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Category</label>
-                  <select data-field="editCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                  <select data-field="editCategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                     <option value="" disabled>
                       Select category
                     </option>
@@ -141,7 +141,7 @@ export function AccountEditModal({
               <button type="button" onClick={() => close()} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={busy || !name.trim()} onClick={save} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+              <button type="button" disabled={busy || !name.trim()} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {busy ? "Saving..." : "Save"}
               </button>
             </div>

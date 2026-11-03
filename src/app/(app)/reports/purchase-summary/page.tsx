@@ -25,7 +25,7 @@ export default async function PurchaseSummaryPage({ searchParams }: { searchPara
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Purchase Summary</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Purchase Summary</h1>
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
 
@@ -36,30 +36,30 @@ export default async function PurchaseSummaryPage({ searchParams }: { searchPara
         <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
           <tbody>
             <tr className="bg-gray-50">
-              <td className="px-4 py-2 font-medium" colSpan={2}>Purchase Bills ({s.billCount})</td>
+              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Purchase Bills ({s.billCount})</td>
             </tr>
             <tr className="border-t border-gray-100">
-              <td className="px-4 py-2 pl-8">Taxable Amount</td>
-              <td className="px-4 py-2 text-right">{fmt(s.subtotal)}</td>
+              <td className="px-2.5 py-1.5 pl-8">Taxable Amount</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(s.subtotal)}</td>
             </tr>
             <tr className="border-t border-gray-100">
-              <td className="px-4 py-2 pl-8">Tax Paid</td>
-              <td className="px-4 py-2 text-right">{fmt(s.taxAmount)}</td>
+              <td className="px-2.5 py-1.5 pl-8">Tax Paid</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(s.taxAmount)}</td>
             </tr>
             <tr className="border-t border-gray-200 font-medium">
-              <td className="px-4 py-2">Total Billed</td>
-              <td className="px-4 py-2 text-right">{fmt(s.totalBilled)}</td>
+              <td className="px-2.5 py-1.5">Total Billed</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(s.totalBilled)}</td>
             </tr>
             <tr className="bg-gray-50">
-              <td className="px-4 py-2 font-medium" colSpan={2}>Purchase Returns ({s.returnCount})</td>
+              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Purchase Returns ({s.returnCount})</td>
             </tr>
             <tr className="border-t border-gray-200 font-medium">
-              <td className="px-4 py-2">Total Returned</td>
-              <td className="px-4 py-2 text-right">{fmt(s.returnAmount)}</td>
+              <td className="px-2.5 py-1.5">Total Returned</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(s.returnAmount)}</td>
             </tr>
             <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="px-4 py-2">Net Purchases</td>
-              <td className="px-4 py-2 text-right">{fmt(s.netPurchases)}</td>
+              <td className="px-2.5 py-1.5">Net Purchases</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(s.netPurchases)}</td>
             </tr>
           </tbody>
         </table>

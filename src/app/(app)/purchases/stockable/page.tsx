@@ -38,7 +38,7 @@ export default async function StockablePurchasePage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Stockable Purchase</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Stockable Purchase</h1>
           <p className="mt-0.5 text-sm text-gray-500">Record inventory purchases and settlement details.</p>
         </div>
       </div>

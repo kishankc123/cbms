@@ -90,7 +90,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{employee.fullName}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{employee.fullName}</h1>
         <p className="text-sm text-gray-500">{employee.employeeCode}</p>
       </div>
 

@@ -81,25 +81,25 @@ export function EmailLogTable({ data, day, configured, filters }: { data: Data; 
         <table className="w-full text-sm">
           <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
             <tr>
-              <th className="px-4 py-2 font-medium">When</th>
-              <th className="px-4 py-2 font-medium">To</th>
-              <th className="px-4 py-2 font-medium">Kind</th>
-              <th className="px-4 py-2 font-medium">Organization</th>
-              <th className="px-4 py-2 font-medium">Outcome</th>
+              <th className="px-2.5 py-1.5 font-medium">When</th>
+              <th className="px-2.5 py-1.5 font-medium">To</th>
+              <th className="px-2.5 py-1.5 font-medium">Kind</th>
+              <th className="px-2.5 py-1.5 font-medium">Organization</th>
+              <th className="px-2.5 py-1.5 font-medium">Outcome</th>
             </tr>
           </thead>
           <tbody>
             {data.rows.map((r) => (
               <tr key={r.id} className="border-t border-[var(--card-border)] align-top">
-                <td className="whitespace-nowrap px-4 py-2 text-[var(--text-secondary)]">{when(r.createdAt)}</td>
-                <td className="px-4 py-2">
+                <td className="whitespace-nowrap px-2.5 py-1.5 text-[var(--text-secondary)]">{when(r.createdAt)}</td>
+                <td className="px-2.5 py-1.5">
                   {r.toEmail}
                   <br />
                   <span className="text-xs text-[var(--text-secondary)]">{r.subject}</span>
                 </td>
-                <td className="px-4 py-2">{EMAIL_KIND_LABEL[r.kind] ?? r.kind}</td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{r.organization ?? "—"}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">{EMAIL_KIND_LABEL[r.kind] ?? r.kind}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{r.organization ?? "—"}</td>
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={TONE[r.status]?.tone ?? "pending"}>{TONE[r.status]?.label ?? r.status}</StatusPill>
                   {r.error && r.status !== "sent" && <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{r.error}</p>}
                   {r.providerId && <p className="mt-1 text-xs text-[var(--text-secondary)]">Provider id: {r.providerId}</p>}

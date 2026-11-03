@@ -94,7 +94,7 @@ export function PurchaseReturnsTable({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by supplier, credit note #, amount..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-72"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-72"
         />
       </div>
 
@@ -131,20 +131,20 @@ export function PurchaseReturnsTable({
             >
               Status{sortIndicator("status")}
             </th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((n) => (
             <tr key={n.id} className="border-t border-gray-100">
-              <td className="px-4 py-2"><D value={n.noteDate} /></td>
-              <td className="px-4 py-2 font-mono">{n.noteNumber}</td>
-              <td className="px-4 py-2">{vendorById[n.vendorId]?.name ?? "—"}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5"><D value={n.noteDate} /></td>
+              <td className="px-2.5 py-1.5 font-mono">{n.noteNumber}</td>
+              <td className="px-2.5 py-1.5">{vendorById[n.vendorId]?.name ?? "—"}</td>
+              <td className="px-2.5 py-1.5">
                 {Number(n.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </td>
-              <td className="px-4 py-2 capitalize">{n.status}</td>
-              <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
+              <td className="px-2.5 py-1.5 capitalize">{n.status}</td>
+              <td className="px-2.5 py-1.5 text-right space-x-3 whitespace-nowrap">
                 {n.status !== "void" && (
                   <ConfirmForm confirm={`Void credit note ${n.noteNumber}?`} confirmOptions={{ confirmLabel: "Void", danger: true }} action={voidPurchaseReturn} className="inline">
                     <input type="hidden" name="noteId" value={n.id} />

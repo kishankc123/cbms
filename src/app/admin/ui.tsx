@@ -8,7 +8,7 @@ export function AdminHeader({ title, description, children }: { title: string; d
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{title}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{title}</h1>
         <p className="mt-0.5 text-sm text-[var(--text-secondary)]">{description}</p>
       </div>
       {children}

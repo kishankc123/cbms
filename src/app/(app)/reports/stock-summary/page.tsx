@@ -16,26 +16,26 @@ export default async function StockSummaryPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Stock Summary</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Stock Summary</h1>
       </div>
       <p className="text-sm text-gray-500">{active.length} active tracked item{active.length === 1 ? "" : "s"}, as of today</p>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
         <thead className="bg-gray-50 text-left text-gray-500">
           <tr>
-            <th className="px-4 py-2 font-medium">Item</th>
-            <th className="px-4 py-2 font-medium text-right">Qty on Hand</th>
-            <th className="px-4 py-2 font-medium text-right">Average Cost</th>
-            <th className="px-4 py-2 font-medium text-right">Stock Value</th>
+            <th className="px-2.5 py-1.5 font-medium">Item</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Qty on Hand</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Average Cost</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Stock Value</th>
           </tr>
         </thead>
         <tbody>
           {active.map((i) => (
             <tr key={i.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{i.name}</td>
-              <td className="px-4 py-2 text-right">{fmtQty(i.quantity)}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.averageCost)}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.value)}</td>
+              <td className="px-2.5 py-1.5">{i.name}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmtQty(i.quantity)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.averageCost)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.value)}</td>
             </tr>
           ))}
           {active.length === 0 && (
@@ -49,8 +49,8 @@ export default async function StockSummaryPage() {
         {active.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2" colSpan={3}>Total Stock Value</td>
-              <td className="px-4 py-2 text-right">{fmt(stockValue)}</td>
+              <td className="px-2.5 py-1.5" colSpan={3}>Total Stock Value</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(stockValue)}</td>
             </tr>
           </tfoot>
         )}

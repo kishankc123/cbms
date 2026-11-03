@@ -72,7 +72,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <h3 className="text-sm font-semibold text-gray-900">Salary Settings</h3>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Salary change proration method</label>
-          <select value={prorationMethod} onChange={(e) => setProrationMethod(e.target.value as typeof prorationMethod)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={prorationMethod} onChange={(e) => setProrationMethod(e.target.value as typeof prorationMethod)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
             {PRORATION_METHODS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -82,7 +82,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Rounding rule</label>
-          <select value={roundingRule} onChange={(e) => setRoundingRule(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={roundingRule} onChange={(e) => setRoundingRule(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
             <option value="none">No rounding</option>
             <option value="nearest">Nearest whole number</option>
             <option value="up">Round up</option>
@@ -96,11 +96,11 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Payroll start day</label>
-            <input type="number" min="1" max="31" value={payrollStartDay} onChange={(e) => setPayrollStartDay(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input type="number" min="1" max="31" value={payrollStartDay} onChange={(e) => setPayrollStartDay(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Payroll end day</label>
-            <input type="number" min="1" max="31" value={payrollEndDay} onChange={(e) => setPayrollEndDay(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input type="number" min="1" max="31" value={payrollEndDay} onChange={(e) => setPayrollEndDay(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
             <p className="mt-1 text-xs text-gray-500">31 means &quot;last day of month&quot;.</p>
           </div>
         </div>
@@ -110,7 +110,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <h3 className="text-sm font-semibold text-gray-900">Working Days</h3>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Working days calculation method</label>
-          <select value={workingDaysMethod} onChange={(e) => setWorkingDaysMethod(e.target.value as typeof workingDaysMethod)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={workingDaysMethod} onChange={(e) => setWorkingDaysMethod(e.target.value as typeof workingDaysMethod)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
             {WORKING_DAYS_METHODS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -137,7 +137,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Public holidays (comma-separated YYYY-MM-DD)</label>
-          <textarea value={publicHolidaysText} onChange={(e) => setPublicHolidaysText(e.target.value)} rows={2} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <textarea value={publicHolidaysText} onChange={(e) => setPublicHolidaysText(e.target.value)} rows={2} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
       </section>
 
@@ -147,7 +147,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save settings"}
         </button>

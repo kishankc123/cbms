@@ -9,7 +9,7 @@ export default async function DepreciationPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Depreciation</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Depreciation</h1>
         <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Post a month&apos;s depreciation for every asset in one entry, and review earlier runs.</p>
       </div>
       <DepreciationView data={data} />
