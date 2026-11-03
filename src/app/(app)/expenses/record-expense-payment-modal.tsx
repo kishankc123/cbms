@@ -6,6 +6,9 @@ import { recordExpensePayment } from "./actions";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { controlClass, Field } from "@/components/ui/field";
 
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 
@@ -59,44 +62,34 @@ export function RecordExpensePaymentModal({
         />
       )}
       {pending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setPending(null)} />
-          <div className="relative w-full max-w-sm space-y-4 rounded-lg bg-white p-5 shadow-lg">
-            <p className="text-sm text-gray-900">Record this payment against expense {expenseNumber}?</p>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">Payment date</label>
-              <DatePicker
-                max={todayIso()}
-                value={payDate}
-                onChange={setPayDate}
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setPending(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+        <Modal
+          size="sm"
+          title="Record payment"
+          onClose={() => setPending(null)}
+          dismissible={!saving}
+          footer={
+            <>
+              <Button onClick={() => setPending(null)} disabled={saving}>
                 No
-              </button>
-              <button type="button" onClick={confirm} disabled={saving || !payDate} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              </Button>
+              <Button variant="primary" onClick={confirm} loading={saving} disabled={!payDate}>
                 Yes
-              </button>
-            </div>
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink">Record this payment against expense {expenseNumber}?</p>
+            <Field label="Payment date">
+              <DatePicker max={todayIso()} value={payDate} onChange={setPayDate} className={`${controlClass} w-full`} />
+            </Field>
           </div>
-        </div>
+        </Modal>
       )}
       {error && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4 text-center">
-            <p className="text-sm text-red-600">{error}</p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-6 py-1.5"
-            >
-              OK
-            </button>
-          </div>
-        </div>
+        <Modal size="sm" title="Could not record the payment" onClose={onClose} footer={<Button variant="primary" onClick={onClose}>OK</Button>}>
+          <p className="text-[13px] text-[var(--danger-text)]">{error}</p>
+        </Modal>
       )}
     </>
   );

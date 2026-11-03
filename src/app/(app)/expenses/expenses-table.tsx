@@ -2,21 +2,28 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Download, Plus, Receipt } from "lucide-react";
 import { voidExpense, getExpenseForEdit, type ExpenseEditData } from "./actions";
 import { ExpenseFormModal, type InitialExpense } from "./expense-form-modal";
 import { RecordExpensePaymentModal } from "./record-expense-payment-modal";
 import { RowMenu } from "@/components/row-menu";
-import { ConfirmDialog } from "../sales/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { escapeHtml, printDocument } from "@/lib/print-html";
 import { useCalendar } from "@/components/calendar/calendar-provider";
-import { formatDate } from "@/lib/calendar";
-
 import { DatePicker } from "@/components/calendar/date-picker";
-import { todayIso } from "@/lib/calendar";
 import { D } from "@/components/calendar/date-text";
 import { DateDisplayControl, useDateDisplay } from "@/components/calendar/report-dates";
-import { exportDateColumns, exportDateHeaders, type DateDisplayMode } from "@/lib/calendar";
+import { exportDateColumns, exportDateHeaders, formatDate, todayIso, type DateDisplayMode } from "@/lib/calendar";
+import { Button } from "@/components/ui/button";
+import { controlClass, Select } from "@/components/ui/field";
+import { Amount, DataTable, RowActions, SortableTh, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Modal } from "@/components/ui/modal";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+
 type Vendor = { id: string; name: string };
 type CategoryAccount = { id: string; code: string; name: string; tdsHeadKey?: string | null };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -55,17 +62,16 @@ function paidBy(e: ExpenseRow, modes: string[] | undefined) {
   return modes && modes.length > 0 ? modes.join(", ") : "Unpaid";
 }
 
+// The status badge: what is owed and whether it is late.
+function badgeOf(e: ExpenseRow, today: string): { tone: StatusTone; label: string } {
+  if (e.status === "void") return { tone: "neutral", label: "Void" };
+  if (e.status === "paid") return { tone: "success", label: "Paid" };
+  if (e.dueDate && e.dueDate < today) return { tone: "critical", label: "Overdue" };
+  return e.status === "partially_paid" ? { tone: "pending", label: "Partially paid" } : { tone: "action", label: "Unpaid" };
+}
+
 type SortKey = "number" | "date" | "category" | "net" | "total";
 type SortDir = "asc" | "desc";
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
-    </div>
-  );
-}
 
 export function ExpensesTable({
   paymentModes,
@@ -74,6 +80,9 @@ export function ExpensesTable({
   categoryAccounts,
   cashBankAccounts,
   vatRate,
+  newOpen,
+  onNew,
+  onNewClose,
 }: {
   expenses: ExpenseRow[];
   vendors: Vendor[];
@@ -81,13 +90,16 @@ export function ExpensesTable({
   categoryAccounts: CategoryAccount[];
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
+  /** The "New expense" form is opened from the page header (or the empty list). */
+  newOpen: boolean;
+  onNew: () => void;
+  onNewClose: () => void;
 }) {
   const [exportDates, setExportDates] = useDateDisplay();
-  const [showNewForm, setShowNewForm] = useState(false);
   const [editData, setEditData] = useState<InitialExpense | null>(null);
-  const [voidingRow, setVoidingRow] = useState<ExpenseRow | null>(null);
   const router = useRouter();
   const calendar = useCalendar();
+  const ask = useConfirm();
   const { report, dialog } = useProblem();
   const [payingRow, setPayingRow] = useState<ExpenseRow | null>(null);
   const [viewingRow, setViewingRow] = useState<ExpenseRow | null>(null);
@@ -102,6 +114,7 @@ export function ExpensesTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const today = useMemo(() => todayIso(), []);
+  const filtering = Boolean(search || dateFrom || dateTo || categoryFilter || statusFilter);
 
   const summary = useMemo(() => {
     const active = expenses.filter((e) => e.status !== "void");
@@ -158,8 +171,15 @@ export function ExpensesTable({
       setSortDir("asc");
     } else setSortDir((d) => (d === "asc" ? "desc" : "asc"));
   }
-  const arrow = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "");
-  const sortable = "px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700";
+  const dirOf = (key: SortKey) => (sortKey === key ? sortDir : null);
+
+  function clearFilters() {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setCategoryFilter("");
+    setStatusFilter("");
+  }
 
   async function openEdit(id: string) {
     try {
@@ -170,10 +190,8 @@ export function ExpensesTable({
     }
   }
 
-  async function confirmVoid() {
-    const row = voidingRow;
-    setVoidingRow(null);
-    if (!row) return;
+  async function voidRow(row: ExpenseRow) {
+    if (!(await ask(`Void expense ${row.expenseNumber}? Its accounting entries will be reversed.`, { danger: true, confirmLabel: "Void" }))) return;
     const fd = new FormData();
     fd.set("expenseId", row.id);
     try {
@@ -198,235 +216,187 @@ export function ExpensesTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => setShowNewForm(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
-        >
-          + New Expense
-        </button>
-        <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded border border-gray-300 text-gray-400 text-sm px-4 py-1.5 cursor-not-allowed"
-        >
-          Import
-        </button>
-        <button
-          type="button"
-          onClick={() => exportCsv(sorted, exportDates, paymentModes)}
-          className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5"
-        >
-          Export
-        </button>
-      </div>
+      <StatStrip
+        items={[
+          { label: "Total expenses", value: fmt(summary.total) },
+          { label: "Unpaid", value: fmt(summary.unpaid), tone: summary.unpaid > 0.005 ? "warning" : "default" },
+          { label: "Paid", value: fmt(summary.paid) },
+          { label: "Overdue", value: fmt(summary.overdue), tone: summary.overdue > 0.005 ? "danger" : "default" },
+        ]}
+      />
 
-      <div className="grid grid-cols-4 gap-4">
-        <SummaryCard label="Total Expenses" value={fmt(summary.total)} />
-        <SummaryCard label="Unpaid Expenses" value={fmt(summary.unpaid)} />
-        <SummaryCard label="Paid Expenses" value={fmt(summary.paid)} />
-        <SummaryCard label="Overdue Expenses" value={fmt(summary.overdue)} />
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by supplier, expense #..."
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm w-56"
-        />
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">From</label>
-          <DatePicker value={dateFrom} onChange={(v) => setDateFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search supplier or expense #" />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink-2">From</span>
+          <DatePicker value={dateFrom} onChange={setDateFrom} className={`${controlClass} w-40`} />
+          <span className="text-xs text-ink-2">To</span>
+          <DatePicker value={dateTo} onChange={setDateTo} className={`${controlClass} w-40`} />
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">To</label>
-          <DatePicker value={dateTo} onChange={(v) => setDateTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-        </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-        >
+        <Select aria-label="Category" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-44">
           <option value="">All categories</option>
           {categoryAccounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.code} — {a.name}
             </option>
           ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-        >
+        </Select>
+        <Select aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-36">
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
+          <Button icon={<Download size={14} />} onClick={() => exportCsv(sorted, exportDates, paymentModes)}>
+            Export
+          </Button>
+        </div>
+      </FilterBar>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <th className={sortable} onClick={() => toggleSort("number")}>
-              Expense #{arrow("number")}
-            </th>
-            <th className={sortable} onClick={() => toggleSort("date")}>
-              Date{arrow("date")}
-            </th>
-            <th className="px-4 py-2 font-medium">Supplier</th>
-            <th className={sortable} onClick={() => toggleSort("category")}>
-              Category{arrow("category")}
-            </th>
-            <th className="px-4 py-2 font-medium">Description</th>
-            <th className={sortable} onClick={() => toggleSort("net")}>
-              Net amount{arrow("net")}
-            </th>
-            <th className="px-4 py-2 font-medium">Tax</th>
-            <th className={sortable} onClick={() => toggleSort("total")}>
-              Total{arrow("total")}
-            </th>
-            <th className="px-4 py-2 font-medium">Mode of payment</th>
-            <th className="px-4 py-2 font-medium"></th>
-          </tr>
+      <DataTable stickyHeader>
+        <thead>
+          <Tr className="hover:bg-transparent">
+            <SortableTh direction={dirOf("number")} onSort={() => toggleSort("number")}>
+              Expense #
+            </SortableTh>
+            <SortableTh direction={dirOf("date")} onSort={() => toggleSort("date")}>
+              Date
+            </SortableTh>
+            <Th>Supplier</Th>
+            <SortableTh direction={dirOf("category")} onSort={() => toggleSort("category")}>
+              Category
+            </SortableTh>
+            <Th>Description</Th>
+            <SortableTh align="right" direction={dirOf("net")} onSort={() => toggleSort("net")}>
+              Net amount
+            </SortableTh>
+            <Th align="right">Tax</Th>
+            <SortableTh align="right" direction={dirOf("total")} onSort={() => toggleSort("total")}>
+              Total
+            </SortableTh>
+            <Th>Mode of payment</Th>
+            <Th>Status</Th>
+            <Th className="w-10" />
+          </Tr>
         </thead>
         <tbody>
-          {sorted.map((e) => (
-            <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 font-mono">{e.expenseNumber}</td>
-              <td className="px-4 py-2"><D value={e.expenseDate} /></td>
-              <td className="px-4 py-2">{e.payee}</td>
-              <td className="px-4 py-2">{e.category}</td>
-              <td className="px-4 py-2 max-w-[200px] truncate">{e.description || "—"}</td>
-              <td className="px-4 py-2">{fmt(e.subtotal)}</td>
-              <td className="px-4 py-2">{fmt(e.tax)}</td>
-              <td className="px-4 py-2">{fmt(e.total)}</td>
-              <td className={`px-4 py-2 ${e.status === "void" ? "text-gray-400" : paymentModes[e.id]?.length ? "" : "text-gray-500"}`}>{paidBy(e, paymentModes[e.id])}</td>
-              <td className="px-4 py-2 text-right whitespace-nowrap">
-                <RowMenu
-                  items={[
-                    { label: "View", onClick: () => setViewingRow(e) },
-                    { label: "Edit", onClick: () => openEdit(e.id), hidden: e.status === "void" },
-                    { label: "Record payment", onClick: () => setPayingRow(e), hidden: !(e.status === "unpaid" || e.status === "partially_paid") },
-                    { label: "Print", onClick: () => printExpense(e) },
-                    { label: "Void", onClick: () => setVoidingRow(e), danger: true, hidden: e.status === "void" },
-                  ]}
-                />
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={10} className="px-4 py-6 text-center text-gray-400">
-                No expenses match
-              </td>
-            </tr>
-          )}
+          {sorted.map((e) => {
+            const badge = badgeOf(e, today);
+            const modes = paymentModes[e.id];
+            return (
+              <Tr key={e.id} clickable selected={viewingRow?.id === e.id} onClick={() => setViewingRow(e)}>
+                <Td className="font-mono text-xs">{e.expenseNumber}</Td>
+                <Td className="whitespace-nowrap">
+                  <D value={e.expenseDate} />
+                </Td>
+                <Td className="max-w-48 truncate whitespace-nowrap">{e.payee}</Td>
+                <Td className="max-w-56 truncate text-ink-2">{e.category}</Td>
+                <Td className="max-w-48 truncate text-ink-2">{e.description || "—"}</Td>
+                <Td numeric>
+                  <Amount value={e.subtotal} />
+                </Td>
+                <Td numeric>
+                  <Amount value={e.tax} />
+                </Td>
+                <Td numeric className="font-medium">
+                  <Amount value={e.total} />
+                </Td>
+                <Td className="text-ink-2">{e.status !== "void" && modes?.length ? modes.join(", ") : "—"}</Td>
+                <Td>
+                  <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
+                </Td>
+                <Td className="whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
+                  <RowActions>
+                    <RowMenu
+                      items={[
+                        { label: "View", onClick: () => setViewingRow(e) },
+                        { label: "Edit", onClick: () => openEdit(e.id), hidden: e.status === "void" },
+                        { label: "Record payment", onClick: () => setPayingRow(e), hidden: !(e.status === "unpaid" || e.status === "partially_paid") },
+                        { label: "Print", onClick: () => printExpense(e) },
+                        { label: "Void", onClick: () => voidRow(e), danger: true, hidden: e.status === "void" },
+                      ]}
+                    />
+                  </RowActions>
+                </Td>
+              </Tr>
+            );
+          })}
         </tbody>
-      </table>
+      </DataTable>
+      {sorted.length === 0 &&
+        (expenses.length === 0 ? (
+          <EmptyState icon={Receipt} title="No expenses yet" description="Record what the business spends and it will be listed here." action={<Button variant="primary" icon={<Plus size={14} />} onClick={onNew}>New expense</Button>} />
+        ) : (
+          <EmptyState icon={Receipt} title="No expenses match" description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
+        ))}
 
-      {showNewForm && (
-        <ExpenseFormModal
-          vendors={vendors}
-          categoryAccounts={categoryAccounts}
-          cashBankAccounts={cashBankAccounts}
-          vatRate={vatRate}
-          onClose={() => setShowNewForm(false)}
-        />
-      )}
+      {newOpen && <ExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} vatRate={vatRate} onClose={onNewClose} />}
 
-      {editData && (
-        <ExpenseFormModal
-          vendors={vendors}
-          categoryAccounts={categoryAccounts}
-          cashBankAccounts={cashBankAccounts}
-          vatRate={vatRate}
-          initial={editData}
-          onClose={() => setEditData(null)}
-        />
-      )}
+      {editData && <ExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} vatRate={vatRate} initial={editData} onClose={() => setEditData(null)} />}
 
-      {payingRow && (
-        <RecordExpensePaymentModal
-          expenseId={payingRow.id}
-          expenseNumber={payingRow.expenseNumber}
-          remaining={payingRow.amountPayable - payingRow.amountPaid}
-          cashBankAccounts={cashBankAccounts}
-          onClose={() => setPayingRow(null)}
-        />
-      )}
+      {payingRow && <RecordExpensePaymentModal expenseId={payingRow.id} expenseNumber={payingRow.expenseNumber} remaining={payingRow.amountPayable - payingRow.amountPaid} cashBankAccounts={cashBankAccounts} onClose={() => setPayingRow(null)} />}
 
       {viewingRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setViewingRow(null)} />
-          <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-lg space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">{viewingRow.expenseNumber}</h2>
-              <button type="button" onClick={() => setViewingRow(null)} className="text-gray-400 hover:text-gray-600">
-                ✕
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-gray-500">Date</p>
-                <p className="text-gray-900"><D value={viewingRow.expenseDate} /></p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Supplier</p>
-                <p className="text-gray-900">{viewingRow.payee}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Category</p>
-                <p className="text-gray-900">{viewingRow.category}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-gray-900 capitalize">{viewingRow.status.replace("_", " ")}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-xs text-gray-500">Description</p>
-                <p className="text-gray-900">{viewingRow.description || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Net amount</p>
-                <p className="text-gray-900">{fmt(viewingRow.subtotal)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Tax</p>
-                <p className="text-gray-900">{fmt(viewingRow.tax)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total</p>
-                <p className="text-gray-900">{fmt(viewingRow.total)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Amount paid</p>
-                <p className="text-gray-900">{fmt(viewingRow.amountPaid)}</p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => printExpense(viewingRow)} className="text-sm text-gray-600 hover:underline">
+        <Modal
+          size="sm"
+          title={viewingRow.expenseNumber}
+          onClose={() => setViewingRow(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => printExpense(viewingRow)}>
                 Print
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewingRow(null)}
-                className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
-              >
+              </Button>
+              <Button variant="primary" onClick={() => setViewingRow(null)}>
                 Close
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </>
+          }
+        >
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+            <Item label="Date">
+              <D value={viewingRow.expenseDate} />
+            </Item>
+            <Item label="Supplier">{viewingRow.payee}</Item>
+            <Item label="Category">{viewingRow.category}</Item>
+            <Item label="Status">
+              <StatusPill tone={badgeOf(viewingRow, today).tone}>{badgeOf(viewingRow, today).label}</StatusPill>
+            </Item>
+            <Item label="Description" wide>
+              {viewingRow.description || "—"}
+            </Item>
+            <Item label="Net amount">
+              <Amount value={viewingRow.subtotal} />
+            </Item>
+            <Item label="Tax">
+              <Amount value={viewingRow.tax} />
+            </Item>
+            <Item label="Total">
+              <Amount value={viewingRow.total} className="font-semibold" />
+            </Item>
+            <Item label="Amount paid">
+              <Amount value={viewingRow.amountPaid} />
+            </Item>
+          </dl>
+        </Modal>
       )}
-      {voidingRow && <ConfirmDialog message={`Void expense ${voidingRow.expenseNumber}? Its accounting entries will be reversed.`} onYes={confirmVoid} onNo={() => setVoidingRow(null)} />}
       {dialog}
+    </div>
+  );
+}
+
+function Item({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={wide ? "col-span-2" : ""}>
+      <dt className="text-xs text-ink-2">{label}</dt>
+      <dd className="mt-0.5 text-ink">{children}</dd>
     </div>
   );
 }

@@ -21,14 +21,14 @@ type Align = "left" | "right" | "center";
 const ALIGN: Record<Align, string> = { left: "text-left", right: "text-right", center: "text-center" };
 
 export function Th({ align = "left", className = "", ...rest }: React.ComponentProps<"th"> & { align?: Align }) {
-  return <th className={`h-8 whitespace-nowrap border-b border-line bg-app px-3 text-xs font-medium text-ink-2 ${ALIGN[align]} ${className}`} {...rest} />;
+  return <th className={`h-8 whitespace-nowrap border-b border-line bg-app px-2.5 text-xs font-medium text-ink-2 ${ALIGN[align]} ${className}`} {...rest} />;
 }
 
 /** A column heading that sorts: shows which way it is sorted, and calls onSort when clicked. */
 export function SortableTh({ children, direction, onSort, align = "left", className = "" }: { children: React.ReactNode; direction?: "asc" | "desc" | null; onSort: () => void; align?: Align; className?: string }) {
   const Icon = direction === "asc" ? ChevronUp : direction === "desc" ? ChevronDown : ChevronsUpDown;
   return (
-    <th aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"} className={`h-8 whitespace-nowrap border-b border-line bg-app px-3 text-xs font-medium text-ink-2 ${ALIGN[align]} ${className}`}>
+    <th aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"} className={`h-8 whitespace-nowrap border-b border-line bg-app px-2.5 text-xs font-medium text-ink-2 ${ALIGN[align]} ${className}`}>
       <button type="button" onClick={onSort} className={`inline-flex items-center gap-1 hover:text-ink ${align === "right" ? "flex-row-reverse" : ""}`}>
         {children}
         <Icon size={12} className={direction ? "text-ink" : "text-ink-3"} />
@@ -42,12 +42,12 @@ export function Tr({ selected, clickable, className = "", ...rest }: React.Compo
 }
 
 export function Td({ numeric, align, className = "", ...rest }: React.ComponentProps<"td"> & { numeric?: boolean; align?: Align }) {
-  return <td className={`h-8 border-b border-line px-3 text-ink ${numeric ? "text-right tnum" : ALIGN[align ?? "left"]} ${className}`} {...rest} />;
+  return <td className={`h-8 border-b border-line px-2.5 text-ink ${numeric ? "text-right tnum" : ALIGN[align ?? "left"]} ${className}`} {...rest} />;
 }
 
-/** Row actions that appear only when the row is hovered or focused (a contextual menu or buttons). */
+/** Row actions (a contextual menu or buttons): quiet until the row is hovered or focused. */
 export function RowActions({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{children}</div>;
+  return <div className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{children}</div>;
 }
 
 /**

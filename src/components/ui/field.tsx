@@ -23,15 +23,17 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.ComponentProps<"te
   return <textarea ref={ref} aria-invalid={invalid || undefined} rows={3} className={`${cx(invalid, className)} h-auto py-1.5`} {...rest} />;
 });
 
-/** A label above a control, with an optional hint underneath and an error that replaces it. */
-export function Field({ label, hint, error, required, htmlFor, className, children }: { label: string; hint?: string; error?: string | null; required?: boolean; htmlFor?: string; className?: string; children: React.ReactNode }) {
+/** A label above a control, with an optional hint underneath and an error that replaces it. The label wraps the control, so clicking it focuses the control and screen readers read it as the control's name. */
+export function Field({ label, hint, error, required, className, children }: { label: string; hint?: string; error?: string | null; required?: boolean; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
-      <label htmlFor={htmlFor} className="mb-1 block text-xs font-medium text-ink-2">
-        {label}
-        {required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-ink-2">
+          {label}
+          {required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+        </span>
+        {children}
       </label>
-      {children}
       {error ? <p className="mt-1 text-xs text-[var(--danger-text)]">{error}</p> : hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
     </div>
   );

@@ -6,11 +6,9 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { listRecurringExpenses, getRecurringExpenseSummary } from "@/lib/recurring-expenses";
 import { todayIso } from "@/lib/calendar";
-import { BackButton } from "@/components/ui/back-button";
 import { RecurringExpensesTable, type RecurringExpenseRow } from "./recurring-expenses-table";
 import { RecurringEngineRunner } from "./recurring-engine-runner";
 
-const currency = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
 export default async function RecurringExpensesPage() {
   const session = await requireTenantSession();
@@ -64,43 +62,9 @@ export default async function RecurringExpensesPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <>
       <RecurringEngineRunner />
-      <div className="flex items-start gap-3">
-        <BackButton href="/expenses" label="Back to One-off Expenses" />
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Recurring Expenses</h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">Rent, subscriptions, and other expenses that repeat on a schedule.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
-          <p className="text-xs text-[var(--text-secondary)]">Active Recurring Expenses</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{summary.activeCount}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
-          <p className="text-xs text-[var(--text-secondary)]">Expected This Month</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{currency(summary.expectedThisMonth)}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
-          <p className="text-xs text-[var(--text-secondary)]">Expected Next 30 Days</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{currency(summary.expectedNext30Days)}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
-          <p className="text-xs text-[var(--text-secondary)]">Outstanding Liabilities</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{currency(summary.outstandingLiabilities)}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
-          <p className="text-xs text-[var(--text-secondary)]">Overdue Payments</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--status-critical-text)]">
-            {summary.overdueCount} {summary.overdueCount === 1 ? "item" : "items"}
-          </p>
-          {summary.overdueCount > 0 && <p className="text-xs text-[var(--text-secondary)]">{currency(summary.overdueAmount)}</p>}
-        </div>
-      </div>
-
-      <RecurringExpensesTable expenses={rows} vendors={vendorList} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} />
-    </div>
+      <RecurringExpensesTable summary={summary} expenses={rows} vendors={vendorList} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} />
+    </>
   );
 }

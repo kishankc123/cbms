@@ -8,11 +8,14 @@ import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { ConfirmDialog } from "../sales/confirm-dialog";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { controlClass, Field, Input, Select } from "@/components/ui/field";
+import { Amount } from "@/components/ui/data-table";
 type Vendor = { id: string; name: string };
 // Only lowest-level accounts are offered; `group` is the account they sit under, if any.
 type CategoryAccount = { id: string; code: string; name: string; group?: string | null; tdsHeadKey?: string | null };
@@ -100,7 +103,7 @@ export function ExpenseFormModal({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [confirmSave, setConfirmSave] = useState(false);
+  const [asking, setAsking] = useState(false);
   // Payments recorded later in Payments pin the amounts: then only the details can be edited.
   const locked = Boolean(initial?.detailsOnly);
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
@@ -136,14 +139,6 @@ export function ExpenseFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taxableAmount, taxTreatment, billType, tdsRate]);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showPayment && !confirmSave && !problem) onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, showPayment, confirmSave, problem]);
-
   // Categories that have sub-categories are shown only as group headings — the sub-categories are what can be chosen.
   const categoryGroups: { label: string | null; items: CategoryAccount[] }[] = [];
   for (const a of categoryAccounts) {
@@ -169,19 +164,26 @@ export function ExpenseFormModal({
   const paidTotal = round2(payments.reduce((s, p) => s + p.amount, 0));
   const remaining = Math.max(round2(amountPayable - paidTotal), 0);
 
+  // Everything is checked first; then the person is asked once, and only a yes saves.
+  async function askThenSave() {
+    setAsking(true);
+    const yes = await ask("Do you want to save?", { confirmLabel: "Save" });
+    setAsking(false);
+    if (yes) performSave();
+  }
+
   function handleSaveClick() {
-    if (locked) return setConfirmSave(true);
+    if (locked) return askThenSave();
     if (!categoryAccountId) return report("Select an expense category.", at("category"));
     if (subtotal <= 0) return report("Taxable amount must be greater than zero.", at("taxable"));
     if (amountPayable < 0) return report("TDS and other withholdings cannot exceed the total expense amount.", at("tds"));
     if (!vendorId && remaining > 0) {
       return report("Select a supplier: the unpaid balance needs someone it is owed to. A supplier isn't needed once the expense is paid in full.", at("supplier"));
     }
-    setConfirmSave(true);
+    askThenSave();
   }
 
   async function performSave() {
-    setConfirmSave(false);
     setSaving(true);
     try {
       const payload: ExpenseInput = {
@@ -223,307 +225,212 @@ export function ExpenseFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <>
+      <Modal
+        size="lg"
+        title={initial ? `Edit expense ${initial.expenseNumber}` : "New expense"}
+        onClose={onClose}
+        dismissible={!showPayment && !problem && !saving && !asking}
+        footer={
+          <>
+            <Button data-field="pay" onClick={() => setShowPayment(true)} disabled={amountPayable <= 0 || locked}>
+              {payments.length > 0 ? "Edit payment" : "Record payment"}
+            </Button>
+            <Button onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleSaveClick} loading={saving}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          {locked && (
+            <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+              Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
+            </p>
+          )}
 
-      <div className="relative w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">{initial ? `Edit expense ${initial.expenseNumber}` : "New expense"}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
-            ✕
-          </button>
-        </div>
-
-        {locked && (
-          <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
-          </p>
-        )}
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Expense Information</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Expense number</label>
-              <input
-                disabled
-                value={initial?.expenseNumber ?? "Auto-generated on save"}
-                className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Expense date</label>
-              <DatePicker id="exp-expenseDate" disabled={locked} max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Expense category</label>
-              <select
-                data-field="category"
-                disabled={locked}
-                value={categoryAccountId}
-                onChange={(e) => setCategoryAccountId(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Select category</option>
-                {categoryGroups.map((g) =>
-                  g.label ? (
-                    <optgroup key={g.label} label={g.label}>
-                      {g.items.map((a) => (
+          <section className="space-y-3">
+            <SectionTitle>Expense information</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Expense number">
+                <Input disabled value={initial?.expenseNumber ?? "Auto-generated on save"} readOnly />
+              </Field>
+              <Field label="Expense date">
+                <DatePicker id="exp-expenseDate" disabled={locked} max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className={`${controlClass} w-full`} />
+              </Field>
+              <Field label="Expense category">
+                <Select data-field="category" disabled={locked} value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)}>
+                  <option value="">Select category</option>
+                  {categoryGroups.map((g) =>
+                    g.label ? (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.items.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.code} — {a.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : (
+                      g.items.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.code} — {a.name}
                         </option>
-                      ))}
-                    </optgroup>
-                  ) : (
-                    g.items.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.code} — {a.name}
+                      ))
+                    )
+                  )}
+                </Select>
+              </Field>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ink-2">
+                  Supplier {remaining > 0 ? <span className="text-[var(--danger)]">*</span> : <span className="font-normal text-ink-3">(optional once paid in full)</span>}
+                </label>
+                <div data-field="supplier" data-opens>
+                  <SupplierSelect value={vendorId} options={vendors} onChange={(id) => setVendorId(id)} onAdded={addVendor} disabled={locked} className={`${controlClass} w-full bg-surface text-left`} />
+                </div>
+              </div>
+              <Field label="Description" className="sm:col-span-2">
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+              </Field>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <SectionTitle>Invoice / supporting document</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Bill type">
+                <Select data-field="billType" disabled={locked} value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)}>
+                  {BILL_TYPES.map((b) => (
+                    <option key={b.value} value={b.value}>
+                      {b.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Invoice number (optional)">
+                <Input data-field="invoiceNumber" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
+              </Field>
+              <Field label="Invoice date">
+                <DatePicker id="exp-invoiceDate" max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className={`${controlClass} w-full`} />
+              </Field>
+              <Field label="Due date (optional)">
+                <DatePicker id="exp-dueDate" min={invoiceDate || expenseDate} value={dueDate} onChange={(v) => setDueDate(v)} className={`${controlClass} w-full`} />
+              </Field>
+            </div>
+            <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
+          </section>
+
+          <fieldset disabled={locked} className="min-w-0 border-0 p-0">
+            <section className="space-y-3">
+              <SectionTitle>Tax information</SectionTitle>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Taxable amount">
+                  <Input type="number" step="0.01" min="0" data-field="taxable" value={taxableAmount} onChange={(e) => setTaxableAmount(e.target.value)} className="text-right" />
+                </Field>
+                <Field label="Tax treatment">
+                  <Select data-field="taxTreatment" value={taxTreatment} onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}>
+                    {TAX_TREATMENTS.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
                       </option>
-                    ))
-                  )
-                )}
-              </select>
-            </div>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="hidden sm:block" />
+                <Field label={`VAT (${vatRate}% default)${billType !== "vat" ? " — VAT bill only" : ""}`}>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    data-field="vat"
+                    disabled={billType !== "vat"}
+                    value={vatAmount}
+                    onChange={(e) => {
+                      setVatTouched(true);
+                      setVatAmount(e.target.value);
+                    }}
+                    className="text-right"
+                  />
+                </Field>
+                <Field label={`TDS ${tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}`}>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    data-field="tds"
+                    value={tdsAmount}
+                    onChange={(e) => {
+                      setTdsTouched(true);
+                      setTdsAmount(e.target.value);
+                    }}
+                    className="text-right"
+                  />
+                </Field>
+                <Field label="Other applicable tax">
+                  <Input type="number" step="0.01" min="0" value={otherTaxAmount} onChange={(e) => setOtherTaxAmount(e.target.value)} className="text-right" />
+                </Field>
+              </div>
+            </section>
+          </fieldset>
+
+          <section className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Supplier {remaining > 0 ? <span className="text-red-500">*</span> : <span className="text-gray-400">(optional once paid in full)</span>}</label>
-              <div data-field="supplier" data-opens>
-              <SupplierSelect
-                value={vendorId}
-                options={vendors}
-                onChange={(id) => setVendorId(id)}
-                onAdded={addVendor}
-                disabled={locked}
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
-              />
+              <SectionTitle>Amount</SectionTitle>
+              <div className="mt-2 space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
+                <Line label="Subtotal" value={<Amount value={subtotal} />} />
+                <Line label="VAT" value={<Amount value={vat} />} />
+                <Line label="Other tax" value={<Amount value={otherTax} />} />
+                <Line label="Total expense" value={<Amount value={total} />} className="border-t border-line pt-1 font-medium" />
+                <Line label="TDS withheld" value={<span className="tnum">-{tds.toFixed(2)}</span>} className="text-ink-2" />
+                <Line label="Amount payable" value={<Amount value={amountPayable} />} className="border-t border-line pt-1 font-semibold" />
               </div>
             </div>
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">Description</label>
-              <input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-        </section>
 
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Invoice / Supporting Document</h3>
-          <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Bill type</label>
-              <select data-field="billType" disabled={locked} value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">
-                {BILL_TYPES.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
+              <SectionTitle>Settlement</SectionTitle>
+              <div className="mt-2 space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
+                {payments.length === 0 && remaining <= 0 && <p className="text-ink-3">Unpaid</p>}
+                {payments.map((p, i) => (
+                  <Line key={i} label={accountLabels[p.accountId] ?? "Account"} value={<Amount value={p.amount} />} />
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Invoice number (optional)</label>
-              <input
-                data-field="invoiceNumber"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Invoice date</label>
-              <DatePicker id="exp-invoiceDate" max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Due date (optional)</label>
-              <DatePicker id="exp-dueDate" min={invoiceDate || expenseDate} value={dueDate} onChange={(v) => setDueDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
-            </div>
-          </div>
-          <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
-        </section>
-
-        <fieldset disabled={locked} className="min-w-0 border-0 p-0 m-0">
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Tax Information</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Taxable amount</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-field="taxable"
-                value={taxableAmount}
-                onChange={(e) => setTaxableAmount(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Tax treatment</label>
-              <select
-                data-field="taxTreatment"
-                value={taxTreatment}
-                onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                {TAX_TREATMENTS.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div />
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">VAT ({vatRate}% default){billType !== "vat" && <span className="text-gray-400"> — VAT bill only</span>}</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-field="vat"
-                disabled={billType !== "vat"}
-                value={vatAmount}
-                onChange={(e) => {
-                  setVatTouched(true);
-                  setVatAmount(e.target.value);
-                }}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">TDS {tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-field="tds"
-                value={tdsAmount}
-                onChange={(e) => {
-                  setTdsTouched(true);
-                  setTdsAmount(e.target.value);
-                }}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Other applicable tax</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={otherTaxAmount}
-                onChange={(e) => setOtherTaxAmount(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-        </section>
-
-        </fieldset>
-
-        <section className="flex flex-wrap justify-center gap-6">
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-gray-700">Amount</h3>
-            <div className="w-64 rounded-lg border border-gray-300 bg-white p-4 space-y-1 text-sm text-gray-900">
-              <div className="flex items-center justify-between">
-                <span>Subtotal</span>
-                <span>{subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>VAT</span>
-                <span>{vat.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Other tax</span>
-                <span>{otherTax.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-gray-200 pt-1 font-medium">
-                <span>Total expense</span>
-                <span>{total.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between text-gray-600">
-                <span>TDS withheld</span>
-                <span>-{tds.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-gray-200 pt-1 font-bold">
-                <span>Amount payable</span>
-                <span>{amountPayable.toFixed(2)}</span>
+                {remaining > 0 && <Line label="Expense Payable (unpaid)" value={<Amount value={remaining} />} />}
+                <Line label="Amount payable" value={<Amount value={amountPayable} />} className="border-t border-line pt-1 font-semibold" />
               </div>
             </div>
-          </div>
-
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-gray-700">Settlement</h3>
-            <div className="w-64 rounded-lg border border-gray-300 bg-white p-4 space-y-2">
-              {payments.length === 0 && remaining <= 0 && <p className="text-sm text-gray-400">Unpaid</p>}
-              {payments.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-sm text-gray-900">
-                  <span>{accountLabels[p.accountId] ?? "Account"}</span>
-                  <span>{p.amount.toFixed(2)}</span>
-                </div>
-              ))}
-              {remaining > 0 && (
-                <div className="flex items-center justify-between text-sm text-gray-900">
-                  <span>Expense Payable (unpaid)</span>
-                  <span>{remaining.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
-                <span className="font-medium text-gray-900">Amount payable</span>
-                <span className="font-bold text-gray-900">{amountPayable.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            data-field="pay"
-            onClick={() => setShowPayment(true)}
-            disabled={amountPayable <= 0 || locked}
-            className="whitespace-nowrap rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
-          >
-            {payments.length > 0 ? "EDIT PAY" : "RECORD PAY"}
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveClick}
-            disabled={saving}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "SAVE"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5 disabled:opacity-50"
-          >
-            Cancel
-          </button>
+          </section>
         </div>
+      </Modal>
 
-        {dialog}
+      {dialog}
 
-        {confirmSave && (
-          <ConfirmDialog message="Do you want to save?" onYes={performSave} onNo={() => setConfirmSave(false)} />
-        )}
+      {showPayment && (
+        <InvoicePaymentModal
+          total={amountPayable}
+          cashBankAccounts={cashBankAccounts}
+          initialLines={payments}
+          saving={false}
+          onCancel={() => setShowPayment(false)}
+          onConfirm={(p) => {
+            setPayments(p);
+            setShowPayment(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
 
-        {showPayment && (
-          <InvoicePaymentModal
-            total={amountPayable}
-            cashBankAccounts={cashBankAccounts}
-            initialLines={payments}
-            saving={false}
-            onCancel={() => setShowPayment(false)}
-            onConfirm={(p) => {
-              setPayments(p);
-              setShowPayment(false);
-            }}
-          />
-        )}
-      </div>
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-2">{children}</h3>;
+}
+
+function Line({ label, value, className = "" }: { label: string; value: React.ReactNode; className?: string }) {
+  return (
+    <div className={`flex items-center justify-between ${className}`}>
+      <span>{label}</span>
+      {value}
     </div>
   );
 }

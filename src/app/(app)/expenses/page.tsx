@@ -6,9 +6,8 @@ import { requireTenantSession, can } from "@/lib/session";
 import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getExpenseTaxDefaults } from "./actions";
-import { ExpensesTable } from "./expenses-table";
+import { ExpensesWorkspace } from "./expenses-workspace";
 import { paymentModesByExpense } from "@/lib/expenses/payment-modes";
-import { ExpensesTabs } from "./expenses-tabs";
 
 export default async function ExpensesPage() {
   const denied = await guardView("expenses");
@@ -81,19 +80,15 @@ export default async function ExpensesPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Expenses</h1>
-
-      <ExpensesTabs canImport={can(session, "expenses", "create")}>
-      <ExpensesTable
-        expenses={rows}
-        paymentModes={paymentModes}
-        vendors={vendorList}
-        categoryAccounts={categoryAccounts}
-        cashBankAccounts={cashBankAccounts}
-        vatRate={taxDefaults.vatRate}
-      />
-      </ExpensesTabs>
-    </div>
+    <ExpensesWorkspace
+      canImport={can(session, "expenses", "create")}
+      canCreate={can(session, "expenses", "create")}
+      expenses={rows}
+      paymentModes={paymentModes}
+      vendors={vendorList}
+      categoryAccounts={categoryAccounts}
+      cashBankAccounts={cashBankAccounts}
+      vatRate={taxDefaults.vatRate}
+    />
   );
 }
