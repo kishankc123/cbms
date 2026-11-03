@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
-import { getCurrentTaxRate, getTaxRate } from "@/lib/compliance/tax-rates";
-import { headRateKey } from "@/lib/compliance/platform-tax-rate-types";
+import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
+import { tdsRateOn } from "@/lib/compliance/tds-rate";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
@@ -365,9 +365,9 @@ export async function getExpenseTaxDefaults() {
   return { vatRate: await getCurrentTaxRate(session.tenantId, "vat") };
 }
 
-/** The rate of a TDS heading on a given date (0 when none is published), for the Expense form. */
-export async function getTdsRateOn(headKey: string, date: string): Promise<number> {
+/** The rate of a TDS heading on a given date (0 when none is published), for the Expense form: by the supplier's business type where the heading asks for it. */
+export async function getTdsRateOn(headKey: string, date: string, vendorId?: string | null) {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "view")) throw new Error("Not permitted");
-  return getTaxRate(session.tenantId, headRateKey("tds", headKey), date);
+  return tdsRateOn(session.tenantId, headKey, date, vendorId);
 }

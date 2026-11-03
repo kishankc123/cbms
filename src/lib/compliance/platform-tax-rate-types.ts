@@ -14,6 +14,23 @@ export const BASE_RATE_TYPES: RateType[] = [
 /** The key a heading's rate is published and stored under. */
 export const headRateKey = (taxTypeKey: string, headKey: string) => `${taxTypeKey}.${headKey}`;
 
+/** Who is paid, where a heading's rate depends on it (a company and a proprietorship are deducted at different rates). A supplier with none chosen takes the heading's own rate. */
+export const PAYEE_TYPES: RateType[] = [
+  { key: "company", label: "Company" },
+  { key: "individual", label: "Proprietorship / individual" },
+];
+export const payeeTypeLabel = (key: string | null | undefined) => PAYEE_TYPES.find((p) => p.key === key)?.label ?? null;
+
+/** The key a heading's rate for one kind of payee is published and stored under, such as "tds.services.company". */
+export const payeeRateKey = (taxTypeKey: string, headKey: string, payeeType: string) => `${headRateKey(taxTypeKey, headKey)}.${payeeType}`;
+
+/** Every rate a heading is published under: one, or one more for each kind of payee when the heading's rate depends on who is paid. */
+export function headRateTypes(h: { taxTypeKey: string; key: string; name: string; byPayeeType: boolean }): RateType[] {
+  const label = `${h.name} ${h.taxTypeKey.toUpperCase()}`;
+  if (!h.byPayeeType) return [{ key: headRateKey(h.taxTypeKey, h.key), label }];
+  return [{ key: headRateKey(h.taxTypeKey, h.key), label: `${label} — other or not stated` }, ...PAYEE_TYPES.map((p) => ({ key: payeeRateKey(h.taxTypeKey, h.key, p.key), label: `${label} — ${p.label.toLowerCase()}` }))];
+}
+
 /** A fiscal year of a country: `startYear` identifies it, `from`/`to` are its real (AD) first and last days. */
 export type FiscalYear = { startYear: number; label: string; from: string; to: string };
 

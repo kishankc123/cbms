@@ -109,15 +109,15 @@ export function ExpenseFormModal({
 
   // The TDS heading follows the chosen category (set on it or its group in the Chart of Accounts); its rate is the platform's, on the expense date.
   const tdsHead = categoryAccounts.find((c) => c.id === categoryAccountId)?.tdsHeadKey ?? null;
-  const [fetchedRate, setFetchedRate] = useState(0);
+  const [fetched, setFetched] = useState<{ rate: number; basis: string | null }>({ rate: 0, basis: null });
   useEffect(() => {
     let live = true;
-    if (tdsHead) getTdsRateOn(tdsHead, expenseDate).then((r) => live && setFetchedRate(r));
+    if (tdsHead) getTdsRateOn(tdsHead, expenseDate, vendorId || null).then((r) => live && setFetched(r));
     return () => {
       live = false;
     };
-  }, [tdsHead, expenseDate]);
-  const tdsRate = tdsHead ? fetchedRate : 0;
+  }, [tdsHead, expenseDate, vendorId]);
+  const tdsRate = tdsHead ? fetched.rate : 0;
 
   // Auto-fills VAT/TDS from the tenant's configured rates as the taxable
   // amount or treatment changes — never hard-coded, and the user can still
@@ -391,7 +391,7 @@ export function ExpenseFormModal({
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">TDS {tdsHead ? `(${tdsRate}% on this category)` : "(not on this category)"}</label>
+              <label className="block text-xs text-gray-500 mb-1">TDS {tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}</label>
               <input
                 type="number"
                 step="0.01"

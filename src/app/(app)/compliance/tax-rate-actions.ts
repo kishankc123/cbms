@@ -4,7 +4,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { complianceTaxHeads, tenants } from "@/db/schema";
-import { BASE_RATE_TYPES, headRateKey } from "@/lib/compliance/platform-tax-rate-types";
+import { BASE_RATE_TYPES, headRateTypes } from "@/lib/compliance/platform-tax-rate-types";
 import { getOpenTaxRate, getCurrentTaxRateInfo, getTaxRateHistory, type TaxTypeKey } from "@/lib/compliance/tax-rates";
 
 export type RateLine = { key: string; label: string; group: string | null; slabs: boolean; rate: number | null; since: string | null };
@@ -21,7 +21,7 @@ export async function getTaxRatesOverview(): Promise<RateLine[]> {
     .orderBy(asc(complianceTaxHeads.sortOrder), asc(complianceTaxHeads.name));
   const lines = [
     ...BASE_RATE_TYPES.map((t) => ({ key: t.key, label: t.label, group: null, slabs: false })),
-    ...heads.map((h) => ({ key: headRateKey(h.taxTypeKey, h.key), label: h.name, group: h.taxTypeKey.toUpperCase(), slabs: h.kind === "slabs" })),
+    ...heads.flatMap((h) => headRateTypes(h).map((t, i) => ({ key: t.key, label: i === 0 ? (h.byPayeeType ? `${h.name} — other or not stated` : h.name) : t.label.replace(/^.* TDS — /, `${h.name} — `), group: h.taxTypeKey.toUpperCase(), slabs: h.kind === "slabs" }))),
   ];
   return Promise.all(
     lines.map(async (l) => {

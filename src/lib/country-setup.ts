@@ -18,7 +18,7 @@ export const isSetupSection = (s: string): s is SetupSection => s in SETUP_SECTI
 // Every one of the three tables has these columns; taxes also have the authority and "registrable" columns.
 type Shared = typeof complianceAuthorities;
 const tableOf = (section: SetupSection) => SETUP_SECTIONS[section].table as unknown as Shared;
-export type SetupRow = { id: string; key: string; name: string; isActive: boolean; authorityKey?: string | null; isRegistrable?: boolean; kind?: string; module?: string; sortOrder?: number };
+export type SetupRow = { id: string; key: string; name: string; isActive: boolean; authorityKey?: string | null; isRegistrable?: boolean; kind?: string; module?: string; taxTypeKey?: string; byPayeeType?: boolean; sortOrder?: number };
 
 /** What every country starts with: VAT and Income tax. Anything else is added by hand. */
 export const DEFAULT_TAX_TYPES = [

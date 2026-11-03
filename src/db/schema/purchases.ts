@@ -37,6 +37,8 @@ export const vendors = pgTable("vendors", {
   name: text("name").notNull(),
   contactInfo: jsonb("contact_info"),
   panNumber: text("pan_number"),
+  /** "company" or "individual" (proprietorship): which TDS rate applies to what we pay them. null = not set. */
+  businessType: text("business_type"),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
   // This supplier's own sub-account under Accounts Payable — every purchase,
   // payment, and opening balance posts here instead of the shared AP

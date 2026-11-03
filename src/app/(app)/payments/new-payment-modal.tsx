@@ -17,6 +17,8 @@ import { ConfirmDialog } from "../sales/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { methodForMode } from "@/lib/payment-mode-rules";
+import { getPayableTaxItems, recordObligationPayment } from "../compliance/tax-actions";
+import { HeadSplitFields, shareAcross, splitAmounts, splitHeadings, splitTotal, startingSplit, type HeadSplit } from "../compliance/tax/heading-split";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
@@ -56,6 +58,7 @@ function flattenAccounts(groups: FormOptions["cashBankAccounts"]) {
   return list;
 }
 
+type TaxItem = Awaited<ReturnType<typeof getPayableTaxItems>>[number];
 type OutstandingRow = { id: string; label: string; date: string; outstanding: number };
 
 export function NewPaymentModal({
@@ -107,6 +110,13 @@ export function NewPaymentModal({
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
   const [allocated, setAllocated] = useState<Record<string, string>>({});
 
+  // A new Tax Payment is made to one of the tax items still owing; a TDS item is paid by heading, each heading clearing its own payable account.
+  const [taxItems, setTaxItems] = useState<TaxItem[]>([]);
+  const [taxItemId, setTaxItemId] = useState("");
+  const [headSplit, setHeadSplit] = useState<HeadSplit>({});
+  const taxItem = taxItems.find((t) => t.id === taxItemId) ?? null;
+  const headings = splitHeadings(taxItem?.breakdown);
+
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
@@ -148,6 +158,24 @@ export function NewPaymentModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType, customerId, vendorId]);
+
+  useEffect(() => {
+    setTaxItemId("");
+    if (paymentType === "tax_payment" && !editing) getPayableTaxItems().then(setTaxItems).catch(() => setTaxItems([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentType]);
+
+  function chooseTaxItem(id: string) {
+    const item = taxItems.find((t) => t.id === id);
+    const split = startingSplit(splitHeadings(item?.breakdown));
+    setTaxItemId(id);
+    setHeadSplit(split);
+    setAmount(!item ? "" : item.breakdown ? splitTotal(splitHeadings(item.breakdown), split).toFixed(2) : item.balance.toFixed(2));
+  }
+  function changeSplit(next: HeadSplit) {
+    setHeadSplit(next);
+    setAmount(splitTotal(headings, next).toFixed(2));
+  }
 
   useEffect(() => {
     setRefundable(null);
@@ -232,6 +260,29 @@ export function NewPaymentModal({
         attachmentUrl: attachmentUrl || null,
         allocations: config.showAllocation ? allocations : undefined,
       };
+
+      if (taxItem && !editing) {
+        const r = await recordObligationPayment({
+          obligationId: taxItem.id,
+          amount: amountNum,
+          headAmounts: headings.length > 0 ? splitAmounts(headings, headSplit) : undefined,
+          paymentDate,
+          accountId,
+          paymentModeId: paymentModeId || null,
+          paymentMethod: paymentMethod as never,
+          referenceNumber: referenceNumber || "",
+          chequeNumber: paymentMethod === "cheque" ? chequeNumber : undefined,
+          description: description || undefined,
+          notes: notes || undefined,
+          confirmDuplicate: confirmDup,
+        });
+        if (r.duplicateWarning) {
+          setConfirmDuplicate(true);
+          return;
+        }
+        onDone();
+        return;
+      }
 
       if (editing) {
         // A tax payment (no allocation section here) keeps the compliance items it settles; an older customer or supplier payment's
@@ -450,7 +501,20 @@ export function NewPaymentModal({
                 <input value={partyOtherName} onChange={(e) => setPartyOtherName(e.target.value)} placeholder="e.g. lender, owner, description" className={inputCls} />
               </div>
             )}
-            {config.showCategoryAccount && (
+            {paymentType === "tax_payment" && !editing && taxItems.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Pay to</label>
+                <select data-field="taxItem" value={taxItemId} onChange={(e) => chooseTaxItem(e.target.value)} className={inputCls}>
+                  <option value="">Other (no tax item)</option>
+                  {taxItems.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label} · {fmt(t.balance)} left
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {config.showCategoryAccount && !taxItem && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Classification Account</label>
                 <select data-field="category" value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)} className={inputCls}>
@@ -468,8 +532,9 @@ export function NewPaymentModal({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount</label>
-              <input data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldErrors.amount ? inputErrCls : inputCls} />
+              <input data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
             </div>
+            {headings.length > 0 && <HeadSplitFields headings={headings} split={headSplit} onChange={changeSplit} inputClass={inputCls} />}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -143,11 +143,11 @@ export function VatWorksheet() {
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded border border-gray-200 p-3">
-              <p className="text-xs text-gray-500">Opening balance</p>
+              <p className="text-xs text-gray-500">VAT credit brought forward</p>
               <p className="text-lg font-semibold text-gray-900">{fmt(sheet.openingCredit)}</p>
             </div>
             <div className="rounded border border-gray-200 p-3">
-              <p className="text-xs text-gray-500">Closing balance</p>
+              <p className="text-xs text-gray-500">Net VAT due (credit carried forward, in green)</p>
               <p className={`text-lg font-semibold ${closingClass(-closingCredit)}`}>{fmt(-closingCredit || 0)}</p>
             </div>
             <div className="rounded border border-gray-200 p-3">
@@ -165,14 +165,14 @@ export function VatWorksheet() {
                   <th className="py-2 pr-3 text-right">VAT on sales</th>
                   <th className="py-2 pr-3 text-right">Net purchase</th>
                   <th className="py-2 pr-3 text-right">VAT on purchase</th>
-                  <th className="py-2 pr-3 text-right">Net payable</th>
-                  <th className="py-2 pr-3 text-right">Opening balance</th>
-                  <th className="py-2 pl-3 text-right">Closing balance</th>
+                  <th className="py-2 pr-3 text-right">VAT this period (sales − purchase)</th>
+                  <th className="py-2 pr-3 text-right">Credit brought forward</th>
+                  <th className="py-2 pl-3 text-right">Net VAT due (credit carried forward)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-gray-200 bg-[var(--surface-muted-bg)] font-medium text-gray-900">
-                  <td className="py-2 pr-3">Opening balance b/f</td>
+                  <td className="py-2 pr-3">Credit brought forward</td>
                   <td className="py-2 pr-3" colSpan={5}></td>
                   <td className="py-2 pr-3 text-right">{fmt(sheet.openingCredit)}</td>
                   <td className="py-2 pl-3"></td>
@@ -205,6 +205,7 @@ export function VatWorksheet() {
                 </tr>
               </tfoot>
             </table>
+            <p className="mt-2 text-xs text-gray-500">The last column is what you owe for the period after any credit is used. A negative amount in green is VAT you can claim: it carries forward and is deducted from the next period&apos;s VAT.</p>
           </div>
         </>
       )}

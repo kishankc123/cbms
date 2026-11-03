@@ -12,6 +12,18 @@ export type TaxTypeKey = string;
  * legacy single-value tenant field only for a tenant whose rate history has not been seeded yet.
  */
 export async function getTaxRate(tenantId: string, taxTypeKey: TaxTypeKey, date: string): Promise<number> {
+  const published = await publishedRateOn(tenantId, taxTypeKey, date);
+  if (published !== null) return published;
+
+  // Only the two original rates have a fallback; a heading with no published rate has none.
+  if (taxTypeKey !== "vat" && taxTypeKey !== "tds") return 0;
+  const [tenant] = await db.select({ vatRate: tenants.vatRate, tdsRate: tenants.tdsRate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  if (!tenant) return 0;
+  return parseFloat((taxTypeKey === "vat" ? tenant.vatRate : tenant.tdsRate) ?? "0") || 0;
+}
+
+/** The rate in force on `date`, or null when none is published for it (a rate of 0 is a rate; null is "not set"). */
+export async function publishedRateOn(tenantId: string, taxTypeKey: TaxTypeKey, date: string): Promise<number | null> {
   const [row] = await db
     .select({ rate: taxRates.rate })
     .from(taxRates)
@@ -24,13 +36,7 @@ export async function getTaxRate(tenantId: string, taxTypeKey: TaxTypeKey, date:
       )
     )
     .limit(1);
-  if (row) return Number(row.rate);
-
-  // Only the two original rates have a fallback; a heading with no published rate has none.
-  if (taxTypeKey !== "vat" && taxTypeKey !== "tds") return 0;
-  const [tenant] = await db.select({ vatRate: tenants.vatRate, tdsRate: tenants.tdsRate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  if (!tenant) return 0;
-  return parseFloat((taxTypeKey === "vat" ? tenant.vatRate : tenant.tdsRate) ?? "0") || 0;
+  return row ? Number(row.rate) : null;
 }
 
 export async function getCurrentTaxRate(tenantId: string, taxTypeKey: TaxTypeKey): Promise<number> {

@@ -21,6 +21,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { HeadSplitFields, shareAcross, splitAmounts, splitHeadings, splitTotal, startingSplit, type Breakdown, type HeadSplit } from "./heading-split";
 
 type Detail = Awaited<ReturnType<typeof getTaxObligationDetail>>;
 type Options = Awaited<ReturnType<typeof getTaxActionOptions>>;
@@ -379,8 +380,6 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
   );
 }
 
-type Breakdown = { key: string | null; name: string; withheld: number; deposited: number; remaining: number }[];
-
 function PaymentPanel({
   balance,
   breakdown,
@@ -406,21 +405,9 @@ function PaymentPanel({
   const [reference, setReference] = useState("");
   const [cheque, setCheque] = useState("");
   // Paying by heading: each heading starts at what is left for it. Changing the total shares it across the headings in proportion.
-  const headings = (breakdown ?? []).filter((r) => r.remaining > 0 || r.withheld > 0);
-  const hk = (k: string | null) => k ?? "";
-  const [byHead, setByHead] = useState<Record<string, string>>(() => Object.fromEntries(headings.map((r) => [hk(r.key), r.remaining.toFixed(2)])));
-  const headTotal = Math.round(headings.reduce((s, r) => s + (Number(byHead[hk(r.key)]) || 0), 0) * 100) / 100;
-  function shareTotal(total: number) {
-    const left = headings.reduce((s, r) => s + r.remaining, 0);
-    let given = 0;
-    const next: Record<string, string> = {};
-    headings.forEach((r, i) => {
-      const part = i === headings.length - 1 ? Math.round((total - given) * 100) / 100 : left > 0 ? Math.round(((total * r.remaining) / left) * 100) / 100 : 0;
-      given += part;
-      next[hk(r.key)] = Math.max(part, 0).toFixed(2);
-    });
-    setByHead(next);
-  }
+  const headings = splitHeadings(breakdown);
+  const [byHead, setByHead] = useState<HeadSplit>(() => startingSplit(headings));
+  const headTotal = splitTotal(headings, byHead);
   const byHeading = headings.length > 0;
   const value = byHeading ? headTotal : Number(amount);
 
@@ -430,26 +417,14 @@ function PaymentPanel({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">{byHeading ? "Total depositing" : "Amount"}</label>
-          <input type="number" step="0.01" min="0" className={input} value={byHeading ? String(headTotal) : amount} onChange={(e) => (byHeading ? shareTotal(Number(e.target.value) || 0) : setAmount(e.target.value))} />
+          <input type="number" step="0.01" min="0" className={input} value={byHeading ? String(headTotal) : amount} onChange={(e) => (byHeading ? setByHead(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} />
           {balance > 0 && <p className="mt-1 text-xs text-gray-400">Balance {fmt(balance)}</p>}
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Date</label>
           <DatePicker value={paymentDate} onChange={setPaymentDate} className={input} />
         </div>
-        {byHeading && (
-          <div className="col-span-2 space-y-1.5 rounded border border-gray-200 bg-white p-3">
-            <p className="text-xs text-gray-500">Deposited for each heading</p>
-            {headings.map((r) => (
-              <div key={hk(r.key)} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-gray-700">
-                  {r.name} <span className="text-xs text-gray-400">· {fmt(r.remaining)} left</span>
-                </span>
-                <input type="number" step="0.01" min="0" className={`${input} w-32 text-right`} value={byHead[hk(r.key)] ?? ""} onChange={(e) => setByHead({ ...byHead, [hk(r.key)]: e.target.value })} />
-              </div>
-            ))}
-          </div>
-        )}
+        {byHeading && <HeadSplitFields headings={headings} split={byHead} onChange={setByHead} inputClass={input} />}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Paid from (mode and account)</label>
           <PaymentModeSelect
@@ -480,7 +455,7 @@ function PaymentPanel({
         <button
           type="button"
           disabled={busy || !(value > 0) || !accountId || !paymentDate}
-          onClick={() => onSubmit({ amount: value, headAmounts: byHeading ? headings.map((r) => ({ key: r.key, amount: Number(byHead[hk(r.key)]) || 0 })) : undefined, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
+          onClick={() => onSubmit({ amount: value, headAmounts: byHeading ? splitAmounts(headings, byHead) : undefined, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
           className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
         >
           {busy ? "Recording..." : "Record payment"}

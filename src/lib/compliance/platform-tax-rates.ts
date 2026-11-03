@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { complianceCountries, complianceTaxHeads, platformTaxRateDrafts, platformTaxRates, taxRates, tenants } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { addDays, fiscalYearOf, fiscalYearRange, type CalendarSystem } from "@/lib/calendar";
-import { BASE_RATE_TYPES, headRateKey, type FiscalYear, type RateType, type RateVersion } from "./platform-tax-rate-types";
+import { BASE_RATE_TYPES, headRateTypes, type FiscalYear, type RateType, type RateVersion } from "./platform-tax-rate-types";
 
 // Tax rates published for a whole country by a platform administrator. One timeline per country and tax type; a new version starts
 // after the one in force, which is closed the day before. Publishing a version also writes it into every organization of the
@@ -18,11 +18,11 @@ const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new
 /** Everything this country publishes a rate for: VAT, Income tax, and one rate per active TDS heading that is paid by percentage. */
 export async function rateTypesFor(countryCode: string): Promise<RateType[]> {
   const heads = await db
-    .select({ taxTypeKey: complianceTaxHeads.taxTypeKey, key: complianceTaxHeads.key, name: complianceTaxHeads.name })
+    .select({ taxTypeKey: complianceTaxHeads.taxTypeKey, key: complianceTaxHeads.key, name: complianceTaxHeads.name, byPayeeType: complianceTaxHeads.byPayeeType })
     .from(complianceTaxHeads)
     .where(and(eq(complianceTaxHeads.countryCode, countryCode), eq(complianceTaxHeads.isActive, true), eq(complianceTaxHeads.kind, "rate")))
     .orderBy(asc(complianceTaxHeads.sortOrder), asc(complianceTaxHeads.name));
-  return [...BASE_RATE_TYPES, ...heads.map((h) => ({ key: headRateKey(h.taxTypeKey, h.key), label: `${h.name} ${h.taxTypeKey.toUpperCase()}` }))];
+  return [...BASE_RATE_TYPES, ...heads.flatMap(headRateTypes)];
 }
 
 export async function fiscalCalendar(countryCode: string) {

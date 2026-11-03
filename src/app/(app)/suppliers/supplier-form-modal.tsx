@@ -3,10 +3,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { optionalPanError } from "@/lib/pan";
+import { PAYEE_TYPES } from "@/lib/compliance/platform-tax-rate-types";
 
 type Initial = {
   name: string;
   panNumber: string;
+  businessType?: string;
   phone: string;
   details: string;
   openingBalance: number;
@@ -120,6 +122,18 @@ export function SupplierFormModal({
                   defaultValue={initial?.panNumber}
                   className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Business type</label>
+                <select name="businessType" defaultValue={initial?.businessType ?? ""} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                  <option value="">Not set</option>
+                  {PAYEE_TYPES.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">Decides the TDS rate on what you pay them, where the rate depends on who is paid.</p>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Contact number</label>

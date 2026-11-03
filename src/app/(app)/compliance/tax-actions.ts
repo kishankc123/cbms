@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, complianceObligations, complianceTaxAssessments, complianceTaxTypes, paymentAllocations, payments, tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
@@ -143,6 +143,21 @@ export async function getTaxObligationDetail(id: string) {
   };
 }
 
+/** The tax items that still have something to pay, for the Money out form: a TDS item carries what is left per heading. Empty for someone who cannot record tax payments. */
+export async function getPayableTaxItems() {
+  const session = await requireTenantSession();
+  if (!can(session, "compliance", "edit") || !can(session, "payments", "create")) return [];
+  const rows = await db
+    .select()
+    .from(complianceObligations)
+    .where(and(eq(complianceObligations.tenantId, session.tenantId), eq(complianceObligations.categoryKey, "tax"), ne(complianceObligations.status, "not_applicable")))
+    .orderBy(asc(complianceObligations.dueDate));
+  const amounts = await obligationAmounts(session.tenantId, rows);
+  const { byKey } = await taxTypeNames(session.tenantId);
+  const open = rows.filter((r) => amounts.get(r.id)!.balance > 0.005 && r.taxTypeKey && byKey.get(r.taxTypeKey)?.payableAccountName);
+  return Promise.all(open.map(async (r) => ({ id: r.id, label: `${r.name} — ${r.periodLabel}`, balance: amounts.get(r.id)!.balance, breakdown: r.taxTypeKey === "tds" ? await tdsDepositBreakdown(session.tenantId, r) : null })));
+}
+
 /** Choices for the payment and charge forms. */
 export async function getTaxActionOptions() {
   const session = await requireTenantSession();
@@ -226,6 +241,8 @@ export type ObligationPaymentInput = {
   paymentMethod: "cash" | "bank_transfer" | "cheque" | "card" | "online" | "other";
   referenceNumber: string;
   chequeNumber?: string;
+  description?: string;
+  notes?: string;
   confirmDuplicate?: boolean;
 };
 
@@ -263,7 +280,8 @@ export async function recordObligationPayment(input: ObligationPaymentInput) {
     chequeNumber: input.chequeNumber || null,
     referenceNumber: input.referenceNumber.trim() || null,
     amount: input.amount,
-    description: "Tax payment",
+    description: input.description?.trim() || "Tax payment",
+    notes: input.notes?.trim() || null,
     allocations: byHeading.length > 0 ? byHeading.map((h) => ({ targetType: "tax_obligation" as const, targetId: input.obligationId, allocatedAmount: h.amount, tdsHeadKey: h.key })) : [{ targetType: "tax_obligation", targetId: input.obligationId, allocatedAmount: input.amount }],
     confirmDuplicate: input.confirmDuplicate,
   });
