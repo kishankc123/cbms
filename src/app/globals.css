@@ -55,6 +55,10 @@
   --danger-text: light-dark(#a93232, #f29a9a);
   --danger-border: light-dark(#efc4c4, #4a2024);
 
+  /* The filled danger button: darker than --danger in light mode so its white label keeps its contrast. */
+  --danger-fill: light-dark(#c03c3c, #e26b6b);
+  --on-danger: light-dark(#ffffff, #240e10);
+
   --info-bg: light-dark(#eef0fb, #1c1e3a);
   --info-text: light-dark(#3b4496, #bec3f5);
   --info-border: light-dark(#c2c7f0, #2f3466);
