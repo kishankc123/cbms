@@ -8,6 +8,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 const TABS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/cash-flow", label: "Cash flow" },
+  { href: "/dashboard/upcoming", label: "Upcoming" },
 ] as const;
 
 export function DashboardTabs() {
