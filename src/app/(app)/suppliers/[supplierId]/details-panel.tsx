@@ -4,8 +4,9 @@ import { useState } from "react";
 import { updateSupplier, deleteSupplier } from "../actions";
 import { SupplierFormModal } from "../supplier-form-modal";
 import { ConfirmForm } from "@/components/ui/confirm-dialog";
+import { payeeTypeLabel } from "@/lib/compliance/platform-tax-rate-types";
 
-type Supplier = { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
+type Supplier = { id: string; name: string; panNumber: string; businessType: string; phone: string; details: string; openingBalance: number };
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -60,6 +61,7 @@ export function DetailsPanel({
       <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-white p-5">
         <Field label="Name" value={supplier.name} />
         <Field label="PAN / VAT Number" value={supplier.panNumber} />
+        <Field label="Business type" value={payeeTypeLabel(supplier.businessType) ?? "Not set"} />
         <Field label="Contact Number" value={supplier.phone} />
         <Field label="Address" value={supplier.details} />
         <Field label="Opening Balance" value={`${fmt(supplier.openingBalance)} ${drCr(supplier.openingBalance)}`} />

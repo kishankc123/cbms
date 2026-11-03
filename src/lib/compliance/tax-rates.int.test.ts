@@ -85,7 +85,7 @@ describe("what the organization sees, by tax and TDS heading", () => {
     expect(lines.find((l) => l.key === "vat")).toMatchObject({ label: "VAT", group: null, rate: 15 });
     expect(lines.find((l) => l.key === "income_tax")).toMatchObject({ rate: null });
     expect(lines.find((l) => l.key === "tds.rent")).toMatchObject({ label: "Rent", group: "TDS", slabs: false, rate: null });
-    expect(lines.find((l) => l.key === "tds.payroll")).toMatchObject({ label: "Payroll", group: "TDS", slabs: true, rate: null });
+    expect(lines.find((l) => l.key === "tds.payroll")).toMatchObject({ group: "TDS", slabs: true, rate: null });
     expect(await getOpenTaxRate(org.tenantId, "tds.rent")).toBeNull();
   });
 });

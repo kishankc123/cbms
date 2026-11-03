@@ -110,6 +110,8 @@ export const complianceTaxHeads = pgTable(
     name: text("name").notNull(),
     kind: text("kind").notNull().default("rate"),
     module: text("module").notNull().default("expenses"),
+    /** The rate depends on who is paid (a company or a proprietorship): one rate per kind of payee, see PAYEE_TYPES. */
+    byPayeeType: boolean("by_payee_type").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
   },

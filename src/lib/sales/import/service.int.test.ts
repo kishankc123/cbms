@@ -13,13 +13,13 @@ let himalId: string;
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
 const SETTINGS: ImportSettings = { defaultBillType: "taxable", paidMode: "file", defaultAccountId: null };
 const CSV = [
-  "Date,Customer,Amount,Discount,Bill type,Paid amount,Received into",
-  "2026-09-10,Himal Enterprises,11300,0,Taxable,0,",
-  "2026-09-11,Hamal Entrprises,5000,500,Zero rated,0,",
-  "2026-09-12,Brand New Traders,2260,0,,0,",
-  "2026-09-13,,1130,0,Taxable,1130,Cash",
-  "2026-09-14,Himal Enterprises,abc,0,,0,",
-  "not a date,Himal Enterprises,100,0,,0,",
+  "Date,Customer,Amount,Bill type,Paid amount,Received into",
+  "2026-09-10,Himal Enterprises,11300,Taxable,0,",
+  "2026-09-11,Hamal Entrprises,4500,Zero rated,0,",
+  "2026-09-12,Brand New Traders,2260,,0,",
+  "2026-09-13,,1130,Taxable,1130,Cash",
+  "2026-09-14,Himal Enterprises,abc,,0,",
+  "not a date,Himal Enterprises,100,,0,",
 ].join("\n");
 
 const base = (text = CSV, settings = SETTINGS) => ({ fileName: "sales.csv", base64: b64(text), settings });
@@ -56,7 +56,7 @@ describe("the review", () => {
     expect(r.counts).toEqual({ ready: 2, attention: 4, duplicate: 0, skipped: 0 });
     const row = (n: number) => r.rows.find((x) => x.rowNumber === n)!;
     expect(row(2)).toMatchObject({ status: "ready", customerName: "Himal Enterprises", total: 11300, tax: 1300 }); // 13% VAT on 10,000
-    expect(row(3)).toMatchObject({ status: "attention", issues: ["customer"], total: 4500 }); // zero-rated: no VAT, after the discount
+    expect(row(3)).toMatchObject({ status: "attention", issues: ["customer"], total: 4500 }); // zero-rated: no VAT
     expect(row(4)).toMatchObject({ status: "attention", issues: ["customer"], total: 2260 });
     expect(row(5)).toMatchObject({ status: "ready", customerName: null, paid: 1130 }); // a cash sale, paid in full into Cash
     expect(row(6)).toMatchObject({ status: "attention", issues: ["amount"] });

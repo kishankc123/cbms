@@ -40,7 +40,6 @@ const base: PurchaseRowInput = {
   dateIso: "2026-09-10",
   periodLocked: false,
   amount: { value: 1130, invalid: false },
-  discount: { value: null, invalid: false },
   billType: undefined,
   pays: noPays,
   supplier: "matched",

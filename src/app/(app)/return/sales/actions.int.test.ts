@@ -56,7 +56,7 @@ describe("sales returns (debit notes)", () => {
       ],
     });
     expect(cash).toBeTruthy();
-    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Widget", purchasePrice: "60", sellingPrice: "100", stockQuantity: "5" }).returning();
+    const [item] = await db.insert(items).values({ tenantId: org.tenantId, name: "Widget", purchasePrice: "60", sellingPrice: "100", stockQuantity: "5", itemType: "product", inventoryTracking: true }).returning();
 
     await createSalesReturn({ noteNumber: "DN-1", noteDate: "2026-09-10", customerId: customer.id, lines: [{ itemId: item.id, description: "Widget", rate: 100, quantity: 2, discount: 0 }] });
 

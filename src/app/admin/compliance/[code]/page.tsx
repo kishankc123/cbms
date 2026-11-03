@@ -5,7 +5,7 @@ import { BackButton } from "@/components/ui/back-button";
 import { monthNames } from "@/lib/calendar";
 import { categoriesOf, COMPLIANCE_TABS, complianceTab, NOT_TAXES, STATUTORY_PENALTIES } from "@/lib/compliance/config-tabs";
 import { PENALTY_TYPES } from "@/lib/compliance/penalty-types";
-import { BASE_RATE_TYPES, headRateKey } from "@/lib/compliance/platform-tax-rate-types";
+import { BASE_RATE_TYPES, headRateTypes } from "@/lib/compliance/platform-tax-rate-types";
 import { listSetup } from "@/lib/country-setup";
 import { getCountryPageData } from "@/app/admin/setup/countries/actions";
 import { adminCard, AdminHeader, Facts } from "../../ui";
@@ -182,7 +182,7 @@ async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: strin
               {selectedHead.kind === "slabs" ? (
                 fiscalYear && <SlabsAdmin data={rates} headKey={selectedHead.key} headName={selectedHead.name} fiscalYear={fiscalYear} />
               ) : (
-                <TaxRatesAdmin data={rates} only={[headRateKey("tds", selectedHead.key)]} fiscalYear={fiscalYear} />
+                <TaxRatesAdmin data={rates} only={headRateTypes({ taxTypeKey: "tds", byPayeeType: false, ...selectedHead }).map((t) => t.key)} fiscalYear={fiscalYear} />
               )}
               <p className="text-sm text-[var(--text-secondary)]">
                 Used in: <span className="text-[var(--text-primary)]">{selectedHead.module === "payroll" ? "Payroll (salary sheet and payslip)" : "Expenses"}</span>

@@ -19,7 +19,7 @@ export function ProfileTabs({
   outstanding,
   fiscalYearStartDate,
 }: {
-  supplier: { id: string; name: string; panNumber: string; phone: string; details: string; openingBalance: number };
+  supplier: { id: string; name: string; panNumber: string; businessType: string; phone: string; details: string; openingBalance: number };
   purchases: number;
   paid: number;
   /** Net of other entries posted to the supplier's account (e.g. journal vouchers). */

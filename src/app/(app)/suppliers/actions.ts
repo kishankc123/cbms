@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { optionalPan } from "@/lib/pan";
+import { PAYEE_TYPES } from "@/lib/compliance/platform-tax-rate-types";
 import { reverseLatestEntryForSource } from "@/lib/ledger/post";
 import { createSupplierPayableAccount } from "@/lib/ledger/subledger-accounts";
 import { syncSupplierOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
@@ -20,6 +21,13 @@ function parseOpeningBalance(formData: FormData): string {
   return signed.toFixed(2);
 }
 
+// Which TDS rate applies to what we pay a supplier; empty means not set.
+function parseBusinessType(formData: FormData): string | null {
+  const v = String(formData.get("businessType") ?? "");
+  if (v && !PAYEE_TYPES.some((p) => p.key === v)) throw new Error("Choose a business type from the list");
+  return v || null;
+}
+
 export async function createSupplier(formData: FormData): Promise<{ id: string; name: string }> {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
@@ -27,6 +35,7 @@ export async function createSupplier(formData: FormData): Promise<{ id: string; 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Supplier name is required");
   const panNumber = optionalPan(formData.get("panNumber"), "PAN / VAT number");
+  const businessType = parseBusinessType(formData);
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -37,6 +46,7 @@ export async function createSupplier(formData: FormData): Promise<{ id: string; 
       tenantId: session.tenantId,
       name,
       panNumber: panNumber || null,
+      businessType,
       contactInfo: {
         phone: phone || undefined,
         details: details || undefined,
@@ -67,6 +77,7 @@ export async function updateSupplier(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) throw new Error("Supplier name is required");
   const panNumber = optionalPan(formData.get("panNumber"), "PAN / VAT number");
+  const businessType = parseBusinessType(formData);
   const phone = String(formData.get("phone") ?? "").trim();
   const details = String(formData.get("details") ?? "").trim();
   const openingBalance = parseOpeningBalance(formData);
@@ -83,6 +94,7 @@ export async function updateSupplier(formData: FormData) {
     .set({
       name,
       panNumber: panNumber || null,
+      businessType,
       contactInfo: {
         phone: phone || undefined,
         details: details || undefined,
