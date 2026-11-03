@@ -9,6 +9,6 @@ const Chart = dynamic(() => import("./balance-chart").then((m) => m.BalanceChart
   loading: () => <div className="h-[240px] animate-pulse rounded-md bg-line" />,
 });
 
-export function LazyBalanceChart({ data, reserve, height = 240 }: { data: BalancePoint[]; reserve: number; height?: number }) {
-  return <Chart data={data} reserve={reserve} height={height} />;
+export function LazyBalanceChart({ data, reserve, height = 240, showPlan = false }: { data: BalancePoint[]; reserve: number; height?: number; showPlan?: boolean }) {
+  return <Chart data={data} reserve={reserve} height={height} showPlan={showPlan} />;
 }
