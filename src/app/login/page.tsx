@@ -36,7 +36,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4" autoComplete="on">
-        <h1 className="text-xl font-semibold text-gray-900">Client Books Sign In</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Client Books Sign In</h1>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -47,14 +47,14 @@ export default function LoginPage() {
             autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-gray-700">Password</label>
-            <Link href="/forgot-password" className="text-xs text-[var(--color-primary)] hover:underline">
+            <Link href="/forgot-password" className="text-xs text-[var(--accent-text)] hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -90,7 +90,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full"
         >
           {loading ? "Signing in..." : "Login"}
         </button>
@@ -98,13 +98,13 @@ export default function LoginPage() {
         <div className="space-y-2 border-t border-gray-100 pt-4 text-center text-sm text-gray-500">
           <p>
             Setting up a business?{" "}
-            <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register" className="text-[var(--accent-text)] hover:underline">
               Create a business account
             </Link>
           </p>
           <p>
             Joining an organization that already uses Client Books?{" "}
-            <Link href="/register/user" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register/user" className="text-[var(--accent-text)] hover:underline">
               Create a user account
             </Link>
           </p>

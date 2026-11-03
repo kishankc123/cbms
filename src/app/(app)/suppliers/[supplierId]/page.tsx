@@ -35,7 +35,7 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{supplier.name}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{supplier.name}</h1>
         <p className="text-sm text-gray-500">Supplier</p>
       </div>
 

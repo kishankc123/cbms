@@ -29,7 +29,7 @@ function Field({ label, hint, children, span }: { label: string; hint?: string; 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className={`relative w-full ${wide ? "max-w-2xl" : "max-w-lg"} rounded-lg bg-white p-5 shadow-lg`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
@@ -95,7 +95,7 @@ function Form({ title, onClose, onDone, submitLabel, disabled, run, children, wi
         <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
           Cancel
         </button>
-        <button type="button" disabled={busy || disabled} onClick={submit} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+        <button type="button" disabled={busy || disabled} onClick={submit} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {busy ? "Saving..." : submitLabel}
         </button>
       </div>

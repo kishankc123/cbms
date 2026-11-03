@@ -35,14 +35,14 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Transfer {t.transferNumber}</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Transfer {t.transferNumber}</h1>
           <p className="mt-0.5 text-sm text-gray-500">Inter-Transfer</p>
         </div>
         <div className="flex items-center gap-2">
           <StatusPill tone={t.status === "posted" ? "success" : "critical"}>{t.status}</StatusPill>
           {t.status === "posted" && (
             <>
-              <Link href={`/payments/inter-transfer/${t.id}/edit`} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">Edit</Link>
+              <Link href={`/payments/inter-transfer/${t.id}/edit`} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">Edit</Link>
               <VoidButton transferId={t.id} transferNumber={t.transferNumber} />
             </>
           )}
@@ -60,7 +60,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           <span className="text-gray-500">Attachment</span>
           <span>
             {t.attachmentUrl ? (
-              <a href={t.attachmentUrl} target="_blank" rel="noreferrer" className="text-[var(--color-primary)] hover:underline break-all">{t.attachmentUrl}</a>
+              <a href={t.attachmentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline break-all">{t.attachmentUrl}</a>
             ) : "—"}
           </span>
           {t.status === "voided" && (
@@ -74,9 +74,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-900">Accounting Entry</h2>
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 text-xs font-semibold">Account</th>
                 <th className="px-3 py-2 text-xs font-semibold text-right">Debit</th>
@@ -85,7 +85,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             </thead>
             <tbody>
               {t.entryLines.map((l, i) => (
-                <tr key={i} className="border-t border-gray-100">
+                <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-2">{l.accountName}</td>
                   <td className="px-3 py-2 text-right">{l.debit > 0 ? fmt(l.debit) : "-"}</td>
                   <td className="px-3 py-2 text-right">{l.credit > 0 ? fmt(l.credit) : "-"}</td>
@@ -107,7 +107,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
                   Edited by {h.userName} on <DT value={h.at} />
                 </p>
                 <table className="mt-1.5 w-full text-xs">
-                  <thead className="text-left text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="pr-2 py-0.5 font-medium">Field</th>
                       <th className="pr-2 py-0.5 font-medium">Was</th>
@@ -116,7 +116,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
                   </thead>
                   <tbody>
                     {h.changes.map((c) => (
-                      <tr key={c.field} className="border-t border-gray-100 align-top">
+                      <tr key={c.field} className="border-b border-line transition-colors hover:bg-hover align-top">
                         <td className="pr-2 py-0.5 text-gray-600">{c.field}</td>
                         <td className="pr-2 py-0.5 text-gray-500 break-words">{c.before}</td>
                         <td className="py-0.5 text-gray-900 break-words">{c.after}</td>

@@ -5,6 +5,7 @@ import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 import { vendors, purchaseBills } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
 import { getSupplierBalances } from "@/lib/ledger/supplier-balances";
@@ -33,13 +34,8 @@ export default async function ConsumablePurchasePage() {
   const paymentModes = await paymentModesByBill(session.tenantId, billList.map((b) => b.id));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Consumable Purchase</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Record operating purchases and settlement details.</p>
-        </div>
-      </div>
+    <div>
+      <PageHeader title="Consumable purchase" description="Record operating purchases and settlement details." />
 
       <ConsumablePurchaseTabs
         vendors={vendorList}

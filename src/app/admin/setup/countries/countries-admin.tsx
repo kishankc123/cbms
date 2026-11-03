@@ -54,27 +54,27 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">
-                <th className="px-4 py-2">Country</th>
-                <th className="px-4 py-2">Code</th>
-                <th className="px-4 py-2">Currency</th>
-                <th className="px-4 py-2">Calendar</th>
-                <th className="px-4 py-2">Organizations</th>
-                <th className="px-4 py-2" />
+                <th className="px-2.5 py-1.5">Country</th>
+                <th className="px-2.5 py-1.5">Code</th>
+                <th className="px-2.5 py-1.5">Currency</th>
+                <th className="px-2.5 py-1.5">Calendar</th>
+                <th className="px-2.5 py-1.5">Organizations</th>
+                <th className="px-2.5 py-1.5" />
               </tr>
             </thead>
             <tbody>
               {data.countries.map((c) => (
                 <tr key={c.code} className="border-b border-[var(--card-border)] last:border-0">
-                  <td className="px-4 py-2 font-medium">
-                    <Link href={`/admin/setup/countries/${c.code}`} className="text-[var(--color-primary)] hover:underline">
+                  <td className="px-2.5 py-1.5 font-medium">
+                    <Link href={`/admin/setup/countries/${c.code}`} className="text-[var(--accent-text)] hover:underline">
                       {c.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2">{c.code}</td>
-                  <td className="px-4 py-2">{c.currency}</td>
-                  <td className="px-4 py-2">{c.statutoryCalendar}</td>
-                  <td className="px-4 py-2">{c.organizations > 0 ? <StatusPill tone="success">{c.organizations} in use</StatusPill> : 0}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-2.5 py-1.5">{c.code}</td>
+                  <td className="px-2.5 py-1.5">{c.currency}</td>
+                  <td className="px-2.5 py-1.5">{c.statutoryCalendar}</td>
+                  <td className="px-2.5 py-1.5">{c.organizations > 0 ? <StatusPill tone="success">{c.organizations} in use</StatusPill> : 0}</td>
+                  <td className="px-2.5 py-1.5 text-right">
                     <button
                       type="button"
                       disabled={busy || c.organizations > 0}
@@ -144,7 +144,7 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
           </label>
           <div className="sm:col-span-4">
             <p className="mb-3 text-xs text-[var(--text-secondary)]">The currency, calendar and fiscal year start are suggested from the country. A new country has no tax rates, fines or filing requirements yet. Add them under Compliance Configuration.</p>
-            <button type="submit" disabled={busy} className="rounded bg-[var(--color-primary)] px-4 py-2 text-sm text-white disabled:opacity-50">
+            <button type="submit" disabled={busy} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               Add country
             </button>
           </div>

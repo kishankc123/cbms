@@ -71,7 +71,7 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
             </label>
           </>
         )}
-        <button type="submit" disabled={busy} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+        <button type="submit" disabled={busy} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           Add
         </button>
       </form>
@@ -80,10 +80,10 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">
-              <th className="px-4 py-2">Name</th>
-              {taxes && <th className="px-4 py-2">Authority</th>}
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2" />
+              <th className="px-2.5 py-1.5">Name</th>
+              {taxes && <th className="px-2.5 py-1.5">Authority</th>}
+              <th className="px-2.5 py-1.5">Status</th>
+              <th className="px-2.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
@@ -98,11 +98,11 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
               <tr key={row.id} className="border-b border-[var(--card-border)] last:border-0">
                 {editing?.id === row.id ? (
                   <>
-                    <td className="px-4 py-2">
+                    <td className="px-2.5 py-1.5">
                       <input className={`${adminField} w-64`} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} autoFocus />
                     </td>
                     {taxes && (
-                      <td className="px-4 py-2">
+                      <td className="px-2.5 py-1.5">
                         <select className={adminField} value={editing.authorityKey} onChange={(e) => setEditing({ ...editing, authorityKey: e.target.value })}>
                           <option value="">None</option>
                           {data.authorities.map((a) => (
@@ -113,9 +113,9 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
                         </select>
                       </td>
                     )}
-                    <td className="px-4 py-2" />
-                    <td className="space-x-3 px-4 py-2 text-right">
-                      <button type="button" disabled={busy} onClick={() => run(() => changeCountrySetupItem(data.section, row.id, { name: editing.name, ...(taxes ? { authorityKey: editing.authorityKey } : {}) }), () => setEditing(null))} className="text-sm text-[var(--color-primary)]">
+                    <td className="px-2.5 py-1.5" />
+                    <td className="space-x-3 px-2.5 py-1.5 text-right">
+                      <button type="button" disabled={busy} onClick={() => run(() => changeCountrySetupItem(data.section, row.id, { name: editing.name, ...(taxes ? { authorityKey: editing.authorityKey } : {}) }), () => setEditing(null))} className="text-sm text-[var(--accent-text)]">
                         Save
                       </button>
                       <button type="button" onClick={() => setEditing(null)} className="text-sm text-[var(--text-secondary)]">
@@ -126,13 +126,13 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
                 ) : (
                   <>
                     <td className={`px-4 py-2 font-medium ${row.isActive ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>{row.name}</td>
-                    {taxes && <td className="px-4 py-2">{authorityName(row.authorityKey)}</td>}
-                    <td className="px-4 py-2">{row.isActive ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="action">Inactive</StatusPill>}</td>
-                    <td className="space-x-3 px-4 py-2 text-right">
-                      <button type="button" disabled={busy} onClick={() => setEditing({ id: row.id, name: row.name, authorityKey: row.authorityKey ?? "" })} className="text-sm text-[var(--color-primary)]">
+                    {taxes && <td className="px-2.5 py-1.5">{authorityName(row.authorityKey)}</td>}
+                    <td className="px-2.5 py-1.5">{row.isActive ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="action">Inactive</StatusPill>}</td>
+                    <td className="space-x-3 px-2.5 py-1.5 text-right">
+                      <button type="button" disabled={busy} onClick={() => setEditing({ id: row.id, name: row.name, authorityKey: row.authorityKey ?? "" })} className="text-sm text-[var(--accent-text)]">
                         Edit
                       </button>
-                      <button type="button" disabled={busy} onClick={() => toggle(row)} className={`text-sm ${row.isActive ? "text-red-600" : "text-[var(--color-primary)]"}`}>
+                      <button type="button" disabled={busy} onClick={() => toggle(row)} className={`text-sm ${row.isActive ? "text-red-600" : "text-[var(--accent-text)]"}`}>
                         {row.isActive ? "Deactivate" : "Activate"}
                       </button>
                     </td>

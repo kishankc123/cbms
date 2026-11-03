@@ -6,6 +6,7 @@ import { can, requireTenantSession } from "@/lib/session";
 import { EmployeesTabs } from "./employees-tabs";
 
 import { todayIso } from "@/lib/calendar";
+import { PageHeader } from "@/components/ui/page-header";
 export default async function EmployeesPage() {
   const denied = await guardView("payroll");
   if (denied) return denied;
@@ -34,7 +35,7 @@ export default async function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Employees</h1>
+      <PageHeader title="Employees" className="!mb-0" />
       <EmployeesTabs
         employees={employeeList}
         currentSalaries={seesSalary ? Object.fromEntries(currentSalaryByEmployee) : null}

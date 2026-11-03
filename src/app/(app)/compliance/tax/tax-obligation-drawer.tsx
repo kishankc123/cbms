@@ -108,7 +108,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-lg space-y-5">
         <div className="flex items-start justify-between">
           <div>
@@ -181,7 +181,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
 
             {canAct && (
               <div className="flex flex-wrap items-center gap-2">
-                <select value={d.item.status} disabled={busy} onChange={(e) => changeStatus(e.target.value as ObligationStatus)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select value={d.item.status} disabled={busy} onChange={(e) => changeStatus(e.target.value as ObligationStatus)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>
                       {STATUS_LABEL[s]}
@@ -189,17 +189,17 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                   ))}
                 </select>
                 {d.item.status !== "filed" && d.item.status !== "paid" && (
-                  <button type="button" disabled={busy} onClick={() => changeStatus("filed")} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => changeStatus("filed")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                     Mark as filed
                   </button>
                 )}
                 {d.canPay && d.item.hasPayableAccount && (
-                  <button type="button" disabled={busy} onClick={() => openPanel("payment")} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-3 py-1.5 disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => openPanel("payment")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     Record payment
                   </button>
                 )}
                 {d.item.hasPayableAccount && (
-                  <button type="button" disabled={busy} onClick={() => openPanel("charge")} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => openPanel("charge")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                     Add penalty / assessment
                   </button>
                 )}
@@ -288,7 +288,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
               </div>
               {d.canEdit && (
                 <div className="flex justify-end">
-                  <button type="button" disabled={busy} onClick={() => run(() => updateTaxObligation(id, form))} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => run(() => updateTaxObligation(id, form))} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                     Save details
                   </button>
                 </div>
@@ -299,7 +299,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-900">By heading</h3>
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="py-1 pr-2 font-medium">Heading</th>
                       <th className="py-1 pr-2 text-right font-medium">Withheld</th>
@@ -309,7 +309,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                   </thead>
                   <tbody>
                     {d.tdsBreakdown.map((r) => (
-                      <tr key={r.key ?? "none"} className="border-t border-gray-100">
+                      <tr key={r.key ?? "none"} className="border-b border-line transition-colors hover:bg-hover">
                         <td className="py-1.5 pr-2">{r.name}</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.withheld)}</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.deposited)}</td>
@@ -456,7 +456,7 @@ function PaymentPanel({
           type="button"
           disabled={busy || !(value > 0) || !accountId || !paymentDate}
           onClick={() => onSubmit({ amount: value, headAmounts: byHeading ? splitAmounts(headings, byHead) : undefined, paymentDate, accountId, paymentModeId: modeId || null, paymentMethod: method, referenceNumber: reference, chequeNumber: cheque || undefined })}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {busy ? "Recording..." : "Record payment"}
         </button>
@@ -537,7 +537,7 @@ function ChargePanel({
           type="button"
           disabled={busy || !(value > 0) || !date}
           onClick={() => onSubmit({ kind, amount: value, date, description, reference, expenseAccountId })}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {busy ? "Posting..." : "Post to ledger"}
         </button>

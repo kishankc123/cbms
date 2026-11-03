@@ -78,7 +78,7 @@ export function VatWorksheet() {
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-600">
           Fiscal year
-          <select value={selectedKey} onChange={(e) => setYearKey(e.target.value)} disabled={busy !== null} className="rounded border border-gray-300 bg-white px-2 py-1 text-sm">
+          <select value={selectedKey} onChange={(e) => setYearKey(e.target.value)} disabled={busy !== null} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
             {state.years.map((y) => (
               <option key={y.key} value={y.key}>
                 {y.label}
@@ -98,7 +98,7 @@ export function VatWorksheet() {
           </span>
           {state.canEdit && (
             <span className="flex gap-2">
-              <button type="button" disabled={busy !== null} onClick={() => run("save", () => saveVatWorksheetDraft(selectedKey))} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white disabled:opacity-50">
+              <button type="button" disabled={busy !== null} onClick={() => run("save", () => saveVatWorksheetDraft(selectedKey))} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {busy === "save" ? "Saving…" : "Save worksheet"}
               </button>
               <button type="button" disabled={busy !== null} onClick={() => run("discard", () => discardVatWorksheetLoad(selectedKey))} className="rounded border border-gray-300 bg-white px-3 py-1 text-sm text-gray-700 disabled:opacity-50">
@@ -130,7 +130,7 @@ export function VatWorksheet() {
         <div className="rounded border border-dashed border-gray-300 px-4 py-8 text-center">
           <p className="text-sm text-gray-600">This year&apos;s worksheet has not been loaded yet.</p>
           {state.canEdit ? (
-            <button type="button" disabled={busy !== null} onClick={() => run("load", () => loadVatWorksheetFromBooks(selectedKey))} className="mt-3 rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" disabled={busy !== null} onClick={() => run("load", () => loadVatWorksheetFromBooks(selectedKey))} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 mt-3">
               {busy === "load" ? "Loading from the books… this can take a minute" : "Load worksheet"}
             </button>
           ) : (

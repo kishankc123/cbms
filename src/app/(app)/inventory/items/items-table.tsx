@@ -6,6 +6,15 @@ import { useRouter } from "next/navigation";
 import { deleteItem, setItemActive, type BillingType, type ItemType } from "./actions";
 import { EditItemModal } from "./edit-item-modal";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Boxes } from "lucide-react";
+import { RowMenu } from "@/components/row-menu";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/field";
+import { Amount, DataTable, RowActions, SortableTh, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { StatusPill } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
@@ -53,6 +62,8 @@ export function ItemsTable({
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState<"" | "active" | "inactive">("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -70,7 +81,7 @@ export function ItemsTable({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let rows = !q ? items : items.filter((it) => it.name.toLowerCase().includes(q));
+    let rows = items.filter((it) => (!q || it.name.toLowerCase().includes(q)) && (!categoryFilter || it.categoryId === categoryFilter) && (stateFilter === "active" ? it.isActive : stateFilter === "inactive" ? !it.isActive : true));
 
     if (sortKey) {
       rows = [...rows].sort((a, b) => {
@@ -82,12 +93,17 @@ export function ItemsTable({
     }
 
     return rows;
-  }, [items, search, categoryById, sortKey, sortDir]);
+  }, [items, search, categoryFilter, stateFilter, categoryById, sortKey, sortDir]);
 
-  function sortIndicator(key: SortKey) {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ▲" : " ▼";
+  const dirOf = (key: SortKey) => (sortKey === key ? sortDir : null);
+  const filtering = Boolean(search || categoryFilter || stateFilter);
+  function clearFilters() {
+    setSearch("");
+    setCategoryFilter("");
+    setStateFilter("");
   }
+  const activeCount = items.filter((it) => it.isActive).length;
+  const stockValue = items.filter((it) => it.isActive).reduce((sum, it) => sum + Number(it.stockValue), 0);
 
   async function handleActive(id: string, isActive: boolean) {
     try {
@@ -110,86 +126,110 @@ export function ItemsTable({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items..."
-          className="ml-auto rounded border border-gray-300 px-3 py-1.5 text-sm w-64"
-        />
-      </div>
+    <div className="space-y-4">
+      <StatStrip
+        items={[
+          { label: "Items", value: items.length },
+          { label: "Active", value: activeCount },
+          { label: "Inactive", value: items.length - activeCount },
+          ...(isProduct ? [{ label: "Stock value", value: <Amount value={stockValue} /> }] : []),
+        ]}
+      />
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <th className="px-4 py-2 font-medium">SN</th>
-            <th className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700" onClick={() => toggleSort("name")}>
-              Items{sortIndicator("name")}
-            </th>
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search items" />
+        {isProduct && categories.length > 0 && (
+          <Select aria-label="Category" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-44">
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <Select aria-label="Status" value={stateFilter} onChange={(e) => setStateFilter(e.target.value as "" | "active" | "inactive")} className="w-36">
+          <option value="">All items</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </Select>
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
+
+      <DataTable stickyHeader>
+        <thead>
+          <Tr className="hover:bg-transparent">
+            <Th className="w-10">#</Th>
+            <SortableTh direction={dirOf("name")} onSort={() => toggleSort("name")}>
+              Item
+            </SortableTh>
             {isProduct && (
-              <th
-                className="px-4 py-2 font-medium cursor-pointer select-none hover:text-gray-700"
-                onClick={() => toggleSort("category")}
-              >
-                Category{sortIndicator("category")}
-              </th>
+              <SortableTh direction={dirOf("category")} onSort={() => toggleSort("category")}>
+                Category
+              </SortableTh>
             )}
             {isProduct ? (
               <>
-                <th className="px-4 py-2 font-medium text-right">On hand</th>
-                <th className="px-4 py-2 font-medium text-right">Stock value</th>
+                <Th align="right">On hand</Th>
+                <Th align="right">Stock value</Th>
               </>
             ) : (
-              <th className="px-4 py-2 font-medium text-right">{rateLabel}</th>
+              <Th align="right">{rateLabel}</Th>
             )}
-            <th className="px-4 py-2 font-medium"></th>
-          </tr>
+            <Th className="w-10" />
+          </Tr>
         </thead>
         <tbody>
           {filtered.map((it, i) => (
-            <tr key={it.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{i + 1}</td>
-              <td className="px-4 py-2">
-                <div>
-                  {it.name}
-                  {!it.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
-                  {isProduct && !it.inventoryTracking && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Not tracked</span>}
-                  {it.billingType !== "one_time" && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{BILLING_TYPE_LABEL[it.billingType]}</span>}
+            <Tr key={it.id}>
+              <Td className="text-ink-2">{i + 1}</Td>
+              <Td>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={it.isActive ? "" : "text-ink-2"}>{it.name}</span>
+                  {!it.isActive && <StatusPill tone="neutral">Inactive</StatusPill>}
+                  {isProduct && !it.inventoryTracking && <StatusPill tone="neutral">Not tracked</StatusPill>}
+                  {it.billingType !== "one_time" && <StatusPill tone="neutral">{BILLING_TYPE_LABEL[it.billingType]}</StatusPill>}
                 </div>
-                {it.revenueAccountId && <p className="text-xs text-gray-400">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
-              </td>
-              {isProduct && <td className="px-4 py-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</td>}
+                {it.revenueAccountId && <p className="text-xs text-ink-2">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
+              </Td>
+              {isProduct && <Td className="text-ink-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</Td>}
               {isProduct ? (
                 <>
-                  <td className="px-4 py-2 text-right">{Number(it.stockQuantity)}</td>
-                  <td className="px-4 py-2 text-right">{Number(it.stockValue).toFixed(2)}</td>
+                  <Td numeric>{Number(it.stockQuantity)}</Td>
+                  <Td numeric>
+                    <Amount value={Number(it.stockValue)} />
+                  </Td>
                 </>
               ) : (
-                <td className="px-4 py-2 text-right">{Number(it.sellingPrice).toFixed(2)}</td>
+                <Td numeric>
+                  <Amount value={Number(it.sellingPrice)} />
+                </Td>
               )}
-              <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
-                <button type="button" onClick={() => setEditingId(it.id)} className="text-xs text-gray-600 hover:underline">
-                  Edit
-                </button>
-                <button type="button" onClick={() => handleActive(it.id, !it.isActive)} className="text-xs text-gray-600 hover:underline">
-                  {it.isActive ? "Make inactive" : "Make active"}
-                </button>
-                <button type="button" onClick={() => handleDelete(it.id, it.name)} className="text-xs text-red-600 hover:underline">
-                  Delete
-                </button>
-              </td>
-            </tr>
+              <Td className="whitespace-nowrap">
+                <RowActions>
+                  <RowMenu
+                    items={[
+                      { label: "Edit", onClick: () => setEditingId(it.id) },
+                      { label: it.isActive ? "Make inactive" : "Make active", onClick: () => handleActive(it.id, !it.isActive) },
+                      { label: "Delete", onClick: () => handleDelete(it.id, it.name), danger: true },
+                    ]}
+                  />
+                </RowActions>
+              </Td>
+            </Tr>
           ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                No items yet
-              </td>
-            </tr>
-          )}
         </tbody>
-      </table>
+      </DataTable>
+      {filtered.length === 0 &&
+        (items.length === 0 ? (
+          <EmptyState icon={Boxes} title="No items yet" description="Add an item from the Add new tab and it will be listed here." />
+        ) : (
+          <EmptyState icon={Boxes} title="No items match" description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
+        ))}
 
       {editingId && (
         <EditItemModal

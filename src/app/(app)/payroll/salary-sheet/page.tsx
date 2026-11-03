@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { employees, payrollRuns } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { SalarySheetTabs } from "./salary-sheet-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function SalarySheetPage() {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
@@ -21,7 +22,7 @@ export default async function SalarySheetPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Salary sheet</h1>
+      <PageHeader title="Salary sheet" className="!mb-0" />
       <SalarySheetTabs runs={runs} employees={employeeList} />
     </div>
   );

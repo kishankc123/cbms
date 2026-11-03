@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances, type AccountRow } from "@/lib/ledger/chart";
 import { Balance, SystemBadge, TYPE_LABEL } from "../shared";
+import { PageHeader } from "@/components/ui/page-header";
 
 const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as const;
 
@@ -27,10 +28,7 @@ export default async function ChartStructurePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Chart of Accounts — Structure</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Every account and where it sits. A group&apos;s balance includes its sub-groups.</p>
-      </div>
+      <PageHeader title="Chart of Accounts — Structure" description="Every account and where it sits. A group&apos;s balance includes its sub-groups." />
 
       {TYPE_ORDER.map((type) => {
         rows.length = 0;
@@ -46,7 +44,7 @@ export default async function ChartStructurePage() {
                 Total <span className="font-medium text-gray-900"><Balance value={Math.round(total * 100) / 100} /></span>
               </p>
             </div>
-            <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="border-collapse text-[13px] w-full">
               <tbody>
                 {section.map(({ account: a, depth }) => (
                   <tr key={a.id} className={`border-t border-gray-100 first:border-t-0 ${a.isActive ? "" : "text-gray-400"}`}>

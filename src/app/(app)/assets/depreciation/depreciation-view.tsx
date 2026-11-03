@@ -91,7 +91,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
           {data.months.length > 0 && (
             <div className="flex items-center gap-3">
               <label className="text-xs text-gray-500">Depreciate through</label>
-              <select className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" value={anchor} onChange={(e) => choose(e.target.value)}>
+              <select className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" value={anchor} onChange={(e) => choose(e.target.value)}>
                 {data.months.map((m) => (
                   <option key={m.anchor} value={m.anchor}>
                     {m.label}
@@ -99,7 +99,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
                 ))}
               </select>
               {data.canRun && (
-                <button type="button" disabled={!canPost} onClick={() => setConfirming(true)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+                <button type="button" disabled={!canPost} onClick={() => setConfirming(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                   {posting ? "Posting..." : "Post depreciation"}
                 </button>
               )}
@@ -118,38 +118,38 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
         ) : preview ? (
           <div className={`mt-4 overflow-x-auto ${loading ? "opacity-50" : ""}`}>
             <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+              <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Code</th>
-                  <th className="px-4 py-2 font-medium">Asset</th>
-                  <th className="px-4 py-2 text-right font-medium">Months</th>
-                  <th className="px-4 py-2 text-right font-medium">Depreciation</th>
-                  <th className="px-4 py-2 text-right font-medium">Accumulated after</th>
-                  <th className="px-4 py-2 text-right font-medium">Net book value after</th>
+                  <th className="px-2.5 py-1.5 font-medium">Code</th>
+                  <th className="px-2.5 py-1.5 font-medium">Asset</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Months</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Depreciation</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Accumulated after</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Net book value after</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.lines.slice(0, SHOWN).map((l) => (
-                  <tr key={l.assetId} className="border-t border-[var(--card-border)]">
-                    <td className="px-4 py-2 font-medium">
-                      <Link href={`/assets/${l.assetId}`} className="text-[var(--color-primary)] hover:underline">
+                  <tr key={l.assetId} className="border-b border-line transition-colors hover:bg-hover">
+                    <td className="px-2.5 py-1.5 font-medium">
+                      <Link href={`/assets/${l.assetId}`} className="text-[var(--accent-text)] hover:underline">
                         {l.assetCode}
                       </Link>
                     </td>
-                    <td className="px-4 py-2">{l.name}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{l.months}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{money(l.amount)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{money(l.accumulatedAfter)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{money(l.netBookValueAfter)}</td>
+                    <td className="px-2.5 py-1.5">{l.name}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{l.months}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{money(l.amount)}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{money(l.accumulatedAfter)}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{money(l.netBookValueAfter)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t border-[var(--card-border)] font-semibold">
-                  <td className="px-4 py-2" colSpan={3}>
+                  <td className="px-2.5 py-1.5" colSpan={3}>
                     Total ({preview.lines.length}){preview.lines.length > SHOWN ? ` — first ${SHOWN} shown` : ""}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{money(preview.total)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums">{money(preview.total)}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
@@ -161,31 +161,31 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
       <section className={`${card} overflow-x-auto`}>
         <h2 className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">Previous runs</h2>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Run</th>
-              <th className="px-4 py-2 font-medium">Month</th>
-              <th className="px-4 py-2 font-medium">Posted on</th>
-              <th className="px-4 py-2 text-right font-medium">Assets</th>
-              <th className="px-4 py-2 text-right font-medium">Depreciation</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2" />
+              <th className="px-2.5 py-1.5 font-medium">Run</th>
+              <th className="px-2.5 py-1.5 font-medium">Month</th>
+              <th className="px-2.5 py-1.5 font-medium">Posted on</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Assets</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Depreciation</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
+              <th className="px-2.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
             {data.runs.map((r) => (
               <tr key={r.id} className={`border-t border-[var(--card-border)] ${r.status === "reversed" ? "opacity-50" : ""}`}>
-                <td className="px-4 py-2 font-medium">DEP-{String(r.runNumber).padStart(6, "0")}</td>
-                <td className="px-4 py-2">{r.periodLabel}</td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">
+                <td className="px-2.5 py-1.5 font-medium">DEP-{String(r.runNumber).padStart(6, "0")}</td>
+                <td className="px-2.5 py-1.5">{r.periodLabel}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   <D value={r.createdAt.slice(0, 10)} />
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums">{r.assetCount}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(r.totalAmount)}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{r.assetCount}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(r.totalAmount)}</td>
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={r.status === "posted" ? "success" : "critical"}>{r.status === "posted" ? "Posted" : "Reversed"}</StatusPill>
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-2.5 py-1.5 text-right">
                   {data.canReverse && r.id === data.latestPostedId && (
                     <button type="button" onClick={() => setReversing(r)} className="text-sm text-red-600 hover:underline">
                       Reverse

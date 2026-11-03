@@ -47,13 +47,13 @@ export function StockTabs({
 
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-gray-100 p-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${tab === t.id ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${tab === t.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
           >
             {t.label}
           </button>
@@ -183,7 +183,7 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
       </div>
 
       <div className="flex justify-end">
-        <button type="button" onClick={save} disabled={saving} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+        <button type="button" onClick={save} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {saving ? "Saving..." : "Save adjustment"}
         </button>
       </div>

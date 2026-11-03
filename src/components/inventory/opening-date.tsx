@@ -40,8 +40,8 @@ export function useOpeningDateGuard(date: string, active: boolean) {
       {message && <p className="mt-1 text-xs text-red-600">{message}</p>}
       {prompt && message && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setPrompt(false)} />
-          <div className="relative w-full max-w-md space-y-4 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setPrompt(false)} />
+          <div className="relative w-full max-w-md space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Transaction date is before the Inventory Opening Date</h2>
             <p className="text-sm text-gray-600">This transaction would fall outside the current inventory history.</p>
             <p className="text-sm text-gray-900">{message}</p>
@@ -49,10 +49,10 @@ export function useOpeningDateGuard(date: string, active: boolean) {
               <button type="button" onClick={() => setPrompt(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" onClick={() => router.push("/inventory/stock?tab=opening")} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+              <button type="button" onClick={() => router.push("/inventory/stock?tab=opening")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                 Change Inventory Opening Date
               </button>
-              <button type="button" onClick={() => setPrompt(false)} autoFocus className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+              <button type="button" onClick={() => setPrompt(false)} autoFocus className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Change transaction date
               </button>
             </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { Check, ChevronDown } from "lucide-react";
 import { switchOrganization } from "../select-organization/actions";
 
 type Org = { tenantId: string; companyName: string; roleLabel: string };
@@ -36,17 +37,17 @@ export function OrgSwitcher({ orgs, activeId }: { orgs: Org[]; activeId: string 
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={pending}
-        className="w-full text-left rounded px-1 py-1 hover:bg-[var(--sidebar-bg-hover)] disabled:opacity-60"
+        aria-expanded={open}
+        title={active?.roleLabel}
+        className="flex h-8 max-w-[9rem] items-center sm:max-w-[16rem] gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:opacity-60"
       >
-        <p className="flex items-center justify-between text-sm font-semibold text-white">
-          <span className="truncate">{active?.companyName ?? "Organization"}</span>
-          <span className="ml-2 text-[10px] text-[var(--sidebar-text)]">▼</span>
-        </p>
-        <p className="text-xs text-[var(--sidebar-text)]">{active?.roleLabel}</p>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent text-[10px] font-semibold text-[var(--on-accent)]">{(active?.companyName ?? "O").slice(0, 1).toUpperCase()}</span>
+        <span className="truncate">{active?.companyName ?? "Organization"}</span>
+        <ChevronDown size={14} className="shrink-0 text-ink-2" />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-line bg-surface py-1 shadow-[var(--shadow-popover)]">
           <p className="px-3 py-1 text-xs font-medium text-gray-500">Switch Organization</p>
           {orgs.map((o) => (
             <button
@@ -55,7 +56,7 @@ export function OrgSwitcher({ orgs, activeId }: { orgs: Org[]; activeId: string 
               onClick={() => choose(o.tenantId)}
               className="flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-50"
             >
-              <span className="w-3 text-sm text-[var(--color-primary)]">{o.tenantId === activeId ? "✓" : ""}</span>
+              <span className="flex h-5 w-3 items-center text-accent-text">{o.tenantId === activeId ? <Check size={14} /> : null}</span>
               <span>
                 <span className="block text-sm text-gray-900">{o.companyName}</span>
                 <span className="block text-xs text-gray-500">{o.roleLabel}</span>
@@ -63,7 +64,7 @@ export function OrgSwitcher({ orgs, activeId }: { orgs: Org[]; activeId: string 
             </button>
           ))}
           <div className="border-t border-gray-100 mt-1 pt-1">
-            <Link href="/create-organization" className="block px-3 py-1.5 text-sm text-[var(--color-primary)] hover:bg-gray-50">
+            <Link href="/create-organization" className="block px-3 py-1.5 text-sm text-[var(--accent-text)] hover:bg-gray-50">
               + Create new organization
             </Link>
           </div>

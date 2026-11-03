@@ -16,7 +16,7 @@ export default async function CompanySettingsPage() {
   return (
     <div className="space-y-6">
       <SettingsHeader title="Company details" description="Your organization's name, currency and registration numbers.">
-        <Link href="/compliance/company" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/compliance/company" className="text-sm text-[var(--accent-text)] hover:underline">
           VAT / TDS rates →
         </Link>
       </SettingsHeader>

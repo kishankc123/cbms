@@ -36,7 +36,7 @@ export function ExpenseTracker({ categories, otherAmount, total, reportHref }: {
             ))}
           </select>
           {reportHref && (
-            <Link href={reportHref} className="text-xs font-medium text-[var(--color-primary)] hover:underline whitespace-nowrap">
+            <Link href={reportHref} className="text-xs font-medium text-[var(--accent-text)] hover:underline whitespace-nowrap">
               View P&amp;L →
             </Link>
           )}

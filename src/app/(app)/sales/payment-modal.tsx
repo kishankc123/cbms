@@ -74,9 +74,9 @@ export function PaymentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onCancel} />
 
-      <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="relative w-full max-w-md rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Record payment</h2>
           <button type="button" onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -94,7 +94,7 @@ export function PaymentModal({
               <PaymentModeSelect
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
-                className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
               />
               <input
                 type="number"
@@ -103,7 +103,7 @@ export function PaymentModal({
                 value={line.amount}
                 onChange={(e) => updateLine(i, "amount", e.target.value)}
                 placeholder="Amount"
-                className="w-28 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28"
               />
             </div>
           ))}
@@ -138,7 +138,7 @@ export function PaymentModal({
             <select
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
             >
               <option value="">Select customer</option>
               {allCustomers.map((c) => (
@@ -169,7 +169,7 @@ export function PaymentModal({
             type="button"
             disabled={saving || customerRequired}
             onClick={handleConfirm}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {saving ? "Saving..." : "Confirm"}
           </button>

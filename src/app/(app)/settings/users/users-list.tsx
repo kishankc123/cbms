@@ -89,43 +89,43 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
           <option value="active">Active</option>
           <option value="suspended">Suspended</option>
         </select>
-        <button type="submit" className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+        <button type="submit" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Search
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">ID</th>
-              <th className="px-4 py-2 font-medium">Name</th>
-              <th className="px-4 py-2 font-medium">Email</th>
-              <th className="px-4 py-2 font-medium">Contact</th>
-              <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium">Last sign-in</th>
-              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">ID</th>
+              <th className="px-2.5 py-1.5 font-medium">Name</th>
+              <th className="px-2.5 py-1.5 font-medium">Email</th>
+              <th className="px-2.5 py-1.5 font-medium">Contact</th>
+              <th className="px-2.5 py-1.5 font-medium">Role</th>
+              <th className="px-2.5 py-1.5 font-medium">Last sign-in</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
               <th className="w-10" />
             </tr>
           </thead>
           <tbody>
             {list.rows.map((r) => (
-              <tr key={r.userId} className="border-t border-[var(--card-border)]">
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{r.code}</td>
-                <td className="px-4 py-2 font-medium">
-                  <Link href={`/settings/users/${r.userId}`} className="text-[var(--color-primary)] hover:underline">
+              <tr key={r.userId} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{r.code}</td>
+                <td className="px-2.5 py-1.5 font-medium">
+                  <Link href={`/settings/users/${r.userId}`} className="text-[var(--accent-text)] hover:underline">
                     {r.name}
                   </Link>{" "}
                   {r.userId === data.me && <span className="text-xs font-normal text-gray-400">(you)</span>}
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   {r.email}
                   {!r.verified && <span className="ml-2 text-xs text-amber-700">unverified</span>}
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{r.mobile || "—"}</td>
-                <td className="px-4 py-2">{r.roleName}</td>
-                <td className="whitespace-nowrap px-4 py-2 text-[var(--text-secondary)]">{r.lastLogin ? new Date(r.lastLogin).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Never"}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{r.mobile || "—"}</td>
+                <td className="px-2.5 py-1.5">{r.roleName}</td>
+                <td className="whitespace-nowrap px-2.5 py-1.5 text-[var(--text-secondary)]">{r.lastLogin ? new Date(r.lastLogin).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Never"}</td>
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={r.status === "active" ? "success" : "action"}>{r.status === "active" ? "Active" : "Suspended"}</StatusPill>
                 </td>
                 <td className="relative px-2">
@@ -216,8 +216,8 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
       )}
       {handing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !handBusy && setHanding(null)} />
-          <div className="relative w-full max-w-md space-y-3 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !handBusy && setHanding(null)} />
+          <div className="relative w-full max-w-md space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Hand the organization over to {handing.name}?</h2>
             <p className="text-sm text-gray-600">
               {handing.name} becomes the Owner, with full control of the organization and its users. You step down to the role below, so you cannot undo this yourself. Type your password to confirm.
@@ -240,7 +240,7 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
               <button type="button" disabled={handBusy} onClick={() => setHanding(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={handBusy || !handPassword || !stepDownRoleId} onClick={confirmHandOver} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+              <button type="button" disabled={handBusy || !handPassword || !stepDownRoleId} onClick={confirmHandOver} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {handBusy ? "Handing over…" : "Hand over ownership"}
               </button>
             </div>

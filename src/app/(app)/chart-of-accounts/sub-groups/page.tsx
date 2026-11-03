@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances } from "@/lib/ledger/chart";
 import { SubGroupsTable } from "./sub-groups-table";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function SubGroupsPage() {
   const denied = await guardView("chart_of_accounts");
@@ -14,7 +15,7 @@ export default async function SubGroupsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Chart of Accounts — Sub-groups</h1>
+      <PageHeader title="Chart of Accounts — Sub-groups" className="!mb-0" />
 
       <SubGroupsTable
         groups={groups.filter((g) => g.isActive).map((g) => ({ id: g.id, code: g.code, name: g.name, category: g.category, tdsHeadKey: g.tdsHeadKey }))}

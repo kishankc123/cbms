@@ -10,6 +10,7 @@ import { updateFiscalYearDates } from "../actions";
 import { settingsButton, settingsCard, settingsInput, settingsLabel } from "../ui";
 import { getFiscalYearsPageData } from "./actions";
 import { FiscalYearsManager } from "./fiscal-years-manager";
+import { PageHeader } from "@/components/ui/page-header";
 
 const FISCAL_YEARS = generateFiscalYearOptions();
 
@@ -21,10 +22,7 @@ export default async function FiscalYearsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Fiscal Years</h1>
-        <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Every fiscal year on record, its status, and the reporting/posting boundaries it defines.</p>
-      </div>
+      <PageHeader title="Fiscal Years" description="Every fiscal year on record, its status, and the reporting/posting boundaries it defines." />
       <FiscalYearsManager data={data} isAdmin={isOrgAdmin(session.role)} />
 
       {tenant && (

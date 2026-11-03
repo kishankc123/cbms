@@ -7,8 +7,8 @@
 export function BillAvailableToggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <div>
-      <label className="mb-1 block text-xs text-gray-500">Bill physically available?</label>
-      <div className="inline-flex rounded-full bg-gray-100 p-0.5" role="radiogroup" aria-label="Bill physically available">
+      <label className="mb-1 block text-xs font-medium text-ink-2">Bill physically available?</label>
+      <div className="inline-flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Bill physically available">
         {[
           { v: true, label: "Yes" },
           { v: false, label: "No" },
@@ -20,8 +20,8 @@ export function BillAvailableToggle({ value, onChange, disabled }: { value: bool
             aria-checked={value === o.v}
             disabled={disabled}
             onClick={() => onChange(o.v)}
-            className={`rounded-full px-4 py-1 text-sm transition-colors disabled:opacity-50 ${
-              value === o.v ? (o.v ? "bg-white font-medium text-green-700 shadow-sm" : "bg-white font-medium text-amber-700 shadow-sm") : "text-gray-500 hover:text-gray-700"
+            className={`rounded px-3.5 py-0.5 text-[13px] transition-colors disabled:opacity-50 ${
+              value === o.v ? (o.v ? "bg-surface font-medium text-[var(--success-text)] shadow-[var(--shadow-sm)]" : "bg-surface font-medium text-[var(--warning-text)] shadow-[var(--shadow-sm)]") : "text-ink-2 hover:text-ink"
             }`}
           >
             {o.label}

@@ -16,7 +16,7 @@ export default async function EditTransferPage({ params }: { params: Promise<{ i
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Edit Transfer {detail.transferNumber}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Edit Transfer {detail.transferNumber}</h1>
         <p className="mt-0.5 text-sm text-gray-500">The accounting entry is updated automatically.</p>
       </div>
       <TransferForm

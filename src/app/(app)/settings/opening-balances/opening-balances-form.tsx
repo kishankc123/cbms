@@ -95,14 +95,14 @@ export function OpeningBalancesForm({ sheet, canSave }: { sheet: Sheet; canSave:
           </thead>
           <tbody>
             {sheet.rows.map((r, i) => (
-              <tr key={r.id} className="border-t border-[var(--card-border)]">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className={`${td} text-gray-400`}>{i + 1}</td>
                 <td className={`${td} text-gray-500`}>{r.category}</td>
                 <td className={td}>
                   <span className="mr-2 text-xs text-gray-400">{r.code}</span>
                   {r.name}
                   {r.screen && (
-                    <Link href={r.screen} className="ml-3 text-xs text-[var(--color-primary)] hover:underline">
+                    <Link href={r.screen} className="ml-3 text-xs text-[var(--accent-text)] hover:underline">
                       Enter on its own screen
                     </Link>
                   )}

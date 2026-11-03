@@ -24,7 +24,7 @@ function SlabTable({ label, slabs }: { label: string; slabs: Slab[] }) {
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">{label}</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="py-1 pr-2 font-medium">Income from</th>
             <th className="py-1 pr-2 font-medium">Up to</th>
@@ -33,7 +33,7 @@ function SlabTable({ label, slabs }: { label: string; slabs: Slab[] }) {
         </thead>
         <tbody>
           {slabs.map((s, i) => (
-            <tr key={i} className="border-t border-[var(--card-border)]">
+            <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
               <td className="py-1 pr-2 tabular-nums">{money(i === 0 ? 0 : (slabs[i - 1].upTo ?? 0))}</td>
               <td className="py-1 pr-2 tabular-nums">{s.upTo === null ? "and above" : money(s.upTo)}</td>
               <td className="py-1 text-right tabular-nums">{s.rate}%</td>
@@ -56,7 +56,7 @@ function SlabEditor({ label, rows, base, onChange }: { label: string; rows: Row[
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">{label}</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="py-1 pr-2 font-medium">From</th>
             <th className="py-1 pr-2 font-medium">Up to</th>
@@ -86,7 +86,7 @@ function SlabEditor({ label, rows, base, onChange }: { label: string; rows: Row[
           })}
         </tbody>
       </table>
-      <button type="button" onClick={add} className="mt-1 text-xs text-[var(--color-primary)] hover:underline">
+      <button type="button" onClick={add} className="mt-1 text-xs text-[var(--accent-text)] hover:underline">
         + Add slab
       </button>
     </div>
@@ -164,7 +164,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           </p>
         </div>
         {!editor && (
-          <button type="button" onClick={() => open({ draftId: null, effectiveFrom: "", source: "", isVerified: false, rows: yearVersion || before ? copyOf((yearVersion ?? before).tables) : blank() })} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+          <button type="button" onClick={() => open({ draftId: null, effectiveFrom: "", source: "", isVerified: false, rows: yearVersion || before ? copyOf((yearVersion ?? before).tables) : blank() })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {yearVersion ? `Publish v${shown.length + 1}` : "Set the slabs"}
           </button>
         )}
@@ -209,7 +209,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           </label>
           <p className="text-xs text-[var(--text-secondary)]">Payroll in {country.name} uses these slabs from the start date. The earlier slabs end the day before.</p>
           <div className="flex gap-2">
-            <button type="button" disabled={busy || !editor.effectiveFrom} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" disabled={busy || !editor.effectiveFrom} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               {busy ? "Publishing…" : editor.draftId ? "Confirm and publish" : "Publish"}
             </button>
             <button type="button" disabled={busy} onClick={() => setEditor(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
@@ -231,7 +231,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
 
       {shown.length > 0 && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-2 font-medium">Version</th>
               <th className="py-1 pr-2 font-medium">From</th>
@@ -243,14 +243,14 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           <tbody>
             {[...shown].reverse().map((v) =>
               notes?.id === v.id ? (
-                <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td colSpan={5} className="space-y-2 py-2">
                     <input value={notes.source} onChange={(e) => setNotes({ ...notes, source: e.target.value })} placeholder="Source" className={`${adminField} w-full`} />
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={notes.isVerified} onChange={(e) => setNotes({ ...notes, isVerified: e.target.checked })} /> Verified against current law
                     </label>
                     <div className="flex gap-2">
-                      <button type="button" disabled={busy} onClick={saveNotes} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white disabled:opacity-50">
+                      <button type="button" disabled={busy} onClick={saveNotes} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                         Save
                       </button>
                       <button type="button" onClick={() => setNotes(null)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700">
@@ -260,7 +260,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
                   </td>
                 </tr>
               ) : (
-                <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td className="py-1.5 pr-2 font-medium">
                     v{v.version} {v.inForce && <StatusPill tone="success">in force</StatusPill>}
                   </td>
@@ -270,7 +270,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
                     {v.source ?? "—"} {v.isVerified ? <StatusPill tone="success">verified</StatusPill> : <StatusPill tone="pending">unverified</StatusPill>}
                   </td>
                   <td className="py-1.5 text-right">
-                    <button type="button" onClick={() => setNotes({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--color-primary)] hover:underline">
+                    <button type="button" onClick={() => setNotes({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--accent-text)] hover:underline">
                       Verify / source
                     </button>
                   </td>

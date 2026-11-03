@@ -27,7 +27,7 @@ const pct = (n: number | null) => (n === null ? null : `${n >= 0 ? "↑" : "↓"
 const rangeQs = (from: string, to: string) => new URLSearchParams({ from, to }).toString();
 
 const linkCard = "block rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 transition-shadow hover:shadow-sm";
-const drillLink = "text-xs font-medium text-[var(--color-primary)] hover:underline";
+const drillLink = "text-xs font-medium text-[var(--accent-text)] hover:underline";
 
 // Where each Needs Attention item's own detail lives — the module/report that either created the
 // issue (drafts) or is the natural place to resolve or investigate it.
@@ -93,7 +93,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* The greeting is the page heading. */}
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
           {greetingFor(new Date())}, {user.name}
         </h1>
         {"allTime" in activeFiscalYear ? (
@@ -102,7 +102,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
             FY {activeFiscalYear.code}
             <StatusPill tone="action">Not yet added</StatusPill>
-            <Link href="/settings/fiscal-years" className="text-xs text-[var(--color-primary)] hover:underline">
+            <Link href="/settings/fiscal-years" className="text-xs text-[var(--accent-text)] hover:underline">
               Add it →
             </Link>
           </p>
@@ -182,7 +182,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               const { tone, label } = NEEDS_ATTENTION_TONE[item.severity];
               const href = NEEDS_ATTENTION_HREF[item.id];
               const title = href ? (
-                <Link href={href} className="hover:underline hover:text-[var(--color-primary)]">
+                <Link href={href} className="hover:underline hover:text-[var(--accent-text)]">
                   {item.label}
                 </Link>
               ) : (
@@ -248,7 +248,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       <RowCard key={d.id}>
                         <RowMeta
                           title={
-                            <Link href="/compliance" className="hover:underline hover:text-[var(--color-primary)]">
+                            <Link href="/compliance" className="hover:underline hover:text-[var(--accent-text)]">
                               {d.name}
                             </Link>
                           }

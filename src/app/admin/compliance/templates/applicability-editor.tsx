@@ -18,7 +18,7 @@ export function ApplicabilityEditor({ applies, sentence, taxes, companyTypes, on
       {applies === null ? (
         <div className="space-y-2 text-sm text-[var(--text-secondary)]">
           <p>This rule is more detailed than the choices here, so it stays as it is.</p>
-          <button type="button" onClick={() => onChange(EVERYONE)} className="text-[var(--color-primary)] hover:underline">
+          <button type="button" onClick={() => onChange(EVERYONE)} className="text-[var(--accent-text)] hover:underline">
             Replace it with simple choices
           </button>
         </div>
@@ -96,7 +96,7 @@ export function ApplicabilityEditor({ applies, sentence, taxes, companyTypes, on
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => onChange({ ...applies, rows: [...applies.rows, blank("employees", false)] })} className="text-sm text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={() => onChange({ ...applies, rows: [...applies.rows, blank("employees", false)] })} className="text-sm text-[var(--accent-text)] hover:underline">
                 + Add a condition
               </button>
             </div>

@@ -10,7 +10,7 @@ export function AccountLink({ accountId, from, to, className, children }: { acco
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   return (
-    <Link href={`/reports/ledger?${params.toString()}`} className={className ?? "hover:underline hover:text-[var(--color-primary)]"}>
+    <Link href={`/reports/ledger?${params.toString()}`} className={className ?? "hover:underline hover:text-[var(--accent-text)]"}>
       {children}
     </Link>
   );

@@ -2,6 +2,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { getInventoryValuation } from "@/lib/inventory/valuation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const fmt = (n: number) => n.toFixed(2);
 const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -16,26 +17,26 @@ export default async function StockSummaryPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Stock Summary</h1>
+        <PageHeader title="Stock Summary" className="!mb-0" />
       </div>
       <p className="text-sm text-gray-500">{active.length} active tracked item{active.length === 1 ? "" : "s"}, as of today</p>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Item</th>
-            <th className="px-4 py-2 font-medium text-right">Qty on Hand</th>
-            <th className="px-4 py-2 font-medium text-right">Average Cost</th>
-            <th className="px-4 py-2 font-medium text-right">Stock Value</th>
+            <th className="px-2.5 py-1.5 font-medium">Item</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Qty on Hand</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Average Cost</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Stock Value</th>
           </tr>
         </thead>
         <tbody>
           {active.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{i.name}</td>
-              <td className="px-4 py-2 text-right">{fmtQty(i.quantity)}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.averageCost)}</td>
-              <td className="px-4 py-2 text-right">{fmt(i.value)}</td>
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5">{i.name}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmtQty(i.quantity)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.averageCost)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(i.value)}</td>
             </tr>
           ))}
           {active.length === 0 && (
@@ -49,8 +50,8 @@ export default async function StockSummaryPage() {
         {active.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2" colSpan={3}>Total Stock Value</td>
-              <td className="px-4 py-2 text-right">{fmt(stockValue)}</td>
+              <td className="px-2.5 py-1.5" colSpan={3}>Total Stock Value</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(stockValue)}</td>
             </tr>
           </tfoot>
         )}

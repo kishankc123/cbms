@@ -79,7 +79,7 @@ export function BankBookView({
       <ReportFilter from={from} to={to} fiscal={fiscal}>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Bank account</label>
-          <select value={accountId ?? ""} onChange={(e) => pickAccount(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-56">
+          <select value={accountId ?? ""} onChange={(e) => pickAccount(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 min-w-56">
             <option value="">Select a bank account…</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -100,26 +100,26 @@ export function BankBookView({
             </h2>
             <div className="flex items-center gap-4">
               <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shown?.hiddenPairs ?? 0} />
-              <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+              <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
                 Export CSV
               </button>
             </div>
           </div>
-          <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
-                <th className="px-4 py-2 font-medium">Date</th>
-                <th className="px-4 py-2 font-medium">Reference</th>
-                <th className="px-4 py-2 font-medium">Description</th>
-                <th className="px-4 py-2 font-medium text-right">Debit</th>
-                <th className="px-4 py-2 font-medium text-right">Credit</th>
-                <th className="px-4 py-2 font-medium text-right">Balance</th>
+                <th className="px-2.5 py-1.5 font-medium">Date</th>
+                <th className="px-2.5 py-1.5 font-medium">Reference</th>
+                <th className="px-2.5 py-1.5 font-medium">Description</th>
+                <th className="px-2.5 py-1.5 font-medium text-right">Debit</th>
+                <th className="px-2.5 py-1.5 font-medium text-right">Credit</th>
+                <th className="px-2.5 py-1.5 font-medium text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-t border-gray-100 bg-gray-50/50">
-                <td className="px-4 py-2 text-gray-500" colSpan={5}>Opening balance</td>
-                <td className="px-4 py-2 text-right">{fmt(ledger.openingBalance)}</td>
+                <td className="px-2.5 py-1.5 text-gray-500" colSpan={5}>Opening balance</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(ledger.openingBalance)}</td>
               </tr>
               {(shown?.lines ?? []).map((l, i) => (
                 <tr
@@ -136,17 +136,17 @@ export function BankBookView({
                   }}
                   className={`cursor-pointer border-t border-gray-100 hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none ${l.isReversed || l.reversalOfId ? "text-gray-400" : ""}`}
                 >
-                  <td className="px-4 py-2 whitespace-nowrap">
+                  <td className="px-2.5 py-1.5 whitespace-nowrap">
                     <D value={l.entryDate} />
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs">{l.referenceNumber ?? ""}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-2.5 py-1.5 font-mono text-xs">{l.referenceNumber ?? ""}</td>
+                  <td className="px-2.5 py-1.5">
                     {l.description ?? l.memo ?? ""}
                     <ReversalTags isReversed={l.isReversed} isReversal={Boolean(l.reversalOfId)} />
                   </td>
-                  <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
-                  <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
-                  <td className="px-4 py-2 text-right">{fmt(l.runningBalance)}</td>
+                  <td className="px-2.5 py-1.5 text-right">{l.debit ? fmt(l.debit) : ""}</td>
+                  <td className="px-2.5 py-1.5 text-right">{l.credit ? fmt(l.credit) : ""}</td>
+                  <td className="px-2.5 py-1.5 text-right">{fmt(l.runningBalance)}</td>
                 </tr>
               ))}
               {(shown?.lines.length ?? 0) === 0 && (
@@ -157,10 +157,10 @@ export function BankBookView({
                 </tr>
               )}
               <tr className="border-t-2 border-gray-300 font-medium">
-                <td className="px-4 py-2" colSpan={3}>Totals</td>
-                <td className="px-4 py-2 text-right">{fmt(totalDebit)}</td>
-                <td className="px-4 py-2 text-right">{fmt(totalCredit)}</td>
-                <td className="px-4 py-2 text-right">{fmt(shown?.lines.at(-1)?.runningBalance ?? ledger.openingBalance)}</td>
+                <td className="px-2.5 py-1.5" colSpan={3}>Totals</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalDebit)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(totalCredit)}</td>
+                <td className="px-2.5 py-1.5 text-right">{fmt(shown?.lines.at(-1)?.runningBalance ?? ledger.openingBalance)}</td>
               </tr>
             </tbody>
           </table>

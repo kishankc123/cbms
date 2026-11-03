@@ -20,26 +20,26 @@ export default async function AdminAuditLogPage({ searchParams }: { searchParams
       </div>
       <div className={`${adminCard} overflow-x-auto`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">When</th>
-              <th className="px-4 py-2 font-medium">Who</th>
-              <th className="px-4 py-2 font-medium">Event</th>
-              <th className="px-4 py-2 font-medium">Before</th>
-              <th className="px-4 py-2 font-medium">After</th>
+              <th className="px-2.5 py-1.5 font-medium">When</th>
+              <th className="px-2.5 py-1.5 font-medium">Who</th>
+              <th className="px-2.5 py-1.5 font-medium">Event</th>
+              <th className="px-2.5 py-1.5 font-medium">Before</th>
+              <th className="px-2.5 py-1.5 font-medium">After</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--card-border)] align-top">
-                <td className="whitespace-nowrap px-4 py-2 text-[var(--text-secondary)]">{when(r.at)}</td>
-                <td className="px-4 py-2">{r.who}</td>
-                <td className="px-4 py-2">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover align-top">
+                <td className="whitespace-nowrap px-2.5 py-1.5 text-[var(--text-secondary)]">{when(r.at)}</td>
+                <td className="px-2.5 py-1.5">{r.who}</td>
+                <td className="px-2.5 py-1.5">
                   <p className="text-[var(--text-primary)]">{r.what}</p>
                   <p className="font-mono text-xs text-[var(--text-secondary)]">{r.action}</p>
                 </td>
-                <td className="max-w-xs break-words px-4 py-2 text-xs text-[var(--text-secondary)]">{r.before ?? "—"}</td>
-                <td className="max-w-xs break-words px-4 py-2 text-xs text-[var(--text-secondary)]">{r.after ?? "—"}</td>
+                <td className="max-w-xs break-words px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">{r.before ?? "—"}</td>
+                <td className="max-w-xs break-words px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">{r.after ?? "—"}</td>
               </tr>
             ))}
             {rows.length === 0 && (

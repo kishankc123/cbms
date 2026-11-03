@@ -7,6 +7,15 @@ import { PAYMENT_TYPE_LABELS, MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, STA
 import { NewPaymentModal, type EditingPayment } from "./new-payment-modal";
 import { PaymentDetailDrawer } from "./payment-detail-drawer";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { Download, Plus, Wallet } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { controlClass, Select } from "@/components/ui/field";
+import { DataTable, RowActions, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { presetRange, todayIso, type CalendarSystem, type DateRange, type RangePreset } from "@/lib/calendar";
@@ -49,6 +58,8 @@ export function PaymentsWorkspace({
   initialTo,
   fixedDirection,
   fiscal = null,
+  title,
+  description,
 }: {
   formOptions: FormOptions;
   initialPayments: PaymentRow[];
@@ -58,6 +69,8 @@ export function PaymentsWorkspace({
   fixedDirection?: "money_in" | "money_out";
   /** The organization's configured fiscal year (real AD boundaries). */
   fiscal?: DateRange | null;
+  title: string;
+  description: string;
 }) {
   const calendar = useCalendar();
   const router = useRouter();
@@ -157,187 +170,170 @@ export function PaymentsWorkspace({
     router.refresh();
   }
 
+  const filtering = datePreset !== "this_month" || (!fixedDirection && direction !== "all") || paymentType !== "all" || accountId !== "" || partyType !== "all" || status !== "all" || search !== "";
+
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-end gap-2">
-        <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
-        <button type="button" disabled className="rounded border border-gray-300 text-gray-400 text-sm px-4 py-1.5 cursor-not-allowed" title="Coming soon">
-          Import
-        </button>
-        <button type="button" onClick={handleExport} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
-          Export
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowNew(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5"
-        >
-          + New Payment
-        </button>
-      </div>
+      <PageHeader
+        title={title}
+        description={description}
+        className="!mb-0"
+        actions={
+          <>
+            <DateDisplayControl label="Export dates" value={exportDates} onChange={setExportDates} />
+            <Button icon={<Download size={14} />} onClick={handleExport}>
+              Export
+            </Button>
+          </>
+        }
+        primary={
+          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setShowNew(true)}>
+            New payment
+          </Button>
+        }
+      />
 
-      <div className={`grid grid-cols-2 gap-4 ${fixedDirection ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
-        {fixedDirection !== "money_out" && <SummaryCard label="Total Received" value={summary.totalReceived} tone="success" />}
-        {fixedDirection !== "money_in" && <SummaryCard label="Total Paid" value={summary.totalPaid} tone="critical" />}
-        <SummaryCard label="Unallocated" value={summary.unallocated} tone="action" />
-        <SummaryCard label="Reconciled" value={summary.reconciled} tone="pending" />
-      </div>
+      <StatStrip
+        items={[
+          ...(fixedDirection !== "money_out" ? [{ label: "Total received", value: fmt(summary.totalReceived) }] : []),
+          ...(fixedDirection !== "money_in" ? [{ label: "Total paid", value: fmt(summary.totalPaid) }] : []),
+          { label: "Unallocated", value: fmt(summary.unallocated), tone: summary.unallocated > 0.005 ? ("warning" as const) : ("default" as const) },
+          { label: "Reconciled", value: fmt(summary.reconciled) },
+        ]}
+      />
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
-              {DATE_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search payment no., party, reference" className="max-w-72" />
+        <Select aria-label="Date" value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="w-40">
+          {DATE_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+        {datePreset === "custom" && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-ink-2">From</span>
+            <DatePicker value={from} onChange={(v) => setFrom(v)} className={`${controlClass} w-40`} />
+            <span className="text-xs text-ink-2">To</span>
+            <DatePicker value={to} onChange={(v) => setTo(v)} className={`${controlClass} w-40`} />
           </div>
-          {datePreset === "custom" && (
-            <>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">From</label>
-                <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">To</label>
-                <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-              </div>
-            </>
-          )}
-          {!fixedDirection && (
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Direction</label>
-              <select
-                value={direction}
-                onChange={(e) => {
-                  setDirection(e.target.value as typeof direction);
-                  setPaymentType("all");
-                }}
-                className="rounded border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                <option value="all">All</option>
-                <option value="money_in">Money In</option>
-                <option value="money_out">Money Out</option>
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Payment Type</label>
-            <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
-              <option value="all">All types</option>
-              {typeOptions.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Account</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
-              <option value="">All accounts</option>
-              {flatAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Party</label>
-            <select value={partyType} onChange={(e) => setPartyType(e.target.value as typeof partyType)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
-              <option value="all">All parties</option>
-              <option value="customer">Customer</option>
-              <option value="supplier">Supplier</option>
-              <option value="employee">Employee</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
-              {STATUS_FILTER_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button type="button" onClick={handleClearFilters} className="text-sm text-gray-500 hover:text-gray-700">
-            Clear Filters
-          </button>
-        </div>
+        )}
+        {!fixedDirection && (
+          <Select
+            aria-label="Direction"
+            value={direction}
+            onChange={(e) => {
+              setDirection(e.target.value as typeof direction);
+              setPaymentType("all");
+            }}
+            className="w-32"
+          >
+            <option value="all">In and out</option>
+            <option value="money_in">Money in</option>
+            <option value="money_out">Money out</option>
+          </Select>
+        )}
+        <Select aria-label="Payment type" value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="w-40">
+          <option value="all">All types</option>
+          {typeOptions.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </Select>
+        <Select aria-label="Account" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-44">
+          <option value="">All accounts</option>
+          {flatAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </Select>
+        <Select aria-label="Party" value={partyType} onChange={(e) => setPartyType(e.target.value as typeof partyType)} className="w-32">
+          <option value="all">All parties</option>
+          <option value="customer">Customer</option>
+          <option value="supplier">Supplier</option>
+          <option value="employee">Employee</option>
+          <option value="other">Other</option>
+        </Select>
+        <Select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)} className="w-40">
+          {STATUS_FILTER_OPTIONS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
 
-        <div className="mt-3">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search payment no., party, reference, description, cheque no..."
-            className="w-full max-w-md rounded border border-gray-300 px-3 py-1.5 text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Payment No.</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Date</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Type</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Party</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Account</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Reference</th>
-              <th className="px-3 py-2 font-semibold text-xs text-right whitespace-nowrap">Amount</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Allocation</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Reconciliation</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap">Status</th>
-              <th className="px-3 py-2 font-semibold text-xs whitespace-nowrap"></th>
-            </tr>
+      {loading && rows.length === 0 ? (
+        <TableSkeleton rows={6} cols={8} />
+      ) : (
+        <DataTable stickyHeader>
+          <thead>
+            <Tr className="hover:bg-transparent">
+              <Th>Payment no.</Th>
+              <Th>Date</Th>
+              <Th>Type</Th>
+              <Th>Party</Th>
+              <Th>Account</Th>
+              <Th>Reference</Th>
+              <Th align="right">Amount</Th>
+              <Th>Allocation</Th>
+              <Th>Reconciliation</Th>
+              <Th>Status</Th>
+              <Th className="w-10" />
+            </Tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-sm text-gray-400">
-                  {loading ? "Loading..." : "No payments match these filters."}
-                </td>
-              </tr>
-            )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
-                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.paymentNumber}</td>
-                <td className="px-3 py-2 whitespace-nowrap"><D value={r.paymentDate} /></td>
-                <td className="px-3 py-2 whitespace-nowrap">{PAYMENT_TYPE_LABELS[r.paymentType] ?? r.paymentType}</td>
-                <td className="px-3 py-2">{r.party}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.accountName}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-500">{r.referenceNumber ?? r.chequeNumber ?? "—"}</td>
-                <td className={`px-3 py-2 text-right font-medium whitespace-nowrap ${r.direction === "money_in" ? "text-green-700" : "text-red-700"}`}>
+              <Tr key={r.id} clickable selected={detailId === r.id} onClick={() => setDetailId(r.id)}>
+                <Td className="whitespace-nowrap font-mono text-xs">{r.paymentNumber}</Td>
+                <Td className="whitespace-nowrap">
+                  <D value={r.paymentDate} />
+                </Td>
+                <Td className="whitespace-nowrap">{PAYMENT_TYPE_LABELS[r.paymentType] ?? r.paymentType}</Td>
+                <Td className="max-w-48 truncate">{r.party}</Td>
+                <Td className="whitespace-nowrap text-ink-2">{r.accountName}</Td>
+                <Td className="whitespace-nowrap text-ink-2">{r.referenceNumber ?? r.chequeNumber ?? "—"}</Td>
+                <Td numeric className={`font-medium ${r.direction === "money_in" ? "text-[var(--success-text)]" : "text-[var(--danger-text)]"}`}>
                   {r.direction === "money_in" ? "+" : "-"}
                   {fmt(r.amount)}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {r.allocationStatus === "n/a" ? <span className="text-xs text-gray-400">—</span> : <StatusPill tone={ALLOCATION_TONE[r.allocationStatus] ?? "pending"}>{r.allocationStatus.replace("_", " ")}</StatusPill>}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                </Td>
+                <Td className="whitespace-nowrap">
+                  {r.allocationStatus === "n/a" ? <span className="text-ink-2">—</span> : <StatusPill tone={ALLOCATION_TONE[r.allocationStatus] ?? "pending"}>{r.allocationStatus.replace("_", " ")}</StatusPill>}
+                </Td>
+                <Td className="whitespace-nowrap">
                   <StatusPill tone={RECON_TONE[r.reconciliationStatus] ?? "pending"}>{r.reconciliationStatus}</StatusPill>
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                </Td>
+                <Td className="whitespace-nowrap">
                   <StatusPill tone={STATUS_TONE[r.status] ?? "pending"}>{r.status}</StatusPill>
-                </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <button type="button" onClick={() => setDetailId(r.id)} className="text-xs text-[var(--color-primary)] hover:underline">
-                    View
-                  </button>
-                </td>
-              </tr>
+                </Td>
+                <Td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <RowActions>
+                    <Button size="sm" variant="ghost" onClick={() => setDetailId(r.id)}>
+                      View
+                    </Button>
+                  </RowActions>
+                </Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </DataTable>
+      )}
+      {!loading && rows.length === 0 && (
+        <EmptyState
+          icon={Wallet}
+          title={filtering ? "No payments match" : "No payments in this period"}
+          description={filtering ? "Try different filters, or clear them." : "Payments recorded in this period will be listed here."}
+          action={filtering ? <Button onClick={handleClearFilters}>Clear filters</Button> : undefined}
+        />
+      )}
 
       {showNew && <NewPaymentModal formOptions={formOptions} onDone={onSaved} onCancel={() => setShowNew(false)} fixedDirection={fixedDirection} />}
       {editing && (
@@ -366,16 +362,6 @@ export function PaymentsWorkspace({
           }}
         />
       )}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "success" | "critical" | "action" | "pending" }) {
-  const textTone = tone === "success" ? "text-green-700" : tone === "critical" ? "text-red-700" : tone === "action" ? "text-amber-700" : "text-blue-700";
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold ${textTone}`}>{fmt(value)}</p>
     </div>
   );
 }

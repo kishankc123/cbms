@@ -178,7 +178,7 @@ export function RecurringExpenseFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
 
       <form onSubmit={handleSubmit} className="relative w-full max-w-2xl rounded-lg bg-[var(--card-bg)] p-5 shadow-lg space-y-5">
         <div className="flex items-center justify-between">
@@ -350,7 +350,7 @@ export function RecurringExpenseFormModal({
           <button type="button" onClick={onClose} className="rounded border border-[var(--card-border)] px-4 py-1.5 text-sm text-[var(--text-secondary)]">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {saving ? "Saving…" : "Save"}
           </button>
         </div>

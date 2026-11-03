@@ -105,7 +105,7 @@ export function JournalReportView({
       <ReportFilter from={from} to={to} fiscal={fiscal}>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Transaction type</label>
-          <select value={sourceType} onChange={(e) => setParam("type", e.target.value)} className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-40">
+          <select value={sourceType} onChange={(e) => setParam("type", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 min-w-40">
             <option value="">All types</option>
             {SOURCE_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -121,7 +121,7 @@ export function JournalReportView({
             onKeyDown={(e) => e.key === "Enter" && setParam("q", e.currentTarget.value)}
             onBlur={(e) => setParam("q", e.currentTarget.value)}
             placeholder="Reference or description…"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3"
           />
         </div>
       </ReportFilter>
@@ -133,24 +133,24 @@ export function JournalReportView({
         </p>
         <div className="flex items-center gap-4">
           <ReversedToggle checked={showReversed} onChange={setShowReversed} hiddenPairs={shownPairs.hiddenPairs} />
-          <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+          <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Export CSV
           </button>
         </div>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Date</th>
-            <th className="px-4 py-2 font-medium">Reference</th>
-            <th className="px-4 py-2 font-medium">Description</th>
-            <th className="px-4 py-2 font-medium">Account</th>
-            <th className="px-4 py-2 font-medium text-right">Debit</th>
-            <th className="px-4 py-2 font-medium text-right">Credit</th>
-            <th className="px-4 py-2 font-medium">Type</th>
-            <th className="px-4 py-2 font-medium">Created By</th>
-            <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium">Date</th>
+            <th className="px-2.5 py-1.5 font-medium">Reference</th>
+            <th className="px-2.5 py-1.5 font-medium">Description</th>
+            <th className="px-2.5 py-1.5 font-medium">Account</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Debit</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Credit</th>
+            <th className="px-2.5 py-1.5 font-medium">Type</th>
+            <th className="px-2.5 py-1.5 font-medium">Created By</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -160,21 +160,21 @@ export function JournalReportView({
               <tr key={`${e.id}-${i}`} tabIndex={0} role="button" title="Click to see this transaction" onClick={() => setOpenEntry(e.id)} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setOpenEntry(e.id); } }} className={`cursor-pointer border-t border-gray-100 hover:bg-[var(--surface-muted-bg)] focus:bg-[var(--surface-muted-bg)] focus:outline-none ${e.isReversed ? "opacity-60" : ""}`}>
                 {i === 0 ? (
                   <>
-                    <td className="px-4 py-2 whitespace-nowrap" rowSpan={e.lines.length}>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap" rowSpan={e.lines.length}>
                       <D value={e.entryDate} />
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs" rowSpan={e.lines.length}>{e.referenceNumber ?? ""}</td>
+                    <td className="px-2.5 py-1.5 font-mono text-xs" rowSpan={e.lines.length}>{e.referenceNumber ?? ""}</td>
                   </>
                 ) : null}
-                <td className="px-4 py-2">{l.description ?? (i === 0 ? e.memo : "") ?? ""}</td>
-                <td className="px-4 py-2">{l.code} — {l.name}</td>
-                <td className="px-4 py-2 text-right">{l.debit ? fmt(l.debit) : ""}</td>
-                <td className="px-4 py-2 text-right">{l.credit ? fmt(l.credit) : ""}</td>
+                <td className="px-2.5 py-1.5">{l.description ?? (i === 0 ? e.memo : "") ?? ""}</td>
+                <td className="px-2.5 py-1.5">{l.code} — {l.name}</td>
+                <td className="px-2.5 py-1.5 text-right">{l.debit ? fmt(l.debit) : ""}</td>
+                <td className="px-2.5 py-1.5 text-right">{l.credit ? fmt(l.credit) : ""}</td>
                 {i === 0 ? (
                   <>
-                    <td className="px-4 py-2 whitespace-nowrap" rowSpan={e.lines.length}>{SOURCE_TYPE_LABEL[e.sourceType] ?? e.sourceType}</td>
-                    <td className="px-4 py-2 whitespace-nowrap" rowSpan={e.lines.length}>{e.createdBy}</td>
-                    <td className="px-4 py-2" rowSpan={e.lines.length}>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap" rowSpan={e.lines.length}>{SOURCE_TYPE_LABEL[e.sourceType] ?? e.sourceType}</td>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap" rowSpan={e.lines.length}>{e.createdBy}</td>
+                    <td className="px-2.5 py-1.5" rowSpan={e.lines.length}>
                       <StatusPill tone={status === "Posted" ? "success" : status === "Reversed" ? "critical" : "pending"}>{status}</StatusPill>
                     </td>
                   </>

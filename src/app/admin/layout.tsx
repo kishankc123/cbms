@@ -1,19 +1,25 @@
 import { redirect } from "next/navigation";
 import { requireUserSession } from "@/lib/session";
 import { AppNav } from "@/app/(app)/nav";
-import { SignOutButton } from "@/app/(app)/sign-out-button";
+import { UserMenu } from "@/app/(app)/user-menu";
+import { AppShell } from "@/components/shell/app-shell";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cookies } from "next/headers";
+import { parseTheme, themeCookieName } from "@/lib/theme";
+import { sidebarCookieName } from "@/lib/sidebar";
+import type { NavIconKey } from "@/components/shell/icons";
 
 // A platform admin manages the platform, not any one organization's books — this nav is deliberately flat
 // (no per-org children) since nothing here is scoped to a tenant.
-const NAV = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/organizations", label: "Organizations" },
-  { href: "/admin/compliance", label: "Compliance Configuration" },
-  { href: "/admin/setup", label: "Setup" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/email-log", label: "Sent mail" },
-  { href: "/admin/billing", label: "Billing" },
-  { href: "/admin/audit-log", label: "Platform Audit Log" },
+const NAV: { href: string; label: string; icon: NavIconKey }[] = [
+  { href: "/admin", label: "Overview", icon: "dashboard" },
+  { href: "/admin/organizations", label: "Organizations", icon: "organizations" },
+  { href: "/admin/compliance", label: "Compliance Configuration", icon: "compliance" },
+  { href: "/admin/setup", label: "Setup", icon: "settings" },
+  { href: "/admin/users", label: "Users", icon: "customers" },
+  { href: "/admin/email-log", label: "Sent mail", icon: "mail" },
+  { href: "/admin/billing", label: "Billing", icon: "expenses" },
+  { href: "/admin/audit-log", label: "Platform Audit Log", icon: "audit" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -23,26 +29,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!user) redirect("/signed-out");
   if (!user.isPlatformAdmin) redirect("/select-organization");
 
+  const store = await cookies();
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col">
-        <div className="px-4 py-4 border-b border-[var(--sidebar-border)]">
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-400">Platform Administration</p>
-          <p className="mt-1 text-sm text-white truncate">{user.email}</p>
-        </div>
-        <AppNav items={NAV} />
-        <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">
-          <SignOutButton />
-        </div>
-      </aside>
-      <main className="flex-1">
-        {/* Never let this be mistaken for any organization's own view — that mistake here is exactly what a
-            platform admin screen must never allow. */}
-        <div className="border-b border-red-200 bg-red-50 px-8 py-2 text-xs font-medium text-red-700">
-          Platform administration — this view spans every organization on the platform, not one client&apos;s books.
-        </div>
-        <div className="p-8">{children}</div>
-      </main>
-    </div>
+    <AppShell
+      initialCollapsed={store.get(sidebarCookieName)?.value === "collapsed"}
+      brand={<p className="truncate text-xs font-semibold uppercase tracking-wide text-red-500">Platform Administration</p>}
+      nav={<AppNav items={NAV} />}
+      topRight={
+        <>
+          <div className="hidden sm:block">
+            <ThemeToggle initial={parseTheme(store.get(themeCookieName)?.value)} />
+          </div>
+          <UserMenu name={user.name} email={user.email} extra={<ThemeToggle initial={parseTheme(store.get(themeCookieName)?.value)} />} />
+        </>
+      }
+    >
+      {/* Never let this be mistaken for any organization's own view — that mistake here is exactly what a
+          platform admin screen must never allow. */}
+      <div className="-mx-4 -mt-5 mb-5 border-b border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 md:-mx-6 md:px-6">
+        Platform administration — this view spans every organization on the platform, not one client&apos;s books.
+      </div>
+      {children}
+    </AppShell>
   );
 }

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { vendors, items, purchaseReturns } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 import { PurchaseReturnTabs } from "./purchase-return-tabs";
 
 export default async function PurchaseReturnPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
@@ -20,11 +21,8 @@ export default async function PurchaseReturnPage({ searchParams }: { searchParam
     getCurrentTaxRate(session.tenantId, "vat"),
   ]);
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Purchase Return</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Credit notes for goods sent back to suppliers.</p>
-      </div>
+    <div>
+      <PageHeader title="Purchase return" description="Credit notes for goods sent back to suppliers." />
       <PurchaseReturnTabs vendors={vendorList} items={itemList} vatRate={vatRate} noteList={noteList} initialTab={view === "new" ? "new" : "notes"} />
     </div>
   );

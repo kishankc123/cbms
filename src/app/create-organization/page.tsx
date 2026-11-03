@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createAdditionalOrganization } from "../select-organization/actions";
 import { listCountryOptions } from "../register/actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 const inputCls = "w-full rounded border border-gray-300 px-3 py-2 text-sm";
 
@@ -43,7 +44,7 @@ export default function CreateOrganizationPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <form onSubmit={submit} className="w-full max-w-md bg-white rounded-lg shadow p-8 space-y-3">
-        <h1 className="text-xl font-semibold text-gray-900">Create new organization</h1>
+        <PageHeader title="Create new organization" className="!mb-0" />
         <p className="text-sm text-gray-500">You will be its Owner. Your existing account and password stay the same.</p>
         {f("name", "Business / Organization name *")}
         <div className="grid grid-cols-2 gap-3">
@@ -73,7 +74,7 @@ export default function CreateOrganizationPage() {
           <Link href="/select-organization" className="rounded border border-gray-300 text-gray-700 px-4 py-2 text-sm">
             Cancel
           </Link>
-          <button type="submit" disabled={loading} className="flex-1 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium disabled:opacity-50">
+          <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 flex-1">
             {loading ? "Creating..." : "Create Organization"}
           </button>
         </div>

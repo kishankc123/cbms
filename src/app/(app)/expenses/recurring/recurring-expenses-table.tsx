@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Plus, Repeat } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatStrip } from "@/components/ui/stat-strip";
+import { Amount, DataTable, Td, Th, Tr } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
@@ -48,12 +54,16 @@ const STATUS_TONE: Record<RecurringStatus, { tone: StatusTone; label: string }> 
 
 const currency = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
+export type RecurringSummary = { activeCount: number; expectedThisMonth: number; expectedNext30Days: number; outstandingLiabilities: number; overdueCount: number; overdueAmount: number };
+
 export function RecurringExpensesTable({
+  summary,
   expenses,
   vendors,
   categoryAccounts,
   cashBankAccounts,
 }: {
+  summary: RecurringSummary;
   expenses: RecurringExpenseRow[];
   vendors: Vendor[];
   categoryAccounts: CategoryAccount[];
@@ -64,99 +74,116 @@ export function RecurringExpensesTable({
   const [creating, setCreating] = useState(false);
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] px-4 py-2 text-sm font-medium text-white"
-        >
-          + New Recurring Expense
-        </button>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Recurring expenses"
+        description="Rent, subscriptions, and other expenses that repeat on a schedule."
+        back={{ href: "/expenses", label: "Back to One-off Expenses" }}
+        primary={
+          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+            New recurring expense
+          </Button>
+        }
+      />
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">
-              <th className="px-4 py-2.5 font-medium">Expense</th>
-              <th className="px-4 py-2.5 font-medium">Account</th>
-              <th className="px-4 py-2.5 font-medium">Payable To</th>
-              <th className="px-4 py-2.5 font-medium text-right">Amount</th>
-              <th className="px-4 py-2.5 font-medium">Frequency</th>
-              <th className="px-4 py-2.5 font-medium">Next Expense</th>
-              <th className="px-4 py-2.5 font-medium">Due Date</th>
-              <th className="px-4 py-2.5 font-medium">Priority</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {expenses.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
-                  No recurring expenses yet — add rent, subscriptions, or other regular expenses with{" "}
-                  <button type="button" onClick={() => setCreating(true)} className="text-[var(--color-primary)] hover:underline">
-                    + New Recurring Expense
-                  </button>
-                  .
-                </td>
-              </tr>
-            )}
-            {expenses.map((row) => {
-              let preview: ReturnType<typeof previewNextOccurrence> | null = null;
-              try {
-                preview = previewNextOccurrence({
-                  calendar,
-                  startDate: row.raw.startDate,
-                  recognitionRule: row.raw.recognitionRule,
-                  recognitionDay: row.raw.recognitionDay,
-                  dueRule: row.raw.dueRule,
-                  dueRuleValue: row.raw.dueRuleValue,
-                });
-              } catch {
-                preview = null;
-              }
-              const statusInfo = STATUS_TONE[row.status];
-              return (
-                <tr key={row.id} className="border-b border-[var(--card-border)] last:border-0">
-                  <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{row.expenseName}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{row.expenseAccountLabel}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{row.payee}</td>
-                  <td className="px-4 py-2.5 text-right font-medium text-[var(--text-primary)]">{currency(row.amount)}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{FREQUENCY_LABEL[row.frequency]}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{preview ? <D value={preview.expenseDate} style="short" /> : "—"}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{preview ? <D value={preview.dueDate} style="short" /> : "—"}</td>
-                  <td className="px-4 py-2.5">
-                    <StatusPill tone={PRIORITY_TONE[row.priority]}>{row.priority[0].toUpperCase() + row.priority.slice(1)}</StatusPill>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <StatusPill tone={statusInfo.tone}>{statusInfo.label}</StatusPill>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center justify-end gap-3">
-                      <Link href={`/expenses/recurring/${row.id}`} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
-                        History
-                      </Link>
-                      <button type="button" onClick={() => setEditing(row.raw)} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
-                        Edit
-                      </button>
-                      <LifecycleActions id={row.id} status={row.status} />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <StatStrip
+        items={[
+          { label: "Active recurring expenses", value: summary.activeCount },
+          { label: "Expected this month", value: currency(summary.expectedThisMonth) },
+          { label: "Expected next 30 days", value: currency(summary.expectedNext30Days) },
+          { label: "Outstanding liabilities", value: currency(summary.outstandingLiabilities) },
+          {
+            label: "Overdue payments",
+            tone: summary.overdueCount > 0 ? "danger" : "default",
+            value: (
+              <>
+                {summary.overdueCount} {summary.overdueCount === 1 ? "item" : "items"}
+                {summary.overdueCount > 0 && <span className="ml-2 text-xs font-normal text-ink-2">{currency(summary.overdueAmount)}</span>}
+              </>
+            ),
+          },
+        ]}
+      />
 
-      {creating && (
-        <RecurringExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} onClose={() => setCreating(false)} />
+      <DataTable>
+        <thead>
+          <Tr className="hover:bg-transparent">
+            <Th>Expense</Th>
+            <Th>Account</Th>
+            <Th>Payable to</Th>
+            <Th align="right">Amount</Th>
+            <Th>Frequency</Th>
+            <Th>Next expense</Th>
+            <Th>Due date</Th>
+            <Th>Priority</Th>
+            <Th>Status</Th>
+            <Th align="right">Actions</Th>
+          </Tr>
+        </thead>
+        <tbody>
+          {expenses.map((row) => {
+            let preview: ReturnType<typeof previewNextOccurrence> | null = null;
+            try {
+              preview = previewNextOccurrence({
+                calendar,
+                startDate: row.raw.startDate,
+                recognitionRule: row.raw.recognitionRule,
+                recognitionDay: row.raw.recognitionDay,
+                dueRule: row.raw.dueRule,
+                dueRuleValue: row.raw.dueRuleValue,
+              });
+            } catch {
+              preview = null;
+            }
+            const statusInfo = STATUS_TONE[row.status];
+            return (
+              <Tr key={row.id}>
+                <Td className="font-medium">{row.expenseName}</Td>
+                <Td className="text-ink-2">{row.expenseAccountLabel}</Td>
+                <Td className="text-ink-2">{row.payee}</Td>
+                <Td numeric className="font-medium">
+                  <Amount value={row.amount} />
+                </Td>
+                <Td className="text-ink-2">{FREQUENCY_LABEL[row.frequency]}</Td>
+                <Td className="whitespace-nowrap text-ink-2">{preview ? <D value={preview.expenseDate} style="short" /> : "—"}</Td>
+                <Td className="whitespace-nowrap text-ink-2">{preview ? <D value={preview.dueDate} style="short" /> : "—"}</Td>
+                <Td>
+                  <StatusPill tone={PRIORITY_TONE[row.priority]}>{row.priority[0].toUpperCase() + row.priority.slice(1)}</StatusPill>
+                </Td>
+                <Td>
+                  <StatusPill tone={statusInfo.tone}>{statusInfo.label}</StatusPill>
+                </Td>
+                <Td>
+                  <div className="flex items-center justify-end gap-3">
+                    <Link href={`/expenses/recurring/${row.id}`} className="text-xs font-medium text-accent-text hover:underline">
+                      History
+                    </Link>
+                    <button type="button" onClick={() => setEditing(row.raw)} className="text-xs font-medium text-accent-text hover:underline">
+                      Edit
+                    </button>
+                    <LifecycleActions id={row.id} status={row.status} />
+                  </div>
+                </Td>
+              </Tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+      {expenses.length === 0 && (
+        <EmptyState
+          icon={Repeat}
+          title="No recurring expenses yet"
+          description="Add rent, subscriptions, or other regular expenses and they will be recorded on schedule."
+          action={
+            <Button variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+              New recurring expense
+            </Button>
+          }
+        />
       )}
-      {editing && (
-        <RecurringExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} initial={editing} onClose={() => setEditing(null)} />
-      )}
+
+      {creating && <RecurringExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} onClose={() => setCreating(false)} />}
+      {editing && <RecurringExpenseFormModal vendors={vendors} categoryAccounts={categoryAccounts} cashBankAccounts={cashBankAccounts} initial={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

@@ -105,7 +105,7 @@ export function VatPeriodHover({ row }: { row: VatWorksheetRow }) {
   const differs = details && (Math.abs(details.salesTaxable - row.netSales) > 0.005 || Math.abs(details.salesVat - row.salesVat) > 0.005 || Math.abs(details.purchasesTaxable - row.netPurchase) > 0.005 || Math.abs(details.purchasesVat - row.purchaseVat) > 0.005);
 
   return (
-    <span ref={anchor} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} onClick={show} tabIndex={0} className="cursor-help underline decoration-dotted decoration-gray-400 underline-offset-4 outline-none focus:text-[var(--color-primary)]">
+    <span ref={anchor} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} onClick={show} tabIndex={0} className="cursor-help underline decoration-dotted decoration-gray-400 underline-offset-4 outline-none focus:text-[var(--accent-text)]">
       <PeriodLabel start={row.periodStart} end={row.periodEnd} fallback={row.periodLabel} />
       {open && box && (
         <span

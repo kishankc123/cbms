@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { listRules } from "../actions";
 import { RulesTable } from "./rules-table";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function RulesPage() {
   const denied = await guardView("audit");
@@ -8,7 +9,7 @@ export default async function RulesPage() {
   const rules = await listRules();
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Rules & Policies</h1>
+      <PageHeader title="Rules & Policies" className="!mb-0" />
       <RulesTable rules={rules} />
     </div>
   );

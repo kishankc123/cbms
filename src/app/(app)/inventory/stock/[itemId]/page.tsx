@@ -43,37 +43,37 @@ export default async function StockCardPage({ params }: { params: Promise<{ item
         <Link href="/inventory/stock" className="text-xs text-gray-500 hover:underline">
           ← Stock
         </Link>
-        <h1 className="text-2xl font-semibold text-gray-900">{item.name}</h1>
+        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{item.name}</h1>
         <p className="text-sm text-gray-500">
           On hand {Number(item.stockQuantity)} · value {fmt(Number(item.stockValue))}
         </p>
       </div>
 
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Date</th>
-            <th className="px-4 py-2 font-medium">Movement</th>
-            <th className="px-4 py-2 font-medium">Reference</th>
-            <th className="px-4 py-2 text-right font-medium">Quantity</th>
-            <th className="px-4 py-2 text-right font-medium">Value</th>
-            <th className="px-4 py-2 text-right font-medium">Balance qty</th>
-            <th className="px-4 py-2 text-right font-medium">Balance value</th>
+            <th className="px-2.5 py-1.5 font-medium">Date</th>
+            <th className="px-2.5 py-1.5 font-medium">Movement</th>
+            <th className="px-2.5 py-1.5 font-medium">Reference</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Quantity</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Value</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Balance qty</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Balance value</th>
           </tr>
         </thead>
         <tbody>
           {card.map((m) => (
-            <tr key={m.id} className="border-t border-gray-100">
-              <td className="px-4 py-2"><D value={m.date} /></td>
-              <td className="px-4 py-2">
+            <tr key={m.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5"><D value={m.date} /></td>
+              <td className="px-2.5 py-1.5">
                 {LABEL[m.type] ?? m.type}
                 {m.isReversal && <span className="ml-2 text-xs text-gray-500">(undone)</span>}
               </td>
-              <td className="px-4 py-2 text-gray-500">{(m.sourceId && number.get(m.sourceId)) || m.note || "—"}</td>
-              <td className="px-4 py-2 text-right">{m.quantity > 0 ? "+" : ""}{m.quantity}</td>
-              <td className="px-4 py-2 text-right">{m.value > 0 ? "+" : ""}{fmt(m.value)}</td>
-              <td className="px-4 py-2 text-right">{m.balanceQuantity}</td>
-              <td className="px-4 py-2 text-right">{fmt(m.balanceValue)}</td>
+              <td className="px-2.5 py-1.5 text-gray-500">{(m.sourceId && number.get(m.sourceId)) || m.note || "—"}</td>
+              <td className="px-2.5 py-1.5 text-right">{m.quantity > 0 ? "+" : ""}{m.quantity}</td>
+              <td className="px-2.5 py-1.5 text-right">{m.value > 0 ? "+" : ""}{fmt(m.value)}</td>
+              <td className="px-2.5 py-1.5 text-right">{m.balanceQuantity}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(m.balanceValue)}</td>
             </tr>
           ))}
           {card.length === 0 && (

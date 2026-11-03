@@ -116,7 +116,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 setRecorded(false);
               }}
               className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                taxTypeKey === t.key ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                taxTypeKey === t.key ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--accent-text)]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
             >
               {t.name}
@@ -133,7 +133,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 setFilingBasis(e.target.value as FilingBasis);
                 setRecorded(false);
               }}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
             >
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
@@ -151,7 +151,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                   setTerm(+e.target.value);
                   setRecorded(false);
                 }}
-                className="flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
               >
                 {TERMS.map((t) => (
                   <option key={t.n} value={t.n}>
@@ -166,7 +166,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 setPeriodMonth(+e.target.value);
                 setRecorded(false);
               }}
-              className="flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
             >
               {monthNames(calendar).map((m, i) => (
                 <option key={m} value={i + 1}>
@@ -182,7 +182,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 else setPeriodYear(+e.target.value);
                 setRecorded(false);
               }}
-              className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3"
             >
               {years.map((y) => (
                 <option key={y} value={y}>
@@ -225,7 +225,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
               setRecorded(false);
             }}
             placeholder="0.00"
-            className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           />
         </div>
 
@@ -241,7 +241,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 setRecorded(false);
               }}
               placeholder="0.00"
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
             />
           </div>
         )}
@@ -291,7 +291,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                     type="button"
                     disabled={recording || breakdown.daysDelayed === 0 || (breakdown.filingPenalty + breakdown.paymentPenalty + breakdown.interest) <= 0}
                     onClick={handleRecord}
-                    className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
                   >
                     {recording ? "Recording…" : "Record this charge"}
                   </button>

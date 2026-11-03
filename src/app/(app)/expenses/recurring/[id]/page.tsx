@@ -41,7 +41,7 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
       <div className="flex items-start gap-3">
         <BackButton href="/expenses/recurring" label="Back to Recurring Expenses" />
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{recurring.expenseName}</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{recurring.expenseName}</h1>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">Recurring expense history</p>
         </div>
       </div>
@@ -87,18 +87,18 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">
-              <th className="px-4 py-2.5 font-medium">Period</th>
-              <th className="px-4 py-2.5 font-medium">Expense Date</th>
-              <th className="px-4 py-2.5 font-medium">Due Date</th>
-              <th className="px-4 py-2.5 font-medium text-right">Expected</th>
-              <th className="px-4 py-2.5 font-medium text-right">Paid</th>
-              <th className="px-4 py-2.5 font-medium text-right">Remaining</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 font-medium">Reference</th>
+              <th className="px-2.5 py-1.5 font-medium">Period</th>
+              <th className="px-2.5 py-1.5 font-medium">Expense Date</th>
+              <th className="px-2.5 py-1.5 font-medium">Due Date</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Expected</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Paid</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Remaining</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">Reference</th>
             </tr>
           </thead>
           <tbody>
@@ -113,20 +113,20 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
               const info = STATUS_INFO[p.status] ?? STATUS_INFO.expected;
               return (
                 <tr key={p.id} className="border-b border-[var(--card-border)] last:border-0">
-                  <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{p.periodLabel}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">
+                  <td className="px-2.5 py-1.5 font-medium text-[var(--text-primary)]">{p.periodLabel}</td>
+                  <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                     <D value={p.expenseDate} style="short" />
                   </td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.dueDate ? <D value={p.dueDate} style="short" /> : "—"}</td>
-                  <td className="px-4 py-2.5 text-right font-medium text-[var(--text-primary)]">{currency(p.expectedAmount)}</td>
-                  <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{p.amountPaid !== null ? currency(p.amountPaid) : "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{p.remaining !== null ? currency(p.remaining) : "—"}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{p.dueDate ? <D value={p.dueDate} style="short" /> : "—"}</td>
+                  <td className="px-2.5 py-1.5 text-right font-medium text-[var(--text-primary)]">{currency(p.expectedAmount)}</td>
+                  <td className="px-2.5 py-1.5 text-right text-[var(--text-secondary)]">{p.amountPaid !== null ? currency(p.amountPaid) : "—"}</td>
+                  <td className="px-2.5 py-1.5 text-right text-[var(--text-secondary)]">{p.remaining !== null ? currency(p.remaining) : "—"}</td>
+                  <td className="px-2.5 py-1.5">
                     <StatusPill tone={info.tone}>{info.label}</StatusPill>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-2.5 py-1.5">
                     {p.expenseNumber ? (
-                      <Link href={`/reports/journal-report?q=${p.expenseNumber}&from=${p.expenseDate}&to=${p.expenseDate}`} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+                      <Link href={`/reports/journal-report?q=${p.expenseNumber}&from=${p.expenseDate}&to=${p.expenseDate}`} className="text-xs font-medium text-[var(--accent-text)] hover:underline">
                         {p.expenseNumber}
                       </Link>
                     ) : (

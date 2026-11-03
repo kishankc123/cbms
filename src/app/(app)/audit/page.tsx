@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { getAuditOverview } from "./actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 const ACTION_LABEL: Record<string, string> = {
   period_closed: "Period closed",
@@ -27,10 +28,7 @@ export default async function AuditOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Audit</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Exceptions, locked periods, rules and the audit trail — what keeps your records clean.</p>
-      </div>
+      <PageHeader title="Audit" description="Exceptions, locked periods, rules and the audit trail — what keeps your records clean." />
 
       {data.exceptionsFiscalYear && <p className="text-xs text-gray-500">Exceptions are counted for fiscal year {data.exceptionsFiscalYear}, the one in view in the sidebar.</p>}
       <div className="grid grid-cols-4 gap-4">
@@ -57,24 +55,24 @@ export default async function AuditOverviewPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-900">Recent activity</h2>
-          <Link href="/audit/audit-trail" className="text-xs text-[var(--color-primary)] hover:underline">
+          <Link href="/audit/audit-trail" className="text-xs text-[var(--accent-text)] hover:underline">
             Open audit trail
           </Link>
         </div>
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Action</th>
-              <th className="px-4 py-2 font-medium">By</th>
-              <th className="px-4 py-2 font-medium">When</th>
+              <th className="px-2.5 py-1.5 font-medium">Action</th>
+              <th className="px-2.5 py-1.5 font-medium">By</th>
+              <th className="px-2.5 py-1.5 font-medium">When</th>
             </tr>
           </thead>
           <tbody>
             {data.recentActivity.map((a) => (
-              <tr key={a.id} className="border-t border-gray-100">
-                <td className="px-4 py-2">{ACTION_LABEL[a.action] ?? a.action}</td>
-                <td className="px-4 py-2">{a.userName}</td>
-                <td className="px-4 py-2 text-gray-500">{new Date(a.at).toLocaleString()}</td>
+              <tr key={a.id} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5">{ACTION_LABEL[a.action] ?? a.action}</td>
+                <td className="px-2.5 py-1.5">{a.userName}</td>
+                <td className="px-2.5 py-1.5 text-gray-500">{new Date(a.at).toLocaleString()}</td>
               </tr>
             ))}
             {data.recentActivity.length === 0 && (

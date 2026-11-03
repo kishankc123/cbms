@@ -40,45 +40,45 @@ export function OrgsTable({ data, filters }: { data: Data; filters: { q: string;
           <option value="suspended">Suspended</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <button type="submit" className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+        <button type="submit" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Search
         </button>
       </form>
 
       <div className={`${adminCard} overflow-x-auto`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Client code</th>
-              <th className="px-4 py-2 font-medium">Organization</th>
-              <th className="px-4 py-2 font-medium">PAN / VAT</th>
-              <th className="px-4 py-2 font-medium">Owner</th>
-              <th className="px-4 py-2 text-right font-medium">Members</th>
-              <th className="px-4 py-2 font-medium">Plan</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Created</th>
+              <th className="px-2.5 py-1.5 font-medium">Client code</th>
+              <th className="px-2.5 py-1.5 font-medium">Organization</th>
+              <th className="px-2.5 py-1.5 font-medium">PAN / VAT</th>
+              <th className="px-2.5 py-1.5 font-medium">Owner</th>
+              <th className="px-2.5 py-1.5 text-right font-medium">Members</th>
+              <th className="px-2.5 py-1.5 font-medium">Plan</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">Created</th>
             </tr>
           </thead>
           <tbody>
             {data.rows.map((o) => (
-              <tr key={o.id} className="border-t border-[var(--card-border)]">
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{o.clientCode ?? "—"}</td>
-                <td className="px-4 py-2 font-medium">
-                  <Link href={`/admin/organizations/${o.id}`} className="text-[var(--color-primary)] hover:underline">
+              <tr key={o.id} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{o.clientCode ?? "—"}</td>
+                <td className="px-2.5 py-1.5 font-medium">
+                  <Link href={`/admin/organizations/${o.id}`} className="text-[var(--accent-text)] hover:underline">
                     {o.name}
                   </Link>
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{o.pan ?? "—"}</td>
-                <td className="px-4 py-2">{o.owner ?? "—"}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{o.members}</td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{o.pan ?? "—"}</td>
+                <td className="px-2.5 py-1.5">{o.owner ?? "—"}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{o.members}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   {o.plan ?? "—"}
                   {o.planStatus ? ` (${o.planStatus.replace("_", " ")})` : ""}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={orgTone(o.status)}>{o.status === "active" ? "Active" : o.status === "suspended" ? "Suspended" : "Cancelled"}</StatusPill>
                 </td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">{when(o.createdAt)}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{when(o.createdAt)}</td>
               </tr>
             ))}
             {data.rows.length === 0 && (

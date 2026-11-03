@@ -39,15 +39,15 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
           </p>
         )}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Link href={viewHref} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
+          <Link href={viewHref} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             View {noun}s
           </Link>
           {fixable > 0 && (
-            <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--surface-muted-bg)]">
+            <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--accent-text)] hover:bg-[var(--surface-muted-bg)]">
               Fix and import the {fixable} remaining row{fixable === 1 ? "" : "s"}
             </button>
           )}
-          <button type="button" onClick={onAnother} className="rounded border border-gray-300 bg-white px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <button type="button" onClick={onAnother} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Import another file
           </button>
         </div>
@@ -57,7 +57,7 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
         <section className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{result.skipped.length} row{result.skipped.length === 1 ? "" : "s"} not imported</h2>
-            <button type="button" onClick={downloadSkipped} className="text-sm text-[var(--color-primary)] hover:underline">
+            <button type="button" onClick={downloadSkipped} className="text-sm text-[var(--accent-text)] hover:underline">
               Download list
             </button>
           </div>

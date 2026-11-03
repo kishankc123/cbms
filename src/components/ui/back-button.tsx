@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 
 /**
  * Circular icon-only "back" affordance — the shared replacement for the inline "← Label" text
@@ -14,11 +15,9 @@ export function BackButton({ href, label, className }: { href: string; label: st
       href={href}
       aria-label={label}
       title={label}
-      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--card-border)] ${className ?? ""}`}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink transition-colors hover:bg-[var(--border)] ${className ?? ""}`}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 18l-6-6 6-6" />
-      </svg>
+      <ChevronLeft size={16} strokeWidth={2} />
     </Link>
   );
 }

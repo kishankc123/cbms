@@ -63,21 +63,21 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Mode</th>
-              <th className="px-4 py-2 font-medium">Linked accounts</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2" />
+              <th className="px-2.5 py-1.5 font-medium">Mode</th>
+              <th className="px-2.5 py-1.5 font-medium">Linked accounts</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
+              <th className="px-2.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
             {data.modes.map((m) => (
-              <tr key={m.id} className="border-t border-[var(--card-border)] align-top">
-                <td className="px-4 py-2 font-medium">{m.name}</td>
-                <td className="px-4 py-2 text-[var(--text-secondary)]">
+              <tr key={m.id} className="border-b border-line transition-colors hover:bg-hover align-top">
+                <td className="px-2.5 py-1.5 font-medium">{m.name}</td>
+                <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   {m.accounts.length === 0 ? (
                     <span>Not linked yet</span>
                   ) : (
@@ -91,11 +91,11 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
                     </ul>
                   )}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-1.5">
                   <StatusPill tone={m.isActive ? "success" : "pending"}>{m.isActive ? "Active" : "Inactive"}</StatusPill>
                 </td>
-                <td className="whitespace-nowrap px-4 py-2 text-right">
-                  <button type="button" className="mr-3 text-[var(--color-primary)] hover:underline" onClick={() => startEdit(m)}>
+                <td className="whitespace-nowrap px-2.5 py-1.5 text-right">
+                  <button type="button" className="mr-3 text-[var(--accent-text)] hover:underline" onClick={() => startEdit(m)}>
                     Edit
                   </button>
                   <button type="button" className="text-red-600 hover:underline" onClick={() => setDeleting(m)}>
@@ -123,7 +123,7 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
 
       {editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setEditing(null)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !saving && setEditing(null)} />
           <div className="relative max-h-[85vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-lg bg-[var(--card-bg)] p-5 shadow-lg">
             <h2 className="text-lg font-medium text-[var(--text-primary)]">{editing.id ? "Edit mode" : "Add mode"}</h2>
             <div>

@@ -6,6 +6,7 @@ import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/l
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const fmt = (n: number) => n.toFixed(2);
@@ -41,44 +42,44 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Payroll Summary</h1>
+        <PageHeader title="Payroll Summary" className="!mb-0" />
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
       <p className="text-sm text-gray-500">
         <D value={from} /> – <D value={to} />
       </p>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Payroll Run</th>
-            <th className="px-4 py-2 font-medium text-right">Employees</th>
-            <th className="px-4 py-2 font-medium text-right">Gross Pay</th>
-            <th className="px-4 py-2 font-medium text-right">Allowances</th>
-            <th className="px-4 py-2 font-medium text-right">Overtime</th>
-            <th className="px-4 py-2 font-medium text-right">Benefits</th>
-            <th className="px-4 py-2 font-medium text-right">Deductions</th>
-            <th className="px-4 py-2 font-medium text-right">TDS</th>
-            <th className="px-4 py-2 font-medium text-right">Advance Recovered</th>
-            <th className="px-4 py-2 font-medium text-right">Net Pay</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Payroll Run</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Employees</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Gross Pay</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Allowances</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Overtime</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Benefits</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Deductions</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">TDS</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Advance Recovered</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Net Pay</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {runs.map((r) => (
-            <tr key={r.runId} className="border-t border-gray-100">
-              <td className="px-4 py-2">{r.label}</td>
-              <td className="px-4 py-2 text-right">{r.employeeCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.grossPay)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.allowances)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.overtimeAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.benefitsAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.deductions)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.tdsAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.advanceRecovered)}</td>
-              <td className="px-4 py-2 text-right font-medium">{fmt(r.netPay)}</td>
-              <td className="px-4 py-2 whitespace-nowrap">
-                <Link href={`/payroll/salary-sheet/${r.runId}`} className="text-xs text-[var(--color-primary)] hover:underline">
+            <tr key={r.runId} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5">{r.label}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.employeeCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.grossPay)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.allowances)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.overtimeAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.benefitsAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.deductions)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.tdsAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.advanceRecovered)}</td>
+              <td className="px-2.5 py-1.5 text-right font-medium">{fmt(r.netPay)}</td>
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
+                <Link href={`/payroll/salary-sheet/${r.runId}`} className="text-xs text-[var(--accent-text)] hover:underline">
                   Open in Salary Sheet
                 </Link>
               </td>
@@ -95,17 +96,17 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
         {runs.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right">{totals.employeeCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.grossPay)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.allowances)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.overtimeAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.benefitsAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.deductions)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.tdsAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.advanceRecovered)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.netPay)}</td>
-              <td className="px-4 py-2"></td>
+              <td className="px-2.5 py-1.5">Total</td>
+              <td className="px-2.5 py-1.5 text-right">{totals.employeeCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.grossPay)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.allowances)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.overtimeAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.benefitsAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.deductions)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.tdsAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.advanceRecovered)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.netPay)}</td>
+              <td className="px-2.5 py-1.5"></td>
             </tr>
           </tfoot>
         )}

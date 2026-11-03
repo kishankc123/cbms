@@ -200,7 +200,7 @@ export function CompanyForm({ data }: { data: Data }) {
         {dialog}
         {saved && <span className="text-xs text-green-600">Saved</span>}
         {data.canEdit && (
-          <button type="button" disabled={saving || changes.length === 0} onClick={handleSaveClick} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+          <button type="button" disabled={saving || changes.length === 0} onClick={handleSaveClick} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {saving ? "Saving..." : "Save changes"}
           </button>
         )}
@@ -208,13 +208,13 @@ export function CompanyForm({ data }: { data: Data }) {
 
       {reviewing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setReviewing(false)} />
-          <div className="relative w-full max-w-md space-y-4 rounded-lg bg-white p-5 shadow-lg">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !saving && setReviewing(false)} />
+          <div className="relative w-full max-w-md space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Review changes</h2>
             <table className="w-full text-sm">
               <tbody>
                 {changes.map((f) => (
-                  <tr key={f} className="border-t border-gray-100 align-top">
+                  <tr key={f} className="border-b border-line transition-colors hover:bg-hover align-top">
                     <td className="py-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap">{FIELD_LABEL[f]}</td>
                     <td className="py-1.5">
                       <span className="text-gray-400 line-through">{data.values[f] || "—"}</span>
@@ -230,7 +230,7 @@ export function CompanyForm({ data }: { data: Data }) {
               <button type="button" disabled={saving} onClick={() => setReviewing(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50">
                 Cancel
               </button>
-              <button type="button" disabled={saving} onClick={confirmSave} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+              <button type="button" disabled={saving} onClick={confirmSave} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {saving ? "Saving..." : "Confirm & save"}
               </button>
             </div>

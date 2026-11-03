@@ -84,7 +84,7 @@ function OpeningDateCard({ openingDate }: { openingDate: string | null }) {
           {openingDate ? "Inventory history begins on this date. Nothing that moves stock can be dated before it." : "Set the date inventory tracking begins before entering opening stock."}
         </p>
       </div>
-      <button type="button" onClick={() => setOpen(true)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
         {openingDate ? "Change date" : "Set date"}
       </button>
       {open && <OpeningDateModal current={openingDate} onClose={() => setOpen(false)} />}
@@ -132,8 +132,8 @@ function OpeningDateModal({ current, onClose }: { current: string | null; onClos
   const blocked = (preview?.blockerCount ?? 0) > 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-lg space-y-4 rounded-lg bg-white p-5 shadow-lg">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-lg space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
         <h2 className="text-base font-semibold text-gray-900">{current ? "Change the Inventory Opening Date" : "Set the Inventory Opening Date"}</h2>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Inventory Opening Date</label>
@@ -187,7 +187,7 @@ function OpeningDateModal({ current, onClose }: { current: string | null; onClos
           <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
             Cancel
           </button>
-          <button type="button" onClick={confirm} disabled={saving || !preview || blocked || !reviewed} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" onClick={confirm} disabled={saving || !preview || blocked || !reviewed} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {saving ? "Saving..." : "Confirm"}
           </button>
         </div>
@@ -236,15 +236,15 @@ function SavedRows({ rows, unitName, disabled }: { rows: OpeningRow[]; unitName:
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-900">Opening balances</h3>
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Item</th>
-            <th className="px-4 py-2 font-medium">Unit</th>
-            <th className="px-4 py-2 text-right font-medium">Quantity</th>
-            <th className="px-4 py-2 text-right font-medium">Unit cost</th>
-            <th className="px-4 py-2 text-right font-medium">Total value</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Item</th>
+            <th className="px-2.5 py-1.5 font-medium">Unit</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Quantity</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Unit cost</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Total value</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -253,25 +253,25 @@ function SavedRows({ rows, unitName, disabled }: { rows: OpeningRow[]; unitName:
             const q = parseFloat(quantity) || 0;
             const c = parseFloat(unitCost) || 0;
             return (
-              <tr key={r.itemId} className="border-t border-gray-100">
-                <td className="px-4 py-2">{r.name}</td>
-                <td className="px-4 py-2 text-gray-500">{unitName.get(r.unitId ?? "") ?? "—"}</td>
+              <tr key={r.itemId} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5">{r.name}</td>
+                <td className="px-2.5 py-1.5 text-gray-500">{unitName.get(r.unitId ?? "") ?? "—"}</td>
                 {editing ? (
                   <>
-                    <td className="px-4 py-1 text-right"><input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-24 rounded border border-gray-300 px-1.5 py-1 text-right text-sm" /></td>
-                    <td className="px-4 py-1 text-right"><input type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="w-24 rounded border border-gray-300 px-1.5 py-1 text-right text-sm" /></td>
-                    <td className="px-4 py-2 text-right">{fmt(q * c)}</td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <td className="px-4 py-1 text-right"><input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
+                    <td className="px-4 py-1 text-right"><input type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
+                    <td className="px-2.5 py-1.5 text-right">{fmt(q * c)}</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
                       <button type="button" onClick={() => reviewEdit(r)} className="text-xs text-gray-700 hover:underline">Review &amp; save</button>
                       <button type="button" onClick={() => setEditingId(null)} className="ml-3 text-xs text-gray-500 hover:underline">Cancel</button>
                     </td>
                   </>
                 ) : (
                   <>
-                    <td className="px-4 py-2 text-right">{r.quantity}</td>
-                    <td className="px-4 py-2 text-right">{fmt(r.unitCost)}</td>
-                    <td className="px-4 py-2 text-right">{fmt(r.value)}</td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <td className="px-2.5 py-1.5 text-right">{r.quantity}</td>
+                    <td className="px-2.5 py-1.5 text-right">{fmt(r.unitCost)}</td>
+                    <td className="px-2.5 py-1.5 text-right">{fmt(r.value)}</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
                       <button type="button" disabled={disabled} onClick={() => startEdit(r)} className="text-xs text-gray-600 hover:underline disabled:opacity-40">Edit</button>
                       <button type="button" disabled={disabled} onClick={() => reviewDelete(r)} className="ml-3 text-xs text-red-600 hover:underline disabled:opacity-40">Delete</button>
                     </td>
@@ -327,8 +327,8 @@ function ImpactDialog({ review, onClose, onDone }: { review: { kind: "edit" | "d
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-lg space-y-3 rounded-lg bg-white p-5 shadow-lg">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-lg space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
         <h2 className="text-base font-semibold text-gray-900">{kind === "edit" ? "Review the change to" : "Delete the opening stock of"} {row.name}</h2>
         {preview.before && (
           <p className="text-sm text-gray-700">
@@ -469,13 +469,13 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
         </div>
       </div>
       <div className="flex justify-end">
-        <button type="button" onClick={add} disabled={disabled} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">+ Add product</button>
+        <button type="button" onClick={add} disabled={disabled} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">+ Add product</button>
       </div>
 
       {staged.length > 0 && (
         <>
-          <table className="w-full overflow-hidden rounded-lg border border-gray-200 text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-1.5 font-medium">Product</th>
                 <th className="px-3 py-1.5 text-right font-medium">Quantity</th>
@@ -486,7 +486,7 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
             </thead>
             <tbody>
               {staged.map((s) => (
-                <tr key={s.itemId} className="border-t border-gray-100">
+                <tr key={s.itemId} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-1.5">{s.name}{s.unit ? <span className="text-gray-400"> · {s.unit}</span> : null}</td>
                   <td className="px-3 py-1.5 text-right">{s.quantity}</td>
                   <td className="px-3 py-1.5 text-right">{fmt(s.unitCost)}</td>
@@ -497,7 +497,7 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
             </tbody>
           </table>
           <div className="flex justify-end">
-            <button type="button" onClick={saveAll} disabled={saving} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">{saving ? "Saving..." : "Save opening stock"}</button>
+            <button type="button" onClick={saveAll} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">{saving ? "Saving..." : "Save opening stock"}</button>
           </div>
         </>
       )}
@@ -513,8 +513,8 @@ function History({ history }: { history: HistoryRow[] }) {
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-900">Opening stock history</h3>
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-3 py-2 font-medium">Date / time</th>
             <th className="px-3 py-2 font-medium">User</th>
@@ -527,7 +527,7 @@ function History({ history }: { history: HistoryRow[] }) {
         </thead>
         <tbody>
           {history.map((h) => (
-            <tr key={h.id} className="border-t border-gray-100 align-top">
+            <tr key={h.id} className="border-b border-line transition-colors hover:bg-hover align-top">
               <td className="px-3 py-2 whitespace-nowrap text-gray-600">{new Date(h.when).toLocaleString()}</td>
               <td className="px-3 py-2">{h.user}</td>
               <td className="px-3 py-2">{ACTION_LABEL[h.action] ?? h.action}</td>

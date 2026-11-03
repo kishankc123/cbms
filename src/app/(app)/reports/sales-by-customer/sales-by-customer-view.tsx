@@ -33,26 +33,26 @@ export function SalesByCustomerView({ rows, from, to }: { rows: SalesByCustomerR
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Customer</th>
-            <th className="px-4 py-2 font-medium text-right">Invoices</th>
-            <th className="px-4 py-2 font-medium text-right">Total Invoiced</th>
-            <th className="px-4 py-2 font-medium text-right">Returns</th>
-            <th className="px-4 py-2 font-medium text-right">Return Amount</th>
-            <th className="px-4 py-2 font-medium text-right">Net Sales</th>
+            <th className="px-2.5 py-1.5 font-medium">Customer</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Invoices</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Total Invoiced</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Returns</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Return Amount</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Net Sales</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.customerId} className="border-t border-gray-100">
-              <td className="px-4 py-2">
+            <tr key={r.customerId} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5">
                 {r.accountId ? (
                   <AccountLink accountId={r.accountId} from={from} to={to}>
                     {r.customerName}
@@ -61,11 +61,11 @@ export function SalesByCustomerView({ rows, from, to }: { rows: SalesByCustomerR
                   r.customerName
                 )}
               </td>
-              <td className="px-4 py-2 text-right">{r.invoiceCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.totalInvoiced)}</td>
-              <td className="px-4 py-2 text-right">{r.returnCount || ""}</td>
-              <td className="px-4 py-2 text-right">{r.returnAmount ? fmt(r.returnAmount) : ""}</td>
-              <td className="px-4 py-2 text-right font-medium">{fmt(r.netSales)}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.invoiceCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.totalInvoiced)}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.returnCount || ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.returnAmount ? fmt(r.returnAmount) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right font-medium">{fmt(r.netSales)}</td>
             </tr>
           ))}
           {rows.length === 0 && (
@@ -79,12 +79,12 @@ export function SalesByCustomerView({ rows, from, to }: { rows: SalesByCustomerR
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right">{totals.invoiceCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.totalInvoiced)}</td>
-              <td className="px-4 py-2 text-right">{totals.returnCount}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.returnAmount)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.netSales)}</td>
+              <td className="px-2.5 py-1.5">Total</td>
+              <td className="px-2.5 py-1.5 text-right">{totals.invoiceCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.totalInvoiced)}</td>
+              <td className="px-2.5 py-1.5 text-right">{totals.returnCount}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.returnAmount)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.netSales)}</td>
             </tr>
           </tfoot>
         )}

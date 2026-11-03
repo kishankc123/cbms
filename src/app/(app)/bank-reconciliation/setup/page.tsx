@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { listBankAccounts, getBankAccountLedgerOptions } from "../actions";
 import { BankAccountsTable } from "./bank-accounts-table";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function BankAccountSetupPage() {
   const denied = await guardView("bank_reconciliation");
@@ -9,7 +10,7 @@ export default async function BankAccountSetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Bank Accounts</h1>
+      <PageHeader title="Bank Accounts" className="!mb-0" />
       <BankAccountsTable bankAccounts={bankAccounts} ledgerOptions={ledgerOptions} />
     </div>
   );

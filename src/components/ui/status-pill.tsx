@@ -2,19 +2,20 @@
 // dark text, never a bright saturated fill. Map each domain status string to
 // one of these four tones at the call site — do not invent new ad-hoc
 // color classes for status badges.
-export type StatusTone = "success" | "pending" | "action" | "critical";
+export type StatusTone = "success" | "pending" | "action" | "critical" | "neutral";
 
 const TONE_CLASSES: Record<StatusTone, string> = {
   success: "bg-[var(--status-success-bg)] text-[var(--status-success-text)] border-[var(--status-success-border)]",
   pending: "bg-[var(--status-pending-bg)] text-[var(--status-pending-text)] border-[var(--status-pending-border)]",
   action: "bg-[var(--status-action-bg)] text-[var(--status-action-text)] border-[var(--status-action-border)]",
   critical: "bg-[var(--status-critical-bg)] text-[var(--status-critical-text)] border-[var(--status-critical-border)]",
+  neutral: "bg-surface-2 text-ink-2 border-line",
 };
 
 export function StatusPill({ tone, children }: { tone: StatusTone; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center rounded-md border px-2 py-px text-[11px] font-medium leading-4 whitespace-nowrap ${TONE_CLASSES[tone]}`}
     >
       {children}
     </span>

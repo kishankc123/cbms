@@ -5,6 +5,7 @@ import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { paymentModesByBill } from "@/lib/purchases/bill-payment-modes";
 import { vendors, purchaseBills, items } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { StockableTabs } from "../stockable-tabs";
 
@@ -35,13 +36,8 @@ export default async function StockablePurchasePage() {
   const paymentModes = await paymentModesByBill(session.tenantId, billList.map((b) => b.id));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Stockable Purchase</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Record inventory purchases and settlement details.</p>
-        </div>
-      </div>
+    <div>
+      <PageHeader title="Stockable purchase" description="Record inventory purchases and settlement details." />
 
       <StockableTabs
         vendors={vendorList}

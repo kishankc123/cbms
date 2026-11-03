@@ -4,6 +4,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { employees } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 
 // Benefits are historical per-employee records (Employees > profile >
 // Benefits tab) — this page is the entry point for picking which employee's
@@ -20,23 +21,23 @@ export default async function BenefitsIndexPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Benefits</h1>
+      <PageHeader title="Benefits" className="!mb-0" />
       <p className="text-sm text-gray-500">Select an employee to view or add their benefits.</p>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Employee ID</th>
-            <th className="px-4 py-2 font-medium">Full Name</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Employee ID</th>
+            <th className="px-2.5 py-1.5 font-medium">Full Name</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {employeeList.map((e) => (
-            <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 font-mono">{e.employeeCode}</td>
-              <td className="px-4 py-2">{e.fullName}</td>
-              <td className="px-4 py-2 text-right">
+            <tr key={e.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5 font-mono">{e.employeeCode}</td>
+              <td className="px-2.5 py-1.5">{e.fullName}</td>
+              <td className="px-2.5 py-1.5 text-right">
                 <Link href={`/payroll/employees/${e.id}`} className="text-xs text-gray-600 hover:underline">
                   Open profile
                 </Link>

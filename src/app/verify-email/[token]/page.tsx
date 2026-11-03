@@ -1,4 +1,5 @@
 import { VerifyForm } from "./verify-form";
+import { PageHeader } from "@/components/ui/page-header";
 
 // Verification happens on a button press (not on page load) so email security
 // scanners that pre-open links can't consume the token.
@@ -7,7 +8,7 @@ export default async function VerifyEmailPage({ params }: { params: Promise<{ to
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4">
-        <h1 className="text-xl font-semibold text-gray-900">Verify your email</h1>
+        <PageHeader title="Verify your email" className="!mb-0" />
         <VerifyForm token={token} />
       </div>
     </div>

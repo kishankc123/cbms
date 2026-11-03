@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Button } from "./button";
 
 // The one confirmation pop-up. Ask before anything that deletes, voids, closes, ends or can't easily be undone:
 //
@@ -49,19 +50,19 @@ function Dialog({ pending, onAnswer }: { pending: Pending; onAnswer: (yes: boole
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={() => onAnswer(false)} />
-      <div role="alertdialog" aria-modal="true" aria-label={title ?? "Please confirm"} className="relative w-full max-w-sm space-y-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
-        {title && <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>}
-        <p className="whitespace-pre-line text-sm text-[var(--text-primary)]">{pending.message}</p>
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => onAnswer(false)} />
+      <div role="alertdialog" aria-modal="true" aria-label={title ?? "Please confirm"} className="relative w-full max-w-sm space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
+        {title && <h2 className="text-sm font-semibold text-ink">{title}</h2>}
+        <p className="whitespace-pre-line text-[13px] text-ink">{pending.message}</p>
         <div className="flex justify-end gap-2">
           {cancelLabel && (
-            <button ref={cancelRef} type="button" onClick={() => onAnswer(false)} className="rounded px-4 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
+            <Button ref={cancelRef} variant="secondary" onClick={() => onAnswer(false)}>
               {cancelLabel}
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={() => onAnswer(true)} className={`rounded px-4 py-1.5 text-sm text-white ${danger ? "bg-red-600 hover:bg-red-700" : "bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]"}`}>
+          <Button variant={danger ? "danger" : "primary"} onClick={() => onAnswer(true)}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

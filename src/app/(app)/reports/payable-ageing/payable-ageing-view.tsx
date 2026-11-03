@@ -30,28 +30,28 @@ export function PayableAgeingView({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Supplier</th>
-            <th className="px-4 py-2 font-medium text-right">Current</th>
-            <th className="px-4 py-2 font-medium text-right">1–30 days</th>
-            <th className="px-4 py-2 font-medium text-right">31–60 days</th>
-            <th className="px-4 py-2 font-medium text-right">61–90 days</th>
-            <th className="px-4 py-2 font-medium text-right">90+ days</th>
-            <th className="px-4 py-2 font-medium text-right">Not linked to a bill</th>
-            <th className="px-4 py-2 font-medium text-right">Total</th>
+            <th className="px-2.5 py-1.5 font-medium">Supplier</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Current</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">1–30 days</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">31–60 days</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">61–90 days</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">90+ days</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Not linked to a bill</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Total</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.vendorId} className="border-t border-gray-100">
-              <td className="px-4 py-2">
+            <tr key={r.vendorId} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5">
                 {r.accountId ? (
                   <AccountLink accountId={r.accountId} to={asOf}>
                     {r.name}
@@ -60,13 +60,13 @@ export function PayableAgeingView({
                   r.name
                 )}
               </td>
-              <td className="px-4 py-2 text-right">{r.current ? fmt(r.current) : ""}</td>
-              <td className="px-4 py-2 text-right">{r.d1to30 ? fmt(r.d1to30) : ""}</td>
-              <td className="px-4 py-2 text-right">{r.d31to60 ? fmt(r.d31to60) : ""}</td>
-              <td className="px-4 py-2 text-right">{r.d61to90 ? fmt(r.d61to90) : ""}</td>
-              <td className="px-4 py-2 text-right">{r.d90plus ? fmt(r.d90plus) : ""}</td>
-              <td className="px-4 py-2 text-right text-gray-500">{r.unapplied ? fmt(r.unapplied) : ""}</td>
-              <td className="px-4 py-2 text-right font-medium">{fmt(r.total)}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.current ? fmt(r.current) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.d1to30 ? fmt(r.d1to30) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.d31to60 ? fmt(r.d31to60) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.d61to90 ? fmt(r.d61to90) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right">{r.d90plus ? fmt(r.d90plus) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right text-gray-500">{r.unapplied ? fmt(r.unapplied) : ""}</td>
+              <td className="px-2.5 py-1.5 text-right font-medium">{fmt(r.total)}</td>
             </tr>
           ))}
           {rows.length === 0 && (
@@ -80,14 +80,14 @@ export function PayableAgeingView({
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-              <td className="px-4 py-2">Total</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.current)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.d1to30)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.d31to60)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.d61to90)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.d90plus)}</td>
-              <td className="px-4 py-2 text-right text-gray-500">{fmt(totals.unapplied)}</td>
-              <td className="px-4 py-2 text-right">{fmt(totals.total)}</td>
+              <td className="px-2.5 py-1.5">Total</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.current)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.d1to30)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.d31to60)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.d61to90)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.d90plus)}</td>
+              <td className="px-2.5 py-1.5 text-right text-gray-500">{fmt(totals.unapplied)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(totals.total)}</td>
             </tr>
           </tfoot>
         )}

@@ -91,8 +91,8 @@ export function UploadStatementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-3xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Upload Statement</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -113,7 +113,7 @@ export function UploadStatementModal({
                 onImported();
                 onClose();
               }}
-              className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-6 py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
             >
               Done
             </button>
@@ -125,7 +125,7 @@ export function UploadStatementModal({
             {loading && <p className="text-sm text-gray-400">Reading file...</p>}
             <p className="text-xs text-gray-500">
               Use your bank&apos;s file as it is and match its columns on the next screen. Need an example?{" "}
-              <button type="button" onClick={downloadSample} className="text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={downloadSample} className="text-[var(--accent-text)] hover:underline">
                 Download sample file
               </button>
             </p>
@@ -143,7 +143,7 @@ export function UploadStatementModal({
                   <select
                     value={mapping[f.key] ?? ""}
                     onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
                   >
                     <option value="">Not mapped</option>
                     {preview.headers.map((h) => (
@@ -162,13 +162,13 @@ export function UploadStatementModal({
                 value={saveAsTemplateName}
                 onChange={(e) => setSaveAsTemplateName(e.target.value)}
                 placeholder="e.g. Nabil Bank CSV"
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
               />
             </div>
 
-            <div className="overflow-x-auto rounded border border-gray-200">
+            <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50">
+                <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                   <tr>
                     {preview.headers.map((h) => (
                       <th key={h} className="px-2 py-1 text-left font-medium text-gray-500 whitespace-nowrap">
@@ -179,7 +179,7 @@ export function UploadStatementModal({
                 </thead>
                 <tbody>
                   {preview.sampleRows.map((row, i) => (
-                    <tr key={i} className="border-t border-gray-100">
+                    <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                       {row.map((c, j) => (
                         <td key={j} className="px-2 py-1 whitespace-nowrap">
                           {c}
@@ -200,7 +200,7 @@ export function UploadStatementModal({
                 type="button"
                 disabled={loading || !mapping.date || (!mapping.debit && !mapping.credit && !mapping.amount)}
                 onClick={handleImport}
-                className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
               >
                 {loading ? "Importing..." : "Import"}
               </button>

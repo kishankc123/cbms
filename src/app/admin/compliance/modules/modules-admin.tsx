@@ -72,7 +72,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
       <section className={`${adminCard} overflow-x-auto p-5`}>
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">{moduleLabel(moduleKey)}: applicable taxes</h2>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-3 font-medium">Tax</th>
               <th className="py-1 pr-3 font-medium">Worked out by</th>
@@ -86,7 +86,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
             {data.taxes.map((t) => {
               const row = rowOf(t.key);
               return (
-                <tr key={t.key} className="border-t border-[var(--card-border)] align-top">
+                <tr key={t.key} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td className="py-2 pr-3 font-medium text-[var(--text-primary)]">{t.name}</td>
                   {row ? (
                     <>
@@ -95,7 +95,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
                       <td className="py-2 pr-3">{priceBasisLabel(row.priceBasis)}</td>
                       <td className="py-2 pr-3">{postsToLabel(row.postsTo)}</td>
                       <td className="whitespace-nowrap py-2 text-right">
-                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, method: row.method, bearer: row.bearer, priceBasis: row.priceBasis, postsTo: row.postsTo })} className="mr-3 text-[var(--color-primary)] hover:underline">
+                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, method: row.method, bearer: row.bearer, priceBasis: row.priceBasis, postsTo: row.postsTo })} className="mr-3 text-[var(--accent-text)] hover:underline">
                           Edit
                         </button>
                         <button type="button" disabled={busy} onClick={() => remove(t.key, t.name)} className="text-red-600 hover:underline">
@@ -109,7 +109,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
                         <StatusPill tone="pending">Not applied</StatusPill>
                       </td>
                       <td className="py-2 text-right">
-                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, ...starting })} className="text-[var(--color-primary)] hover:underline">
+                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, ...starting })} className="text-[var(--accent-text)] hover:underline">
                           Apply
                         </button>
                       </td>
@@ -163,7 +163,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
           </div>
           <p className="text-xs text-[var(--text-secondary)]">Modules keep following their own rules for now; the platform records this and modules will read it as they are moved over one at a time. It reaches {reach}.</p>
           <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               {busy ? "Saving…" : "Save"}
             </button>
             <button type="button" disabled={busy} onClick={() => setEditing(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
@@ -178,7 +178,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
         <table className="w-full text-sm">
           <tbody>
             {data.taxes.map((t) => (
-              <tr key={t.key} className="border-t border-[var(--card-border)]">
+              <tr key={t.key} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="py-1.5 pr-3 font-medium text-[var(--text-primary)]">{t.name}</td>
                 <td className="py-1.5 text-[var(--text-secondary)]">{modulesOf(t.key).length ? modulesOf(t.key).map(moduleLabel).join(", ") : "No module yet"}</td>
               </tr>

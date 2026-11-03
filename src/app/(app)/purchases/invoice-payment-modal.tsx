@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { controlClass, Input } from "@/components/ui/field";
+import { Amount } from "@/components/ui/data-table";
 
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { modeId: string; accountId: string; amount: string };
@@ -42,14 +46,6 @@ export function InvoicePaymentModal({
       : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: total > 0 ? String(total) : "" }]
   );
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
-
   function updateLine(i: number, field: "amount", value: string) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
   }
@@ -67,19 +63,25 @@ export function InvoicePaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-
-      <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Record payment</h2>
-          <button type="button" onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600">
-            ✕
-          </button>
-        </div>
-
-        <p className="text-sm text-gray-600">
-          Invoice total: <span className="font-medium text-gray-900">{total.toFixed(2)}</span>
+    <Modal
+      size="md"
+      title="Record payment"
+      onClose={onCancel}
+      dismissible={!saving}
+      footer={
+        <>
+          <Button onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={overpaid} loading={saving} onClick={handleConfirm}>
+            Confirm
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-[13px] text-ink-2">
+          Invoice total: <Amount value={total} className="font-medium text-ink" />
         </p>
 
         <div className="space-y-2">
@@ -88,62 +90,30 @@ export function InvoicePaymentModal({
               <PaymentModeSelect
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
-                className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className={`${controlClass} flex-1`}
               />
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={line.amount}
-                onChange={(e) => updateLine(i, "amount", e.target.value)}
-                placeholder="Amount"
-                className="w-28 rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
+              <Input type="number" step="0.01" min="0" value={line.amount} onChange={(e) => updateLine(i, "amount", e.target.value)} placeholder="Amount" className="w-28 text-right" />
             </div>
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setLines((prev) => [...prev, { modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }])}
-          className="text-sm text-gray-600 hover:text-gray-900"
-        >
+        <Button variant="ghost" size="sm" onClick={() => setLines((prev) => [...prev, { modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }])}>
           + Add other payment option
-        </button>
+        </Button>
 
-        <div className="rounded border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+        <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px]">
           <div className="flex justify-between">
-            <span className="text-gray-600">Amount entered</span>
-            <span className="font-medium text-gray-900">{totalEntered.toFixed(2)}</span>
+            <span className="text-ink-2">Amount entered</span>
+            <Amount value={totalEntered} className="font-medium" />
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">{remaining > 0 ? "Remaining (on credit)" : "Difference"}</span>
-            <span className={`font-medium ${remaining > 0 ? "text-amber-600" : "text-green-600"}`}>
-              {remaining.toFixed(2)}
-            </span>
+            <span className="text-ink-2">{remaining > 0 ? "Remaining (on credit)" : "Difference"}</span>
+            <Amount value={remaining} className={`font-medium ${remaining > 0 ? "text-[var(--warning-text)]" : "text-[var(--success-text)]"}`} />
           </div>
         </div>
 
-        {overpaid && <p className="text-xs text-red-600">Amount entered cannot exceed the invoice total.</p>}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={saving || overpaid}
-            onClick={handleConfirm}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Confirm"}
-          </button>
-        </div>
+        {overpaid && <p className="text-xs text-[var(--danger-text)]">Amount entered cannot exceed the invoice total.</p>}
       </div>
-    </div>
+    </Modal>
   );
 }

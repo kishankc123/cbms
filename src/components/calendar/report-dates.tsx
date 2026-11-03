@@ -38,9 +38,9 @@ export function useDateDisplay(): [DateDisplay, (mode: DateDisplay) => void] {
 
 export function DateDisplayControl({ value, onChange, label = "Date Display" }: { value: DateDisplay; onChange: (m: DateDisplay) => void; label?: string }) {
   return (
-    <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value as DateDisplay)} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+    <div className="flex items-center gap-1.5">
+      <label className="whitespace-nowrap text-xs text-ink-2">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value as DateDisplay)} className="h-8 rounded-md border border-line-strong bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent">
         <option value="AD">AD Only</option>
         <option value="BS">BS Only</option>
         <option value="BOTH">AD + BS</option>

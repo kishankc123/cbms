@@ -1,132 +1,291 @@
 @import "tailwindcss";
 
+/*
+  DESIGN TOKENS — the one place colours, type, radius, spacing, shadow and motion are defined.
+
+  Every colour is written once as light-dark(light value, dark value). The theme is chosen by `color-scheme` on <html>:
+    - no choice saved ("Match system"): `light dark`, so the operating system decides;
+    - an explicit choice sets data-theme="light" | "dark" (see layout.tsx and theme-toggle.tsx) and always wins.
+  The dark values are designed separately, not inverted from the light ones. New components use the semantic names below
+  (bg-surface, text-ink, border-line ...) and never a literal colour. Older components still written with Tailwind's
+  gray/red/amber/green classes follow the theme too, because those scales are re-pointed at these tokens further down.
+*/
 :root {
-  --background: #f8f9fa;
-  --foreground: #0f172a;
-  --color-primary: #4169e1;
-  --color-primary-hover: #3151b0;
+  color-scheme: light dark;
 
-  /* Sidebar — dark charcoal/slate workspace rail, distinct from the light
-     app background so the two panes read as separate surfaces. Stays the
-     same in both light and dark app themes: it's a fixed workspace rail,
-     not part of the page surface that flips. */
-  --sidebar-bg: #0f172a;
-  --sidebar-bg-hover: #1e293b;
-  --sidebar-border: #1e293b;
-  --sidebar-text: #cbd5e1;
-  --sidebar-text-active: #ffffff;
+  /* Surfaces */
+  --bg-app: light-dark(#f7f7f8, #0e0f11);
+  --bg-surface: light-dark(#ffffff, #151619);
+  --bg-surface-2: light-dark(#f2f3f5, #1b1c20);
+  --bg-hover: light-dark(#f2f3f5, #1f2024);
+  --bg-selected: light-dark(#eef0fb, #1c1e3a);
+  --bg-overlay: light-dark(rgb(15 16 18 / 0.4), rgb(0 0 0 / 0.6));
 
-  /* General surface/text tokens for cards and page chrome — use these
-     (not hardcoded bg-white/text-gray-900) in any new or retheme'd
-     component so it picks up dark mode for free. */
-  --card-bg: #ffffff;
-  --card-border: #e5e7eb;
-  --text-primary: #0f172a;
-  --text-secondary: #6b7280;
-  --surface-muted-bg: #f3f4f6;
-  --surface-muted-text: #6b7280;
+  /* Text */
+  --text-1: light-dark(#222326, #e8e9ec);
+  --text-2: light-dark(#70727a, #9b9da5);
+  --text-3: light-dark(#9a9ca3, #6e7078); /* placeholders and disabled text only: too faint for anything that must be read */
 
-  /* Status pill system — soft background tint + high-contrast dark text,
-     never a bright saturated fill. Reuse via the StatusPill component
-     (src/components/ui/status-pill.tsx) rather than one-off classes. */
-  --status-success-bg: #ecfdf3;
-  --status-success-text: #036b3a;
-  --status-success-border: #b7ebc9;
+  /* Lines */
+  --border: light-dark(#e7e8eb, #26272c);
+  --border-strong: light-dark(#d5d7dc, #34353b);
 
-  --status-pending-bg: #eff6ff;
-  --status-pending-text: #1d4ed8;
-  --status-pending-border: #bfdbfe;
+  /* Indigo accent: --accent fills buttons and selections (white text on it), --accent-text is the same colour for text and
+     links, lightened in dark mode so small text keeps its contrast. */
+  --accent: #5e6ad2;
+  --accent-hover: light-dark(#4f5bc0, #6d79de);
+  --accent-text: light-dark(#5e6ad2, #8f99f0);
+  --accent-soft: light-dark(#eef0fb, #1c1e3a);
+  --on-accent: #ffffff;
+  --focus-ring: light-dark(#5e6ad2, #8f99f0);
 
-  --status-action-bg: #fffaeb;
-  --status-action-text: #b45309;
-  --status-action-border: #fde3a7;
+  /* Status colours: the colour itself, then its soft background, readable text and border. */
+  --success: light-dark(#16856b, #2fa588);
+  --success-bg: light-dark(#ecf7f3, #0f2a22);
+  --success-text: light-dark(#0e6350, #6bcdb4);
+  --success-border: light-dark(#a9ddcf, #1c4a3b);
 
-  --status-critical-bg: #fef2f2;
-  --status-critical-text: #b91c1c;
-  --status-critical-border: #fecaca;
-  --status-critical-dot: #ef4444;
+  --warning: light-dark(#c48a32, #d7a04a);
+  --warning-bg: light-dark(#fbf5ea, #2a2112);
+  --warning-text: light-dark(#8a5e1b, #e8bf7a);
+  --warning-border: light-dark(#edd6a8, #4f3c1b);
+
+  --danger: light-dark(#d14d4d, #e26b6b);
+  --danger-bg: light-dark(#fbefef, #2a1618);
+  --danger-text: light-dark(#a93232, #f29a9a);
+  --danger-border: light-dark(#efc4c4, #4a2024);
+
+  /* The filled danger button: darker than --danger in light mode so its white label keeps its contrast. */
+  --danger-fill: light-dark(#c03c3c, #e26b6b);
+  --on-danger: light-dark(#ffffff, #240e10);
+
+  --info-bg: light-dark(#eef0fb, #1c1e3a);
+  --info-text: light-dark(#3b4496, #bec3f5);
+  --info-border: light-dark(#c2c7f0, #2f3466);
+
+  /* Sidebar: a light neutral with a thin border in light mode, a slightly different dark from the page in dark mode. */
+  --sidebar-bg: light-dark(#f2f3f5, #121316);
+  --sidebar-bg-hover: light-dark(#e8e9ec, #1b1c20);
+  --sidebar-active-bg: light-dark(#e2e4e9, #1f2024);
+  --sidebar-border: light-dark(#e2e4e8, #232428);
+  --sidebar-text: light-dark(#54565d, #a8aab2);
+  --sidebar-text-active: light-dark(#222326, #f1f2f4);
+  --sidebar-width: 14rem;
+  --sidebar-width-collapsed: 3.25rem;
+  --topbar-h: 2.75rem;
+
+  /* Shape. Inputs and buttons 6px, dropdowns and cards 8px, modals 12px. */
+  --radius-control: 0.375rem;
+  --radius-popover: 0.5rem;
+  --radius-card: 0.5rem;
+  --radius-modal: 0.75rem;
+
+  /* Elevation: quiet in light, a little stronger in dark where shadows barely show. */
+  --shadow-sm: light-dark(0 1px 2px rgb(16 17 20 / 0.05), 0 1px 2px rgb(0 0 0 / 0.4));
+  --shadow-popover: light-dark(0 4px 16px rgb(16 17 20 / 0.1), 0 6px 20px rgb(0 0 0 / 0.5));
+  --shadow-modal: light-dark(0 12px 40px rgb(16 17 20 / 0.16), 0 16px 48px rgb(0 0 0 / 0.6));
+
+  /* Motion: short and functional. */
+  --duration: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Compact density (the default): control and table-row heights, and the spacing of page chrome. */
+  --control-h: 1.875rem;
+  --row-h: 2rem;
+  --page-gap: 1rem;
+
+  /* Names the earlier components were written against. They point at the tokens above, so they follow the new palette and
+     the theme without being touched; new code should use the semantic names. */
+  --background: var(--bg-app);
+  --foreground: var(--text-1);
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-hover);
+  --card-bg: var(--bg-surface);
+  --card-border: var(--border);
+  --text-primary: var(--text-1);
+  --text-secondary: var(--text-2);
+  --surface-muted-bg: var(--bg-surface-2);
+  --surface-muted-text: var(--text-2);
+  --status-success-bg: var(--success-bg);
+  --status-success-text: var(--success-text);
+  --status-success-border: var(--success-border);
+  --status-pending-bg: var(--info-bg);
+  --status-pending-text: var(--info-text);
+  --status-pending-border: var(--info-border);
+  --status-action-bg: var(--warning-bg);
+  --status-action-text: var(--warning-text);
+  --status-action-border: var(--warning-border);
+  --status-critical-bg: var(--danger-bg);
+  --status-critical-text: var(--danger-text);
+  --status-critical-border: var(--danger-border);
+  --status-critical-dot: var(--danger);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
+/* Semantic Tailwind utilities for new components: bg-surface, text-ink-2, border-line, text-accent-text ... */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--color-primary);
-  --color-primary-hover: var(--color-primary-hover);
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-surface-2: var(--bg-surface-2);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+  --color-ink: var(--text-1);
+  --color-ink-2: var(--text-2);
+  --color-ink-3: var(--text-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-bg);
+  --color-success-ink: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-bg);
+  --color-warning-ink: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-bg);
+  --color-danger-ink: var(--danger-text);
+
+  --color-background: var(--bg-app);
+  --color-foreground: var(--text-1);
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-hover);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 /*
-  Dark mode. Historically this UI was light-only (explicit gray-900 text on
-  explicit white/gray-50 cards, with no dark pairing) — that's why every
-  color here is a CSS variable rather than a hardcoded Tailwind class.
-  Components already built on these tokens (sidebar, StatusPill, RowCard)
-  get dark mode for free; components still using hardcoded bg-white/
-  text-gray-* classes directly do not yet, and are retheme'd incrementally.
-  Two ways in: prefers-color-scheme (the "system" default, no explicit
-  choice saved) and an explicit [data-theme] attribute on <html> set by the
-  theme toggle, which always wins over the OS preference.
+  The scales the existing screens were written with (text-gray-500, border-gray-200, bg-red-50 ...) now read the theme,
+  so the whole application follows light and dark before each screen is moved onto the semantic names. Values are chosen
+  by hand for each theme: in dark, the low numbers are the dark surfaces and the high numbers the light text.
 */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --background: #0b1220;
-    --foreground: #e2e8f0;
-    --card-bg: #1e293b;
-    --card-border: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --surface-muted-bg: #334155;
-    --surface-muted-text: #cbd5e1;
+@theme {
+  --color-gray-50: light-dark(#f9f9fa, #181a1d);
+  --color-gray-100: light-dark(#f2f3f5, #1f2024);
+  --color-gray-200: light-dark(#e7e8eb, #26272c);
+  --color-gray-300: light-dark(#d5d7dc, #34353b);
+  --color-gray-400: light-dark(#6f7178, #878992);
+  --color-gray-500: light-dark(#5f6168, #9fa1a9);
+  --color-gray-600: light-dark(#4d4f56, #b4b6bd);
+  --color-gray-700: light-dark(#45474d, #c8cad0);
+  --color-gray-800: light-dark(#2f3034, #dcdde1);
+  --color-gray-900: light-dark(#222326, #e8e9ec);
+  --color-gray-950: light-dark(#151618, #f4f4f6);
 
-    --status-success-bg: #0f2b1e;
-    --status-success-text: #4ade80;
-    --status-success-border: #14532d;
+  --color-red-50: light-dark(#fbefef, #2a1618);
+  --color-red-100: light-dark(#f7dede, #35191c);
+  --color-red-200: light-dark(#efc4c4, #4a2024);
+  --color-red-300: light-dark(#e49c9c, #6a2a2f);
+  --color-red-400: light-dark(#dc7777, #d97272);
+  --color-red-500: light-dark(#d14d4d, #e26b6b);
+  --color-red-600: light-dark(#c03c3c, #ee7b7b);
+  --color-red-700: light-dark(#a93232, #f29a9a);
+  --color-red-800: light-dark(#8c2a2a, #f6b7b7);
+  --color-red-900: light-dark(#6f2222, #fad3d3);
 
-    --status-pending-bg: #0f1f3d;
-    --status-pending-text: #60a5fa;
-    --status-pending-border: #1e3a5f;
+  --color-amber-50: light-dark(#fbf5ea, #2a2112);
+  --color-amber-100: light-dark(#f6e9cf, #3a2d16);
+  --color-amber-200: light-dark(#edd6a8, #4f3c1b);
+  --color-amber-300: light-dark(#e3be7b, #6b5223);
+  --color-amber-400: light-dark(#d4a24f, #c99a45);
+  --color-amber-500: light-dark(#c48a32, #d7a04a);
+  --color-amber-600: light-dark(#a87321, #e0ae5c);
+  --color-amber-700: light-dark(#8a5e1b, #e8bf7a);
+  --color-amber-800: light-dark(#6f4b16, #efcf9a);
+  --color-amber-900: light-dark(#573a12, #f5dfba);
 
-    --status-action-bg: #2c2008;
-    --status-action-text: #fbbf24;
-    --status-action-border: #4a3510;
+  --color-green-50: light-dark(#ecf7f3, #0f2a22);
+  --color-green-100: light-dark(#d3eee6, #143629);
+  --color-green-200: light-dark(#a9ddcf, #1c4a3b);
+  --color-green-300: light-dark(#74c5af, #27665a);
+  --color-green-400: light-dark(#3fa68c, #3fb598);
+  --color-green-500: light-dark(#16856b, #2fa588);
+  --color-green-600: light-dark(#11755e, #4cc0a2);
+  --color-green-700: light-dark(#0e6350, #6bcdb4);
+  --color-green-800: light-dark(#0b5040, #90dbc7);
+  --color-green-900: light-dark(#083d31, #b8e8db);
 
-    --status-critical-bg: #2c1212;
-    --status-critical-text: #f87171;
-    --status-critical-border: #4a1d1d;
-    --status-critical-dot: #f87171;
+  --color-blue-50: light-dark(#eef0fb, #1a1c33);
+  --color-blue-100: light-dark(#dee1f7, #23264a);
+  --color-blue-200: light-dark(#c2c7f0, #2f3466);
+  --color-blue-300: light-dark(#9fa7e6, #434a8f);
+  --color-blue-400: light-dark(#7f89dd, #7b86e3);
+  --color-blue-500: light-dark(#5e6ad2, #6b77dd);
+  --color-blue-600: light-dark(#5560c4, #8e98ec);
+  --color-blue-700: light-dark(#4a55b8, #a5adf1);
+  --color-blue-800: light-dark(#3b4496, #bec3f5);
+  --color-blue-900: light-dark(#2e3577, #d6d9f9);
+
+  /* Type sizes, compact: body 13px, section headings 14-16px, page titles 22px. text-xs stays 12px for supporting text. */
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.75rem;
+}
+
+/* A plain white surface follows the theme. (Not --color-white: text-white must stay white on indigo buttons.) */
+.bg-white {
+  background-color: var(--bg-surface);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+html {
+  font-size: 16px;
+}
+body {
+  background: var(--bg-app);
+  color: var(--text-1);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  -webkit-font-smoothing: antialiased;
+}
+/* Money lines up: every figure in a table or number field uses tabular numerals. */
+table,
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+::selection {
+  background: var(--accent-soft);
+}
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }
 
-:root[data-theme="dark"] {
-  --background: #0b1220;
-  --foreground: #e2e8f0;
-  --card-bg: #1e293b;
-  --card-border: #334155;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --surface-muted-bg: #334155;
-  --surface-muted-text: #cbd5e1;
-
-  --status-success-bg: #0f2b1e;
-  --status-success-text: #4ade80;
-  --status-success-border: #14532d;
-
-  --status-pending-bg: #0f1f3d;
-  --status-pending-text: #60a5fa;
-  --status-pending-border: #1e3a5f;
-
-  --status-action-bg: #2c2008;
-  --status-action-text: #fbbf24;
-  --status-action-border: #4a3510;
-
-  --status-critical-bg: #2c1212;
-  --status-critical-text: #f87171;
-  --status-critical-border: #4a1d1d;
-  --status-critical-dot: #f87171;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* On a phone, a table wider than the screen scrolls inside itself instead of making the whole page scroll sideways.
+   Tables already inside a scrolling box (DataTable and the older wrappers) are left as they are. */
+@media (max-width: 767px) {
+  main table:not(.overflow-x-auto *) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }

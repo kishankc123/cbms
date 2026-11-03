@@ -5,6 +5,7 @@ import { payrollComponents } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getOrCreateSettings } from "@/lib/payroll/settings";
 import { SetupTabs } from "./setup-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function PayrollSetupPage() {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
@@ -18,7 +19,7 @@ export default async function PayrollSetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Payroll setup</h1>
+      <PageHeader title="Payroll setup" className="!mb-0" />
       <SetupTabs settings={settings} components={components} />
     </div>
   );

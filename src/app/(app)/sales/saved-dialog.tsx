@@ -20,8 +20,8 @@ export function SavedDialog({ title, lines, onClose }: { title: string; lines: s
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-sm space-y-3 rounded-lg bg-white p-5 shadow-lg">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-sm space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100 text-green-700">✓</span>
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
@@ -32,7 +32,7 @@ export function SavedDialog({ title, lines, onClose }: { title: string; lines: s
           ))}
         </div>
         <div className="flex justify-end">
-          <button ref={ok} type="button" onClick={onClose} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]">
+          <button ref={ok} type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             OK
           </button>
         </div>

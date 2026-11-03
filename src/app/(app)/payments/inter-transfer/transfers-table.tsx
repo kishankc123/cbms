@@ -86,13 +86,13 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search transfer no. or reference..."
-          className="w-full max-w-md rounded border border-gray-300 px-3 py-1.5 text-sm"
+          className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full max-w-md"
         />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-3 py-2 font-semibold text-xs">Transfer No.</th>
               <th className="px-3 py-2 font-semibold text-xs">Date</th>
@@ -109,7 +109,7 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
               <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">{loading ? "Loading..." : "No transfers found."}</td></tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.transferNumber}</td>
                 <td className="px-3 py-2 whitespace-nowrap"><D value={r.transferDate} /></td>
                 <td className="px-3 py-2">{r.fromAccount}</td>
@@ -118,9 +118,9 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
                 <td className="px-3 py-2 text-gray-500">{r.reference ?? "—"}</td>
                 <td className="px-3 py-2"><StatusPill tone={r.status === "posted" ? "success" : "critical"}>{r.status}</StatusPill></td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <Link href={`/payments/inter-transfer/${r.id}`} className="text-xs text-[var(--color-primary)] hover:underline">View</Link>
+                  <Link href={`/payments/inter-transfer/${r.id}`} className="text-xs text-[var(--accent-text)] hover:underline">View</Link>
                   {r.status === "posted" && (
-                    <Link href={`/payments/inter-transfer/${r.id}/edit`} className="ml-3 text-xs text-[var(--color-primary)] hover:underline">Edit</Link>
+                    <Link href={`/payments/inter-transfer/${r.id}/edit`} className="ml-3 text-xs text-[var(--accent-text)] hover:underline">Edit</Link>
                   )}
                 </td>
               </tr>

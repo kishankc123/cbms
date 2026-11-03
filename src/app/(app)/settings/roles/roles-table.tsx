@@ -28,33 +28,33 @@ export function RolesTable({ roles }: { roles: RolesList }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+    <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">ID</th>
-            <th className="px-4 py-2 font-medium">Role</th>
-            <th className="px-4 py-2 font-medium">Description</th>
-            <th className="px-4 py-2 font-medium">Access</th>
-            <th className="px-4 py-2 text-right font-medium">Users</th>
-            <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium">ID</th>
+            <th className="px-2.5 py-1.5 font-medium">Role</th>
+            <th className="px-2.5 py-1.5 font-medium">Description</th>
+            <th className="px-2.5 py-1.5 font-medium">Access</th>
+            <th className="px-2.5 py-1.5 text-right font-medium">Users</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
             <th className="w-10" />
           </tr>
         </thead>
         <tbody>
           {roles.map((r) => (
-            <tr key={r.id} className="border-t border-[var(--card-border)]">
-              <td className="px-4 py-2 text-[var(--text-secondary)]">{r.code}</td>
-              <td className="px-4 py-2 font-medium">
-                <Link href={`/settings/roles/${r.id}`} className="text-[var(--color-primary)] hover:underline">
+            <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{r.code}</td>
+              <td className="px-2.5 py-1.5 font-medium">
+                <Link href={`/settings/roles/${r.id}`} className="text-[var(--accent-text)] hover:underline">
                   {r.name}
                 </Link>{" "}
                 {r.isSystem && <span className="ml-1 rounded-full border border-[var(--card-border)] px-2 py-0.5 text-xs font-normal text-[var(--text-secondary)]">System</span>}
               </td>
-              <td className="max-w-xs px-4 py-2 text-[var(--text-secondary)]">{r.description || "—"}</td>
-              <td className="px-4 py-2">{r.access}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{r.members}</td>
-              <td className="px-4 py-2">
+              <td className="max-w-xs px-2.5 py-1.5 text-[var(--text-secondary)]">{r.description || "—"}</td>
+              <td className="px-2.5 py-1.5">{r.access}</td>
+              <td className="px-2.5 py-1.5 text-right tabular-nums">{r.members}</td>
+              <td className="px-2.5 py-1.5">
                 <StatusPill tone={r.isActive ? "success" : "pending"}>{r.isActive ? "Active" : "Inactive"}</StatusPill>
               </td>
               <td className="relative px-2">

@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { getCompanyDetails } from "../company-actions";
 import { listTaxRegistrations } from "../registration-actions";
 import { CompanyTabs } from "./company-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function CompanyDetailsPage() {
   const denied = await guardView("compliance");
@@ -9,10 +10,7 @@ export default async function CompanyDetailsPage() {
   const [data, registrations] = await Promise.all([getCompanyDetails(), listTaxRegistrations()]);
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Company Details</h1>
-        <p className="mt-0.5 text-sm text-gray-500">The basics of your business. Your country and company type decide which compliance requirements apply.</p>
-      </div>
+      <PageHeader title="Company Details" description="The basics of your business. Your country and company type decide which compliance requirements apply." />
       <CompanyTabs data={data} registrations={registrations} />
     </div>
   );

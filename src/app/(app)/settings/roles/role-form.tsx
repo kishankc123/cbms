@@ -158,9 +158,9 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
 
       <section data-field="matrix" className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Module</th>
+              <th className="px-2.5 py-1.5 font-medium">Module</th>
               {PERMISSION_ACTIONS.map((a) => (
                 <th key={a} className="px-3 py-2 text-center font-medium">
                   <label className="inline-flex cursor-pointer items-center gap-1.5">
@@ -174,8 +174,8 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
           </thead>
           <tbody>
             {editor.catalog.map((m) => (
-              <tr key={m.key} className="border-t border-[var(--card-border)]">
-                <td className="px-4 py-2">
+              <tr key={m.key} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5">
                   <p className="font-medium text-[var(--text-primary)]">{m.label}</p>
                   <p className="text-xs text-[var(--text-secondary)]">{m.description}</p>
                   {(m.extras ?? []).map((e) => (
@@ -212,7 +212,7 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
             {saving ? "Saving..." : role ? "Save changes" : "Create role"}
           </button>
         )}
-        <Link href="/settings/roles" className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+        <Link href="/settings/roles" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           {readOnly ? "Back" : "Cancel"}
         </Link>
         {role && editor.defaults && (

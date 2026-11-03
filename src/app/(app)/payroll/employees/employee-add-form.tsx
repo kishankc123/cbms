@@ -103,46 +103,46 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Full Name</label>
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div className="col-span-2">
           <label className="block text-xs text-gray-500 mb-1">Address</label>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Contact Number</label>
-          <input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">PAN Number</label>
-          <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Joining Date</label>
-          <DatePicker max={today()} value={joiningDate} onChange={(v) => setJoiningDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker max={today()} value={joiningDate} onChange={(v) => setJoiningDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Leaving Date (if left)</label>
-          <DatePicker min={joiningDate} value={leavingDate} onChange={(v) => setLeavingDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker min={joiningDate} value={leavingDate} onChange={(v) => setLeavingDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Department</label>
-          <input value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={department} onChange={(e) => setDepartment(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Designation</label>
-          <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Employment Type</label>
           <select
             value={employmentType}
             onChange={(e) => setEmploymentType(e.target.value as typeof employmentType)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           >
             {EMPLOYMENT_TYPES.map((o) => (
               <option key={o.value} value={o.value}>
@@ -156,7 +156,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
           <select
             value={employmentStatus}
             onChange={(e) => setEmploymentStatus(e.target.value as typeof employmentStatus)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           >
             {EMPLOYMENT_STATUSES.map((o) => (
               <option key={o.value} value={o.value}>
@@ -167,15 +167,15 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Bank Name</label>
-          <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Bank Account Number</label>
-          <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Tax status (salary TDS)</label>
-          <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+          <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
             <option value="">Not chosen (Single is used)</option>
             <option value="single">Single</option>
             <option value="couple">Couple</option>
@@ -183,11 +183,11 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Income from earlier employer this fiscal year</label>
-          <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">TDS already withheld by earlier employer</label>
-          <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Initial Basic Salary</label>
@@ -197,7 +197,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
             min="0"
             value={initialSalary}
             onChange={(e) => setInitialSalary(e.target.value)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           />
           <p className="mt-1 text-xs text-gray-500">Creates the first Salary History record, effective from the joining date.</p>
         </div>
@@ -208,7 +208,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Saving..." : "+ Add employee"}
         </button>

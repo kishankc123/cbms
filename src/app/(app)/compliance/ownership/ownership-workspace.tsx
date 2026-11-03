@@ -88,7 +88,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
       {canEdit && (
         <div className="flex items-center justify-end gap-2">
           <div className="relative">
-            <button type="button" disabled={!data.capital.exists} onClick={() => setMenu((v) => !v)} className="rounded border border-gray-300 bg-white px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+            <button type="button" disabled={!data.capital.exists} onClick={() => setMenu((v) => !v)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
               + Record Capital Change ▾
             </button>
             {menu && (
@@ -117,7 +117,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               </div>
             )}
           </div>
-          <button type="button" disabled={!data.capital.exists} onClick={() => setDialog({ kind: "add" })} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40">
+          <button type="button" disabled={!data.capital.exists} onClick={() => setDialog({ kind: "add" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             + Add Shareholder
           </button>
         </div>
@@ -127,7 +127,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
           <p className="text-sm text-gray-600">Your capital structure isn&apos;t set up yet.</p>
           {canEdit && (
-            <button type="button" onClick={() => setDialog({ kind: "setup" })} className="mt-3 rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+            <button type="button" onClick={() => setDialog({ kind: "setup" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 mt-3">
               Set up capital
             </button>
           )}
@@ -188,8 +188,8 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               Total ownership: <span className={`font-semibold ${data.ownership.allocationPct < 100 && data.capital.issuedShares > 0 ? "text-amber-700" : "text-gray-900"}`}>{data.ownership.allocationPct}%</span>
             </span>
           </div>
-          <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 font-medium">Shareholder</th>
                 <th className="px-3 py-2 font-medium">Type</th>
@@ -218,17 +218,17 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
                     <StatusPill tone={h.status === "active" ? "success" : "action"}>{h.status === "active" ? "Active" : "Inactive"}</StatusPill>
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap space-x-2 text-xs">
-                    <button type="button" onClick={() => setDialog({ kind: "view", holder: h })} className="text-[var(--color-primary)] hover:underline">
+                    <button type="button" onClick={() => setDialog({ kind: "view", holder: h })} className="text-[var(--accent-text)] hover:underline">
                       View
                     </button>
                     {canEdit && (
                       <>
-                        <button type="button" onClick={() => setDialog({ kind: "edit", holder: h })} className="text-[var(--color-primary)] hover:underline">
+                        <button type="button" onClick={() => setDialog({ kind: "edit", holder: h })} className="text-[var(--accent-text)] hover:underline">
                           Edit
                         </button>
                         {h.status === "active" && (
                           <>
-                            <button type="button" onClick={() => setDialog({ kind: "transfer", presetId: h.id })} className="text-[var(--color-primary)] hover:underline">
+                            <button type="button" onClick={() => setDialog({ kind: "transfer", presetId: h.id })} className="text-[var(--accent-text)] hover:underline">
                               Transfer
                             </button>
                             <button type="button" onClick={() => setDialog({ kind: "deactivate", holder: h })} className="text-gray-500 hover:underline">
@@ -275,14 +275,14 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               </div>
             </div>
             {canEdit && (
-              <button type="button" onClick={() => setDialog({ kind: "lagat" })} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+              <button type="button" onClick={() => setDialog({ kind: "lagat" })} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Record update
               </button>
             )}
           </div>
           <h3 className="text-sm font-semibold text-gray-900">Share Lagat history</h3>
-          <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -294,7 +294,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
             </thead>
             <tbody>
               {data.lagat.history.map((e) => (
-                <tr key={e.id} className="border-t border-gray-100">
+                <tr key={e.id} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-2 whitespace-nowrap">
                     <D value={e.status === "updated" ? e.lastUpdatedDate : e.lastChangeDate} />
                   </td>
@@ -370,8 +370,8 @@ function describe(c: Change, currency: string): string {
 
 function ChangesTable({ changes, currency, compact }: { changes: Change[]; currency: string; compact?: boolean }) {
   return (
-    <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <thead className="bg-gray-50 text-left text-gray-500">
+    <table className="border-collapse text-[13px] w-full">
+      <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
         <tr>
           <th className="px-3 py-2 font-medium">Date</th>
           <th className="px-3 py-2 font-medium">Change</th>
@@ -382,7 +382,7 @@ function ChangesTable({ changes, currency, compact }: { changes: Change[]; curre
       </thead>
       <tbody>
         {changes.map((c) => (
-          <tr key={c.id} className="border-t border-gray-100">
+          <tr key={c.id} className="border-b border-line transition-colors hover:bg-hover">
             <td className="px-3 py-2 whitespace-nowrap">
               <D value={c.date} />
             </td>

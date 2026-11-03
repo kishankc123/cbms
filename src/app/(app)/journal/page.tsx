@@ -7,6 +7,7 @@ import { peekNextVoucher } from "@/lib/ledger/voucher";
 import { JournalEntryForm } from "./journal-entry-form";
 import { reverseEntry } from "./actions";
 import { D } from "@/components/calendar/date-text";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function JournalPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
@@ -24,14 +25,14 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Journal Entries</h1>
+      <PageHeader title="Journal Entries" className="!mb-0" />
 
       <JournalEntryForm accounts={accountList} nextVoucher={nextVoucher} />
 
       {showHistory ? (
         <History tenantId={session.tenantId} accountList={accountList} />
       ) : (
-        <Link href="/journal?history=1" className="inline-block text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/journal?history=1" className="inline-block text-sm text-[var(--accent-text)] hover:underline">
           Show entry history
         </Link>
       )}
@@ -56,7 +57,7 @@ async function History({ tenantId, accountList }: { tenantId: string; accountLis
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-900">Entry history</h2>
-        <Link href="/journal" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/journal" className="text-sm text-[var(--accent-text)] hover:underline">
           Hide entry history
         </Link>
       </div>
@@ -85,7 +86,7 @@ async function History({ tenantId, accountList }: { tenantId: string; accountLis
           <table className="w-full text-sm mt-3">
             <tbody>
               {(linesByEntry.get(entry.id) ?? []).map((l) => (
-                <tr key={l.id} className="border-t border-gray-100">
+                <tr key={l.id} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1">
                     {accountById.get(l.accountId)?.code} {accountById.get(l.accountId)?.name}
                   </td>

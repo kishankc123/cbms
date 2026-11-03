@@ -46,8 +46,8 @@ export function ClassifyLedgerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Classify unmatched transaction</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -64,7 +64,7 @@ export function ClassifyLedgerModal({
           <select
             value={classification}
             onChange={(e) => setClassification(e.target.value as typeof classification)}
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
           >
             {CLASSIFICATIONS.map((c) => (
               <option key={c.value} value={c.value}>
@@ -76,7 +76,7 @@ export function ClassifyLedgerModal({
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">Notes (optional)</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
 
 
@@ -88,7 +88,7 @@ export function ClassifyLedgerModal({
             type="button"
             disabled={saving}
             onClick={handleSubmit}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save"}
           </button>

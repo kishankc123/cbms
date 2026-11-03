@@ -88,13 +88,13 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               <h2 className="text-lg font-medium text-[var(--text-primary)]">{t.label}</h2>
               <p className="text-sm text-[var(--text-secondary)]">{t.description}</p>
             </div>
-            <button type="button" onClick={() => startAdd(t.key)} className="shrink-0 rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+            <button type="button" onClick={() => startAdd(t.key)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 shrink-0">
               {fiscalYear && !timeline[t.key].some((v) => v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from)) ? "Set for this year" : "New version"}
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+              <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                 <tr>
                   <th className="px-3 py-2 font-medium">Starts</th>
                   <th className="px-3 py-2 font-medium">Figures</th>
@@ -105,7 +105,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               </thead>
               <tbody>
                 {[...timeline[t.key]].filter((v) => !fiscalYear || (v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from))).reverse().map((v) => (
-                  <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                  <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className="font-medium">{v.fiscalYear ? `FY ${v.fiscalYear}` : "Original"}</span>
                       <br />
@@ -132,7 +132,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
                     </td>
                     <td className="px-3 py-2 text-[var(--text-secondary)]">{v.source || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <button type="button" className="mr-3 text-[var(--color-primary)] hover:underline" onClick={() => startEdit(v)}>
+                      <button type="button" className="mr-3 text-[var(--accent-text)] hover:underline" onClick={() => startEdit(v)}>
                         {v.editable ? "Edit" : "Verify / source"}
                       </button>
                       {v.editable && (
@@ -158,7 +158,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
 
       {editing && spec && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setEditing(null)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !saving && setEditing(null)} />
           <div className="relative max-h-[88vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-lg bg-[var(--card-bg)] p-5 shadow-lg">
             <h2 className="text-lg font-medium text-[var(--text-primary)]">
               {spec.label}: {editing.id ? (editing.started ? "verification and source" : "edit version") : "new version"}
@@ -226,7 +226,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
                   );
                 })}
                 {!editing.started && (
-                  <button type="button" className="text-sm text-[var(--color-primary)] hover:underline" onClick={() => setEditing({ ...editing, form: { ...editing.form, tiers: [...editing.form.tiers, { ...blankTier }] } })}>
+                  <button type="button" className="text-sm text-[var(--accent-text)] hover:underline" onClick={() => setEditing({ ...editing, form: { ...editing.form, tiers: [...editing.form.tiers, { ...blankTier }] } })}>
                     Add a band
                   </button>
                 )}
@@ -246,7 +246,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               <button type="button" disabled={saving} onClick={() => setEditing(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" disabled={saving} onClick={save} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+              <button type="button" disabled={saving} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>

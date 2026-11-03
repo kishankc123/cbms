@@ -1,83 +1,120 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { History } from "lucide-react";
 import { listAuditTrail } from "../actions";
-
 import { DatePicker } from "@/components/calendar/date-picker";
 import { DT } from "@/components/calendar/date-text";
+import { Button } from "@/components/ui/button";
+import { controlClass, Select } from "@/components/ui/field";
+import { DataTable, Td, Th, Tr } from "@/components/ui/data-table";
+import { FilterBar, SearchInput } from "@/components/ui/filters";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+
 type Entry = Awaited<ReturnType<typeof listAuditTrail>>[number];
 
 export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] }) {
   const [entries, setEntries] = useState(initialEntries);
+  const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [entityType, setEntityType] = useState("");
   const [loading, setLoading] = useState(false);
+  const [applied, setApplied] = useState(false);
 
-  async function applyFilters() {
+  // Entity types to choose from: those seen in the trail loaded first.
+  const entityTypes = useMemo(() => [...new Set(initialEntries.map((e) => e.entityType))].sort(), [initialEntries]);
+
+  async function load(next: { from: string; to: string; entityType: string }) {
     setLoading(true);
     try {
-      const rows = await listAuditTrail({ from: from || undefined, to: to || undefined, entityType: entityType || undefined });
-      setEntries(rows);
+      setEntries(await listAuditTrail({ from: next.from || undefined, to: next.to || undefined, entityType: next.entityType || undefined }));
+      setApplied(Boolean(next.from || next.to || next.entityType));
     } finally {
       setLoading(false);
     }
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">From</label>
-          <DatePicker value={from} onChange={(v) => setFrom(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">To</label>
-          <DatePicker value={to} onChange={(v) => setTo(v)} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Entity type</label>
-          <input value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="e.g. accounting_period" className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-        </div>
-        <button type="button" disabled={loading} onClick={applyFilters} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
-          {loading ? "Loading..." : "Filter"}
-        </button>
-      </div>
+  function clearFilters() {
+    setSearch("");
+    setFrom("");
+    setTo("");
+    setEntityType("");
+    load({ from: "", to: "", entityType: "" });
+  }
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
-          <tr>
-            <th className="px-4 py-2 font-medium">Date/Time</th>
-            <th className="px-4 py-2 font-medium">User</th>
-            <th className="px-4 py-2 font-medium">Action</th>
-            <th className="px-4 py-2 font-medium">Entity</th>
-            <th className="px-4 py-2 font-medium">Before</th>
-            <th className="px-4 py-2 font-medium">After</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 whitespace-nowrap"><DT value={e.timestamp} /></td>
-              <td className="px-4 py-2">{e.userName}</td>
-              <td className="px-4 py-2">{e.action}</td>
-              <td className="px-4 py-2">
-                {e.entityType}
-                {e.entityId ? ` (${e.entityId.slice(0, 8)})` : ""}
-              </td>
-              <td className="px-4 py-2 max-w-[200px] truncate text-xs text-gray-500">{e.beforeValue ? JSON.stringify(e.beforeValue) : "—"}</td>
-              <td className="px-4 py-2 max-w-[200px] truncate text-xs text-gray-500">{e.afterValue ? JSON.stringify(e.afterValue) : "—"}</td>
-            </tr>
+  // The search box narrows what is already loaded; the dates and entity type ask for a fresh list.
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? entries.filter((e) => `${e.userName} ${e.action} ${e.entityType}`.toLowerCase().includes(q)) : entries;
+  }, [entries, search]);
+  const filtering = Boolean(search || applied || from || to || entityType);
+
+  return (
+    <div className="space-y-4">
+      <FilterBar className="!mb-0">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search user, action or entity" />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink-2">From</span>
+          <DatePicker value={from} onChange={setFrom} className={`${controlClass} w-40`} />
+          <span className="text-xs text-ink-2">To</span>
+          <DatePicker value={to} onChange={setTo} className={`${controlClass} w-40`} />
+        </div>
+        <Select aria-label="Entity type" value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-48">
+          <option value="">All entity types</option>
+          {entityTypes.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
           ))}
-          {entries.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                No audit entries recorded yet
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        </Select>
+        <Button variant="primary" loading={loading} onClick={() => load({ from, to, entityType })}>
+          Apply
+        </Button>
+        {filtering && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
+
+      {loading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : (
+        <DataTable stickyHeader>
+          <thead>
+            <Tr className="hover:bg-transparent">
+              <Th>Date / time</Th>
+              <Th>User</Th>
+              <Th>Action</Th>
+              <Th>Entity</Th>
+              <Th>Before</Th>
+              <Th>After</Th>
+            </Tr>
+          </thead>
+          <tbody>
+            {shown.map((e) => (
+              <Tr key={e.id}>
+                <Td className="whitespace-nowrap">
+                  <DT value={e.timestamp} />
+                </Td>
+                <Td className="whitespace-nowrap">{e.userName}</Td>
+                <Td>{e.action}</Td>
+                <Td>
+                  {e.entityType}
+                  {e.entityId ? <span className="text-ink-2"> ({e.entityId.slice(0, 8)})</span> : ""}
+                </Td>
+                <Td className="max-w-52 truncate text-xs text-ink-2">{e.beforeValue ? JSON.stringify(e.beforeValue) : "—"}</Td>
+                <Td className="max-w-52 truncate text-xs text-ink-2">{e.afterValue ? JSON.stringify(e.afterValue) : "—"}</Td>
+              </Tr>
+            ))}
+          </tbody>
+        </DataTable>
+      )}
+      {!loading && shown.length === 0 && (
+        <EmptyState icon={History} title={filtering ? "No entries match" : "No audit entries recorded yet"} description={filtering ? "Try different filters, or clear them." : "Changes made in the books will be recorded here."} action={filtering ? <Button onClick={clearFilters}>Clear filters</Button> : undefined} />
+      )}
     </div>
   );
 }

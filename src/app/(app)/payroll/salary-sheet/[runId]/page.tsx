@@ -60,7 +60,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
             {payrollPeriodLabel(run)}
           </h1>
           <p className="text-sm text-gray-500">
@@ -73,9 +73,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       {slabsMissing && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">Salary-tax slabs are not set for this fiscal year, so no TDS was taken in this run. Once the platform administrator has published them, recalculate the run.</p>}
       {assumedStatus > 0 && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{assumedStatus} employee{assumedStatus === 1 ? " has" : "s have"} no tax status, so the Single slabs were used. Choose Single or Couple on the employee&apos;s profile, then recalculate.</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Employee</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Basic Salary</th>
@@ -94,7 +94,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           </thead>
           <tbody>
             {lines.map((l) => (
-              <tr key={l.id} className="border-t border-gray-100">
+              <tr key={l.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-3 py-2 whitespace-nowrap">
                   <span className="font-mono text-xs text-gray-500">{l.employeeCode}</span> {l.fullName}
                 </td>
@@ -139,7 +139,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-gray-900">Staff advances {run.status === "finalized" ? "recovered in" : "to be recovered in"} this run</h2>
           <table className="mt-2 w-full text-sm">
-            <thead className="text-left text-gray-500">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="py-1 pr-3 font-medium">Employee</th>
                 <th className="py-1 pr-3 font-medium">Advance date</th>
@@ -149,7 +149,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
             </thead>
             <tbody>
               {recoveries.map((r, i) => (
-                <tr key={i} className="border-t border-gray-100">
+                <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1 pr-3">{nameOf.get(r.employeeId)}</td>
                   <td className="py-1 pr-3"><D value={r.advanceDate} /></td>
                   <td className="py-1 pr-3">{payrollPeriodLabel({ calendarSystem: r.forCalendar, month: r.forMonth, year: r.forYear })}</td>

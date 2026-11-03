@@ -132,7 +132,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <p className="text-xs text-[var(--text-secondary)]">{yearRate ? `${fiscalYear ? "Applies in this year from" : "In force since"} ${bothDates(fiscalYear && yearRate.effectiveFrom < fiscalYear.from ? fiscalYear.from : yearRate.effectiveFrom)}` : fiscalYear ? "No rate is set for this year." : "Organizations are using their own rate."}</p>
                 </div>
                 {open !== t.key && (
-                  <button type="button" onClick={() => { setOpen(t.key); setDraft(blankDraft); setMessage(null); }} className="rounded bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]">
+                  <button type="button" onClick={() => { setOpen(t.key); setDraft(blankDraft); setMessage(null); }} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     {fiscalYear ? (yearRate ? `Publish v${shown.length + 1}` : "Set the rate") : "Publish a new rate"}
                   </button>
                 )}
@@ -163,7 +163,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                     {latest ? ` It has to start after ${latest.effectiveFrom}.` : ""}
                   </p>
                   <div className="flex gap-2">
-                    <button type="button" disabled={busy || !draft.rate || !draft.effectiveFrom} onClick={() => publish(t.key)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+                    <button type="button" disabled={busy || !draft.rate || !draft.effectiveFrom} onClick={() => publish(t.key)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                       {busy ? "Publishing…" : "Publish"}
                     </button>
                     <button type="button" disabled={busy} onClick={() => setOpen(null)} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700">
@@ -189,7 +189,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                       <input type="date" min={fiscalYear?.from} max={fiscalYear?.to} value={edited.effectiveFrom} onChange={(e) => setConfirming({ ...confirming, [t.key]: { ...edited, effectiveFrom: e.target.value } })} className={`${adminField} mt-1 w-full`} />
                     </label>
                   </div>
-                  <button type="button" disabled={busy} onClick={() => confirm(draftOf.id, edited)} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50">
+                  <button type="button" disabled={busy} onClick={() => confirm(draftOf.id, edited)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                     {busy ? "Publishing…" : "Confirm and publish"}
                   </button>
                 </div>
@@ -199,7 +199,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
 
               {shown.length > 0 && (
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-[var(--text-secondary)]">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="py-1 pr-2 font-medium">Rate</th>
                       <th className="py-1 pr-2 font-medium">From</th>
@@ -211,14 +211,14 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <tbody>
                     {[...shown].reverse().map((v) =>
                       editing?.id === v.id ? (
-                        <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                        <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                           <td colSpan={5} className="space-y-2 py-2">
                             <input value={editing.source} onChange={(e) => setEditing({ ...editing, source: e.target.value })} placeholder="Source" className={`${adminField} w-full`} />
                             <label className="flex items-center gap-2 text-sm">
                               <input type="checkbox" checked={editing.isVerified} onChange={(e) => setEditing({ ...editing, isVerified: e.target.checked })} /> Verified against current law
                             </label>
                             <div className="flex gap-2">
-                              <button type="button" disabled={busy} onClick={saveEdit} className="rounded bg-[var(--color-primary)] px-3 py-1 text-sm text-white disabled:opacity-50">
+                              <button type="button" disabled={busy} onClick={saveEdit} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                                 Save
                               </button>
                               <button type="button" onClick={() => setEditing(null)} className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700">
@@ -228,7 +228,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                           </td>
                         </tr>
                       ) : (
-                        <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                        <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                           <td className="py-1.5 pr-2 font-medium">
                             {fiscalYear && <span className="mr-2 text-xs text-[var(--text-secondary)]">v{v.version}</span>}{pct(v.rate)} {v.inForce && <StatusPill tone="success">in force</StatusPill>}
                           </td>
@@ -238,7 +238,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                             {v.source ?? "—"} {v.isVerified ? <StatusPill tone="success">verified</StatusPill> : <StatusPill tone="pending">unverified</StatusPill>}
                           </td>
                           <td className="py-1.5 text-right">
-                            <button type="button" onClick={() => setEditing({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--color-primary)] hover:underline">
+                            <button type="button" onClick={() => setEditing({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--accent-text)] hover:underline">
                               Edit
                             </button>
                           </td>
@@ -258,7 +258,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Organizations in {country.name}</h2>
         <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. Only you can change a rate. An organization marked own was set before rates were published, and keeps it until you publish a rate for it.</p>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-2 font-medium">Organization</th>
               {shownTypes.map((t) => (
@@ -271,7 +271,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
           </thead>
           <tbody>
             {rates.organizations.map((o) => (
-              <tr key={o.id} className="border-t border-[var(--card-border)]">
+              <tr key={o.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="py-1.5 pr-2">{o.name}</td>
                 {shownTypes.map((t) => {
                   const r = o.rates[t.key];

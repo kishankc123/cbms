@@ -73,7 +73,7 @@ export function ExceptionsTable({ exceptions, years, selectedKey, assignableUser
         {/* An exception belongs to the fiscal year of the thing it is about. */}
         <label className="flex items-center gap-2 text-sm text-gray-600">
           Fiscal year
-          <select value={selectedKey} onChange={(e) => router.replace(`/audit/exceptions?fy=${e.target.value}`)} className="rounded border border-gray-300 bg-white px-2 py-1 text-sm">
+          <select value={selectedKey} onChange={(e) => router.replace(`/audit/exceptions?fy=${e.target.value}`)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3">
             <option value="all">All years</option>
             {years.map((y) => (
               <option key={y.key} value={y.key}>
@@ -84,34 +84,34 @@ export function ExceptionsTable({ exceptions, years, selectedKey, assignableUser
         </label>
         <div className="flex items-center gap-3">
         {scanMessage && <span className="text-xs text-gray-500">{scanMessage}</span>}
-        <button type="button" disabled={scanning} onClick={handleScan} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+        <button type="button" disabled={scanning} onClick={handleScan} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {scanning ? "Scanning..." : "Run Scan"}
         </button>
         </div>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Type</th>
-            <th className="px-4 py-2 font-medium">Description</th>
-            <th className="px-4 py-2 font-medium">Severity</th>
-            <th className="px-4 py-2 font-medium">Fiscal year</th>
-            <th className="px-4 py-2 font-medium">Detected</th>
-            <th className="px-4 py-2 font-medium">Assigned</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Type</th>
+            <th className="px-2.5 py-1.5 font-medium">Description</th>
+            <th className="px-2.5 py-1.5 font-medium">Severity</th>
+            <th className="px-2.5 py-1.5 font-medium">Fiscal year</th>
+            <th className="px-2.5 py-1.5 font-medium">Detected</th>
+            <th className="px-2.5 py-1.5 font-medium">Assigned</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {exceptions.map((e) => (
-            <tr key={e.id} className="border-t border-gray-100">
-              <td className="px-4 py-2 capitalize">{e.exceptionType.replace(/_/g, " ")}</td>
-              <td className="px-4 py-2 max-w-[280px] truncate">{e.description}</td>
-              <td className="px-4 py-2 capitalize">{e.severity.replace("_", " ")}</td>
-              <td className="px-4 py-2 whitespace-nowrap" title="The year of the thing this exception is about">{e.fiscalYear}</td>
-              <td className="px-4 py-2"><DT value={e.detectedDate} dateOnly /></td>
-              <td className="px-4 py-2">
+            <tr key={e.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5 capitalize">{e.exceptionType.replace(/_/g, " ")}</td>
+              <td className="px-2.5 py-1.5 max-w-[280px] truncate">{e.description}</td>
+              <td className="px-2.5 py-1.5 capitalize">{e.severity.replace("_", " ")}</td>
+              <td className="px-2.5 py-1.5 whitespace-nowrap" title="The year of the thing this exception is about">{e.fiscalYear}</td>
+              <td className="px-2.5 py-1.5"><DT value={e.detectedDate} dateOnly /></td>
+              <td className="px-2.5 py-1.5">
                 <select
                   value={e.assignedUserId ?? ""}
                   disabled={busyId === e.id || e.status === "closed"}
@@ -126,7 +126,7 @@ export function ExceptionsTable({ exceptions, years, selectedKey, assignableUser
                   ))}
                 </select>
               </td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 <select
                   value={e.status}
                   disabled={busyId === e.id || e.status === "closed"}
@@ -140,7 +140,7 @@ export function ExceptionsTable({ exceptions, years, selectedKey, assignableUser
                   ))}
                 </select>
               </td>
-              <td className="px-4 py-2 text-xs text-gray-400 max-w-[160px] truncate" title={e.resolution ?? undefined}>
+              <td className="px-2.5 py-1.5 text-xs text-gray-400 max-w-[160px] truncate" title={e.resolution ?? undefined}>
                 {e.resolution ?? ""}
               </td>
             </tr>
@@ -157,15 +157,15 @@ export function ExceptionsTable({ exceptions, years, selectedKey, assignableUser
 
       {resolvingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setResolvingId(null)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-5 shadow-lg space-y-3">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setResolvingId(null)} />
+          <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Resolve exception</h2>
-            <textarea value={resolutionText} onChange={(e) => setResolutionText(e.target.value)} rows={3} placeholder="Resolution notes" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <textarea value={resolutionText} onChange={(e) => setResolutionText(e.target.value)} rows={3} placeholder="Resolution notes" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setResolvingId(null)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="button" onClick={handleResolve} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+              <button type="button" onClick={handleResolve} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Resolve
               </button>
             </div>

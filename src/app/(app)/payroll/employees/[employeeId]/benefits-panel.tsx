@@ -35,14 +35,14 @@ export function BenefitsPanel({ employeeId, benefits }: { employeeId: string; be
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           + Add Benefit
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-3 py-2 font-medium">Benefit Type</th>
             <th className="px-3 py-2 font-medium">Amount</th>
@@ -56,7 +56,7 @@ export function BenefitsPanel({ employeeId, benefits }: { employeeId: string; be
         </thead>
         <tbody>
           {benefits.map((b) => (
-            <tr key={b.id} className="border-t border-gray-100">
+            <tr key={b.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-3 py-2">{b.benefitType}</td>
               <td className="px-3 py-2">{Number(b.amount).toFixed(2)}</td>
               <td className="px-3 py-2 capitalize">{b.frequency.replace("_", " ")}</td>

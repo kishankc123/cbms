@@ -249,7 +249,7 @@ export function DatePicker({ value, onChange, min, max, required, disabled, plac
                 onClick={() => {
                   if (commit(today)) setOpen(false);
                 }}
-                className="text-[var(--color-primary)] hover:underline"
+                className="text-[var(--accent-text)] hover:underline"
               >
                 Today
               </button>

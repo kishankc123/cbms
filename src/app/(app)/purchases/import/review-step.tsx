@@ -166,10 +166,10 @@ function Summary({ rows, review, includeDuplicates, onIncludeDuplicates, toImpor
               Import the duplicates too
             </label>
           )}
-          <button type="button" disabled={busy || toImport === 0} onClick={onCheck} className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <button type="button" disabled={busy || toImport === 0} onClick={onCheck} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             Check only
           </button>
-          <button type="button" disabled={busy || toImport === 0} onClick={onImport} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="button" disabled={busy || toImport === 0} onClick={onImport} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {busy ? "Working..." : `Import ${toImport} bill${toImport === 1 ? "" : "s"}`}
           </button>
         </div>
@@ -223,7 +223,7 @@ function SupplierGroups({ review, supplierDecisions: decisions, onSupplierDecisi
           {groups.some((g) => g.suggestion && !decisions[g.key]) && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of groups) if (g.suggestion && !next[g.key]) next[g.key] = { action: "existing", vendorId: g.suggestion.vendorId, remember: true };
@@ -236,7 +236,7 @@ function SupplierGroups({ review, supplierDecisions: decisions, onSupplierDecisi
           {undecided > 0 && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of groups) if (!next[g.key]) next[g.key] = { action: "create", name: g.text };
@@ -319,7 +319,7 @@ function CategoryGroups({ review, categoryDecisions: decisions, onCategoryDecisi
         {groups.some((g) => g.suggestion && !decisions[g.key]) && (
           <button
             type="button"
-            className="text-sm text-[var(--color-primary)] hover:underline"
+            className="text-sm text-[var(--accent-text)] hover:underline"
             onClick={() => {
               const next = { ...decisions };
               for (const g of groups) if (g.suggestion && !next[g.key]) next[g.key] = { action: "existing", categoryId: g.suggestion.categoryId };
@@ -401,7 +401,7 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+        <div className="flex gap-1 overflow-x-auto border-b border-line">
           {tabs.map(([id, label]) => (
             <button
               key={id}
@@ -429,7 +429,7 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
 
       <div className={`${card} overflow-x-auto`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-3 py-2 font-medium">Row</th>
               <th className="px-3 py-2 font-medium">Date</th>
@@ -463,7 +463,7 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
                   <td className="max-w-xs px-3 py-2 text-xs text-[var(--text-secondary)]">{r.status === "skipped" ? "" : r.messages.join(" ")}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {r.status !== "skipped" && (
-                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--color-primary)] hover:underline">
+                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--accent-text)] hover:underline">
                         {overrides[r.rowNumber] ? "Fix (edited)" : "Fix"}
                       </button>
                     )}

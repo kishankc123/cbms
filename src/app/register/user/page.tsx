@@ -37,7 +37,7 @@ export default function RegisterUserPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md space-y-5 rounded-lg bg-white p-8 shadow">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Create a user account</h1>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Create a user account</h1>
           <p className="text-sm text-gray-500">Your own login. An organization you work for adds you to it using your email address.</p>
         </div>
 
@@ -59,7 +59,7 @@ export default function RegisterUserPage() {
           </Field>
           <p className="text-xs text-gray-500">At least 8 characters with a letter and a number. We email you a link to verify the address; an organization can only add you once it is verified.</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button type="submit" disabled={loading} className="w-full rounded bg-[var(--color-primary)] py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+          <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full">
             {loading ? "Creating..." : "Create user account"}
           </button>
         </form>
@@ -67,13 +67,13 @@ export default function RegisterUserPage() {
         <div className="space-y-1 text-center text-sm text-gray-500">
           <p>
             Already have an account?{" "}
-            <Link href="/login" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/login" className="text-[var(--accent-text)] hover:underline">
               Sign in
             </Link>
           </p>
           <p>
             Setting up a business instead?{" "}
-            <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register" className="text-[var(--accent-text)] hover:underline">
               Create a business account
             </Link>
           </p>

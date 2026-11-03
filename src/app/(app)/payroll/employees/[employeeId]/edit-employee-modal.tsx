@@ -138,9 +138,9 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
 
-      <div className="relative w-full max-w-2xl rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="relative w-full max-w-2xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Edit employee</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -151,47 +151,47 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Employee ID</label>
-            <input value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Full Name</label>
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div className="col-span-2">
             <label className="block text-xs text-gray-500 mb-1">Address</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={address} onChange={(e) => setAddress(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Contact Number</label>
-            <input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">PAN Number</label>
-            <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Joining Date</label>
-            <DatePicker value={joiningDate} onChange={(v) => setJoiningDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DatePicker value={joiningDate} onChange={(v) => setJoiningDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Leaving Date (if left)</label>
-            <DatePicker min={joiningDate} value={leavingDate} onChange={(v) => setLeavingDate(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DatePicker min={joiningDate} value={leavingDate} onChange={(v) => setLeavingDate(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Department</label>
-            <input value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={department} onChange={(e) => setDepartment(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Designation</label>
-            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Employment Type</label>
-            <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value as typeof employmentType)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value as typeof employmentType)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
               {EMPLOYMENT_TYPES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -201,7 +201,7 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Employment Status</label>
-            <select value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as typeof employmentStatus)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as typeof employmentStatus)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
               {EMPLOYMENT_STATUSES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -211,15 +211,15 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bank Name</label>
-            <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bank Account Number</label>
-            <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Tax status (salary TDS)</label>
-            <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <select value={taxStatus} onChange={(e) => setTaxStatus(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
               <option value="">Not chosen (Single is used)</option>
               <option value="single">Single</option>
               <option value="couple">Couple</option>
@@ -227,23 +227,23 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Income from earlier employer this fiscal year</label>
-            <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">TDS already withheld by earlier employer</label>
-            <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           {currentSalary !== null && (
             <div className="col-span-2 space-y-3 rounded border border-gray-200 p-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Basic Salary</label>
-                  <input type="number" min="0" step="0.01" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                  <input type="number" min="0" step="0.01" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                 </div>
                 {salaryChanged && (
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">New salary starts from</label>
-                    <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                    <DatePicker value={effectiveFrom} onChange={(v) => setEffectiveFrom(v)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                   </div>
                 )}
               </div>
@@ -251,7 +251,7 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
                 <>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
-                    <input value={salaryReason} onChange={(e) => setSalaryReason(e.target.value)} placeholder="For example Increment, or Correction of a typing mistake" className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                    <input value={salaryReason} onChange={(e) => setSalaryReason(e.target.value)} placeholder="For example Increment, or Correction of a typing mistake" className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                   </div>
                   <p className="text-xs text-gray-500">
                     {replacing
@@ -272,7 +272,7 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save"}
           </button>

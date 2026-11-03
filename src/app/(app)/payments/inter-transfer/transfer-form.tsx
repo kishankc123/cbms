@@ -113,11 +113,11 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
           <span className="text-gray-500">To</span><span>{labelOf(toAccountId)}</span>
         </div>
         <div className="flex gap-2">
-          <Link href={`/payments/inter-transfer/${done.id}`} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-1.5">
+          <Link href={`/payments/inter-transfer/${done.id}`} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
             View Transfer
           </Link>
           {/* A full page load on purpose: it clears every field of the form for the next transfer. */}
-          <button type="button" onClick={() => window.location.assign("/payments/inter-transfer/new")} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-4 py-1.5">
+          <button type="button" onClick={() => window.location.assign("/payments/inter-transfer/new")} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             New Transfer
           </button>
         </div>
@@ -191,7 +191,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
       </div>
 
       <div className="flex items-center gap-3">
-        <button type="button" onClick={handleSave} disabled={saving} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50">
+        <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {initial ? "Save Changes" : "Save Transfer"}
         </button>
         <Link href={initial ? `/payments/inter-transfer/${initial.id}` : "/payments/inter-transfer"} className="text-sm text-gray-500 hover:text-gray-700">
@@ -202,8 +202,8 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => !saving && setConfirming(null)} />
-          <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-lg space-y-4">
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => !saving && setConfirming(null)} />
+          <div className="relative w-full max-w-md rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
             <h3 className="text-base font-semibold text-gray-900">Confirm Transfer</h3>
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <span className="text-gray-500">From Account</span><span>{labelOf(fromAccountId)}</span>
@@ -219,7 +219,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
               <button type="button" onClick={() => setConfirming(null)} disabled={saving} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50">
                 Cancel
               </button>
-              <button type="button" onClick={handleConfirm} disabled={saving} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+              <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 {saving ? "Posting..." : "Confirm Transfer"}
               </button>
             </div>

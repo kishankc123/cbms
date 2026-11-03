@@ -2,9 +2,9 @@ import Link from "next/link";
 
 // "Role list | Add new" — the two internal screens of Roles.
 export function RoleTabs({ active }: { active: "list" | "new" | "edit" }) {
-  const tab = (on: boolean) => `rounded-full px-4 py-1.5 text-sm transition-colors ${on ? "bg-[var(--card-bg)] font-medium text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`;
+  const tab = (on: boolean) => `relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${on ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`;
   return (
-    <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+    <div className="flex gap-1 overflow-x-auto border-b border-line">
       <Link href="/settings/roles" className={tab(active === "list" || active === "edit")}>
         Role list
       </Link>

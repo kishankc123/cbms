@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { can, requireTenantSession, requireUserSession, TenantScopeError } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import { listActiveMemberships } from "@/lib/memberships";
-import { SignOutButton } from "./sign-out-button";
 import { AppNav } from "./nav";
 import { OrgSwitcher } from "./org-switcher";
 import { FiscalYearSwitcher } from "./fiscal-year-switcher";
@@ -16,12 +15,17 @@ import { CalendarProvider } from "@/components/calendar/calendar-provider";
 import { InventoryProvider } from "@/components/inventory/opening-date";
 import { getOpeningDate } from "@/lib/inventory/stock";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AppShell } from "@/components/shell/app-shell";
+import type { NavIconKey } from "@/components/shell/icons";
+import { UserMenu } from "./user-menu";
+import { sidebarCookieName } from "@/lib/sidebar";
 import { themeCookieName, parseTheme } from "@/lib/theme";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
+const NAV: NavEntry[] = [
+  { href: "/dashboard", icon: "dashboard", label: "Dashboard" },
   {
     href: "/chart-of-accounts",
+    icon: "chart",
     label: "Chart of Accounts",
     children: [
       { href: "/chart-of-accounts", label: "Group" },
@@ -29,10 +33,11 @@ const NAV = [
       { href: "/chart-of-accounts/structure", label: "Structure" },
     ],
   },
-  { href: "/customers", label: "Customers" },
-  { href: "/sales", label: "Sales" },
+  { href: "/customers", icon: "customers", label: "Customers" },
+  { href: "/sales", icon: "sales", label: "Sales" },
   {
     href: "/return",
+    icon: "returns",
     label: "Return",
     children: [
       { href: "/return/sales", label: "Sales return" },
@@ -41,15 +46,17 @@ const NAV = [
   },
   {
     href: "/purchases",
+    icon: "purchases",
     label: "Purchases",
     children: [
       { href: "/purchases/consumable", label: "Consumable purchase" },
       { href: "/purchases/stockable", label: "Stockable purchase" },
     ],
   },
-  { href: "/suppliers", label: "Suppliers" },
+  { href: "/suppliers", icon: "suppliers", label: "Suppliers" },
   {
     href: "/expenses",
+    icon: "expenses",
     label: "Expenses",
     children: [
       { href: "/expenses", label: "One-off Expenses" },
@@ -58,6 +65,7 @@ const NAV = [
   },
   {
     href: "/payments",
+    icon: "payments",
     label: "Payments",
     children: [
       { href: "/payments/money-in", label: "Money In" },
@@ -67,6 +75,7 @@ const NAV = [
   },
   {
     href: "/inventory",
+    icon: "inventory",
     label: "Inventory",
     children: [
       { href: "/inventory/items", label: "Product" },
@@ -77,6 +86,7 @@ const NAV = [
   },
   {
     href: "/assets",
+    icon: "assets",
     label: "Assets",
     children: [
       { href: "/assets", label: "Asset list" },
@@ -87,6 +97,7 @@ const NAV = [
   },
   {
     href: "/payroll",
+    icon: "payroll",
     label: "Payroll",
     children: [
       { href: "/payroll/employees", label: "Employees" },
@@ -98,6 +109,7 @@ const NAV = [
   },
   {
     href: "/bank-reconciliation",
+    icon: "bank",
     label: "Bank Reconciliation",
     children: [
       { href: "/bank-reconciliation", label: "Home" },
@@ -107,6 +119,7 @@ const NAV = [
   },
   {
     href: "/compliance",
+    icon: "compliance",
     label: "Compliance",
     children: [
       { href: "/compliance", label: "Overview" },
@@ -122,6 +135,7 @@ const NAV = [
   },
   {
     href: "/audit",
+    icon: "audit",
     label: "Audit",
     children: [
       { href: "/audit", label: "Overview" },
@@ -131,9 +145,10 @@ const NAV = [
       { href: "/audit/audit-trail", label: "Audit Trail" },
     ],
   },
-  { href: "/journal", label: "Journal Entries" },
+  { href: "/journal", icon: "journal", label: "Journal Entries" },
   {
     href: "/reports",
+    icon: "reports",
     label: "Reports",
     // One child today — Financial Reports, covering everything actually built (P&L, Balance Sheet, Trial
     // Balance, Ledger) via the /reports landing page. As the other categories in the spec get built
@@ -143,6 +158,7 @@ const NAV = [
   },
   {
     href: "/settings",
+    icon: "settings",
     label: "Settings",
     children: [
       { href: "/settings/company", label: "Company details" },
@@ -181,7 +197,7 @@ const NAV_ACCESS: Record<string, string> = {
   "/settings/payment-modes": "admin",
 };
 
-type NavEntry = { href: string; label: string; children?: { href: string; label: string }[] };
+type NavEntry = { href: string; label: string; icon: NavIconKey; children?: { href: string; label: string }[] };
 
 /** Only what this person may open: a group with no visible children disappears with them. */
 function visibleNav(items: NavEntry[], session: Awaited<ReturnType<typeof requireTenantSession>>): NavEntry[] {
@@ -222,13 +238,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     cookies(),
   ]);
   const activeTheme = parseTheme(cookieStore.get(themeCookieName)?.value);
+  const sidebarCollapsed = cookieStore.get(sidebarCookieName)?.value === "collapsed";
 
   return (
     <CalendarProvider calendar={session.calendar}>
     <InventoryProvider openingDate={inventoryOpeningDate}>
-    <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 bg-[var(--sidebar-bg)] flex flex-col sticky top-0 h-screen self-start">
-        <div className="px-3 py-4 border-b border-[var(--sidebar-border)]">
+    <AppShell
+      initialCollapsed={sidebarCollapsed}
+      brand={<p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-text-active)]">Client Books</p>}
+      nav={<AppNav items={visibleNav(NAV, session)} />}
+      topLeft={
+        <>
           <OrgSwitcher
             orgs={orgs.map((o) => ({ tenantId: o.tenantId, companyName: o.companyName, roleLabel: o.roleName }))}
             activeId={session.tenantId}
@@ -239,19 +259,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             isAllTime={"allTime" in activeFiscalYear}
             suggestedCode={"suggested" in activeFiscalYear ? activeFiscalYear.code : null}
           />
-        </div>
-        <AppNav items={visibleNav(NAV, session)} />
-        <div className="px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between gap-2">
-          <SignOutButton />
-          <ThemeToggle initial={activeTheme} />
-        </div>
-      </aside>
-      <main className="flex-1 p-8">
-        <AddNoticeBanner notices={notices} activeTenantId={session.tenantId} />
-        {!user.emailVerifiedAt && <VerifyBanner emailProblem={await verificationEmailProblem(user.email)} />}
-        {children}
-      </main>
-    </div>
+        </>
+      }
+      topRight={
+        <>
+          <div className="hidden sm:block">
+            <ThemeToggle initial={activeTheme} />
+          </div>
+          <UserMenu name={user.name} email={user.email} detail={session.roleName ?? undefined} extra={<ThemeToggle initial={activeTheme} />} />
+        </>
+      }
+    >
+      <AddNoticeBanner notices={notices} activeTenantId={session.tenantId} />
+      {!user.emailVerifiedAt && <VerifyBanner emailProblem={await verificationEmailProblem(user.email)} />}
+      {children}
+    </AppShell>
     </InventoryProvider>
     </CalendarProvider>
   );

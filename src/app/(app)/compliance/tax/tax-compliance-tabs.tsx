@@ -38,7 +38,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
 
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-gray-100 p-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TAX_TABS.map((t) => (
           <button
             key={t.key}
@@ -47,7 +47,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
               setTab(t.key);
               setSection("overview");
             }}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${tab === t.key ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${tab === t.key ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
           >
             {t.label}
           </button>
@@ -63,7 +63,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
                 type="button"
                 onClick={() => setSection(s.key)}
                 className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  section === s.key ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-gray-500 hover:text-gray-700"
+                  section === s.key ? "border-[var(--color-primary)] text-[var(--accent-text)]" : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {s.label}
@@ -92,7 +92,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
       {!registered && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
           Not registered for {active.label}.{" "}
-          <Link href="/compliance/company" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/compliance/company" className="text-[var(--accent-text)] hover:underline">
             Register in Company Details → Tax Registrations
           </Link>{" "}
           to activate it here.

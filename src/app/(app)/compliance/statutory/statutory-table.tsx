@@ -80,7 +80,7 @@ export function StatutoryTable({ data }: { data: Data }) {
           </div>
         </div>
         {data.canCreate && (
-          <button type="button" onClick={() => setAdding(true)} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5">
+          <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             + Add Compliance
           </button>
         )}
@@ -92,39 +92,39 @@ export function StatutoryTable({ data }: { data: Data }) {
         </p>
       )}
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Requirement</th>
-            <th className="px-4 py-2 font-medium">Frequency</th>
-            <th className="px-4 py-2 font-medium">Due date</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium">Completed</th>
-            <th className="px-4 py-2 font-medium">Reference</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Requirement</th>
+            <th className="px-2.5 py-1.5 font-medium">Frequency</th>
+            <th className="px-2.5 py-1.5 font-medium">Due date</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium">Completed</th>
+            <th className="px-2.5 py-1.5 font-medium">Reference</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50/60 cursor-pointer" onClick={() => setOpen(i)}>
-              <td className="px-4 py-2">
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover cursor-pointer" onClick={() => setOpen(i)}>
+              <td className="px-2.5 py-1.5">
                 <span className="font-medium text-gray-900">{i.name}</span>
                 <span className="ml-2 text-xs text-gray-400">
                   {CATEGORY[i.categoryKey] ?? i.categoryKey}
                   {i.period && i.period !== "—" ? ` · ${i.period}` : ""}
                 </span>
               </td>
-              <td className="px-4 py-2">{FREQ[i.frequency]}</td>
-              <td className="px-4 py-2 whitespace-nowrap">
+              <td className="px-2.5 py-1.5">{FREQ[i.frequency]}</td>
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
                 <D value={i.dueDate} />
               </td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5">
                 <ObligationStatusPill status={i.effective} completedLabel="Completed" />
               </td>
-              <td className="px-4 py-2 whitespace-nowrap">{i.completedDate ? <D value={i.completedDate} /> : "—"}</td>
-              <td className="px-4 py-2">{i.referenceNumber || "—"}</td>
-              <td className="px-4 py-2 text-right">
-                <button type="button" className="text-xs text-[var(--color-primary)] hover:underline">
+              <td className="px-2.5 py-1.5 whitespace-nowrap">{i.completedDate ? <D value={i.completedDate} /> : "—"}</td>
+              <td className="px-2.5 py-1.5">{i.referenceNumber || "—"}</td>
+              <td className="px-2.5 py-1.5 text-right">
+                <button type="button" className="text-xs text-[var(--accent-text)] hover:underline">
                   View
                 </button>
               </td>
@@ -151,13 +151,13 @@ export function StatutoryTable({ data }: { data: Data }) {
               <tbody>
                 {data.requirements.map((r) => (
                   <tr key={r.key} className="border-t border-gray-50 first:border-t-0">
-                    <td className="px-4 py-2">
+                    <td className="px-2.5 py-1.5">
                       <p className="text-gray-900">{r.name}</p>
                       {r.description && <p className="text-xs text-gray-400">{r.description}</p>}
                     </td>
-                    <td className="px-4 py-2 text-gray-500">{FREQ[r.frequency]}</td>
-                    <td className="px-4 py-2 text-gray-500">{r.authority || "—"}</td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-2.5 py-1.5 text-gray-500">{FREQ[r.frequency]}</td>
+                    <td className="px-2.5 py-1.5 text-gray-500">{r.authority || "—"}</td>
+                    <td className="px-2.5 py-1.5 text-right">
                       <StatusPill tone={r.scheduled ? "success" : "action"}>{r.scheduled ? "Scheduled" : "Deadline not yet confirmed"}</StatusPill>
                     </td>
                   </tr>
@@ -183,8 +183,8 @@ export function StatutoryTable({ data }: { data: Data }) {
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-lg bg-white p-5 shadow-lg">
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -306,7 +306,7 @@ function ItemModal({ item, data, onClose, onSaved }: { item: Item; data: Data; o
           {editable ? "Cancel" : "Close"}
         </button>
         {editable && (
-          <button type="button" disabled={busy} onClick={save} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             {busy ? "Saving..." : "Save"}
           </button>
         )}
@@ -390,7 +390,7 @@ function AddModal({ data, onClose, onSaved }: { data: Data; onClose: () => void;
         <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
           Cancel
         </button>
-        <button type="button" disabled={busy || !f.name.trim() || !f.dueDate} onClick={save} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-50">
+        <button type="button" disabled={busy || !f.name.trim() || !f.dueDate} onClick={save} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           {busy ? "Adding..." : "Add"}
         </button>
       </div>

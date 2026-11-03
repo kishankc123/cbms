@@ -98,7 +98,7 @@ export function LinePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -175,17 +175,17 @@ export function LinePanel({
                 </p>
                 <AccountPicker options={choices} value={differenceAccount} onChange={setDifferenceAccount} />
                 <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional), for example Bank fee" className={field} />
-                <button type="button" disabled={busy || locked || !differenceAccount} onClick={recordDifference} className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+                <button type="button" disabled={busy || locked || !differenceAccount} onClick={recordDifference} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                   Record the {fmt(Math.abs(gap))} and match
                 </button>
               </div>
             )}
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setTab("create")} className="text-sm text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={() => setTab("create")} className="text-sm text-[var(--accent-text)] hover:underline">
                 Nothing here? Create a transaction
               </button>
-              <button type="button" disabled={busy || locked || !matching} onClick={match} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+              <button type="button" disabled={busy || locked || !matching} onClick={match} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                 Match
               </button>
             </div>
@@ -213,7 +213,7 @@ export function LinePanel({
               <button
                 type="button"
                 onClick={() => setRows([...rows, { accountId: "", amount: Math.max(round2(Math.abs(line.amount) - splitTotal), 0).toFixed(2) }])}
-                className="text-sm text-[var(--color-primary)] hover:underline"
+                className="text-sm text-[var(--accent-text)] hover:underline"
               >
                 + Add another account (split)
               </button>
@@ -229,14 +229,14 @@ export function LinePanel({
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Add a comment (optional)" className={field} />
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={onRecordPayment} className="text-left text-sm text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={onRecordPayment} className="text-left text-sm text-[var(--accent-text)] hover:underline">
                 Money from a customer or to a supplier? Record a {moneyIn ? "receipt" : "payment"} instead
               </button>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={onClose} className="rounded px-4 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-muted-bg)]">
                   Cancel
                 </button>
-                <button type="button" disabled={busy || locked || !splitMatching} onClick={create} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
+                <button type="button" disabled={busy || locked || !splitMatching} onClick={create} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                   Save
                 </button>
               </div>

@@ -36,7 +36,7 @@ export function DifferencePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Why is there a difference?</h2>
@@ -90,7 +90,7 @@ export function DifferencePanel({
                   <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">{l.memo || l.description || "—"}</span>
                   <span className="tabular-nums text-[var(--text-primary)]">{fmt(l.signedAmount)}</span>
                   {l.classification ? <StatusPill tone="pending">{l.classification.replace(/_/g, " ")}</StatusPill> : <span className="w-20" />}
-                  <button type="button" disabled={locked(l.entryDate)} onClick={() => onClassify(l)} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40">
+                  <button type="button" disabled={locked(l.entryDate)} onClick={() => onClassify(l)} className="text-xs text-[var(--accent-text)] hover:underline disabled:opacity-40">
                     {l.classification ? "Change" : "Explain"}
                   </button>
                 </li>

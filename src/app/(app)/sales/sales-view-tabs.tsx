@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { Plus } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Tabs } from "@/components/ui/tabs";
 
 const VIEWS = [
   { id: "invoices", label: "Invoices" },
@@ -13,20 +17,13 @@ export function SalesViewTabs({ initialView, addNew, invoices }: { initialView: 
   const [view, setView] = useState<SalesView>(initialView);
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-gray-100 p-1">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => setView(v.id)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-              view === v.id ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      <PageHeader
+        title="Sales"
+        description="Record customer sales and review invoices."
+        className="!mb-0"
+        primary={view === "invoices" ? <Button variant="primary" icon={<Plus size={14} />} onClick={() => setView("new")}>New invoice</Button> : undefined}
+      />
+      <Tabs items={VIEWS.map((v) => ({ id: v.id, label: v.label }))} value={view} onChange={(id) => setView(id as SalesView)} />
       {/* Both stay mounted so a half-filled invoice survives a peek at the invoice list. */}
       <div hidden={view !== "new"}>{addNew}</div>
       <div hidden={view !== "invoices"}>{invoices}</div>

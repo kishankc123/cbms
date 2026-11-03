@@ -67,16 +67,16 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Entry date</label>
-          <DatePicker id="je-date" value={entryDate} onChange={setEntryDate} required className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <DatePicker id="je-date" value={entryDate} onChange={setEntryDate} required className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3" />
         </div>
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs text-gray-500 mb-1">Description</label>
-          <input data-field="description" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          <input data-field="description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
         </div>
       </div>
 
       <table className="w-full text-sm">
-        <thead className="text-left text-gray-500">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="pb-1 font-medium">Account</th>
             <th className="pb-1 font-medium w-32">Debit</th>
@@ -87,7 +87,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
           {rows.map((row, i) => (
             <tr key={i}>
               <td className="py-1 pr-2">
-                <select data-field={`acct${i}`} value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm">
+                <select aria-label={`Line ${i + 1} account`} data-field={`acct${i}`} value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="">Select account</option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -97,10 +97,10 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
                 </select>
               </td>
               <td className="py-1 pr-2">
-                <input data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input aria-label={`Line ${i + 1} debit`} data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
               <td className="py-1">
-                <input type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <input aria-label={`Line ${i + 1} credit`} type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
             </tr>
           ))}
@@ -120,7 +120,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
         </div>
       </div>
 
-      <button type="button" onClick={post} disabled={!balanced || busy} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5 disabled:opacity-40">
+      <button type="button" onClick={post} disabled={!balanced || busy} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
         {busy ? "Posting..." : "Post entry"}
       </button>
 
@@ -128,14 +128,14 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
 
       {recorded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setRecorded(null)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setRecorded(null)} />
           <div role="dialog" aria-modal="true" aria-label="Transaction recorded" className="relative w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-lg space-y-3">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-lg text-green-700">✓</div>
             <h2 className="text-base font-semibold text-gray-900">Transaction recorded</h2>
             <p className="text-sm text-gray-500">
               Your journal entry has been posted as voucher <span className="font-medium text-gray-900">{recorded}</span>.
             </p>
-            <button type="button" autoFocus onClick={() => setRecorded(null)} className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-6 py-1.5">
+            <button type="button" autoFocus onClick={() => setRecorded(null)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               OK
             </button>
           </div>

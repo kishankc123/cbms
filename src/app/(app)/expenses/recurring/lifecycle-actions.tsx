@@ -13,7 +13,7 @@ const inputClass = "w-full rounded border border-[var(--card-border)] bg-[var(--
 function MiniModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-lg bg-[var(--card-bg)] p-4 shadow-lg space-y-3">
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
         {children}
@@ -54,7 +54,7 @@ export function LifecycleActions({ id, status }: { id: string; status: Recurring
         </button>
       )}
       {status === "paused" && (
-        <button type="button" onClick={() => setResuming(true)} className="font-medium text-[var(--color-primary)] hover:underline">
+        <button type="button" onClick={() => setResuming(true)} className="font-medium text-[var(--accent-text)] hover:underline">
           Resume
         </button>
       )}

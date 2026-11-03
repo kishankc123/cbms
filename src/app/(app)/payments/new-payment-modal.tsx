@@ -328,9 +328,9 @@ export function NewPaymentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onCancel} />
 
-      <div className="relative w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg space-y-4">
+      <div className="relative w-full max-w-3xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">{editing ? `Edit Payment ${editing.paymentNumber}` : `New Payment${fixedDirection ? ` — ${fixedDirection === "money_in" ? "Money In" : "Money Out"}` : ""}`}</h2>
           <button type="button" onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -339,13 +339,13 @@ export function NewPaymentModal({
         </div>
 
         {!fixedDirection && !editing && (
-          <div className="inline-flex rounded-full bg-gray-100 p-1">
+          <div className="flex gap-1 overflow-x-auto border-b border-line">
             {(["money_in", "money_out"] as const).map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => setDirection(d)}
-                className={`rounded-full px-4 py-1.5 text-sm transition-colors ${direction === d ? "bg-white text-gray-900 font-medium shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${direction === d ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
               >
                 {d === "money_in" ? "Money In" : "Money Out"}
               </button>
@@ -560,9 +560,9 @@ export function NewPaymentModal({
             {outstanding.length === 0 && <p className="text-sm text-gray-400">No outstanding expenses found.</p>}
 
             {outstanding.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="px-2 py-1.5 text-xs"></th>
                       <th className="px-2 py-1.5 text-xs">No.</th>
@@ -575,7 +575,7 @@ export function NewPaymentModal({
                     {outstanding.map((row) => {
                       const checked = row.id in allocated;
                       return (
-                        <tr key={row.id} className="border-t border-gray-100">
+                        <tr key={row.id} className="border-b border-line transition-colors hover:bg-hover">
                           <td className="px-2 py-1">
                             <input type="checkbox" checked={checked} onChange={(e) => toggleAllocation(row, e.target.checked)} />
                           </td>
@@ -590,7 +590,7 @@ export function NewPaymentModal({
                               disabled={!checked}
                               value={allocated[row.id] ?? ""}
                               onChange={(e) => setAllocated((prev) => ({ ...prev, [row.id]: e.target.value }))}
-                              className="w-24 rounded border border-gray-300 bg-white px-1.5 py-1 text-sm text-right disabled:bg-gray-50"
+                              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right"
                             />
                           </td>
                         </tr>
@@ -626,7 +626,7 @@ export function NewPaymentModal({
             type="button"
             onClick={() => performSave(false)}
             disabled={saving}
-            className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium px-5 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
           >
             {saving ? (editing ? "Saving..." : "Posting...") : editing ? "Save changes" : "Post Payment"}
           </button>

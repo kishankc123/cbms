@@ -47,14 +47,14 @@ export function SalaryHistoryPanel({
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="rounded bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm px-4 py-1.5"
+          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
         >
           + Add Salary Change
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-3 py-2 font-medium whitespace-nowrap">Effective From</th>
             <th className="px-3 py-2 font-medium whitespace-nowrap">Basic Salary</th>
@@ -70,7 +70,7 @@ export function SalaryHistoryPanel({
         </thead>
         <tbody>
           {records.map((r) => (
-            <tr key={r.id} className="border-t border-gray-100">
+            <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-3 py-2 whitespace-nowrap"><D value={r.effectiveFrom} /></td>
               <td className="px-3 py-2 whitespace-nowrap">{Number(r.basicSalary).toFixed(2)}</td>
               <td className="px-3 py-2 whitespace-nowrap">{CHANGE_TYPE_LABELS[r.changeType] ?? r.changeType}</td>

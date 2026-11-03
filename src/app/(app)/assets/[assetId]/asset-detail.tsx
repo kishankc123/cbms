@@ -66,7 +66,7 @@ export function AssetDetail({ data }: { data: AssetDetailData }) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`rounded-full px-4 py-1.5 text-sm transition-colors ${tab === t.id ? "bg-[var(--card-bg)] text-[var(--text-primary)] font-medium shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+              className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${tab === t.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
             >
               {t.label}
             </button>
@@ -187,23 +187,23 @@ function Depreciation({ data }: { data: AssetDetailData }) {
           <span className="text-xs text-[var(--text-secondary)]">A projection from the settings above; monthly depreciation is posted from Assets &gt; Depreciation.</span>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
-              <th className="px-4 py-2 font-medium">Period</th>
-              <th className="px-4 py-2 font-medium text-right">Opening NBV</th>
-              <th className="px-4 py-2 font-medium text-right">Depreciation</th>
-              <th className="px-4 py-2 font-medium text-right">Closing NBV</th>
-              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-2.5 py-1.5 font-medium">Period</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Opening NBV</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Depreciation</th>
+              <th className="px-2.5 py-1.5 font-medium text-right">Closing NBV</th>
+              <th className="px-2.5 py-1.5 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.number} className="border-t border-[var(--card-border)]">
-                <td className="px-4 py-2 text-[var(--text-primary)]">{r.label}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(r.opening)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{money(r.depreciation)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-[var(--text-primary)]">{money(r.closing)}</td>
-                <td className="px-4 py-2 text-xs text-[var(--text-secondary)]">{r.posted ? "Posted" : "Scheduled"}</td>
+              <tr key={r.number} className="border-b border-line transition-colors hover:bg-hover">
+                <td className="px-2.5 py-1.5 text-[var(--text-primary)]">{r.label}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(r.opening)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums">{money(r.depreciation)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular-nums text-[var(--text-primary)]">{money(r.closing)}</td>
+                <td className="px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">{r.posted ? "Posted" : "Scheduled"}</td>
               </tr>
             ))}
             {data.schedule.length === 0 && (
@@ -217,7 +217,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
         </table>
         {data.schedule.length > 12 && (
           <div className="border-t border-[var(--card-border)] px-5 py-2 text-center">
-            <button type="button" onClick={() => setAll(!all)} className="text-sm text-[var(--color-primary)] hover:underline">
+            <button type="button" onClick={() => setAll(!all)} className="text-sm text-[var(--accent-text)] hover:underline">
               {all ? "Show first 12 periods" : `Show all ${data.schedule.length} periods`}
             </button>
           </div>
@@ -331,7 +331,7 @@ function EditModal({ data, onClose }: { data: AssetDetailData; onClose: () => vo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
       <div className="relative w-full max-w-lg space-y-4 rounded-lg bg-[var(--card-bg)] p-5 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Edit asset</h2>

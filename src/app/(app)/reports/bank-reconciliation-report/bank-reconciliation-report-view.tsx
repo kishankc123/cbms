@@ -41,39 +41,39 @@ export function BankReconciliationReportView({ rows }: { rows: ReconciliationRep
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button type="button" onClick={exportCsv} className="rounded border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-3 py-1.5">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
           Export CSV
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
-            <th className="px-4 py-2 font-medium">Bank Account</th>
-            <th className="px-4 py-2 font-medium">Period</th>
-            <th className="px-4 py-2 font-medium text-right">Statement Balance</th>
-            <th className="px-4 py-2 font-medium text-right">Ledger Balance</th>
-            <th className="px-4 py-2 font-medium text-right">Difference</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium">Reconciled By</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className="px-2.5 py-1.5 font-medium">Bank Account</th>
+            <th className="px-2.5 py-1.5 font-medium">Period</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Statement Balance</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Ledger Balance</th>
+            <th className="px-2.5 py-1.5 font-medium text-right">Difference</th>
+            <th className="px-2.5 py-1.5 font-medium">Status</th>
+            <th className="px-2.5 py-1.5 font-medium">Reconciled By</th>
+            <th className="px-2.5 py-1.5 font-medium"></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-t border-gray-100">
-              <td className="px-4 py-2">{r.bankAccountName}</td>
-              <td className="px-4 py-2 whitespace-nowrap">
+            <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
+              <td className="px-2.5 py-1.5">{r.bankAccountName}</td>
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
                 <D value={r.periodStart} /> – <D value={r.periodEnd} />
               </td>
-              <td className="px-4 py-2 text-right">{fmt(r.statementBalance)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.ledgerBalance)}</td>
-              <td className="px-4 py-2 text-right">{fmt(r.difference)}</td>
-              <td className="px-4 py-2">
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.statementBalance)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.ledgerBalance)}</td>
+              <td className="px-2.5 py-1.5 text-right">{fmt(r.difference)}</td>
+              <td className="px-2.5 py-1.5">
                 <StatusPill tone={r.status === "reconciled" ? "success" : r.status === "reopened" ? "critical" : "pending"}>{STATUS_LABEL[r.status]}</StatusPill>
                 {r.status === "reopened" && r.reopenReason && <div className="mt-1 text-xs text-gray-500">{r.reopenReason}</div>}
               </td>
-              <td className="px-4 py-2 whitespace-nowrap">
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
                 {r.reconciledByName ?? "—"}
                 {r.reconciledAt && (
                   <div className="text-xs text-gray-500">
@@ -81,8 +81,8 @@ export function BankReconciliationReportView({ rows }: { rows: ReconciliationRep
                   </div>
                 )}
               </td>
-              <td className="px-4 py-2 whitespace-nowrap">
-                <Link href="/bank-reconciliation" className="text-xs text-[var(--color-primary)] hover:underline">
+              <td className="px-2.5 py-1.5 whitespace-nowrap">
+                <Link href="/bank-reconciliation" className="text-xs text-[var(--accent-text)] hover:underline">
                   Open in Bank Reconciliation
                 </Link>
               </td>

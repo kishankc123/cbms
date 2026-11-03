@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { roleLabel } from "@/lib/roles";
 import { loadInvitation, invitationHasAccount } from "@/lib/invitations";
 import { AcceptExisting, AcceptNew } from "./accept-forms";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function AcceptInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -31,7 +32,7 @@ export default async function AcceptInvitePage({ params }: { params: Promise<{ t
         ) : (
           <div className="space-y-2 text-sm">
             <p className="text-gray-600">This email already has an account. Sign in with it to accept — your existing password works for every organization.</p>
-            <Link href={`/login?callbackUrl=/accept-invite/${token}`} className="block text-center bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded py-2 text-sm font-medium">
+            <Link href={`/login?callbackUrl=/accept-invite/${token}`} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 block text-center">
               Sign in to accept
             </Link>
             {session?.user && <p className="text-xs text-gray-500">You are currently signed in as {session.user.email}. Sign out first to use {invite.email}.</p>}
@@ -44,7 +45,7 @@ export default async function AcceptInvitePage({ params }: { params: Promise<{ t
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4">
-        <h1 className="text-xl font-semibold text-gray-900">Organization invitation</h1>
+        <PageHeader title="Organization invitation" className="!mb-0" />
         {body}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { items, itemUnits, itemGroups, itemCategories } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 import { ProductTabs } from "../product-tabs";
 import { ItemsTabs } from "./items-tabs";
 import { listRevenueAccountOptions } from "./actions";
@@ -21,11 +22,8 @@ export default async function ItemsPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Product</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Inventory-tracked items — the only type that ever moves stock or carries a cost.</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader title="Product" description="Inventory-tracked items — the only type that ever moves stock or carries a cost." className="!mb-0" />
       <ProductTabs />
       <ItemsTabs items={itemList} units={units} groups={groups} categories={categories} accounts={revenueAccounts} />
     </div>

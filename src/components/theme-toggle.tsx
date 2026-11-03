@@ -53,7 +53,7 @@ export function ThemeToggle({ initial }: { initial: Theme }) {
   }
 
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-[var(--sidebar-bg-hover)] p-0.5" role="group" aria-label="Theme">
+    <div className="flex items-center gap-0.5 rounded-md border border-line bg-surface-2 p-0.5" role="group" aria-label="Theme">
       {OPTIONS.map((opt) => (
         <button
           key={opt.value}
@@ -61,8 +61,9 @@ export function ThemeToggle({ initial }: { initial: Theme }) {
           aria-label={opt.label}
           aria-pressed={theme === opt.value}
           onClick={() => pick(opt.value)}
-          className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-            theme === opt.value ? "bg-[var(--sidebar-text-active)] text-[var(--sidebar-bg)]" : "text-[var(--sidebar-text)] hover:text-[var(--sidebar-text-active)]"
+          title={opt.label}
+          className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+            theme === opt.value ? "bg-surface text-ink shadow-[var(--shadow-sm)]" : "text-ink-2 hover:text-ink"
           }`}
         >
           {opt.icon}

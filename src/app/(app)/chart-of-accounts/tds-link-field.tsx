@@ -17,7 +17,7 @@ export function TdsLinkField({ heads, value, onChange, inherited }: { heads: Tds
         Payments to this are subject to TDS
       </label>
       {subject && (
-        <select data-field="tdsHead" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm">
+        <select data-field="tdsHead" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
           {inherited ? <option value="">Same as the group — {show(inherited)}</option> : <option value="" disabled>Choose a heading</option>}
           {choices.map((h) => (
             <option key={h.key} value={h.key}>
