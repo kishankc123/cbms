@@ -69,7 +69,7 @@ async function creditBalance(tenantId: string, accountIds: string[]): Promise<nu
 }
 
 /** Invoices settled in the last 6 months, with the day the last payment against each was made. Paid on the day they were raised is a cash sale, not a habit of paying late, so those are left out. */
-async function settledInvoices(tenantId: string, today: string): Promise<SettledInvoice[]> {
+export async function settledInvoices(tenantId: string, today: string): Promise<SettledInvoice[]> {
   const rows = await db
     .select({ invoiceId: salesInvoices.id, customerId: salesInvoices.customerId, total: salesInvoices.total, docDate: salesInvoices.invoiceDate, dueDate: salesInvoices.dueDate, paidDate: sql<string>`max(${payments.paymentDate})` })
     .from(salesInvoices)
