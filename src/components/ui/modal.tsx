@@ -35,7 +35,8 @@ export function Modal({
     panel.current?.focus();
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismissible && onClose();
+    // Escape closes an open pop-up list or date picker first (they sit in fixed-position layers of their own).
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismissible && !document.querySelector('[style*="position: fixed"]') && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);

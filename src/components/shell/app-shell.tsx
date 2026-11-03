@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { LabelLinks } from "./label-links";
+import { DialogBehavior } from "./dialog-behavior";
 
 const SidebarContext = createContext({ collapsed: false });
 /** Whether the sidebar is showing icons only (desktop). The drawer on a small screen is always the full menu. */
@@ -51,6 +52,7 @@ export function AppShell({
   return (
     <SidebarContext.Provider value={{ collapsed }}>
       <LabelLinks />
+      <DialogBehavior />
       <div className="flex min-h-screen bg-app">
         {drawer && <div className="fixed inset-0 z-40 bg-[var(--bg-overlay)] md:hidden" onClick={() => setDrawer(false)} aria-hidden />}
         <aside
