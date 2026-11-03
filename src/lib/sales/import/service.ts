@@ -39,7 +39,7 @@ const colIndex = (headers: string[], name: string | undefined) => (name ? header
 
 // ------------------------------------------------------------------ step 1: every row, checked
 
-type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; discount: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; revenueAccountId: string | null };
+type Row = ReviewRow & { customerId: string | null; newCustomerName: string | null; gross: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; revenueAccountId: string | null };
 
 async function cashBankAccountList(tenantId: string) {
   return (await buildPaymentResolver(tenantId)).accounts;
@@ -154,7 +154,6 @@ async function buildRows(tenantId: string, parsedIn: Parsed, settings: ImportSet
     const revenueText = cell(r, "revenue");
     const revenueId = revenueText ? revenueByText.get(normalizeName(revenueText)) ?? null : null;
     const amount = parseAmountCell(cell(r, "amount"));
-    const discount = parseAmountCell(cell(r, "discount"));
     const billTypeText = cell(r, "billType");
     const billType = parseBillTypeCell(billTypeText);
     const iso = d?.iso ?? null;
@@ -164,7 +163,6 @@ async function buildRows(tenantId: string, parsedIn: Parsed, settings: ImportSet
       dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       amount,
-      discount,
       billType,
       billTypeText,
       pays,
@@ -201,7 +199,6 @@ async function buildRows(tenantId: string, parsedIn: Parsed, settings: ImportSet
       customerId,
       newCustomerName: state === "create" ? (decisions[key!] as { name: string }).name : null,
       gross: check.computed?.gross ?? 0,
-      discount: check.computed?.discount ?? 0,
       payLines: check.computed ? paymentLines(pays, check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       revenueAccountId: revenueId ?? (settings.defaultRevenueAccountId && revenueList.some((a) => a.id === settings.defaultRevenueAccountId) ? settings.defaultRevenueAccountId : null),
     });
@@ -358,7 +355,7 @@ export async function runSalesImport(ctx: { tenantId: string; userId: string }, 
       invoiceDate: r.dateIso!,
       customerId: r.customerId ?? "",
       grossAmount: r.gross,
-      discountAmount: r.discount,
+      discountAmount: 0,
       billType: r.billType ?? input.settings.defaultBillType,
       revenueAccountId: r.revenueAccountId,
       payments: r.payLines,
@@ -435,9 +432,9 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sales = XLSX.utils.aoa_to_sheet(
     templateRows(IMPORT_FIELDS, [
-      { date: "15/04/2083", customer: customerList[0]?.name ?? "Customer name", amount: 11300, discount: 0, billType: "Taxable", revenue: revenueList[0]?.name ?? "Sales Revenue", paid: 0 },
+      { date: "15/04/2083", customer: customerList[0]?.name ?? "Customer name", amount: 11300, billType: "Taxable", revenue: revenueList[0]?.name ?? "Sales Revenue", paid: 0 },
       // Paid in two parts, through two accounts
-      { date: "16/04/2083", amount: 2825, discount: 0, billType: "Taxable", paid: 2000, account: accountList[0]?.name ?? "Cash", paid2: 825, account2: accountList[1]?.name ?? "Fonepay" },
+      { date: "16/04/2083", amount: 2825, billType: "Taxable", paid: 2000, account: accountList[0]?.name ?? "Cash", paid2: 825, account2: accountList[1]?.name ?? "Fonepay" },
     ])
   );
   const wide: Partial<Record<(typeof IMPORT_FIELDS)[number]["key"], number>> = { date: 14, customer: 30, revenue: 24, account: 22, account2: 22, account3: 22 };
@@ -457,7 +454,7 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
       ["How to fill in the Sales sheet"],
       ["One row is one invoice. Only Date and Amount are needed."],
       ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
-      ["Amount: the invoice amount, VAT included. A Discount is taken off it, and the VAT is worked out from what is left."],
+      ["Amount: the invoice amount, VAT included. The VAT is worked out from it."],
       ["Customer: leave blank for a cash sale that is paid in full."],
       ["Bill type: Taxable or Zero rated. Blank uses the default you choose."],
       ["Paid amount and Received into: only if money was received."],

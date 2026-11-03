@@ -231,7 +231,6 @@ export function InvoiceForm({
   const computedRows = completeRows.map((r) => computeRow(r, vatRate));
   const totalInvoices = completeRows.length;
   const grossSales = computedRows.reduce((s, c) => s + c.gross, 0);
-  const totalDiscount = computedRows.reduce((s, c) => s + c.discount, 0);
   const taxableSales = computedRows.reduce((s, c) => s + c.taxable, 0);
   const totalVat = computedRows.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedRows.reduce((s, c) => s + c.total, 0);
@@ -259,7 +258,6 @@ export function InvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Bill Type</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Revenue</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross Amount</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
@@ -332,16 +330,6 @@ export function InvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={row.discountAmount}
-                        onChange={(e) => updateRow(i, "discountAmount", e.target.value)}
-                        className={`w-24 text-center ${cellInputCls}`}
-                      />
-                    </td>
-                    <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-24 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
                     <td className="px-1 py-1 text-center">
@@ -395,10 +383,6 @@ export function InvoiceForm({
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Gross Sales</span>
               <span>{fmt(grossSales)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Discount</span>
-              <span>{fmt(totalDiscount)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Taxable Sales</span>

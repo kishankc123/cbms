@@ -57,7 +57,7 @@ const colIndex = (headers: string[], name: string | undefined) => (name ? header
 
 // ------------------------------------------------------------------ step 2: every row, checked
 
-type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; discount: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; billNumber: string; description: string };
+type Row = PurchaseReviewRow & { vendorId: string | null; newSupplierName: string | null; categoryId: string | null; gross: number; payLines: { accountId: string; amount: number; modeId: string | null }[]; billNumber: string; description: string };
 type Category = { id: string; code: string; name: string };
 
 async function cashBankAccountList(tenantId: string) {
@@ -195,7 +195,6 @@ async function buildRows(
 
     const pays = readPaySlots((k) => cell(r, k), payResolver);
     const amount = parseAmountCell(cell(r, "amount"));
-    const discount = parseAmountCell(cell(r, "discount"));
     const billTypeText = cell(r, "billType");
     const iso = d?.iso ?? null;
     const billNumber = cell(r, "billNumber");
@@ -205,7 +204,6 @@ async function buildRows(
       dateNote: d?.error ?? (cell(r, "date") ? "The date can't be read." : "There is no date."),
       periodLocked: iso ? lockedByDate.get(iso) ?? false : false,
       amount,
-      discount,
       billType: parsePurchaseBillType(billTypeText),
       billTypeText,
       pays,
@@ -259,7 +257,6 @@ async function buildRows(
       newSupplierName: supplier === "create" && supplierDecision?.action === "create" ? supplierDecision.name : null,
       categoryId,
       gross: check.computed?.gross ?? 0,
-      discount: check.computed?.discount ?? 0,
       payLines: check.computed ? paymentLines(pays, check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       billNumber,
       description: cell(r, "description"),
@@ -441,7 +438,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
           billDate: r.dateIso,
           vendorId: r.vendorId ?? "",
           billType: r.billType ?? input.settings.defaultBillType,
-          lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: r.discount }],
+          lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: 0 }],
           payments: r.payLines,
         },
         { importId: input.importId, takenNumbers: taken }
@@ -512,9 +509,9 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet(
     templateRows(PURCHASE_FIELDS, [
-      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5650, discount: 0, billType: "VAT", paid: 0 },
+      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5650, billType: "VAT", paid: 0 },
       // Paid in two parts, through two accounts
-      { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Tea and snacks", amount: 850, discount: 0, billType: "No bill", paid: 500, account: accountList[0]?.name ?? "Cash", paid2: 350, account2: accountList[1]?.name ?? "Fonepay" },
+      { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Tea and snacks", amount: 850, billType: "No bill", paid: 500, account: accountList[0]?.name ?? "Cash", paid2: 350, account2: accountList[1]?.name ?? "Fonepay" },
     ])
   );
   const wide: Partial<Record<(typeof PURCHASE_FIELDS)[number]["key"], number>> = { date: 14, supplier: 28, category: 24, billNumber: 14, description: 26, account: 22, account2: 22, account3: 22 };
@@ -533,7 +530,7 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
     XLSX.utils.aoa_to_sheet([
       ["How to fill in the Purchases sheet"],
       ["One row is one bill. Only Date and Amount are needed."],
-      ["Amount: what is paid for the bill, VAT included (after any discount). The VAT is worked out from it."],
+      ["Amount: what is paid for the bill, VAT included. The VAT is worked out from it."],
       ["Date: dd/mm/yyyy, AD or BS (15/04/2083 or 31/07/2026). Format the Date column as Text so Excel keeps it as typed."],
       ["Category: one of your purchase categories (see the Categories sheet), or choose a default in the import."],
       ["Supplier: leave blank for a purchase paid in full to no one in particular."],

@@ -72,7 +72,6 @@ const base: RowCheckInput = {
   dateIso: "2026-09-10",
   periodLocked: false,
   amount: { value: 1130, invalid: false },
-  discount: { value: null, invalid: false },
   billType: undefined,
   pays: noPays,
   customer: "matched",
@@ -92,7 +91,6 @@ describe("whether a row can be imported", () => {
     expect(check({ periodLocked: true }).issues).toEqual(["locked"]);
     expect(check({ amount: { value: null, invalid: true } }).issues).toEqual(["amount"]);
     expect(check({ amount: { value: -5, invalid: false } }).messages[0]).toMatch(/sales return/);
-    expect(check({ discount: { value: 2000, invalid: false } }).issues).toEqual(["discount"]);
     expect(check({ billType: null, billTypeText: "maybe" }).issues).toEqual(["billType"]);
   });
   it("lets a fully paid sale go without a customer, but not a part-paid one", () => {
@@ -127,9 +125,8 @@ describe("whether a row can be imported", () => {
     expect(check({ duplicate: true }).status).toBe("duplicate");
     expect(check({ duplicate: true, dateIso: null }).status).toBe("attention");
   });
-  it("the amount includes VAT: the invoice total is the file's amount, less any discount", () => {
+  it("the amount includes VAT: the invoice total is the file's amount", () => {
     expect(check().computed).toMatchObject({ subtotal: 1000, tax: 130, total: 1130 });
-    expect(check({ discount: { value: 113, invalid: false } }).computed).toMatchObject({ subtotal: 900, tax: 117, total: 1017 });
     expect(check({ billType: "zero_rated" }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
   });
 });

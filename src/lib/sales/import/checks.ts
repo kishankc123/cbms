@@ -6,7 +6,7 @@ import type { SalesBillTypeValue } from "./values";
 // review screen and the import itself both run this, so what you approved is what gets posted.
 
 export type RowStatus = "ready" | "attention" | "duplicate" | "skipped";
-export type RowIssue = "date" | "locked" | "amount" | "discount" | "billType" | "revenue" | "paid" | "account" | "customer";
+export type RowIssue = "date" | "locked" | "amount" | "billType" | "revenue" | "paid" | "account" | "customer";
 
 export type CustomerState = "none" | "matched" | "create" | "unknown" | "skipped";
 
@@ -15,7 +15,6 @@ export type RowCheckInput = {
   dateNote?: string;
   periodLocked: boolean;
   amount: { value: number | null; invalid: boolean };
-  discount: { value: number | null; invalid: boolean };
   /** undefined = cell blank, null = not a bill type */
   billType: SalesBillTypeValue | undefined | null;
   billTypeText?: string;
@@ -62,21 +61,16 @@ export function checkRow(i: RowCheckInput): RowCheck {
   else if (i.amount.value === null) flag("amount", "There is no amount.");
   else if (i.amount.value <= 0) flag("amount", i.amount.value < 0 ? "A negative amount is a sales return, which isn't imported here." : "The amount must be more than zero.");
 
-  const discountValue = i.discount.value ?? 0;
-  if (i.discount.invalid) flag("discount", "The discount isn't a number.");
-  else if (discountValue < 0) flag("discount", "The discount can't be negative.");
-  else if (i.amount.value !== null && discountValue > i.amount.value) flag("discount", "The discount is more than the amount.");
-
   if (i.billType === null) flag("billType", `"${i.billTypeText ?? ""}" isn't a bill type. Use taxable or zero-rated.`);
   const billType: SalesBillTypeValue = i.billType ?? i.settings.defaultBillType;
   if (i.revenue === "unknown") flag("revenue", `"${i.revenueText ?? ""}" isn't a revenue account you can post to (a group that has sub-groups can't be chosen; pick one of its sub-groups).`);
 
   let computed: RowCheck["computed"] = null;
-  const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0 && !i.discount.invalid && discountValue >= 0 && discountValue <= i.amount.value;
+  const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0;
   if (amountOk) {
     const vatRate = i.settings.vatRate;
-    // The file's amount is what the customer pays: VAT included, after any discount. Work back to the amount before VAT.
-    const net = netFromInclusive(round2(i.amount.value! - discountValue), billType === "taxable" ? vatRate : 0);
+    // The file's amount is what the customer pays: VAT included. Work back to the amount before VAT.
+    const net = netFromInclusive(round2(i.amount.value!), billType === "taxable" ? vatRate : 0);
     const t = rowTotals(net, 0, billType, vatRate);
     const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "invoice", "received into");
     for (const p of pay.problems) flag(p.issue, p.message);

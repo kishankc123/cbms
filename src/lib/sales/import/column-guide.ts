@@ -35,9 +35,8 @@ function build<K extends string>(fields: FieldDef<K>[], rules: Record<K, Rule>):
 export const salesColumnGuide = (): ColumnGuideRow[] =>
   build(IMPORT_FIELDS, {
     date: { accepts: DATE, example: "15/04/2083" },
-    amount: { accepts: `${MONEY} More than zero. The invoice amount, VAT included. A discount is taken off it, and the VAT is worked out from what is left.`, example: "11300" },
+    amount: { accepts: `${MONEY} More than zero. The invoice amount, VAT included. The VAT is worked out from it.`, example: "11300" },
     customer: { accepts: "The customer's name as in your customers. Blank only for a cash sale paid in full.", example: "Himal Traders" },
-    discount: { accepts: `${MONEY} Not more than the amount.`, example: "500" },
     billType: { accepts: "Taxable or Zero rated. Blank uses the default you choose.", example: "Taxable" },
     revenue: { accepts: "The name or code of a revenue account (lowest level only: a group that has sub-groups can't be used). Blank uses the default you choose.", example: "Sales Revenue" },
     ...payRules("Not more than the invoice total.", "received", "11300"),
@@ -46,12 +45,11 @@ export const salesColumnGuide = (): ColumnGuideRow[] =>
 export const purchaseColumnGuide = (): ColumnGuideRow[] =>
   build(PURCHASE_FIELDS, {
     date: { accepts: DATE, example: "15/04/2083" },
-    amount: { accepts: `${MONEY} More than zero. What is paid, VAT included, after any discount. The VAT is worked out from it.`, example: "5650" },
+    amount: { accepts: `${MONEY} More than zero. What is paid, VAT included. The VAT is worked out from it.`, example: "5650" },
     supplier: { accepts: "The supplier's name as in your suppliers. Blank only for a purchase paid in full.", example: "Himal Traders" },
     category: { accepts: "The name or code of one of your purchase categories, or choose a default in the import.", example: "Stationery" },
     billNumber: { accepts: "The supplier's own bill number. Blank gets an automatic one.", example: "B-101" },
     description: { accepts: "Free text: what was bought.", example: "Office paper" },
-    discount: { accepts: `${MONEY} Not more than the amount.`, example: "100" },
     billType: { accepts: "VAT, PAN, Estimate, Challan or No bill. Only a VAT bill carries VAT.", example: "VAT" },
     ...payRules("Not more than the bill total.", "paid", "0"),
   });

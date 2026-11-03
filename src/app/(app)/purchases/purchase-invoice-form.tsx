@@ -183,6 +183,8 @@ export function PurchaseInvoiceForm({
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
+  // New bills have no discount; the column appears only on an older bill that already carries one.
+  const showDiscount = Boolean(initial?.lines.some((l) => l.discount > 0));
   const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(grandTotal - paidTotal, 0);
   // A non-VAT bill paid in full needs no supplier and no invoice number; a VAT bill or an unpaid balance does.
@@ -356,7 +358,7 @@ export function PurchaseInvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Rate</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
+                {showDiscount && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>}
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
@@ -406,16 +408,18 @@ export function PurchaseInvoiceForm({
                     <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
                     </td>
-                    <td className="px-1 py-1 text-center">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={line.discount}
-                        onChange={(e) => updateLine(i, "discount", e.target.value)}
-                        className={`w-20 ${cellInputCls}`}
-                      />
-                    </td>
+                    {showDiscount && (
+                      <td className="px-1 py-1 text-center">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={line.discount}
+                          onChange={(e) => updateLine(i, "discount", e.target.value)}
+                          className={`w-20 ${cellInputCls}`}
+                        />
+                      </td>
+                    )}
                     <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
@@ -456,10 +460,12 @@ export function PurchaseInvoiceForm({
               <span className="text-gray-500">Gross</span>
               <span>{fmt(grandGross)}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Discount</span>
-              <span>{fmt(grandDiscount)}</span>
-            </div>
+            {showDiscount && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Discount</span>
+                <span>{fmt(grandDiscount)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Taxable</span>
               <span>{fmt(grandTaxable)}</span>

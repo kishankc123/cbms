@@ -6,7 +6,7 @@ import type { PurchaseBillTypeValue } from "./values";
 // review and the import both run this, so what you approved is what gets posted.
 
 export type PurchaseRowStatus = "ready" | "attention" | "duplicate" | "skipped";
-export type PurchaseRowIssue = "date" | "locked" | "amount" | "discount" | "billType" | "paid" | "account" | "supplier" | "category";
+export type PurchaseRowIssue = "date" | "locked" | "amount" | "billType" | "paid" | "account" | "supplier" | "category";
 export type SupplierState = "none" | "matched" | "create" | "unknown" | "skipped";
 export type CategoryState = "ok" | "none" | "unknown" | "skipped";
 
@@ -15,7 +15,6 @@ export type PurchaseRowInput = {
   dateNote?: string;
   periodLocked: boolean;
   amount: { value: number | null; invalid: boolean };
-  discount: { value: number | null; invalid: boolean };
   billType: PurchaseBillTypeValue | undefined | null;
   billTypeText?: string;
   /** The payment columns: up to three parts, each with the account it went through. */
@@ -58,11 +57,6 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
   else if (i.amount.value === null) flag("amount", "There is no amount.");
   else if (i.amount.value <= 0) flag("amount", i.amount.value < 0 ? "A negative amount is a purchase return, which isn't imported here." : "The amount must be more than zero.");
 
-  const discountValue = i.discount.value ?? 0;
-  if (i.discount.invalid) flag("discount", "The discount isn't a number.");
-  else if (discountValue < 0) flag("discount", "The discount can't be negative.");
-  else if (i.amount.value !== null && discountValue > i.amount.value) flag("discount", "The discount is more than the amount.");
-
   if (i.billType === null) flag("billType", `"${i.billTypeText ?? ""}" isn't a bill type. Use VAT, PAN, estimate, challan or no bill.`);
   const billType: PurchaseBillTypeValue = i.billType ?? i.settings.defaultBillType;
 
@@ -70,16 +64,16 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
   else if (i.category === "unknown") flag("category", `"${i.categoryText ?? ""}" isn't one of your purchase categories.`);
 
   let computed: PurchaseRowCheck["computed"] = null;
-  const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0 && !i.discount.invalid && discountValue >= 0 && discountValue <= i.amount.value;
+  const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0;
   if (amountOk) {
     // The file's amount is what is paid, VAT included. VAT applies only to a VAT bill; for any other bill type the amount is the whole cost.
     const vatRate = billType === "vat" ? i.settings.vatRate : 0;
     let t;
     if (billType === "vat") {
-      const net = netFromInclusive(round2(i.amount.value! - discountValue), vatRate);
+      const net = netFromInclusive(round2(i.amount.value!), vatRate);
       t = rowTotals(net, 0, "taxable", vatRate);
     } else {
-      t = rowTotals(i.amount.value!, discountValue, "zero_rated", vatRate);
+      t = rowTotals(i.amount.value!, 0, "zero_rated", vatRate);
     }
     const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "bill", "paid from");
     for (const p of pay.problems) flag(p.issue, p.message);
