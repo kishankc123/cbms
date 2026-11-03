@@ -7,7 +7,7 @@ import { DashboardTabs } from "./dashboard-tabs";
 import { DashboardPeriod } from "./dashboard-period";
 
 // The top of every dashboard tab: the greeting, which financial year is open, and the tabs.
-export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { name: string; activeFiscalYear: Awaited<ReturnType<typeof getActiveFiscalYear>>; from: string; to: string; fiscal: DateRange | null }) {
+export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { name: string; activeFiscalYear: Awaited<ReturnType<typeof getActiveFiscalYear>>; from?: string; to?: string; fiscal?: DateRange | null }) {
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -33,9 +33,11 @@ export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { 
       </div>
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-line">
         <DashboardTabs />
-        <div className="pb-1">
-          <DashboardPeriod from={from} to={to} fiscal={fiscal} />
-        </div>
+        {from && to && (
+          <div className="pb-1">
+            <DashboardPeriod from={from} to={to} fiscal={fiscal ?? null} />
+          </div>
+        )}
       </div>
     </>
   );

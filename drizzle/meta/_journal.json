@@ -750,6 +750,13 @@
       "when": 1793727706171,
       "tag": "0106_ledger_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793730395905,
+      "tag": "0107_planning_settings",
+      "breakpoints": true
     }
   ]
 }
