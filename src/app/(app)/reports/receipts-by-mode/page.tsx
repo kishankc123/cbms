@@ -38,8 +38,8 @@ export default async function ReceiptsByModePage({ searchParams }: { searchParam
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-gray-700">By Mode</h2>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Mode</th>
               <th className="px-2.5 py-1.5 font-medium text-right">Received</th>
@@ -50,7 +50,7 @@ export default async function ReceiptsByModePage({ searchParams }: { searchParam
           </thead>
           <tbody>
             {byMode.map((m) => (
-              <tr key={m.mode} className="border-t border-gray-100">
+              <tr key={m.mode} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5">{m.mode}</td>
                 <td className="px-2.5 py-1.5 text-right">{m.received ? fmt(m.received) : ""}</td>
                 <td className="px-2.5 py-1.5 text-right">{m.paid ? fmt(m.paid) : ""}</td>
@@ -81,8 +81,8 @@ export default async function ReceiptsByModePage({ searchParams }: { searchParam
       {byModeAndAccount.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-medium text-gray-700">By Mode and Account</h2>
-          <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-2.5 py-1.5 font-medium">Mode</th>
                 <th className="px-2.5 py-1.5 font-medium">Account</th>
@@ -93,7 +93,7 @@ export default async function ReceiptsByModePage({ searchParams }: { searchParam
             </thead>
             <tbody>
               {byModeAndAccount.map((r) => (
-                <tr key={r.mode + r.accountId} className="border-t border-gray-100">
+                <tr key={r.mode + r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-2.5 py-1.5">{r.mode}</td>
                   <td className="px-2.5 py-1.5">
                     <AccountLink accountId={r.accountId} from={from} to={to}>

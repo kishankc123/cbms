@@ -198,8 +198,8 @@ function CategoriesPanel({ data }: { data: AssetSetupData }) {
           </button>
         </div>
       )}
-      <table className="w-full text-sm bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg overflow-hidden">
-        <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Category</th>
             <th className="px-2.5 py-1.5 font-medium">Default method</th>
@@ -307,8 +307,8 @@ function LocationsPanel({ data }: { data: AssetSetupData }) {
           </button>
         </div>
       )}
-      <table className="w-full text-sm bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg overflow-hidden max-w-2xl">
-        <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+      <table className="border-collapse text-[13px] w-full max-w-2xl">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Location</th>
             <th className="px-2.5 py-1.5 font-medium">Status</th>

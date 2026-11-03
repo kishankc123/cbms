@@ -40,7 +40,7 @@ export function TaxRatesPanel() {
                     .filter((l) => l.group === g)
                     .map((l) => (
                       <Fragment key={l.key}>
-                        <tr className="border-t border-gray-100">
+                        <tr className="border-b border-line transition-colors hover:bg-hover">
                           <td className={`py-2.5 pr-3 text-gray-900 ${g ? "pl-9" : "pl-5"}`}>{l.label}</td>
                           <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-gray-900">
                             {l.slabs ? <span className="text-xs font-normal text-gray-500">By income slab</span> : l.rate === null ? <span className="text-xs font-normal text-gray-400">Not set yet</span> : `${l.rate}%`}
@@ -57,7 +57,7 @@ export function TaxRatesPanel() {
                           <tr>
                             <td colSpan={3} className="px-5 pb-3">
                               <table className="w-full text-xs">
-                                <thead className="text-left text-gray-500">
+                                <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                                   <tr>
                                     <th className="py-1 pr-3 font-medium">Rate</th>
                                     <th className="py-1 pr-3 font-medium">From</th>
@@ -66,7 +66,7 @@ export function TaxRatesPanel() {
                                 </thead>
                                 <tbody>
                                   {history.rows.map((r) => (
-                                    <tr key={r.id} className="border-t border-gray-100">
+                                    <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                                       <td className="py-1 pr-3">{r.rate}%</td>
                                       <td className="py-1 pr-3">
                                         <D value={r.effectiveFrom} />

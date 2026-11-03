@@ -185,7 +185,7 @@ export function ExcisePermitPanel() {
           <p className="text-sm text-gray-500">None yet. The fiscal year the permit was issued in is counted as paid.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 font-medium">Fiscal year</th>
                 <th className="px-3 py-2 font-medium">Paid on</th>
@@ -196,7 +196,7 @@ export function ExcisePermitPanel() {
             </thead>
             <tbody>
               {[...permit.renewals].reverse().map((r) => (
-                <tr key={r.id} className="border-t border-gray-100">
+                <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-2">FY {r.fiscalYear}</td>
                   <td className="px-3 py-2">
                     <D value={r.paidDate} />

@@ -142,8 +142,8 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
       {view === "month" && <MonthView items={items} />}
 
       {view === "list" && (
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Name</th>
             <th className="px-2.5 py-1.5 font-medium">Period</th>
@@ -156,7 +156,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
         </thead>
         <tbody>
           {items.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100">
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5">
                 {i.name}
                 <span className="ml-2 text-xs capitalize text-gray-400">{i.categoryKey}</span>

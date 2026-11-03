@@ -107,8 +107,8 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
         </div>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Compliance</th>
             <th className="px-2.5 py-1.5 font-medium">Period</th>
@@ -121,7 +121,7 @@ export function TaxComplianceTable({ data, lockTaxType }: { data: Data; lockTaxT
         </thead>
         <tbody>
           {rows.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50/60 cursor-pointer" onClick={() => setOpenId(i.id)}>
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover cursor-pointer" onClick={() => setOpenId(i.id)}>
               <td className="px-2.5 py-1.5">
                 <span className="font-medium text-gray-900">{i.name}</span>
                 {i.taxTypeName && <span className="ml-2 text-xs text-gray-400">{i.taxTypeName}</span>}

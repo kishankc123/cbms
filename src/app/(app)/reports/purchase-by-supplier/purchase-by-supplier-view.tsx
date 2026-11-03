@@ -38,8 +38,8 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Supplier</th>
             <th className="px-2.5 py-1.5 font-medium text-right">Bills</th>
@@ -51,7 +51,7 @@ export function PurchaseBySupplierView({ rows, from, to }: { rows: PurchaseBySup
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.vendorId} className="border-t border-gray-100">
+            <tr key={r.vendorId} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5">
                 {r.accountId ? (
                   <AccountLink accountId={r.accountId} from={from} to={to}>

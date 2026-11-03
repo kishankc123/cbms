@@ -95,7 +95,7 @@ export function OpeningBalancesForm({ sheet, canSave }: { sheet: Sheet; canSave:
           </thead>
           <tbody>
             {sheet.rows.map((r, i) => (
-              <tr key={r.id} className="border-t border-[var(--card-border)]">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className={`${td} text-gray-400`}>{i + 1}</td>
                 <td className={`${td} text-gray-500`}>{r.category}</td>
                 <td className={td}>

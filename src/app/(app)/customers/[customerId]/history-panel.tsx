@@ -64,8 +64,8 @@ export function HistoryPanel({
       {loading && <p className="text-sm text-gray-400">Loading...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && !error && data && (
-        <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <DateHead mode={mode} />
               <th className="px-2.5 py-1.5 font-medium">Details</th>
@@ -85,7 +85,7 @@ export function HistoryPanel({
               <td className="px-2.5 py-1.5">{drCr(data.openingBalance)}</td>
             </tr>
             {data.rows.map((r, i) => (
-              <tr key={i} className="border-t border-gray-100">
+              <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                 <DateCells mode={mode} value={r.date} />
                 <td className="px-2.5 py-1.5">{r.details}</td>
                 <td className="px-2.5 py-1.5">{r.debit > 0 ? fmt(r.debit) : ""}</td>

@@ -188,8 +188,8 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
               Total ownership: <span className={`font-semibold ${data.ownership.allocationPct < 100 && data.capital.issuedShares > 0 ? "text-amber-700" : "text-gray-900"}`}>{data.ownership.allocationPct}%</span>
             </span>
           </div>
-          <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 font-medium">Shareholder</th>
                 <th className="px-3 py-2 font-medium">Type</th>
@@ -281,8 +281,8 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
             )}
           </div>
           <h3 className="text-sm font-semibold text-gray-900">Share Lagat history</h3>
-          <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -294,7 +294,7 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
             </thead>
             <tbody>
               {data.lagat.history.map((e) => (
-                <tr key={e.id} className="border-t border-gray-100">
+                <tr key={e.id} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-2 whitespace-nowrap">
                     <D value={e.status === "updated" ? e.lastUpdatedDate : e.lastChangeDate} />
                   </td>
@@ -370,8 +370,8 @@ function describe(c: Change, currency: string): string {
 
 function ChangesTable({ changes, currency, compact }: { changes: Change[]; currency: string; compact?: boolean }) {
   return (
-    <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <thead className="bg-gray-50 text-left text-gray-500">
+    <table className="border-collapse text-[13px] w-full">
+      <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
         <tr>
           <th className="px-3 py-2 font-medium">Date</th>
           <th className="px-3 py-2 font-medium">Change</th>
@@ -382,7 +382,7 @@ function ChangesTable({ changes, currency, compact }: { changes: Change[]; curre
       </thead>
       <tbody>
         {changes.map((c) => (
-          <tr key={c.id} className="border-t border-gray-100">
+          <tr key={c.id} className="border-b border-line transition-colors hover:bg-hover">
             <td className="px-3 py-2 whitespace-nowrap">
               <D value={c.date} />
             </td>

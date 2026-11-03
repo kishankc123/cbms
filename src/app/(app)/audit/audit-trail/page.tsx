@@ -9,7 +9,7 @@ export default async function AuditTrailPage() {
   const entries = await listAuditTrail({});
   return (
     <div className="space-y-6">
-      <PageHeader title="Audit Trail" className="!mb-0" />
+      <PageHeader title="Audit Trail" description="Who changed what, and when." className="!mb-0" />
       <AuditTrailTable initialEntries={entries} />
     </div>
   );

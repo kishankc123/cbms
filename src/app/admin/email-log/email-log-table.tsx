@@ -79,7 +79,7 @@ export function EmailLogTable({ data, day, configured, filters }: { data: Data; 
 
       <div className={`${adminCard} overflow-x-auto`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">When</th>
               <th className="px-2.5 py-1.5 font-medium">To</th>
@@ -90,7 +90,7 @@ export function EmailLogTable({ data, day, configured, filters }: { data: Data; 
           </thead>
           <tbody>
             {data.rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--card-border)] align-top">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                 <td className="whitespace-nowrap px-2.5 py-1.5 text-[var(--text-secondary)]">{when(r.createdAt)}</td>
                 <td className="px-2.5 py-1.5">
                   {r.toEmail}

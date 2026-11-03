@@ -299,7 +299,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-900">By heading</h3>
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="py-1 pr-2 font-medium">Heading</th>
                       <th className="py-1 pr-2 text-right font-medium">Withheld</th>
@@ -309,7 +309,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                   </thead>
                   <tbody>
                     {d.tdsBreakdown.map((r) => (
-                      <tr key={r.key ?? "none"} className="border-t border-gray-100">
+                      <tr key={r.key ?? "none"} className="border-b border-line transition-colors hover:bg-hover">
                         <td className="py-1.5 pr-2">{r.name}</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.withheld)}</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{fmt(r.deposited)}</td>

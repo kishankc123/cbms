@@ -94,9 +94,9 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">ID</th>
               <th className="px-2.5 py-1.5 font-medium">Name</th>
@@ -110,7 +110,7 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
           </thead>
           <tbody>
             {list.rows.map((r) => (
-              <tr key={r.userId} className="border-t border-[var(--card-border)]">
+              <tr key={r.userId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{r.code}</td>
                 <td className="px-2.5 py-1.5 font-medium">
                   <Link href={`/settings/users/${r.userId}`} className="text-[var(--accent-text)] hover:underline">

@@ -99,9 +99,9 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
             {detail.allocations.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-900">Allocation</h3>
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-gray-500">
+                    <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                       <tr>
                         <th className="px-2 py-1.5 text-xs">Target</th>
                         <th className="px-2 py-1.5 text-xs text-right">Allocated</th>
@@ -110,7 +110,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                     </thead>
                     <tbody>
                       {detail.allocations.map((a, i) => (
-                        <tr key={i} className="border-t border-gray-100">
+                        <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                           <td className="px-2 py-1 font-mono text-xs">{a.label}</td>
                           <td className="px-2 py-1 text-right">{fmt(a.allocatedAmount)}</td>
                           <td className="px-2 py-1 text-right">{a.outstandingAfter !== null ? fmt(a.outstandingAfter) : "—"}</td>
@@ -124,9 +124,9 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
 
             <section className="space-y-2">
               <h3 className="text-sm font-semibold text-gray-900">Accounting Entry</h3>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="px-2 py-1.5 text-xs">Account</th>
                       <th className="px-2 py-1.5 text-xs text-right">Debit</th>
@@ -135,7 +135,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                   </thead>
                   <tbody>
                     {detail.journalLines.map((l, i) => (
-                      <tr key={i} className="border-t border-gray-100">
+                      <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                         <td className="px-2 py-1">{l.accountName}</td>
                         <td className="px-2 py-1 text-right">{l.debit > 0 ? fmt(l.debit) : ""}</td>
                         <td className="px-2 py-1 text-right">{l.credit > 0 ? fmt(l.credit) : ""}</td>
@@ -171,7 +171,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                         Edited by {h.userName} on {fmtDT(h.at)}
                       </p>
                       <table className="mt-1.5 w-full text-xs">
-                        <thead className="text-left text-gray-500">
+                        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                           <tr>
                             <th className="pr-2 py-0.5 font-medium">Field</th>
                             <th className="pr-2 py-0.5 font-medium">Was</th>
@@ -180,7 +180,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                         </thead>
                         <tbody>
                           {h.changes.map((c) => (
-                            <tr key={c.field} className="border-t border-gray-100 align-top">
+                            <tr key={c.field} className="border-b border-line transition-colors hover:bg-hover align-top">
                               <td className="pr-2 py-0.5 text-gray-600">{c.field}</td>
                               <td className="pr-2 py-0.5 text-gray-500 break-words">{c.before}</td>
                               <td className="py-0.5 text-gray-900 break-words">{c.after}</td>

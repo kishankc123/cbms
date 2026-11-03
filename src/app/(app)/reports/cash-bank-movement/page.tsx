@@ -66,8 +66,8 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-gray-700">By Account</h2>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Account</th>
               <th className="px-2.5 py-1.5 font-medium text-right">Opening Balance</th>
@@ -78,7 +78,7 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
           </thead>
           <tbody>
             {accounts.map((a) => (
-              <tr key={a.accountId} className="border-t border-gray-100">
+              <tr key={a.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5">
                   <AccountLink accountId={a.accountId} from={from} to={to}>
                     {a.code} — {a.name}
@@ -112,8 +112,8 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-gray-700">By Transaction Type</h2>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Type</th>
               <th className="px-2.5 py-1.5 font-medium text-right">Total In</th>
@@ -125,7 +125,7 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
             {bySourceType.map((s) => {
               const source = resolveSourceLink(s.sourceType);
               return (
-                <tr key={s.sourceType} className="border-t border-gray-100">
+                <tr key={s.sourceType} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-2.5 py-1.5">{SOURCE_TYPE_LABEL[s.sourceType] ?? s.sourceType}</td>
                   <td className="px-2.5 py-1.5 text-right">{s.totalIn ? fmt(s.totalIn) : ""}</td>
                   <td className="px-2.5 py-1.5 text-right">{s.totalOut ? fmt(s.totalOut) : ""}</td>

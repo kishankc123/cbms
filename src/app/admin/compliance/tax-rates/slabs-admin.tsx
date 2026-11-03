@@ -24,7 +24,7 @@ function SlabTable({ label, slabs }: { label: string; slabs: Slab[] }) {
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">{label}</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="py-1 pr-2 font-medium">Income from</th>
             <th className="py-1 pr-2 font-medium">Up to</th>
@@ -33,7 +33,7 @@ function SlabTable({ label, slabs }: { label: string; slabs: Slab[] }) {
         </thead>
         <tbody>
           {slabs.map((s, i) => (
-            <tr key={i} className="border-t border-[var(--card-border)]">
+            <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
               <td className="py-1 pr-2 tabular-nums">{money(i === 0 ? 0 : (slabs[i - 1].upTo ?? 0))}</td>
               <td className="py-1 pr-2 tabular-nums">{s.upTo === null ? "and above" : money(s.upTo)}</td>
               <td className="py-1 text-right tabular-nums">{s.rate}%</td>
@@ -56,7 +56,7 @@ function SlabEditor({ label, rows, base, onChange }: { label: string; rows: Row[
     <div>
       <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">{label}</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="py-1 pr-2 font-medium">From</th>
             <th className="py-1 pr-2 font-medium">Up to</th>
@@ -231,7 +231,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
 
       {shown.length > 0 && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-2 font-medium">Version</th>
               <th className="py-1 pr-2 font-medium">From</th>
@@ -243,7 +243,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
           <tbody>
             {[...shown].reverse().map((v) =>
               notes?.id === v.id ? (
-                <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td colSpan={5} className="space-y-2 py-2">
                     <input value={notes.source} onChange={(e) => setNotes({ ...notes, source: e.target.value })} placeholder="Source" className={`${adminField} w-full`} />
                     <label className="flex items-center gap-2 text-sm">
@@ -260,7 +260,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
                   </td>
                 </tr>
               ) : (
-                <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td className="py-1.5 pr-2 font-medium">
                     v{v.version} {v.inForce && <StatusPill tone="success">in force</StatusPill>}
                   </td>

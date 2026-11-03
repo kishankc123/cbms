@@ -31,8 +31,8 @@ export default async function TrialBalancePage({ searchParams }: { searchParams:
         <p className="mb-2 text-sm text-gray-500">
           As of <D value={to} />
         </p>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+        <table className="border-collapse text-[13px] w-full">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Account</th>
               <th className="px-2.5 py-1.5 text-right font-medium">Debit</th>
@@ -41,7 +41,7 @@ export default async function TrialBalancePage({ searchParams }: { searchParams:
           </thead>
           <tbody>
             {tb.rows.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}

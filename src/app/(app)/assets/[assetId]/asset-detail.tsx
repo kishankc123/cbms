@@ -187,7 +187,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
           <span className="text-xs text-[var(--text-secondary)]">A projection from the settings above; monthly depreciation is posted from Assets &gt; Depreciation.</span>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Period</th>
               <th className="px-2.5 py-1.5 font-medium text-right">Opening NBV</th>
@@ -198,7 +198,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.number} className="border-t border-[var(--card-border)]">
+              <tr key={r.number} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 text-[var(--text-primary)]">{r.label}</td>
                 <td className="px-2.5 py-1.5 text-right tabular-nums">{money(r.opening)}</td>
                 <td className="px-2.5 py-1.5 text-right tabular-nums">{money(r.depreciation)}</td>

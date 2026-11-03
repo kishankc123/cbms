@@ -166,9 +166,9 @@ export function UploadStatementModal({
               />
             </div>
 
-            <div className="overflow-x-auto rounded border border-gray-200">
+            <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50">
+                <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                   <tr>
                     {preview.headers.map((h) => (
                       <th key={h} className="px-2 py-1 text-left font-medium text-gray-500 whitespace-nowrap">
@@ -179,7 +179,7 @@ export function UploadStatementModal({
                 </thead>
                 <tbody>
                   {preview.sampleRows.map((row, i) => (
-                    <tr key={i} className="border-t border-gray-100">
+                    <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                       {row.map((c, j) => (
                         <td key={j} className="px-2 py-1 whitespace-nowrap">
                           {c}

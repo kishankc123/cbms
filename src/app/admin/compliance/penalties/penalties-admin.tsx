@@ -94,7 +94,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+              <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                 <tr>
                   <th className="px-3 py-2 font-medium">Starts</th>
                   <th className="px-3 py-2 font-medium">Figures</th>
@@ -105,7 +105,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
               </thead>
               <tbody>
                 {[...timeline[t.key]].filter((v) => !fiscalYear || (v.effectiveFrom <= fiscalYear.to && (!v.effectiveTo || v.effectiveTo >= fiscalYear.from))).reverse().map((v) => (
-                  <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                  <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className="font-medium">{v.fiscalYear ? `FY ${v.fiscalYear}` : "Original"}</span>
                       <br />

@@ -106,8 +106,8 @@ export function RegistrationsTable({ data }: { data: Data }) {
         )}
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Tax</th>
             <th className="px-2.5 py-1.5 font-medium">Registration number</th>
@@ -120,7 +120,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
         </thead>
         <tbody>
           {data.registrations.map((r) => (
-            <tr key={r.id} className="border-t border-gray-100">
+            <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 font-medium text-gray-900">{r.taxTypeName}</td>
               <td className="px-2.5 py-1.5">{r.number || <span className="text-gray-400">—</span>}</td>
               <td className="px-2.5 py-1.5">

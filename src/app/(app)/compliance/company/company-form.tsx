@@ -214,7 +214,7 @@ export function CompanyForm({ data }: { data: Data }) {
             <table className="w-full text-sm">
               <tbody>
                 {changes.map((f) => (
-                  <tr key={f} className="border-t border-gray-100 align-top">
+                  <tr key={f} className="border-b border-line transition-colors hover:bg-hover align-top">
                     <td className="py-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap">{FIELD_LABEL[f]}</td>
                     <td className="py-1.5">
                       <span className="text-gray-400 line-through">{data.values[f] || "—"}</span>

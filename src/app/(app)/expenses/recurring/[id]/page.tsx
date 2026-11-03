@@ -87,7 +87,7 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--card-border)] text-left text-xs text-[var(--text-secondary)]">

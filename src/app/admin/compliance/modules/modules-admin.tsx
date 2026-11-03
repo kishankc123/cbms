@@ -72,7 +72,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
       <section className={`${adminCard} overflow-x-auto p-5`}>
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">{moduleLabel(moduleKey)}: applicable taxes</h2>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-3 font-medium">Tax</th>
               <th className="py-1 pr-3 font-medium">Worked out by</th>
@@ -86,7 +86,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
             {data.taxes.map((t) => {
               const row = rowOf(t.key);
               return (
-                <tr key={t.key} className="border-t border-[var(--card-border)] align-top">
+                <tr key={t.key} className="border-b border-line transition-colors hover:bg-hover align-top">
                   <td className="py-2 pr-3 font-medium text-[var(--text-primary)]">{t.name}</td>
                   {row ? (
                     <>
@@ -178,7 +178,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
         <table className="w-full text-sm">
           <tbody>
             {data.taxes.map((t) => (
-              <tr key={t.key} className="border-t border-[var(--card-border)]">
+              <tr key={t.key} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="py-1.5 pr-3 font-medium text-[var(--text-primary)]">{t.name}</td>
                 <td className="py-1.5 text-[var(--text-secondary)]">{modulesOf(t.key).length ? modulesOf(t.key).map(moduleLabel).join(", ") : "No module yet"}</td>
               </tr>

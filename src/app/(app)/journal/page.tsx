@@ -86,7 +86,7 @@ async function History({ tenantId, accountList }: { tenantId: string; accountLis
           <table className="w-full text-sm mt-3">
             <tbody>
               {(linesByEntry.get(entry.id) ?? []).map((l) => (
-                <tr key={l.id} className="border-t border-gray-100">
+                <tr key={l.id} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1">
                     {accountById.get(l.accountId)?.code} {accountById.get(l.accountId)?.name}
                   </td>

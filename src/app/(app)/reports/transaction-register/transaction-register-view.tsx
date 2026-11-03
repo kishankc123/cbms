@@ -141,8 +141,8 @@ export function TransactionRegisterView({
         </div>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             {showFiscalYearColumn && <th className="px-2.5 py-1.5 font-medium">FY</th>}
             <th className="px-2.5 py-1.5 font-medium">Date</th>

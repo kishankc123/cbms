@@ -35,17 +35,17 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
         <p className="mb-2 text-sm text-gray-500">
           <D value={from} /> – <D value={to} />
         </p>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
+        <table className="border-collapse text-[13px] w-full">
           <tbody>
             <tr className="bg-gray-50">
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Operating Activities</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Net Profit</td>
               <td className="px-2.5 py-1.5 text-right">{cf.netProfit.toFixed(2)}</td>
             </tr>
             {cf.operating.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} from={from} to={to}>
                     {r.code} — {r.name}
@@ -63,7 +63,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Investing Activities</td>
             </tr>
             {cf.investing.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} from={from} to={to}>
                     {r.code} — {r.name}
@@ -73,7 +73,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               </tr>
             ))}
             {cf.investing.length === 0 && (
-              <tr className="border-t border-gray-100">
+              <tr className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8 text-gray-400">No investing activity</td>
                 <td className="px-2.5 py-1.5 text-right"></td>
               </tr>
@@ -87,7 +87,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Financing Activities</td>
             </tr>
             {cf.financing.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} from={from} to={to}>
                     {r.code} — {r.name}
@@ -97,7 +97,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               </tr>
             ))}
             {cf.financing.length === 0 && (
-              <tr className="border-t border-gray-100">
+              <tr className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8 text-gray-400">No financing activity</td>
                 <td className="px-2.5 py-1.5 text-right"></td>
               </tr>
@@ -111,7 +111,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               <td className="px-2.5 py-1.5">Net Change in Cash</td>
               <td className="px-2.5 py-1.5 text-right">{cf.netChangeInCash.toFixed(2)}</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 text-gray-500">Actual Cash Movement (Cash + Bank accounts)</td>
               <td className="px-2.5 py-1.5 text-right text-gray-500">{cf.actualCashMovement.toFixed(2)}</td>
             </tr>

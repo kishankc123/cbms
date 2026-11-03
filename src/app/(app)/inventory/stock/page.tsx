@@ -66,8 +66,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Item</th>
             <th className="px-2.5 py-1.5 font-medium">Unit</th>
@@ -79,7 +79,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         </thead>
         <tbody>
           {shown.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100">
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5">
                 {i.name}
                 {!i.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}

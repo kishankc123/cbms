@@ -343,7 +343,7 @@ function Rows({ rows, skipRows, onSkipRows, decisions, overrides, onOverrides }:
 
       <div className={`${card} overflow-x-auto`}>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-3 py-2 font-medium">Row</th>
               <th className="px-3 py-2 font-medium">Date</th>

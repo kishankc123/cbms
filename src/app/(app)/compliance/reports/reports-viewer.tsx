@@ -97,7 +97,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
     return (
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Invoice #</th>
               <DateHead mode={mode} />
@@ -110,7 +110,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
           </thead>
           <tbody>
             {r.rows.map((row, i) => (
-              <tr key={i} className="border-t border-gray-100">
+              <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 font-mono">{row.invoiceNumber}</td>
                 <DateCells mode={mode} value={row.invoiceDate} />
                 <td className="px-2.5 py-1.5">{row.customerName}</td>
@@ -142,7 +142,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
     return (
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Bill #</th>
               <DateHead mode={mode} />
@@ -155,7 +155,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
           </thead>
           <tbody>
             {r.rows.map((row, i) => (
-              <tr key={i} className="border-t border-gray-100">
+              <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 font-mono">{row.billNumber}</td>
                 <DateCells mode={mode} value={row.billDate} />
                 <td className="px-2.5 py-1.5">{row.vendorName}</td>
@@ -207,7 +207,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
     return (
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Reference</th>
               <DateHead mode={mode} />
@@ -229,7 +229,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
                 {r.rows
                   .filter((row) => row.heading === h.name)
                   .map((row, i) => (
-                    <tr key={i} className="border-t border-gray-100">
+                    <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                       <td className="py-2 pl-8 pr-4 font-mono">{row.expenseNumber}</td>
                       <DateCells mode={mode} value={row.expenseDate} />
                       <td className="px-2.5 py-1.5">{row.payee}</td>

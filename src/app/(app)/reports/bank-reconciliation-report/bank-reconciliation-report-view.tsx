@@ -46,8 +46,8 @@ export function BankReconciliationReportView({ rows }: { rows: ReconciliationRep
         </button>
       </div>
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Bank Account</th>
             <th className="px-2.5 py-1.5 font-medium">Period</th>
@@ -61,7 +61,7 @@ export function BankReconciliationReportView({ rows }: { rows: ReconciliationRep
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-t border-gray-100">
+            <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5">{r.bankAccountName}</td>
               <td className="px-2.5 py-1.5 whitespace-nowrap">
                 <D value={r.periodStart} /> – <D value={r.periodEnd} />

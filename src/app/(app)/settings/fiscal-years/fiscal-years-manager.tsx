@@ -153,7 +153,7 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
     <div className="space-y-6">
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Fiscal Year</th>
               <th className="px-2.5 py-1.5 font-medium">Start</th>
@@ -164,7 +164,7 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
           </thead>
           <tbody>
             {data.years.map((fy) => (
-              <tr key={fy.id} className="border-t border-gray-100">
+              <tr key={fy.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 font-medium text-gray-900">{fy.code}</td>
                 <td className="px-2.5 py-1.5">
                   <D value={fy.startDate} />
@@ -233,11 +233,11 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
             <p className="text-xs font-medium text-gray-500 mb-2">Financial review</p>
             <table className="w-full text-sm">
               <tbody>
-                <tr className="border-t border-gray-100">
+                <tr className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1 text-gray-600">Total Income</td>
                   <td className="py-1 text-right">{fmt(reviewData.profitAndLoss.totalIncome)}</td>
                 </tr>
-                <tr className="border-t border-gray-100">
+                <tr className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1 text-gray-600">Total Expenses</td>
                   <td className="py-1 text-right">{fmt(reviewData.profitAndLoss.totalExpenses)}</td>
                 </tr>
@@ -249,11 +249,11 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
                   <td className="py-1 text-gray-600">Total Assets</td>
                   <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalAssets)}</td>
                 </tr>
-                <tr className="border-t border-gray-100">
+                <tr className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1 text-gray-600">Total Liabilities</td>
                   <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalLiabilities)}</td>
                 </tr>
-                <tr className="border-t border-gray-100">
+                <tr className="border-b border-line transition-colors hover:bg-hover">
                   <td className="py-1 text-gray-600">Total Equity</td>
                   <td className="py-1 text-right">{fmt(reviewData.balanceSheet.totalEquity)}</td>
                 </tr>
@@ -298,7 +298,7 @@ export function FiscalYearsManager({ data, isAdmin }: { data: Data; isAdmin: boo
         <div className="rounded-lg border border-green-200 bg-green-50 p-5 space-y-3">
           <h3 className="text-sm font-semibold text-gray-900">Opening Balance Verification</h3>
           <table className="w-full text-sm">
-            <thead className="text-left text-gray-500">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="py-1 font-medium">Account</th>
                 <th className="py-1 font-medium text-right">Previous Closing</th>

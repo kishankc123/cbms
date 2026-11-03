@@ -199,7 +199,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
 
               {shown.length > 0 && (
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-[var(--text-secondary)]">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="py-1 pr-2 font-medium">Rate</th>
                       <th className="py-1 pr-2 font-medium">From</th>
@@ -211,7 +211,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <tbody>
                     {[...shown].reverse().map((v) =>
                       editing?.id === v.id ? (
-                        <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                        <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                           <td colSpan={5} className="space-y-2 py-2">
                             <input value={editing.source} onChange={(e) => setEditing({ ...editing, source: e.target.value })} placeholder="Source" className={`${adminField} w-full`} />
                             <label className="flex items-center gap-2 text-sm">
@@ -228,7 +228,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                           </td>
                         </tr>
                       ) : (
-                        <tr key={v.id} className="border-t border-[var(--card-border)] align-top">
+                        <tr key={v.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                           <td className="py-1.5 pr-2 font-medium">
                             {fiscalYear && <span className="mr-2 text-xs text-[var(--text-secondary)]">v{v.version}</span>}{pct(v.rate)} {v.inForce && <StatusPill tone="success">in force</StatusPill>}
                           </td>
@@ -258,7 +258,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Organizations in {country.name}</h2>
         <p className="mb-3 text-xs text-[var(--text-secondary)]">What each organization is using now. Only you can change a rate. An organization marked own was set before rates were published, and keeps it until you publish a rate for it.</p>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="py-1 pr-2 font-medium">Organization</th>
               {shownTypes.map((t) => (
@@ -271,7 +271,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
           </thead>
           <tbody>
             {rates.organizations.map((o) => (
-              <tr key={o.id} className="border-t border-[var(--card-border)]">
+              <tr key={o.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="py-1.5 pr-2">{o.name}</td>
                 {shownTypes.map((t) => {
                   const r = o.rates[t.key];

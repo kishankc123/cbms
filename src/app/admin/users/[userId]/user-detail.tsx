@@ -94,7 +94,7 @@ export function UserDetail({ data }: { data: AdminUser }) {
       <section className={`${adminCard} overflow-x-auto`}>
         <h2 className="px-5 py-3 text-sm font-semibold text-[var(--text-primary)]">Organizations ({data.organizations.length})</h2>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Organization</th>
               <th className="px-2.5 py-1.5 font-medium">Role</th>
@@ -105,7 +105,7 @@ export function UserDetail({ data }: { data: AdminUser }) {
           </thead>
           <tbody>
             {data.organizations.map((o) => (
-              <tr key={o.tenantId} className="border-t border-[var(--card-border)]">
+              <tr key={o.tenantId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 font-medium">
                   <Link href={`/admin/organizations/${o.tenantId}`} className="text-[var(--accent-text)] hover:underline">
                     {o.name}

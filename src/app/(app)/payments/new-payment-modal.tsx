@@ -560,9 +560,9 @@ export function NewPaymentModal({
             {outstanding.length === 0 && <p className="text-sm text-gray-400">No outstanding expenses found.</p>}
 
             {outstanding.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-gray-500">
+                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                     <tr>
                       <th className="px-2 py-1.5 text-xs"></th>
                       <th className="px-2 py-1.5 text-xs">No.</th>
@@ -575,7 +575,7 @@ export function NewPaymentModal({
                     {outstanding.map((row) => {
                       const checked = row.id in allocated;
                       return (
-                        <tr key={row.id} className="border-t border-gray-100">
+                        <tr key={row.id} className="border-b border-line transition-colors hover:bg-hover">
                           <td className="px-2 py-1">
                             <input type="checkbox" checked={checked} onChange={(e) => toggleAllocation(row, e.target.checked)} />
                           </td>

@@ -118,7 +118,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
         ) : preview ? (
           <div className={`mt-4 overflow-x-auto ${loading ? "opacity-50" : ""}`}>
             <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+              <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                 <tr>
                   <th className="px-2.5 py-1.5 font-medium">Code</th>
                   <th className="px-2.5 py-1.5 font-medium">Asset</th>
@@ -130,7 +130,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
               </thead>
               <tbody>
                 {preview.lines.slice(0, SHOWN).map((l) => (
-                  <tr key={l.assetId} className="border-t border-[var(--card-border)]">
+                  <tr key={l.assetId} className="border-b border-line transition-colors hover:bg-hover">
                     <td className="px-2.5 py-1.5 font-medium">
                       <Link href={`/assets/${l.assetId}`} className="text-[var(--accent-text)] hover:underline">
                         {l.assetCode}
@@ -161,7 +161,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
       <section className={`${card} overflow-x-auto`}>
         <h2 className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">Previous runs</h2>
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Run</th>
               <th className="px-2.5 py-1.5 font-medium">Month</th>

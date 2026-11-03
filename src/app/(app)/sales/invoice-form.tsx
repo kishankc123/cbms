@@ -248,9 +248,9 @@ export function InvoiceForm({
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Sales Entries</h2>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-center text-gray-500">
+            <thead className="text-center text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Invoice No.</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Date</th>
@@ -279,7 +279,7 @@ export function InvoiceForm({
                 return (
                   <tr
                     key={i}
-                    className="border-t border-gray-100"
+                    className="border-b border-line transition-colors hover:bg-hover"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setContextMenu({ rowIndex: i, x: e.clientX, y: e.clientY });

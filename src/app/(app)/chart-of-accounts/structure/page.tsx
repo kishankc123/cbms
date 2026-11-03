@@ -44,7 +44,7 @@ export default async function ChartStructurePage() {
                 Total <span className="font-medium text-gray-900"><Balance value={Math.round(total * 100) / 100} /></span>
               </p>
             </div>
-            <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="border-collapse text-[13px] w-full">
               <tbody>
                 {section.map(({ account: a, depth }) => (
                   <tr key={a.id} className={`border-t border-gray-100 first:border-t-0 ${a.isActive ? "" : "text-gray-400"}`}>

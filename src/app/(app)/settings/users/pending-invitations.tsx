@@ -21,7 +21,7 @@ export function PendingInvitations({ pending }: { pending: UsersPage["pending"] 
   return (
     <div className="space-y-2">
       <h2 className="text-sm font-semibold text-[var(--text-primary)]">Pending invitations</h2>
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <tbody>
             {pending.map((p) => (

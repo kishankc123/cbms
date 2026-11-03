@@ -61,7 +61,7 @@ export function EntryPopup({ entryId, scope, highlightAccountId, onClose }: { en
             {entry.memo && <p className="text-sm text-gray-700">{entry.memo}</p>}
 
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500">
+              <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Account</th>
                   <th className="px-3 py-2 text-center font-medium">Debit</th>

@@ -9,7 +9,7 @@ const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 
 export function TdsWorkingTable({ w }: { w: TdsWorking }) {
   if (w.missing) return <p className="text-sm text-gray-600">Salary-tax slabs are not set for this fiscal year, so no TDS was taken. Ask the platform administrator to publish them, then recalculate the run.</p>;
   const row = (label: string, value: string, muted = false, bold = false) => (
-    <tr className="border-t border-gray-100">
+    <tr className="border-b border-line transition-colors hover:bg-hover">
       <td className={`py-1.5 pr-4 ${muted ? "text-gray-500" : "text-gray-800"} ${bold ? "font-medium" : ""}`}>{label}</td>
       <td className={`py-1.5 text-right tabular-nums ${muted ? "text-gray-500" : "text-gray-800"} ${bold ? "font-medium" : ""}`}>{value}</td>
     </tr>

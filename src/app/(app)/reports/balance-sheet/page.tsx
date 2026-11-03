@@ -31,13 +31,13 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
         <p className="mb-2 text-sm text-gray-500">
           As of <D value={to} />
         </p>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
+        <table className="border-collapse text-[13px] w-full">
           <tbody>
             <tr className="bg-gray-50">
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Assets</td>
             </tr>
             {bs.assets.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
@@ -54,7 +54,7 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Liabilities</td>
             </tr>
             {bs.liabilities.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
@@ -71,7 +71,7 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Equity</td>
             </tr>
             {bs.equity.map((r) => (
-              <tr key={r.accountId} className="border-t border-gray-100">
+              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 pl-8">
                   <AccountLink accountId={r.accountId} to={to}>
                     {r.code} — {r.name}
@@ -80,7 +80,7 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
                 <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
               </tr>
             ))}
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Retained Earnings (current)</td>
               <td className="px-2.5 py-1.5 text-right">{bs.retainedEarnings.toFixed(2)}</td>
             </tr>

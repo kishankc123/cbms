@@ -36,7 +36,7 @@ export function HistoryList({ history, canUndo, onChanged, onUndo, noun }: { his
     <section className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
       <h2 className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">Previous imports</h2>
       <table className="w-full text-sm">
-        <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">File</th>
             <th className="px-2.5 py-1.5 font-medium">When</th>
@@ -48,7 +48,7 @@ export function HistoryList({ history, canUndo, onChanged, onUndo, noun }: { his
         </thead>
         <tbody>
           {history.map((h) => (
-            <tr key={h.id} className="border-t border-[var(--card-border)]">
+            <tr key={h.id} className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5">{h.fileName}</td>
               <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">{new Date(h.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</td>
               <td className="px-2.5 py-1.5 text-right tabular-nums">{h.invoiceCount}</td>

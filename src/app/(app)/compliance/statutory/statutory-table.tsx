@@ -92,8 +92,8 @@ export function StatutoryTable({ data }: { data: Data }) {
         </p>
       )}
 
-      <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Requirement</th>
             <th className="px-2.5 py-1.5 font-medium">Frequency</th>
@@ -106,7 +106,7 @@ export function StatutoryTable({ data }: { data: Data }) {
         </thead>
         <tbody>
           {rows.map((i) => (
-            <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50/60 cursor-pointer" onClick={() => setOpen(i)}>
+            <tr key={i.id} className="border-b border-line transition-colors hover:bg-hover cursor-pointer" onClick={() => setOpen(i)}>
               <td className="px-2.5 py-1.5">
                 <span className="font-medium text-gray-900">{i.name}</span>
                 <span className="ml-2 text-xs text-gray-400">

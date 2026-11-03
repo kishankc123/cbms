@@ -90,9 +90,9 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
         />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-3 py-2 font-semibold text-xs">Transfer No.</th>
               <th className="px-3 py-2 font-semibold text-xs">Date</th>
@@ -109,7 +109,7 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
               <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">{loading ? "Loading..." : "No transfers found."}</td></tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.transferNumber}</td>
                 <td className="px-3 py-2 whitespace-nowrap"><D value={r.transferDate} /></td>
                 <td className="px-3 py-2">{r.fromAccount}</td>

@@ -236,8 +236,8 @@ function SavedRows({ rows, unitName, disabled }: { rows: OpeningRow[]; unitName:
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-900">Opening balances</h3>
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-2.5 py-1.5 font-medium">Item</th>
             <th className="px-2.5 py-1.5 font-medium">Unit</th>
@@ -253,7 +253,7 @@ function SavedRows({ rows, unitName, disabled }: { rows: OpeningRow[]; unitName:
             const q = parseFloat(quantity) || 0;
             const c = parseFloat(unitCost) || 0;
             return (
-              <tr key={r.itemId} className="border-t border-gray-100">
+              <tr key={r.itemId} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5">{r.name}</td>
                 <td className="px-2.5 py-1.5 text-gray-500">{unitName.get(r.unitId ?? "") ?? "—"}</td>
                 {editing ? (
@@ -474,8 +474,8 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
 
       {staged.length > 0 && (
         <>
-          <table className="w-full overflow-hidden rounded-lg border border-gray-200 text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500">
+          <table className="border-collapse text-[13px] w-full">
+            <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-3 py-1.5 font-medium">Product</th>
                 <th className="px-3 py-1.5 text-right font-medium">Quantity</th>
@@ -486,7 +486,7 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
             </thead>
             <tbody>
               {staged.map((s) => (
-                <tr key={s.itemId} className="border-t border-gray-100">
+                <tr key={s.itemId} className="border-b border-line transition-colors hover:bg-hover">
                   <td className="px-3 py-1.5">{s.name}{s.unit ? <span className="text-gray-400"> · {s.unit}</span> : null}</td>
                   <td className="px-3 py-1.5 text-right">{s.quantity}</td>
                   <td className="px-3 py-1.5 text-right">{fmt(s.unitCost)}</td>
@@ -513,8 +513,8 @@ function History({ history }: { history: HistoryRow[] }) {
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-900">Opening stock history</h3>
-      <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
-        <thead className="bg-gray-50 text-left text-gray-500">
+      <table className="border-collapse text-[13px] w-full">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="px-3 py-2 font-medium">Date / time</th>
             <th className="px-3 py-2 font-medium">User</th>
@@ -527,7 +527,7 @@ function History({ history }: { history: HistoryRow[] }) {
         </thead>
         <tbody>
           {history.map((h) => (
-            <tr key={h.id} className="border-t border-gray-100 align-top">
+            <tr key={h.id} className="border-b border-line transition-colors hover:bg-hover align-top">
               <td className="px-3 py-2 whitespace-nowrap text-gray-600">{new Date(h.when).toLocaleString()}</td>
               <td className="px-3 py-2">{h.user}</td>
               <td className="px-3 py-2">{ACTION_LABEL[h.action] ?? h.action}</td>

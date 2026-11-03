@@ -158,7 +158,7 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
 
       <section data-field="matrix" className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Module</th>
               {PERMISSION_ACTIONS.map((a) => (
@@ -174,7 +174,7 @@ export function RoleForm({ editor }: { editor: RoleEditor }) {
           </thead>
           <tbody>
             {editor.catalog.map((m) => (
-              <tr key={m.key} className="border-t border-[var(--card-border)]">
+              <tr key={m.key} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5">
                   <p className="font-medium text-[var(--text-primary)]">{m.label}</p>
                   <p className="text-xs text-[var(--text-secondary)]">{m.description}</p>

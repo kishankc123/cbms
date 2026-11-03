@@ -76,7 +76,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
       </div>
 
       <table className="w-full text-sm">
-        <thead className="text-left text-gray-500">
+        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>
             <th className="pb-1 font-medium">Account</th>
             <th className="pb-1 font-medium w-32">Debit</th>

@@ -68,9 +68,9 @@ export default async function AssetListPage({ searchParams }: { searchParams: Se
 
       <AssetFilters categories={categories} />
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Code</th>
               <th className="px-2.5 py-1.5 font-medium">Asset</th>
@@ -85,7 +85,7 @@ export default async function AssetListPage({ searchParams }: { searchParams: Se
           </thead>
           <tbody>
             {list.rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--card-border)] hover:bg-[var(--surface-muted-bg)]">
+              <tr key={r.id} className="border-b border-line transition-colors hover:bg-hover">
                 <td className="px-2.5 py-1.5 font-mono">
                   <Link href={`/assets/${r.id}`} className="text-[var(--accent-text)] hover:underline">
                     {r.assetCode}

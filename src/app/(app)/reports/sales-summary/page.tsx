@@ -34,24 +34,24 @@ export default async function SalesSummaryPage({ searchParams }: { searchParams:
         <p className="mb-2 text-sm text-gray-500">
           <D value={from} /> – <D value={to} />
         </p>
-        <table className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
+        <table className="border-collapse text-[13px] w-full">
           <tbody>
             <tr className="bg-gray-50">
               <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Sales Invoices ({s.invoiceCount})</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Gross Amount</td>
               <td className="px-2.5 py-1.5 text-right">{fmt(s.grossAmount)}</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Discount</td>
               <td className="px-2.5 py-1.5 text-right">{fmt(s.discountAmount)}</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Taxable Amount</td>
               <td className="px-2.5 py-1.5 text-right">{fmt(s.subtotal)}</td>
             </tr>
-            <tr className="border-t border-gray-100">
+            <tr className="border-b border-line transition-colors hover:bg-hover">
               <td className="px-2.5 py-1.5 pl-8">Tax Collected</td>
               <td className="px-2.5 py-1.5 text-right">{fmt(s.taxAmount)}</td>
             </tr>

@@ -350,9 +350,9 @@ export function PurchaseInvoiceForm({
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Items</h2>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-center text-gray-500">
+            <thead className="text-center text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
               <tr>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Item</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Rate</th>
@@ -369,7 +369,7 @@ export function PurchaseInvoiceForm({
               {lines.map((line, i) => {
                 const c = computedLines[i];
                 return (
-                  <tr key={i} className="border-t border-gray-100">
+                  <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
                     <td className="px-1 py-1 text-center">
                       <ItemSelect
                         value={line.itemId}

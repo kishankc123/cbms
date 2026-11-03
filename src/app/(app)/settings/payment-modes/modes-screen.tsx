@@ -63,9 +63,9 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--surface-muted-bg)] text-left text-[var(--text-secondary)]">
+          <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
             <tr>
               <th className="px-2.5 py-1.5 font-medium">Mode</th>
               <th className="px-2.5 py-1.5 font-medium">Linked accounts</th>
@@ -75,7 +75,7 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
           </thead>
           <tbody>
             {data.modes.map((m) => (
-              <tr key={m.id} className="border-t border-[var(--card-border)] align-top">
+              <tr key={m.id} className="border-b border-line transition-colors hover:bg-hover align-top">
                 <td className="px-2.5 py-1.5 font-medium">{m.name}</td>
                 <td className="px-2.5 py-1.5 text-[var(--text-secondary)]">
                   {m.accounts.length === 0 ? (
