@@ -103,7 +103,7 @@ export function AuditTrailTable({ initialEntries }: { initialEntries: Entry[] })
                 <Td>{e.action}</Td>
                 <Td>
                   {e.entityType}
-                  {e.entityId ? <span className="text-ink-3"> ({e.entityId.slice(0, 8)})</span> : ""}
+                  {e.entityId ? <span className="text-ink-2"> ({e.entityId.slice(0, 8)})</span> : ""}
                 </Td>
                 <Td className="max-w-52 truncate text-xs text-ink-2">{e.beforeValue ? JSON.stringify(e.beforeValue) : "—"}</Td>
                 <Td className="max-w-52 truncate text-xs text-ink-2">{e.afterValue ? JSON.stringify(e.afterValue) : "—"}</Td>

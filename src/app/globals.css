@@ -279,3 +279,13 @@ h3 {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* On a phone, a table wider than the screen scrolls inside itself instead of making the whole page scroll sideways.
+   Tables already inside a scrolling box (DataTable and the older wrappers) are left as they are. */
+@media (max-width: 767px) {
+  main table:not(.overflow-x-auto *) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}

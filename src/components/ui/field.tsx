@@ -34,7 +34,7 @@ export function Field({ label, hint, error, required, className, children }: { l
         </span>
         {children}
       </label>
-      {error ? <p className="mt-1 text-xs text-[var(--danger-text)]">{error}</p> : hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
+      {error ? <p className="mt-1 text-xs text-[var(--danger-text)]">{error}</p> : hint ? <p className="mt-1 text-xs text-ink-2">{hint}</p> : null}
     </div>
   );
 }

@@ -53,7 +53,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
     <div role="status" className="pointer-events-auto flex items-start gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px] text-ink shadow-[var(--shadow-popover)]">
       <Icon size={16} className={`mt-0.5 shrink-0 ${TONE[toast.tone]}`} />
       <p className="min-w-0 flex-1">{toast.message}</p>
-      <button type="button" onClick={onClose} aria-label="Dismiss" className="shrink-0 text-ink-3 transition-colors hover:text-ink">
+      <button type="button" onClick={onClose} aria-label="Dismiss" className="shrink-0 text-ink-2 transition-colors hover:text-ink">
         <X size={14} />
       </button>
     </div>

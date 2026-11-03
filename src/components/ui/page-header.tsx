@@ -33,7 +33,7 @@ export function PageHeader({
             <nav aria-label="Breadcrumb" className="mb-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-2">
               {breadcrumbs.map((b, i) => (
                 <span key={`${b.label}-${i}`} className="flex items-center gap-1">
-                  {i > 0 && <span aria-hidden className="text-ink-3">/</span>}
+                  {i > 0 && <span aria-hidden className="text-ink-2">/</span>}
                   {b.href ? (
                     <Link href={b.href} className="hover:text-ink hover:underline">
                       {b.label}

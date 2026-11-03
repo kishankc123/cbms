@@ -87,7 +87,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
           {rows.map((row, i) => (
             <tr key={i}>
               <td className="py-1 pr-2">
-                <select data-field={`acct${i}`} value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
+                <select aria-label={`Line ${i + 1} account`} data-field={`acct${i}`} value={row.accountId} onChange={(e) => updateRow(i, "accountId", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
                   <option value="">Select account</option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -97,10 +97,10 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
                 </select>
               </td>
               <td className="py-1 pr-2">
-                <input data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                <input aria-label={`Line ${i + 1} debit`} data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
               <td className="py-1">
-                <input type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                <input aria-label={`Line ${i + 1} credit`} type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
             </tr>
           ))}

@@ -306,7 +306,7 @@ export function PaymentsWorkspace({
                   {fmt(r.amount)}
                 </Td>
                 <Td className="whitespace-nowrap">
-                  {r.allocationStatus === "n/a" ? <span className="text-ink-3">—</span> : <StatusPill tone={ALLOCATION_TONE[r.allocationStatus] ?? "pending"}>{r.allocationStatus.replace("_", " ")}</StatusPill>}
+                  {r.allocationStatus === "n/a" ? <span className="text-ink-2">—</span> : <StatusPill tone={ALLOCATION_TONE[r.allocationStatus] ?? "pending"}>{r.allocationStatus.replace("_", " ")}</StatusPill>}
                 </Td>
                 <Td className="whitespace-nowrap">
                   <StatusPill tone={RECON_TONE[r.reconciliationStatus] ?? "pending"}>{r.reconciliationStatus}</StatusPill>

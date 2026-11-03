@@ -281,7 +281,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+        <div className="flex gap-1 overflow-x-auto border-b border-line">
           {FILTERS.map((f) => (
             <button
               key={f.key}

@@ -401,7 +401,7 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+        <div className="flex gap-1 overflow-x-auto border-b border-line">
           {tabs.map(([id, label]) => (
             <button
               key={id}

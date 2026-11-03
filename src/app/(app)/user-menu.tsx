@@ -32,7 +32,7 @@ export function UserMenu({ name, email, detail, extra }: { name: string | null; 
           <div className="border-b border-line px-3 py-2">
             {name && <p className="truncate font-medium text-ink">{name}</p>}
             <p className="truncate text-xs text-ink-2">{email}</p>
-            {detail && <p className="mt-0.5 truncate text-xs text-ink-3">{detail}</p>}
+            {detail && <p className="mt-0.5 truncate text-xs text-ink-2">{detail}</p>}
           </div>
           {extra && <div className="border-b border-line px-3 py-2 sm:hidden">{extra}</div>}
           <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink hover:bg-hover">

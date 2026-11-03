@@ -127,7 +127,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
         </thead>
         <tbody>
           {filtered.map((a) => (
-            <Tr key={a.id} className={a.isActive ? "" : "text-ink-3"}>
+            <Tr key={a.id} className={a.isActive ? "" : "text-ink-2"}>
               <Td className="font-mono text-xs">{a.code}</Td>
               <Td>
                 {a.name}
@@ -151,7 +151,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
       {filtered.length === 0 && (
         <EmptyState icon={ListTree} title="No accounts match" description="Try a different search, or clear the filters." action={filtering ? <Button onClick={clearFilters}>Clear filters</Button> : undefined} />
       )}
-      <p className="text-xs text-ink-3">A group&apos;s balance includes everything in its sub-groups.</p>
+      <p className="text-xs text-ink-2">A group&apos;s balance includes everything in its sub-groups.</p>
     </div>
   );
 }

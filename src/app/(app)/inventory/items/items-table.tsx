@@ -186,7 +186,7 @@ export function ItemsTable({
         <tbody>
           {filtered.map((it, i) => (
             <Tr key={it.id}>
-              <Td className="text-ink-3">{i + 1}</Td>
+              <Td className="text-ink-2">{i + 1}</Td>
               <Td>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={it.isActive ? "" : "text-ink-2"}>{it.name}</span>
@@ -194,7 +194,7 @@ export function ItemsTable({
                   {isProduct && !it.inventoryTracking && <StatusPill tone="neutral">Not tracked</StatusPill>}
                   {it.billingType !== "one_time" && <StatusPill tone="neutral">{BILLING_TYPE_LABEL[it.billingType]}</StatusPill>}
                 </div>
-                {it.revenueAccountId && <p className="text-xs text-ink-3">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
+                {it.revenueAccountId && <p className="text-xs text-ink-2">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
               </Td>
               {isProduct && <Td className="text-ink-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</Td>}
               {isProduct ? (

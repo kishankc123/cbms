@@ -24,7 +24,7 @@ export function SetupTabs({ data }: { data: AssetSetupData }) {
   const [tab, setTab] = useState<TabId>("general");
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -80,7 +80,7 @@ function GeneralPanel({ data }: { data: AssetSetupData }) {
       </label>
       <div>
         <label className="block text-xs text-gray-500 mb-1">Default depreciation frequency</label>
-        <select className={input} value="monthly" disabled>
+        <select aria-label="Default depreciation frequency" className={input} value="monthly" disabled>
           <option value="monthly">Monthly</option>
         </select>
       </div>

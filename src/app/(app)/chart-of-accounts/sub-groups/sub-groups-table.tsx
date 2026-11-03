@@ -110,7 +110,7 @@ export function SubGroupsTable({ groups, subGroups, groupById }: { groups: Group
         </thead>
         <tbody>
           {shown.map((sg) => (
-            <Tr key={sg.id} className={sg.isActive ? "" : "text-ink-3"}>
+            <Tr key={sg.id} className={sg.isActive ? "" : "text-ink-2"}>
               <Td className="font-mono text-xs">{sg.code}</Td>
               <Td>
                 {sg.name}

@@ -31,7 +31,7 @@ export function SortableTh({ children, direction, onSort, align = "left", classN
     <th aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"} className={`h-8 whitespace-nowrap border-b border-line bg-app px-2.5 text-xs font-medium text-ink-2 ${ALIGN[align]} ${className}`}>
       <button type="button" onClick={onSort} className={`inline-flex items-center gap-1 hover:text-ink ${align === "right" ? "flex-row-reverse" : ""}`}>
         {children}
-        <Icon size={12} className={direction ? "text-ink" : "text-ink-3"} />
+        <Icon size={12} className={direction ? "text-ink" : "text-ink-2"} />
       </button>
     </th>
   );
@@ -59,10 +59,10 @@ export function Amount({ value, side, decimals = 2, className = "" }: { value: n
   const negative = value < -(10 ** -decimals) / 2;
   const zero = Math.abs(value) < 10 ** -decimals / 2;
   return (
-    <span className={`tnum ${negative ? "text-[var(--danger-text)]" : zero ? "text-ink-3" : ""} ${className}`}>
+    <span className={`tnum ${negative ? "text-[var(--danger-text)]" : zero ? "text-ink-2" : ""} ${className}`}>
       {negative ? "-" : ""}
       {text}
-      {side && <span className="ml-1 text-[11px] font-normal text-ink-3">{side === "dr" ? "Dr" : "Cr"}</span>}
+      {side && <span className="ml-1 text-[11px] font-normal text-ink-2">{side === "dr" ? "Dr" : "Cr"}</span>}
     </span>
   );
 }

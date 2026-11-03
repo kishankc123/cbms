@@ -129,7 +129,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
               </Td>
               <Td numeric>
                 <Amount value={a.statementBalance} />
-                <p className="text-xs text-ink-3">{a.updatedUpTo ? <>up to <D value={a.updatedUpTo} /></> : "no statement"}</p>
+                <p className="text-xs text-ink-2">{a.updatedUpTo ? <>up to <D value={a.updatedUpTo} /></> : "no statement"}</p>
               </Td>
               <Td numeric>
                 <Amount value={a.ledgerBalance} />
@@ -138,7 +138,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 <span className={Math.abs(a.difference) < 0.005 ? "text-[var(--success-text)]" : "text-[var(--danger-text)]"}>
                   <Amount value={a.difference} />
                 </span>
-                <p className="text-xs text-ink-3">{differenceText(a)}</p>
+                <p className="text-xs text-ink-2">{differenceText(a)}</p>
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-1">

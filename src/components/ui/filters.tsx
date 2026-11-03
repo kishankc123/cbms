@@ -9,7 +9,7 @@ export function FilterBar({ children, className = "" }: { children: React.ReactN
 export function SearchInput({ value, onChange, placeholder = "Search", className = "" }: { value: string; onChange: (value: string) => void; placeholder?: string; className?: string }) {
   return (
     <div className={`relative w-full max-w-64 ${className}`}>
-      <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" />
+      <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-2" />
       <input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} className={`${controlClass} w-full pl-8`} />
     </div>
   );

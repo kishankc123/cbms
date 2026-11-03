@@ -17,7 +17,7 @@ export function TransactionsTabs({ data, opening, disposal }: { data: AssetPurch
   const [tab, setTab] = useState<TabId>("purchase");
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-[var(--surface-muted-bg)] p-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.id}

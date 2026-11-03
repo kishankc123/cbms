@@ -285,7 +285,7 @@ export function ExpenseFormModal({
               </Field>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-2">
-                  Supplier {remaining > 0 ? <span className="text-[var(--danger)]">*</span> : <span className="font-normal text-ink-3">(optional once paid in full)</span>}
+                  Supplier {remaining > 0 ? <span className="text-[var(--danger)]">*</span> : <span className="font-normal text-ink-2">(optional once paid in full)</span>}
                 </label>
                 <div data-field="supplier" data-opens>
                   <SupplierSelect value={vendorId} options={vendors} onChange={(id) => setVendorId(id)} onAdded={addVendor} disabled={locked} className={`${controlClass} w-full bg-surface text-left`} />
@@ -391,7 +391,7 @@ export function ExpenseFormModal({
             <div>
               <SectionTitle>Settlement</SectionTitle>
               <div className="mt-2 space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
-                {payments.length === 0 && remaining <= 0 && <p className="text-ink-3">Unpaid</p>}
+                {payments.length === 0 && remaining <= 0 && <p className="text-ink-2">Unpaid</p>}
                 {payments.map((p, i) => (
                   <Line key={i} label={accountLabels[p.accountId] ?? "Account"} value={<Amount value={p.amount} />} />
                 ))}
