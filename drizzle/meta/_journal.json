@@ -743,6 +743,13 @@
       "when": 1793688884614,
       "tag": "0105_supplier_type_tds",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1793727706171,
+      "tag": "0106_ledger_indexes",
+      "breakpoints": true
     }
   ]
 }

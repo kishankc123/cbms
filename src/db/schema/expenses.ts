@@ -71,4 +71,4 @@ export const expenses = pgTable("expenses", {
   /** Set when the expense came in through Import Expenses. */
   importId: uuid("import_id").references(() => expenseImports.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("expenses_tenant_number").on(t.tenantId, t.expenseNumber)]);
+}, (t) => [uniqueIndex("expenses_tenant_number").on(t.tenantId, t.expenseNumber), index("expenses_tenant_due").on(t.tenantId, t.dueDate)]);

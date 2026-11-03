@@ -1,7 +1,8 @@
-import { and, eq, ne, gte, lte, inArray, notInArray, or, like, sql } from "drizzle-orm";
+import { and, eq, ne, gte, lte, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, salesInvoices, purchaseBills, items, inventorySettings, complianceObligations } from "@/db/schema";
 import { effectiveStatus, summarize as summarizeCompliance, type EffectiveStatus } from "@/lib/compliance/engine/status";
+import { cashAccountRows } from "./cash-flow";
 
 /**
  * Purpose-built aggregate queries for the Dashboard — each one pushes SUM/GROUP BY into
@@ -86,16 +87,8 @@ export async function dashboardKpis(tenantId: string, range: { from: string; to:
 export type CashBankAccountBalance = { accountId: string; code: string; name: string; kind: "cash" | "bank"; balance: number };
 
 export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): Promise<{ total: number; accounts: CashBankAccountBalance[] }> {
-  const cashBankAccounts = await db
-    .select()
-    .from(accounts)
-    .where(
-      and(
-        eq(accounts.tenantId, tenantId),
-        eq(accounts.isActive, true),
-        or(eq(accounts.code, "1000"), like(accounts.code, "1000.%"), eq(accounts.code, "1010"), like(accounts.code, "1010.%"))
-      )
-    );
+  // The same accounts the cash flow figures use, so cash today and money in and out always agree.
+  const cashBankAccounts = await cashAccountRows(tenantId);
   if (cashBankAccounts.length === 0) return { total: 0, accounts: [] };
 
   const accountIds = cashBankAccounts.map((a) => a.id);
@@ -112,6 +105,7 @@ export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): P
 
   const balanceByAccount = new Map(rows.map((r) => [r.accountId, round2(num(r.debit) - num(r.credit))]));
 
+  // An account switched off is listed only while it still holds money.
   const accountRows: CashBankAccountBalance[] = cashBankAccounts
     .map((a) => ({
       accountId: a.id,
@@ -119,94 +113,13 @@ export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): P
       name: a.name,
       kind: isCashCode(a.code) ? ("cash" as const) : ("bank" as const),
       balance: balanceByAccount.get(a.id) ?? 0,
+      isActive: a.isActive,
     }))
+    .filter((a) => a.isActive || a.balance !== 0)
+    .map(({ isActive, ...a }) => (void isActive, a))
     .sort((a, b) => (a.kind === b.kind ? b.balance - a.balance : a.kind === "cash" ? -1 : 1));
 
   return { total: round2(accountRows.reduce((s, a) => s + a.balance, 0)), accounts: accountRows };
-}
-
-// --------------------------------------------------- Revenue/expense trend
-
-export type MonthlyTrendPoint = { monthStart: string; monthEnd: string; revenue: number; expenses: number };
-
-/** Buckets by AD calendar month (see calendar/service.ts: AD is the only canonical date form — BS is display-only), ending in the AD month containing `asOfIso`. */
-export async function revenueExpenseTrend(tenantId: string, monthsBack: number, asOfIso: string): Promise<MonthlyTrendPoint[]> {
-  const [y, m] = asOfIso.split("-").map(Number);
-  const points = Array.from({ length: monthsBack }, (_, idx) => {
-    const i = monthsBack - 1 - idx;
-    const start = new Date(Date.UTC(y, m - 1 - i, 1));
-    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
-    return { key: start.toISOString().slice(0, 7), monthStart: start.toISOString().slice(0, 10), monthEnd: end.toISOString().slice(0, 10) };
-  });
-
-  const rows = await db
-    .select({
-      month: sql<string>`to_char(${journalEntries.entryDate}, 'YYYY-MM')`,
-      category: accounts.category,
-      debit: sql<string>`sum(${journalLines.debitAmount})`,
-      credit: sql<string>`sum(${journalLines.creditAmount})`,
-    })
-    .from(journalLines)
-    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-    .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
-    .where(
-      and(
-        eq(journalEntries.tenantId, tenantId),
-        gte(journalEntries.entryDate, points[0].monthStart),
-        lte(journalEntries.entryDate, points[points.length - 1].monthEnd),
-        inArray(accounts.category, ["income", "expense"])
-      )
-    )
-    .groupBy(sql`to_char(${journalEntries.entryDate}, 'YYYY-MM')`, accounts.category);
-
-  const byMonth = new Map<string, { revenue: number; expenses: number }>();
-  for (const r of rows) {
-    const bucket = byMonth.get(r.month) ?? { revenue: 0, expenses: 0 };
-    if (r.category === "income") bucket.revenue += num(r.credit) - num(r.debit);
-    else bucket.expenses += num(r.debit) - num(r.credit);
-    byMonth.set(r.month, bucket);
-  }
-
-  return points.map((p) => {
-    const b = byMonth.get(p.key) ?? { revenue: 0, expenses: 0 };
-    return { monthStart: p.monthStart, monthEnd: p.monthEnd, revenue: round2(b.revenue), expenses: round2(b.expenses) };
-  });
-}
-
-// ------------------------------------------------------- Expense breakdown
-
-export type ExpenseCategoryAmount = { accountId: string; code: string; name: string; amount: number };
-
-export async function expenseBreakdown(
-  tenantId: string,
-  range: { from: string; to: string },
-  opts: { topN?: number } = {}
-): Promise<{ categories: ExpenseCategoryAmount[]; otherAmount: number; total: number }> {
-  const rows = await db
-    .select({
-      accountId: accounts.id,
-      code: accounts.code,
-      name: accounts.name,
-      debit: sql<string>`sum(${journalLines.debitAmount})`,
-      credit: sql<string>`sum(${journalLines.creditAmount})`,
-    })
-    .from(journalLines)
-    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-    .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
-    .where(and(eq(journalEntries.tenantId, tenantId), eq(accounts.category, "expense"), gte(journalEntries.entryDate, range.from), lte(journalEntries.entryDate, range.to)))
-    .groupBy(accounts.id, accounts.code, accounts.name);
-
-  const all = rows
-    .map((r) => ({ accountId: r.accountId, code: r.code, name: r.name, amount: round2(num(r.debit) - num(r.credit)) }))
-    .filter((r) => r.amount !== 0)
-    .sort((a, b) => b.amount - a.amount);
-
-  const topN = opts.topN ?? 5;
-  const categories = all.slice(0, topN);
-  const otherAmount = round2(all.slice(topN).reduce((s, r) => s + r.amount, 0));
-  const total = round2(all.reduce((s, r) => s + r.amount, 0));
-
-  return { categories, otherAmount, total };
 }
 
 // ------------------------------------------------------------ Needs Attention
@@ -302,52 +215,6 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
   return items_;
 }
 
-// ------------------------------------------------------------ AR ageing
-
-export type AgeingBucket = { label: string; amount: number };
-
-/**
- * Cheap bucket-only version of receivable-ageing.ts's full report — sums invoice
- * outstanding balances into buckets without the per-customer ledger tie-out
- * (getPartyLines/buildStatement) that report does, which isn't needed for a summary widget.
- */
-export async function receivableAgeingSummary(tenantId: string, asOfIso: string): Promise<{ buckets: AgeingBucket[]; total: number }> {
-  const rows = await db
-    .select({ total: salesInvoices.total, amountPaid: salesInvoices.amountPaid, dueDate: salesInvoices.dueDate, invoiceDate: salesInvoices.invoiceDate })
-    .from(salesInvoices)
-    .where(and(eq(salesInvoices.tenantId, tenantId), ne(salesInvoices.status, "void")));
-
-  let current = 0;
-  let b1to30 = 0;
-  let b31to60 = 0;
-  let b61to90 = 0;
-  let b90plus = 0;
-
-  for (const r of rows) {
-    const outstanding = round2(num(r.total) - num(r.amountPaid));
-    if (outstanding <= 0) continue;
-    const due = r.dueDate ?? r.invoiceDate;
-    if (due >= asOfIso) {
-      current += outstanding;
-      continue;
-    }
-    const daysOverdue = daysBetweenIso(due, asOfIso);
-    if (daysOverdue <= 30) b1to30 += outstanding;
-    else if (daysOverdue <= 60) b31to60 += outstanding;
-    else if (daysOverdue <= 90) b61to90 += outstanding;
-    else b90plus += outstanding;
-  }
-
-  const buckets: AgeingBucket[] = [
-    { label: "0–30 days", amount: round2(current + b1to30) },
-    { label: "31–60 days", amount: round2(b31to60) },
-    { label: "61–90 days", amount: round2(b61to90) },
-    { label: "90+ days", amount: round2(b90plus) },
-  ];
-
-  return { buckets, total: round2(buckets.reduce((s, b) => s + b.amount, 0)) };
-}
-
 // --------------------------------------------------------- Compliance
 
 export async function complianceSummary(tenantId: string, todayIso: string) {
@@ -368,40 +235,3 @@ export async function upcomingComplianceDeadlines(tenantId: string, todayIso: st
   return rows.map((r) => ({ id: r.id, name: r.name, dueDate: r.dueDate, status: effectiveStatus({ status: r.status, dueDate: r.dueDate }, todayIso) }));
 }
 
-// ------------------------------------------------------- One-call snapshot
-
-export type DashboardSnapshot = {
-  kpis: DashboardKpis;
-  cashAndBank: Awaited<ReturnType<typeof cashAndBankBreakdown>>;
-  trend: MonthlyTrendPoint[];
-  expenseBreakdown: Awaited<ReturnType<typeof expenseBreakdown>>;
-  needsAttention: NeedsAttentionItem[];
-  receivableAgeing: Awaited<ReturnType<typeof receivableAgeingSummary>>;
-  complianceSummary: Awaited<ReturnType<typeof complianceSummary>>;
-  complianceDeadlines: ComplianceDeadlineRow[];
-};
-
-/** Everything the Dashboard page needs, in one Promise.all — the whole point of this module. */
-export async function getDashboardSnapshot(tenantId: string, range: { from: string; to: string }, asOfIso: string, todayIso: string): Promise<DashboardSnapshot> {
-  const [kpis, cashAndBank, trend, expenseBreakdownResult, needsAttentionResult, receivableAgeing, complianceSummaryResult, complianceDeadlines] = await Promise.all([
-    dashboardKpis(tenantId, range),
-    cashAndBankBreakdown(tenantId, asOfIso),
-    revenueExpenseTrend(tenantId, 7, asOfIso),
-    expenseBreakdown(tenantId, range),
-    needsAttention(tenantId, asOfIso),
-    receivableAgeingSummary(tenantId, asOfIso),
-    complianceSummary(tenantId, todayIso),
-    upcomingComplianceDeadlines(tenantId, todayIso),
-  ]);
-
-  return {
-    kpis,
-    cashAndBank,
-    trend,
-    expenseBreakdown: expenseBreakdownResult,
-    needsAttention: needsAttentionResult,
-    receivableAgeing,
-    complianceSummary: complianceSummaryResult,
-    complianceDeadlines,
-  };
-}

@@ -114,7 +114,7 @@ export const payments = pgTable("payments_ledger", {
   updatedAt: timestamp("updated_at", { withTimezone: true }),
   voidedBy: uuid("voided_by"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
-}, (t) => [uniqueIndex("payments_tenant_number").on(t.tenantId, t.paymentNumber)]);
+}, (t) => [uniqueIndex("payments_tenant_number").on(t.tenantId, t.paymentNumber), index("payments_tenant_date").on(t.tenantId, t.paymentDate)]);
 
 // One payment can settle multiple invoices/bills (or a single expense) —
 // see spec section 17 "Multiple Invoice Payment". allocatedAmount for a

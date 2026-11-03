@@ -107,7 +107,7 @@ export const salesInvoices = pgTable("sales_invoices", {
   importId: uuid("import_id").references(() => salesImports.id),
   /** The revenue account the whole invoice was booked to, when one was chosen (blank: each line's item account, else Sales Revenue). */
   revenueAccountId: uuid("revenue_account_id").references(() => accounts.id),
-});
+}, (t) => [index("sales_invoices_tenant_due").on(t.tenantId, t.dueDate)]);
 
 // A sales return (issued to the customer as a debit note): goods sent back or a price
 // correction. Mirrors an invoice in shape, but reduces what the customer owes.
