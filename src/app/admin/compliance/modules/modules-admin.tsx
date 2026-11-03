@@ -95,7 +95,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
                       <td className="py-2 pr-3">{priceBasisLabel(row.priceBasis)}</td>
                       <td className="py-2 pr-3">{postsToLabel(row.postsTo)}</td>
                       <td className="whitespace-nowrap py-2 text-right">
-                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, method: row.method, bearer: row.bearer, priceBasis: row.priceBasis, postsTo: row.postsTo })} className="mr-3 text-[var(--color-primary)] hover:underline">
+                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, method: row.method, bearer: row.bearer, priceBasis: row.priceBasis, postsTo: row.postsTo })} className="mr-3 text-[var(--accent-text)] hover:underline">
                           Edit
                         </button>
                         <button type="button" disabled={busy} onClick={() => remove(t.key, t.name)} className="text-red-600 hover:underline">
@@ -109,7 +109,7 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
                         <StatusPill tone="pending">Not applied</StatusPill>
                       </td>
                       <td className="py-2 text-right">
-                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, ...starting })} className="text-[var(--color-primary)] hover:underline">
+                        <button type="button" disabled={busy} onClick={() => setEditing({ taxKey: t.key, ...starting })} className="text-[var(--accent-text)] hover:underline">
                           Apply
                         </button>
                       </td>

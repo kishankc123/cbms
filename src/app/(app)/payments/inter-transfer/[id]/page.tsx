@@ -60,7 +60,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           <span className="text-gray-500">Attachment</span>
           <span>
             {t.attachmentUrl ? (
-              <a href={t.attachmentUrl} target="_blank" rel="noreferrer" className="text-[var(--color-primary)] hover:underline break-all">{t.attachmentUrl}</a>
+              <a href={t.attachmentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline break-all">{t.attachmentUrl}</a>
             ) : "—"}
           </span>
           {t.status === "voided" && (

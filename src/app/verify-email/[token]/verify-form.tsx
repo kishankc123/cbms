@@ -22,7 +22,7 @@ export function VerifyForm({ token }: { token: string }) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-green-700">Your email is verified.</p>
-        <Link href="/dashboard" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/dashboard" className="text-sm text-[var(--accent-text)] hover:underline">
           Continue
         </Link>
       </div>

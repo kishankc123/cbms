@@ -80,7 +80,7 @@ export function ComplianceDashboard({ data }: { data: Data }) {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-900">Pending / upcoming compliances</h2>
-          <Link href="/compliance/calendar" className="text-xs text-[var(--color-primary)] hover:underline">
+          <Link href="/compliance/calendar" className="text-xs text-[var(--accent-text)] hover:underline">
             Open calendar
           </Link>
         </div>
@@ -106,7 +106,7 @@ export function ComplianceDashboard({ data }: { data: Data }) {
                   <ObligationStatusPill status={i.status} />
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <Link href={i.href} className="text-xs text-[var(--color-primary)] hover:underline">
+                  <Link href={i.href} className="text-xs text-[var(--accent-text)] hover:underline">
                     View
                   </Link>
                 </td>
@@ -126,7 +126,7 @@ export function ComplianceDashboard({ data }: { data: Data }) {
       {data.summary.exceptions > 0 && (
         <p className="text-xs text-gray-500">
           {data.summary.exceptions} open exception{data.summary.exceptions === 1 ? "" : "s"} in this fiscal year —{" "}
-          <Link href={`/audit/exceptions${data.selectedFiscalYear ? `?fy=${data.selectedFiscalYear}` : ""}`} className="text-[var(--color-primary)] hover:underline">
+          <Link href={`/audit/exceptions${data.selectedFiscalYear ? `?fy=${data.selectedFiscalYear}` : ""}`} className="text-[var(--accent-text)] hover:underline">
             open the Exception Centre
           </Link>
         </p>

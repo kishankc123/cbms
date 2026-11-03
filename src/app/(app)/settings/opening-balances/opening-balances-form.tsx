@@ -102,7 +102,7 @@ export function OpeningBalancesForm({ sheet, canSave }: { sheet: Sheet; canSave:
                   <span className="mr-2 text-xs text-gray-400">{r.code}</span>
                   {r.name}
                   {r.screen && (
-                    <Link href={r.screen} className="ml-3 text-xs text-[var(--color-primary)] hover:underline">
+                    <Link href={r.screen} className="ml-3 text-xs text-[var(--accent-text)] hover:underline">
                       Enter on its own screen
                     </Link>
                   )}

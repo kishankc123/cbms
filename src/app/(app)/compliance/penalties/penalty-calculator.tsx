@@ -116,7 +116,7 @@ export function PenaltyCalculator({ calendar, taxTypes, canRecord }: Props) {
                 setRecorded(false);
               }}
               className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                taxTypeKey === t.key ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--color-primary)]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                taxTypeKey === t.key ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5 text-[var(--accent-text)]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
             >
               {t.name}

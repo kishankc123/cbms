@@ -134,13 +134,13 @@ export default function RegisterPage() {
         <div className="space-y-1 text-center text-sm text-gray-500">
           <p>
             Already have an account?{" "}
-            <Link href="/login" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/login" className="text-[var(--accent-text)] hover:underline">
               Sign in
             </Link>
           </p>
           <p>
             Joining an existing organization?{" "}
-            <Link href="/register/user" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register/user" className="text-[var(--accent-text)] hover:underline">
               Create a user account
             </Link>
           </p>

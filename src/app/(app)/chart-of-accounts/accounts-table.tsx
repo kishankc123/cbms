@@ -70,7 +70,7 @@ export function AccountsTable({ accounts }: { accounts: Account[] }) {
             onClick={() => setFiltersOpen((v) => !v)}
             aria-label="Filters"
             className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm ${
-              subCategoryFilter !== "all" || statusFilter !== "all" ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-gray-300 text-gray-600 hover:text-gray-900"
+              subCategoryFilter !== "all" || statusFilter !== "all" ? "border-[var(--color-primary)] text-[var(--accent-text)]" : "border-gray-300 text-gray-600 hover:text-gray-900"
             }`}
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-current">

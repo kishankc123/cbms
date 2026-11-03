@@ -89,7 +89,7 @@ export default async function AssetListPage({ searchParams }: { searchParams: Se
             {list.rows.map((r) => (
               <tr key={r.id} className="border-t border-[var(--card-border)] hover:bg-[var(--surface-muted-bg)]">
                 <td className="px-4 py-2 font-mono">
-                  <Link href={`/assets/${r.id}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/assets/${r.id}`} className="text-[var(--accent-text)] hover:underline">
                     {r.assetCode}
                   </Link>
                 </td>
@@ -117,12 +117,12 @@ export default async function AssetListPage({ searchParams }: { searchParams: Se
                     {filtered ? "Try a different search, or clear the filters." : "Assets appear here once you purchase one or bring in your opening assets."}
                   </p>
                   {filtered ? (
-                    <Link href="/assets" className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline">
+                    <Link href="/assets" className="mt-3 inline-block text-sm text-[var(--accent-text)] hover:underline">
                       Clear filters
                     </Link>
                   ) : (
                     canCreate && (
-                      <Link href="/assets/transactions" className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline">
+                      <Link href="/assets/transactions" className="mt-3 inline-block text-sm text-[var(--accent-text)] hover:underline">
                         + Add asset
                       </Link>
                     )

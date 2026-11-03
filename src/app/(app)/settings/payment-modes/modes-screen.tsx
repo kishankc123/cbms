@@ -95,7 +95,7 @@ export function ModesScreen({ data }: { data: PaymentModesData }) {
                   <StatusPill tone={m.isActive ? "success" : "pending"}>{m.isActive ? "Active" : "Inactive"}</StatusPill>
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-right">
-                  <button type="button" className="mr-3 text-[var(--color-primary)] hover:underline" onClick={() => startEdit(m)}>
+                  <button type="button" className="mr-3 text-[var(--accent-text)] hover:underline" onClick={() => startEdit(m)}>
                     Edit
                   </button>
                   <button type="button" className="text-red-600 hover:underline" onClick={() => setDeleting(m)}>

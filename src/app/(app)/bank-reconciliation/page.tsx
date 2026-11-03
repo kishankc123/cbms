@@ -49,7 +49,7 @@ export default async function BankReconciliationHome() {
       {accounts.length === 0 ? (
         <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-6 text-sm text-[var(--text-secondary)]">
           No active bank accounts yet.{" "}
-          <Link href="/bank-reconciliation/setup" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/bank-reconciliation/setup" className="text-[var(--accent-text)] hover:underline">
             Set one up
           </Link>{" "}
           before reconciling.

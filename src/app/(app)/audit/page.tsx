@@ -57,7 +57,7 @@ export default async function AuditOverviewPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-900">Recent activity</h2>
-          <Link href="/audit/audit-trail" className="text-xs text-[var(--color-primary)] hover:underline">
+          <Link href="/audit/audit-trail" className="text-xs text-[var(--accent-text)] hover:underline">
             Open audit trail
           </Link>
         </div>

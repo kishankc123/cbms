@@ -212,7 +212,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
                 </td>
                 <td className="px-4 py-2">{KIND_LABEL[d.kind]}</td>
                 <td className="px-4 py-2">
-                  <Link href={`/assets/${d.assetId}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/assets/${d.assetId}`} className="text-[var(--accent-text)] hover:underline">
                     {d.assetCode}
                   </Link>{" "}
                   {d.assetName}

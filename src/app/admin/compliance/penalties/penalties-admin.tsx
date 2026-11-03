@@ -132,7 +132,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
                     </td>
                     <td className="px-3 py-2 text-[var(--text-secondary)]">{v.source || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <button type="button" className="mr-3 text-[var(--color-primary)] hover:underline" onClick={() => startEdit(v)}>
+                      <button type="button" className="mr-3 text-[var(--accent-text)] hover:underline" onClick={() => startEdit(v)}>
                         {v.editable ? "Edit" : "Verify / source"}
                       </button>
                       {v.editable && (
@@ -226,7 +226,7 @@ export function PenaltiesAdmin({ data, only, fiscalYear }: { data: PenaltyAdminD
                   );
                 })}
                 {!editing.started && (
-                  <button type="button" className="text-sm text-[var(--color-primary)] hover:underline" onClick={() => setEditing({ ...editing, form: { ...editing.form, tiers: [...editing.form.tiers, { ...blankTier }] } })}>
+                  <button type="button" className="text-sm text-[var(--accent-text)] hover:underline" onClick={() => setEditing({ ...editing, form: { ...editing.form, tiers: [...editing.form.tiers, { ...blankTier }] } })}>
                     Add a band
                   </button>
                 )}

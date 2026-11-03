@@ -126,7 +126,7 @@ export default async function RecurringExpenseHistoryPage({ params }: { params: 
                   </td>
                   <td className="px-4 py-2.5">
                     {p.expenseNumber ? (
-                      <Link href={`/reports/journal-report?q=${p.expenseNumber}&from=${p.expenseDate}&to=${p.expenseDate}`} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+                      <Link href={`/reports/journal-report?q=${p.expenseNumber}&from=${p.expenseDate}&to=${p.expenseDate}`} className="text-xs font-medium text-[var(--accent-text)] hover:underline">
                         {p.expenseNumber}
                       </Link>
                     ) : (

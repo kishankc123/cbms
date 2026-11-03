@@ -124,7 +124,7 @@ export function StatutoryTable({ data }: { data: Data }) {
               <td className="px-4 py-2 whitespace-nowrap">{i.completedDate ? <D value={i.completedDate} /> : "—"}</td>
               <td className="px-4 py-2">{i.referenceNumber || "—"}</td>
               <td className="px-4 py-2 text-right">
-                <button type="button" className="text-xs text-[var(--color-primary)] hover:underline">
+                <button type="button" className="text-xs text-[var(--accent-text)] hover:underline">
                   View
                 </button>
               </td>

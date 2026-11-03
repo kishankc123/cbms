@@ -65,7 +65,7 @@ export function UsersTable({ data, filters }: { data: Data; filters: { q: string
             {data.rows.map((u) => (
               <tr key={u.id} className="border-t border-[var(--card-border)]">
                 <td className="px-4 py-2 font-medium">
-                  <Link href={`/admin/users/${u.id}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/admin/users/${u.id}`} className="text-[var(--accent-text)] hover:underline">
                     {u.name}
                   </Link>
                   {u.isPlatformAdmin && <span className="ml-2 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-normal text-red-700">Platform admin</span>}

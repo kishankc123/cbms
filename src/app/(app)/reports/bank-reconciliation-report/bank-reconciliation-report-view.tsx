@@ -82,7 +82,7 @@ export function BankReconciliationReportView({ rows }: { rows: ReconciliationRep
                 )}
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
-                <Link href="/bank-reconciliation" className="text-xs text-[var(--color-primary)] hover:underline">
+                <Link href="/bank-reconciliation" className="text-xs text-[var(--accent-text)] hover:underline">
                   Open in Bank Reconciliation
                 </Link>
               </td>

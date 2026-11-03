@@ -78,7 +78,7 @@ export default async function PayrollSummaryPage({ searchParams }: { searchParam
               <td className="px-4 py-2 text-right">{fmt(r.advanceRecovered)}</td>
               <td className="px-4 py-2 text-right font-medium">{fmt(r.netPay)}</td>
               <td className="px-4 py-2 whitespace-nowrap">
-                <Link href={`/payroll/salary-sheet/${r.runId}`} className="text-xs text-[var(--color-primary)] hover:underline">
+                <Link href={`/payroll/salary-sheet/${r.runId}`} className="text-xs text-[var(--accent-text)] hover:underline">
                   Open in Salary Sheet
                 </Link>
               </td>

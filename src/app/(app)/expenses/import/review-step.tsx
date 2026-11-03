@@ -224,7 +224,7 @@ function SupplierGroups({ review, supplierDecisions: decisions, onSupplierDecisi
           {groups.some((g) => g.suggestion && !decisions[g.key]) && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of groups) if (g.suggestion && !next[g.key]) next[g.key] = { action: "existing", vendorId: g.suggestion.vendorId, remember: true };
@@ -237,7 +237,7 @@ function SupplierGroups({ review, supplierDecisions: decisions, onSupplierDecisi
           {undecided > 0 && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of groups) if (!next[g.key]) next[g.key] = { action: "create", name: g.text };
@@ -320,7 +320,7 @@ function CategoryGroups({ review, categoryDecisions: decisions, onCategoryDecisi
         {groups.some((g) => g.suggestion && !decisions[g.key]) && (
           <button
             type="button"
-            className="text-sm text-[var(--color-primary)] hover:underline"
+            className="text-sm text-[var(--accent-text)] hover:underline"
             onClick={() => {
               const next = { ...decisions };
               for (const g of groups) if (g.suggestion && !next[g.key]) next[g.key] = { action: "existing", categoryId: g.suggestion.categoryId };
@@ -464,7 +464,7 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
                   <td className="max-w-xs px-3 py-2 text-xs text-[var(--text-secondary)]">{r.status === "skipped" ? "" : r.messages.join(" ")}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {r.status !== "skipped" && (
-                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--color-primary)] hover:underline">
+                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--accent-text)] hover:underline">
                         {overrides[r.rowNumber] ? "Fix (edited)" : "Fix"}
                       </button>
                     )}

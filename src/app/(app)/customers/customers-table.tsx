@@ -153,7 +153,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
               <td className="px-4 py-2">{fmt(c.paid)}</td>
               <td className="px-4 py-2">{fmt(c.outstanding)}</td>
               <td className="px-4 py-2">
-                <Link href={`/customers/${c.id}`} className="text-xs text-[var(--color-primary)] hover:underline">
+                <Link href={`/customers/${c.id}`} className="text-xs text-[var(--accent-text)] hover:underline">
                   View profile
                 </Link>
               </td>

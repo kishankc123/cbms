@@ -67,13 +67,13 @@ export default function RegisterUserPage() {
         <div className="space-y-1 text-center text-sm text-gray-500">
           <p>
             Already have an account?{" "}
-            <Link href="/login" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/login" className="text-[var(--accent-text)] hover:underline">
               Sign in
             </Link>
           </p>
           <p>
             Setting up a business instead?{" "}
-            <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register" className="text-[var(--accent-text)] hover:underline">
               Create a business account
             </Link>
           </p>

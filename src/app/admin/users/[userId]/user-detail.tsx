@@ -107,7 +107,7 @@ export function UserDetail({ data }: { data: AdminUser }) {
             {data.organizations.map((o) => (
               <tr key={o.tenantId} className="border-t border-[var(--card-border)]">
                 <td className="px-4 py-2 font-medium">
-                  <Link href={`/admin/organizations/${o.tenantId}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/admin/organizations/${o.tenantId}`} className="text-[var(--accent-text)] hover:underline">
                     {o.name}
                   </Link>{" "}
                   <span className="text-xs font-normal text-[var(--text-secondary)]">{o.clientCode}</span>

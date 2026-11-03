@@ -86,7 +86,7 @@ function SlabEditor({ label, rows, base, onChange }: { label: string; rows: Row[
           })}
         </tbody>
       </table>
-      <button type="button" onClick={add} className="mt-1 text-xs text-[var(--color-primary)] hover:underline">
+      <button type="button" onClick={add} className="mt-1 text-xs text-[var(--accent-text)] hover:underline">
         + Add slab
       </button>
     </div>
@@ -270,7 +270,7 @@ export function SlabsAdmin({ data, headKey, headName, fiscalYear }: { data: TaxR
                     {v.source ?? "—"} {v.isVerified ? <StatusPill tone="success">verified</StatusPill> : <StatusPill tone="pending">unverified</StatusPill>}
                   </td>
                   <td className="py-1.5 text-right">
-                    <button type="button" onClick={() => setNotes({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--color-primary)] hover:underline">
+                    <button type="button" onClick={() => setNotes({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--accent-text)] hover:underline">
                       Verify / source
                     </button>
                   </td>

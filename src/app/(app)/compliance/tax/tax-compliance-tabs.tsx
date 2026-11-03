@@ -63,7 +63,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
                 type="button"
                 onClick={() => setSection(s.key)}
                 className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  section === s.key ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-gray-500 hover:text-gray-700"
+                  section === s.key ? "border-[var(--color-primary)] text-[var(--accent-text)]" : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 {s.label}
@@ -92,7 +92,7 @@ export function TaxComplianceTabs({ data }: { data: Data }) {
       {!registered && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
           Not registered for {active.label}.{" "}
-          <Link href="/compliance/company" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/compliance/company" className="text-[var(--accent-text)] hover:underline">
             Register in Company Details → Tax Registrations
           </Link>{" "}
           to activate it here.

@@ -214,7 +214,7 @@ function Groups({ review, decisions, onDecisions, setup }: Props & { review: Rev
           {review.groups.some((g) => g.suggestion && !decisions[g.key]) && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of review.groups) if (g.suggestion && !next[g.key]) next[g.key] = { action: "existing", customerId: g.suggestion.customerId, remember: true };
@@ -227,7 +227,7 @@ function Groups({ review, decisions, onDecisions, setup }: Props & { review: Rev
           {undecided > 0 && (
             <button
               type="button"
-              className="text-[var(--color-primary)] hover:underline"
+              className="text-[var(--accent-text)] hover:underline"
               onClick={() => {
                 const next = { ...decisions };
                 for (const g of review.groups) if (!next[g.key]) next[g.key] = { action: "create", name: g.text };
@@ -375,7 +375,7 @@ function Rows({ rows, skipRows, onSkipRows, decisions, overrides, onOverrides }:
                   <td className="max-w-xs px-3 py-2 text-xs text-[var(--text-secondary)]">{r.status === "skipped" ? "" : r.messages.join(" ")}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {r.status !== "skipped" && (
-                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--color-primary)] hover:underline">
+                      <button type="button" onClick={() => setEditing(r.rowNumber)} className="mr-3 text-xs text-[var(--accent-text)] hover:underline">
                         {overrides[r.rowNumber] ? "Fix (edited)" : "Fix"}
                       </button>
                     )}

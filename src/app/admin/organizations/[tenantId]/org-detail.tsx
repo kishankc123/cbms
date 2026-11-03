@@ -96,7 +96,7 @@ export function OrgDetail({ data }: { data: AdminOrg }) {
             {data.members.map((m) => (
               <tr key={m.userId} className="border-t border-[var(--card-border)]">
                 <td className="px-4 py-2 font-medium">
-                  <Link href={`/admin/users/${m.userId}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/admin/users/${m.userId}`} className="text-[var(--accent-text)] hover:underline">
                     {m.name}
                   </Link>
                 </td>

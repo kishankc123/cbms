@@ -217,7 +217,7 @@ function Depreciation({ data }: { data: AssetDetailData }) {
         </table>
         {data.schedule.length > 12 && (
           <div className="border-t border-[var(--card-border)] px-5 py-2 text-center">
-            <button type="button" onClick={() => setAll(!all)} className="text-sm text-[var(--color-primary)] hover:underline">
+            <button type="button" onClick={() => setAll(!all)} className="text-sm text-[var(--accent-text)] hover:underline">
               {all ? "Show first 12 periods" : `Show all ${data.schedule.length} periods`}
             </button>
           </div>

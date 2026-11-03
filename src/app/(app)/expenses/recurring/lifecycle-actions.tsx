@@ -54,7 +54,7 @@ export function LifecycleActions({ id, status }: { id: string; status: Recurring
         </button>
       )}
       {status === "paused" && (
-        <button type="button" onClick={() => setResuming(true)} className="font-medium text-[var(--color-primary)] hover:underline">
+        <button type="button" onClick={() => setResuming(true)} className="font-medium text-[var(--accent-text)] hover:underline">
           Resume
         </button>
       )}

@@ -167,7 +167,7 @@ export function QuickSelect({
                 close();
                 onAddNew();
               }}
-              className="block w-full border-t border-gray-100 bg-gray-50/60 px-3 py-2 text-left text-sm font-medium text-[var(--color-primary)] hover:bg-gray-100"
+              className="block w-full border-t border-gray-100 bg-gray-50/60 px-3 py-2 text-left text-sm font-medium text-[var(--accent-text)] hover:bg-gray-100"
             >
               {addLabel}
             </button>

@@ -54,7 +54,7 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-gray-700">Password</label>
-            <Link href="/forgot-password" className="text-xs text-[var(--color-primary)] hover:underline">
+            <Link href="/forgot-password" className="text-xs text-[var(--accent-text)] hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -98,13 +98,13 @@ export default function LoginPage() {
         <div className="space-y-2 border-t border-gray-100 pt-4 text-center text-sm text-gray-500">
           <p>
             Setting up a business?{" "}
-            <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register" className="text-[var(--accent-text)] hover:underline">
               Create a business account
             </Link>
           </p>
           <p>
             Joining an organization that already uses Client Books?{" "}
-            <Link href="/register/user" className="text-[var(--color-primary)] hover:underline">
+            <Link href="/register/user" className="text-[var(--accent-text)] hover:underline">
               Create a user account
             </Link>
           </p>

@@ -115,7 +115,7 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
                     )}
                     <td className="px-4 py-2" />
                     <td className="space-x-3 px-4 py-2 text-right">
-                      <button type="button" disabled={busy} onClick={() => run(() => changeCountrySetupItem(data.section, row.id, { name: editing.name, ...(taxes ? { authorityKey: editing.authorityKey } : {}) }), () => setEditing(null))} className="text-sm text-[var(--color-primary)]">
+                      <button type="button" disabled={busy} onClick={() => run(() => changeCountrySetupItem(data.section, row.id, { name: editing.name, ...(taxes ? { authorityKey: editing.authorityKey } : {}) }), () => setEditing(null))} className="text-sm text-[var(--accent-text)]">
                         Save
                       </button>
                       <button type="button" onClick={() => setEditing(null)} className="text-sm text-[var(--text-secondary)]">
@@ -129,10 +129,10 @@ export function SetupList({ data }: { data: NonNullable<SetupListData> }) {
                     {taxes && <td className="px-4 py-2">{authorityName(row.authorityKey)}</td>}
                     <td className="px-4 py-2">{row.isActive ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="action">Inactive</StatusPill>}</td>
                     <td className="space-x-3 px-4 py-2 text-right">
-                      <button type="button" disabled={busy} onClick={() => setEditing({ id: row.id, name: row.name, authorityKey: row.authorityKey ?? "" })} className="text-sm text-[var(--color-primary)]">
+                      <button type="button" disabled={busy} onClick={() => setEditing({ id: row.id, name: row.name, authorityKey: row.authorityKey ?? "" })} className="text-sm text-[var(--accent-text)]">
                         Edit
                       </button>
-                      <button type="button" disabled={busy} onClick={() => toggle(row)} className={`text-sm ${row.isActive ? "text-red-600" : "text-[var(--color-primary)]"}`}>
+                      <button type="button" disabled={busy} onClick={() => toggle(row)} className={`text-sm ${row.isActive ? "text-red-600" : "text-[var(--accent-text)]"}`}>
                         {row.isActive ? "Deactivate" : "Activate"}
                       </button>
                     </td>

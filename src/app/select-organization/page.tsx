@@ -55,7 +55,7 @@ export default async function SelectOrganizationPage() {
         )}
 
         <div className="flex items-center justify-between text-sm">
-          <Link href="/create-organization" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/create-organization" className="text-[var(--accent-text)] hover:underline">
             {orgs.length === 0 ? "Create a business account" : "+ Create another business"}
           </Link>
           <SignOutLink />

@@ -76,7 +76,7 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
       </div>
 
       <div className={`${card} p-4`}>
-        <button type="button" onClick={() => setPasting((v) => !v)} className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+        <button type="button" onClick={() => setPasting((v) => !v)} className="text-sm font-medium text-[var(--accent-text)] hover:underline">
           {pasting ? "Hide paste box" : "Or paste cells from Excel"}
         </button>
         {pasting && (
@@ -96,7 +96,7 @@ export function UploadStep({ busy, onFile, onTemplate, rowNoun, notes, pasteExam
       </div>
 
       <div className={`${card} p-4`}>
-        <button type="button" onClick={() => setGuiding((v) => !v)} className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+        <button type="button" onClick={() => setGuiding((v) => !v)} className="text-sm font-medium text-[var(--accent-text)] hover:underline">
           {guiding ? "Hide the column guide" : "Column guide: what each column can hold"}
         </button>
         {guiding && (

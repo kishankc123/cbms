@@ -104,7 +104,7 @@ export function AddUserForm({ data }: { data: AddUserData }) {
           {done.link && (
             <p className="mt-1 break-all text-xs text-gray-600">
               {done.warning ? "Invitation link (valid 7 days):" : "Email service not configured (dev only) — invitation link:"}{" "}
-              <a href={done.link} className="text-[var(--color-primary)] underline">
+              <a href={done.link} className="text-[var(--accent-text)] underline">
                 {done.link}
               </a>
             </p>
@@ -133,7 +133,7 @@ export function AddUserForm({ data }: { data: AddUserData }) {
         {result?.state === "member" && (
           <p className="rounded bg-[var(--surface-muted-bg)] px-3 py-2 text-sm text-[var(--text-secondary)]">
             {result.name} is already in your organization as {result.roleName}. Change their role from the{" "}
-            <Link href="/settings/users" className="text-[var(--color-primary)] underline">
+            <Link href="/settings/users" className="text-[var(--accent-text)] underline">
               user list
             </Link>
             .

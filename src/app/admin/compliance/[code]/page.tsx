@@ -69,7 +69,7 @@ export default async function AdminCountryCompliancePage({ params, searchParams 
           </div>
           <p className="text-xs text-[var(--text-secondary)]">
             Company types, taxes and authorities are set up under{" "}
-            <Link href={`/admin/setup/countries/${code}`} className="text-[var(--color-primary)] hover:underline">
+            <Link href={`/admin/setup/countries/${code}`} className="text-[var(--accent-text)] hover:underline">
               Setup → Countries → {country.name}
             </Link>
             .
@@ -150,7 +150,7 @@ async function TaxTab({ code, tax, head, fy, view }: { code: string; tax?: strin
               {h.name}
             </Link>
           ))}
-          <Link href={`/admin/setup/countries/${code}/tds-headings`} className="ml-2 text-sm text-[var(--color-primary)] hover:underline">
+          <Link href={`/admin/setup/countries/${code}/tds-headings`} className="ml-2 text-sm text-[var(--accent-text)] hover:underline">
             Manage headings
           </Link>
         </div>

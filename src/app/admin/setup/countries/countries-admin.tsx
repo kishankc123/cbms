@@ -66,7 +66,7 @@ export function CountriesAdmin({ data }: { data: CountriesAdminData }) {
               {data.countries.map((c) => (
                 <tr key={c.code} className="border-b border-[var(--card-border)] last:border-0">
                   <td className="px-4 py-2 font-medium">
-                    <Link href={`/admin/setup/countries/${c.code}`} className="text-[var(--color-primary)] hover:underline">
+                    <Link href={`/admin/setup/countries/${c.code}`} className="text-[var(--accent-text)] hover:underline">
                       {c.name}
                     </Link>
                   </td>

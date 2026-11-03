@@ -64,7 +64,7 @@ export function OrgsTable({ data, filters }: { data: Data; filters: { q: string;
               <tr key={o.id} className="border-t border-[var(--card-border)]">
                 <td className="px-4 py-2 text-[var(--text-secondary)]">{o.clientCode ?? "—"}</td>
                 <td className="px-4 py-2 font-medium">
-                  <Link href={`/admin/organizations/${o.id}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/admin/organizations/${o.id}`} className="text-[var(--accent-text)] hover:underline">
                     {o.name}
                   </Link>
                 </td>

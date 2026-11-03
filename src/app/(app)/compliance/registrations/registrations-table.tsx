@@ -137,7 +137,7 @@ export function RegistrationsTable({ data }: { data: Data }) {
                 <StatusPill tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</StatusPill>
               </td>
               <td className="px-4 py-2 text-right">
-                <button type="button" onClick={() => edit(r)} className="text-xs text-[var(--color-primary)] hover:underline">
+                <button type="button" onClick={() => edit(r)} className="text-xs text-[var(--accent-text)] hover:underline">
                   {data.canEdit ? "Edit" : "View"}
                 </button>
               </td>

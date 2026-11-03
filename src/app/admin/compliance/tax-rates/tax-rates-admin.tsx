@@ -238,7 +238,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                             {v.source ?? "—"} {v.isVerified ? <StatusPill tone="success">verified</StatusPill> : <StatusPill tone="pending">unverified</StatusPill>}
                           </td>
                           <td className="py-1.5 text-right">
-                            <button type="button" onClick={() => setEditing({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--color-primary)] hover:underline">
+                            <button type="button" onClick={() => setEditing({ id: v.id, isVerified: v.isVerified, source: v.source ?? "" })} className="text-xs text-[var(--accent-text)] hover:underline">
                               Edit
                             </button>
                           </td>

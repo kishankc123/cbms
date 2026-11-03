@@ -125,7 +125,7 @@ export function UploadStatementModal({
             {loading && <p className="text-sm text-gray-400">Reading file...</p>}
             <p className="text-xs text-gray-500">
               Use your bank&apos;s file as it is and match its columns on the next screen. Need an example?{" "}
-              <button type="button" onClick={downloadSample} className="text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={downloadSample} className="text-[var(--accent-text)] hover:underline">
                 Download sample file
               </button>
             </p>

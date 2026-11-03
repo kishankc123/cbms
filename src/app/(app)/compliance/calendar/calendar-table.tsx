@@ -324,7 +324,7 @@ function MonthView({ items }: { items: Item[] }) {
           const events = byDate.get(d.iso) ?? [];
           return (
             <div key={d.iso} className={`min-h-20 border-b border-r border-gray-100 p-1 ${d.iso === today ? "bg-blue-50/50" : ""}`}>
-              <p className={`text-xs ${d.iso === today ? "font-semibold text-[var(--color-primary)]" : "text-gray-400"}`}>{d.day}</p>
+              <p className={`text-xs ${d.iso === today ? "font-semibold text-[var(--accent-text)]" : "text-gray-400"}`}>{d.day}</p>
               <div className="mt-1 space-y-0.5">
                 {events.slice(0, 3).map((e) => {
                   const done = e.status === "filed" || e.status === "paid";

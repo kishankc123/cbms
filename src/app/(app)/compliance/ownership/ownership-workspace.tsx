@@ -218,17 +218,17 @@ export function OwnershipWorkspace({ data }: { data: Data }) {
                     <StatusPill tone={h.status === "active" ? "success" : "action"}>{h.status === "active" ? "Active" : "Inactive"}</StatusPill>
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap space-x-2 text-xs">
-                    <button type="button" onClick={() => setDialog({ kind: "view", holder: h })} className="text-[var(--color-primary)] hover:underline">
+                    <button type="button" onClick={() => setDialog({ kind: "view", holder: h })} className="text-[var(--accent-text)] hover:underline">
                       View
                     </button>
                     {canEdit && (
                       <>
-                        <button type="button" onClick={() => setDialog({ kind: "edit", holder: h })} className="text-[var(--color-primary)] hover:underline">
+                        <button type="button" onClick={() => setDialog({ kind: "edit", holder: h })} className="text-[var(--accent-text)] hover:underline">
                           Edit
                         </button>
                         {h.status === "active" && (
                           <>
-                            <button type="button" onClick={() => setDialog({ kind: "transfer", presetId: h.id })} className="text-[var(--color-primary)] hover:underline">
+                            <button type="button" onClick={() => setDialog({ kind: "transfer", presetId: h.id })} className="text-[var(--accent-text)] hover:underline">
                               Transfer
                             </button>
                             <button type="button" onClick={() => setDialog({ kind: "deactivate", holder: h })} className="text-gray-500 hover:underline">

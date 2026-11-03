@@ -90,7 +90,7 @@ export function DifferencePanel({
                   <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">{l.memo || l.description || "—"}</span>
                   <span className="tabular-nums text-[var(--text-primary)]">{fmt(l.signedAmount)}</span>
                   {l.classification ? <StatusPill tone="pending">{l.classification.replace(/_/g, " ")}</StatusPill> : <span className="w-20" />}
-                  <button type="button" disabled={locked(l.entryDate)} onClick={() => onClassify(l)} className="text-xs text-[var(--color-primary)] hover:underline disabled:opacity-40">
+                  <button type="button" disabled={locked(l.entryDate)} onClick={() => onClassify(l)} className="text-xs text-[var(--accent-text)] hover:underline disabled:opacity-40">
                     {l.classification ? "Change" : "Explain"}
                   </button>
                 </li>

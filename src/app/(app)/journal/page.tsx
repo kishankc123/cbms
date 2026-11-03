@@ -31,7 +31,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
       {showHistory ? (
         <History tenantId={session.tenantId} accountList={accountList} />
       ) : (
-        <Link href="/journal?history=1" className="inline-block text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/journal?history=1" className="inline-block text-sm text-[var(--accent-text)] hover:underline">
           Show entry history
         </Link>
       )}
@@ -56,7 +56,7 @@ async function History({ tenantId, accountList }: { tenantId: string; accountLis
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-900">Entry history</h2>
-        <Link href="/journal" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/journal" className="text-sm text-[var(--accent-text)] hover:underline">
           Hide entry history
         </Link>
       </div>

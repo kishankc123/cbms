@@ -12,7 +12,7 @@ export function NextStepNotice({ title, description }: { title: string; descript
         <p className="text-sm font-medium text-[var(--text-primary)]">This screen is being built in the next step.</p>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           The foundation is ready: set up your asset categories, locations and default accounts in{" "}
-          <Link href="/assets/setup" className="text-[var(--color-primary)] hover:underline">
+          <Link href="/assets/setup" className="text-[var(--accent-text)] hover:underline">
             Setup
           </Link>
           .

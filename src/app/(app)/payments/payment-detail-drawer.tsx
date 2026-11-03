@@ -155,7 +155,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
             {detail.attachmentUrl && (
               <section>
                 <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
-                <a href={detail.attachmentUrl} target="_blank" rel="noreferrer" className="text-sm text-[var(--color-primary)] hover:underline break-all">
+                <a href={detail.attachmentUrl} target="_blank" rel="noreferrer" className="text-sm text-[var(--accent-text)] hover:underline break-all">
                   {detail.attachmentUrl}
                 </a>
               </section>

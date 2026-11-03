@@ -43,7 +43,7 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
             View {noun}s
           </Link>
           {fixable > 0 && (
-            <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--surface-muted-bg)]">
+            <button type="button" onClick={onFix} className="rounded border border-[var(--color-primary)] bg-white px-4 py-1.5 text-sm font-medium text-[var(--accent-text)] hover:bg-[var(--surface-muted-bg)]">
               Fix and import the {fixable} remaining row{fixable === 1 ? "" : "s"}
             </button>
           )}
@@ -57,7 +57,7 @@ export function DoneStep({ result, onAnother, onFix, noun, viewHref, createdLabe
         <section className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{result.skipped.length} row{result.skipped.length === 1 ? "" : "s"} not imported</h2>
-            <button type="button" onClick={downloadSkipped} className="text-sm text-[var(--color-primary)] hover:underline">
+            <button type="button" onClick={downloadSkipped} className="text-sm text-[var(--accent-text)] hover:underline">
               Download list
             </button>
           </div>

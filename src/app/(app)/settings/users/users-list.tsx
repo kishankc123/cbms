@@ -113,7 +113,7 @@ export function UsersList({ data, filters }: { data: UsersPage; filters: { q: st
               <tr key={r.userId} className="border-t border-[var(--card-border)]">
                 <td className="px-4 py-2 text-[var(--text-secondary)]">{r.code}</td>
                 <td className="px-4 py-2 font-medium">
-                  <Link href={`/settings/users/${r.userId}`} className="text-[var(--color-primary)] hover:underline">
+                  <Link href={`/settings/users/${r.userId}`} className="text-[var(--accent-text)] hover:underline">
                     {r.name}
                   </Link>{" "}
                   {r.userId === data.me && <span className="text-xs font-normal text-gray-400">(you)</span>}

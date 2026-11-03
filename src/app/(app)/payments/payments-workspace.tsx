@@ -329,7 +329,7 @@ export function PaymentsWorkspace({
                   <StatusPill tone={STATUS_TONE[r.status] ?? "pending"}>{r.status}</StatusPill>
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <button type="button" onClick={() => setDetailId(r.id)} className="text-xs text-[var(--color-primary)] hover:underline">
+                  <button type="button" onClick={() => setDetailId(r.id)} className="text-xs text-[var(--accent-text)] hover:underline">
                     View
                   </button>
                 </td>

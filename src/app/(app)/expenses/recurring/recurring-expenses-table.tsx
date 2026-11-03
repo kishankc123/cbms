@@ -96,7 +96,7 @@ export function RecurringExpensesTable({
               <tr>
                 <td colSpan={10} className="px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
                   No recurring expenses yet — add rent, subscriptions, or other regular expenses with{" "}
-                  <button type="button" onClick={() => setCreating(true)} className="text-[var(--color-primary)] hover:underline">
+                  <button type="button" onClick={() => setCreating(true)} className="text-[var(--accent-text)] hover:underline">
                     + New Recurring Expense
                   </button>
                   .
@@ -135,10 +135,10 @@ export function RecurringExpensesTable({
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-3">
-                      <Link href={`/expenses/recurring/${row.id}`} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+                      <Link href={`/expenses/recurring/${row.id}`} className="text-xs font-medium text-[var(--accent-text)] hover:underline">
                         History
                       </Link>
-                      <button type="button" onClick={() => setEditing(row.raw)} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+                      <button type="button" onClick={() => setEditing(row.raw)} className="text-xs font-medium text-[var(--accent-text)] hover:underline">
                         Edit
                       </button>
                       <LifecycleActions id={row.id} status={row.status} />

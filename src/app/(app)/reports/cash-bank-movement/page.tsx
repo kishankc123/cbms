@@ -130,7 +130,7 @@ export default async function CashBankMovementPage({ searchParams }: { searchPar
                   <td className="px-4 py-2 text-right">{s.totalOut ? fmt(s.totalOut) : ""}</td>
                   <td className="px-4 py-2">
                     {source ? (
-                      <Link href={source.href} className="text-xs text-[var(--color-primary)] hover:underline whitespace-nowrap">
+                      <Link href={source.href} className="text-xs text-[var(--accent-text)] hover:underline whitespace-nowrap">
                         {source.label}
                       </Link>
                     ) : (

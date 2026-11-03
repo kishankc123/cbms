@@ -132,7 +132,7 @@ export function DepreciationView({ data }: { data: DepreciationPageData }) {
                 {preview.lines.slice(0, SHOWN).map((l) => (
                   <tr key={l.assetId} className="border-t border-[var(--card-border)]">
                     <td className="px-4 py-2 font-medium">
-                      <Link href={`/assets/${l.assetId}`} className="text-[var(--color-primary)] hover:underline">
+                      <Link href={`/assets/${l.assetId}`} className="text-[var(--accent-text)] hover:underline">
                         {l.assetCode}
                       </Link>
                     </td>

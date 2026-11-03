@@ -262,7 +262,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           <p className={`text-xl font-semibold tabular-nums ${Math.abs(workspace.difference) < 0.005 ? "text-green-700" : "text-red-600"}`}>{fmt(workspace.difference)}</p>
           <p className="text-xs text-[var(--text-secondary)]">{differenceText(workspace.difference, hasStatement)}</p>
           {hasStatement && Math.abs(workspace.difference) >= 0.005 && (
-            <button type="button" onClick={() => setShowDifference(true)} className="mt-1 text-xs text-[var(--color-primary)] hover:underline">
+            <button type="button" onClick={() => setShowDifference(true)} className="mt-1 text-xs text-[var(--accent-text)] hover:underline">
               Why is there a difference?
             </button>
           )}

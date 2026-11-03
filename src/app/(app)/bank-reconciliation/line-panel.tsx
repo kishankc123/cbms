@@ -182,7 +182,7 @@ export function LinePanel({
             )}
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setTab("create")} className="text-sm text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={() => setTab("create")} className="text-sm text-[var(--accent-text)] hover:underline">
                 Nothing here? Create a transaction
               </button>
               <button type="button" disabled={busy || locked || !matching} onClick={match} className="rounded bg-[var(--color-primary)] px-5 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40">
@@ -213,7 +213,7 @@ export function LinePanel({
               <button
                 type="button"
                 onClick={() => setRows([...rows, { accountId: "", amount: Math.max(round2(Math.abs(line.amount) - splitTotal), 0).toFixed(2) }])}
-                className="text-sm text-[var(--color-primary)] hover:underline"
+                className="text-sm text-[var(--accent-text)] hover:underline"
               >
                 + Add another account (split)
               </button>
@@ -229,7 +229,7 @@ export function LinePanel({
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Add a comment (optional)" className={field} />
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={onRecordPayment} className="text-left text-sm text-[var(--color-primary)] hover:underline">
+              <button type="button" onClick={onRecordPayment} className="text-left text-sm text-[var(--accent-text)] hover:underline">
                 Money from a customer or to a supplier? Record a {moneyIn ? "receipt" : "payment"} instead
               </button>
               <div className="flex items-center gap-2">

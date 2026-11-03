@@ -90,7 +90,7 @@ export function EntryPopup({ entryId, scope, highlightAccountId, onClose }: { en
 
             <div className="flex items-center justify-between">
               {entry.link ? (
-                <Link href={entry.link.href} className="text-sm text-[var(--color-primary)] hover:underline">
+                <Link href={entry.link.href} className="text-sm text-[var(--accent-text)] hover:underline">
                   {entry.link.label}
                 </Link>
               ) : (

@@ -102,7 +102,7 @@ export function OpeningAssetsPanel({ data }: { data: OpeningAssetsData }) {
               {data.assets.map((a) => (
                 <tr key={a.id} className={`border-b border-[var(--card-border)] last:border-0 ${a.status === "voided" ? "opacity-50" : ""}`}>
                   <td className="px-4 py-2 font-medium">
-                    <Link href={`/assets/${a.id}`} className="text-[var(--color-primary)] hover:underline">
+                    <Link href={`/assets/${a.id}`} className="text-[var(--accent-text)] hover:underline">
                       {a.assetCode}
                     </Link>
                   </td>
