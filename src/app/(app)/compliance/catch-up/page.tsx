@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { getCatchup } from "../catchup-actions";
 import { ComplianceProfileNotice } from "../profile-notice";
 import { CatchupChecklist } from "./catchup-checklist";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function CatchupPage() {
   const denied = await guardView("compliance");
@@ -9,10 +10,7 @@ export default async function CatchupPage() {
   const data = await getCatchup();
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance Checklist</h1>
-        <p className="mt-0.5 text-sm text-gray-500">What was already filed before you started using the system. Periods up to your answer are marked filed; everything after stays on your list.</p>
-      </div>
+      <PageHeader title="Compliance Checklist" description="What was already filed before you started using the system. Periods up to your answer are marked filed; everything after stays on your list." />
       <ComplianceProfileNotice />
       <CatchupChecklist data={data} />
     </div>

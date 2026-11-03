@@ -5,6 +5,7 @@ import { items, itemUnits } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { ItemsTabs } from "../items/items-tabs";
 import { listRevenueAccountOptions } from "../items/actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function ServicesPage() {
   const denied = await guardView("inventory");
@@ -19,10 +20,7 @@ export default async function ServicesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Services</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Non-inventory items sold on an invoice — a Service line never moves stock, never carries a cost, and can&apos;t be purchased.</p>
-      </div>
+      <PageHeader title="Services" description="Non-inventory items sold on an invoice — a Service line never moves stock, never carries a cost, and can&apos;t be purchased." />
       <ItemsTabs itemType="service" itemsLabel="Services" rateLabel="Default billing rate" items={itemList} units={units} accounts={revenueAccounts} />
     </div>
   );

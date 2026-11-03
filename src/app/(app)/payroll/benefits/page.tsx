@@ -4,6 +4,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { employees } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 
 // Benefits are historical per-employee records (Employees > profile >
 // Benefits tab) — this page is the entry point for picking which employee's
@@ -20,7 +21,7 @@ export default async function BenefitsIndexPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Benefits</h1>
+      <PageHeader title="Benefits" className="!mb-0" />
       <p className="text-sm text-gray-500">Select an employee to view or add their benefits.</p>
 
       <table className="w-full text-sm bg-white border border-gray-200 rounded-lg overflow-hidden">

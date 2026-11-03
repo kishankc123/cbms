@@ -12,6 +12,7 @@ import { StockMaintenance } from "./maintenance";
 import { getInventoryHistory, getOpeningRows } from "@/lib/inventory/opening";
 import { getOpeningDate } from "@/lib/inventory/stock";
 import { verifyStockBalances } from "@/lib/inventory/recalc";
+import { PageHeader } from "@/components/ui/page-header";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -34,10 +35,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Product</h1>
-        <p className="text-sm text-gray-500">What is on hand, what it cost, and how it ties to the Inventory account.</p>
-      </div>
+      <PageHeader title="Product" description="What is on hand, what it cost, and how it ties to the Inventory account." />
       <ProductTabs />
 
       <StockTabs

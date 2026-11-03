@@ -3,6 +3,7 @@ import { and, eq, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, items, salesReturns } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
+import { PageHeader } from "@/components/ui/page-header";
 import { salesVatRate } from "@/lib/sales/vat";
 import { SalesReturnTabs } from "./sales-return-tabs";
 
@@ -20,11 +21,8 @@ export default async function SalesReturnPage({ searchParams }: { searchParams: 
   ]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Sales Return</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Debit notes for goods returned or sales corrected.</p>
-      </div>
+    <div>
+      <PageHeader title="Sales return" description="Debit notes for goods returned or sales corrected." />
       <SalesReturnTabs customers={customerList} items={itemList} vatRate={vatRate} noteList={noteList} initialTab={view === "new" ? "new" : "notes"} />
     </div>
   );

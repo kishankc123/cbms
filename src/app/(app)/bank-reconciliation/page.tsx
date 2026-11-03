@@ -3,6 +3,7 @@ import { guardView } from "@/components/page-guard";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { getReconciliationOverview, type AccountOverview } from "./actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 const money = (n: number, currency: string) => `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -33,7 +34,7 @@ export default async function BankReconciliationHome() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Bank Reconciliation</h1>
+          <PageHeader title="Bank Reconciliation" className="!mb-0" />
           {accounts.length > 0 && (
             <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
               You have {plural(banks, "bank account", "bank accounts")}

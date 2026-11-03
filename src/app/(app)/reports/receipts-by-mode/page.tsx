@@ -6,6 +6,7 @@ import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { AccountLink } from "../account-link";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const fmt = (n: number) => n.toFixed(2);
@@ -28,7 +29,7 @@ export default async function ReceiptsByModePage({ searchParams }: { searchParam
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Receipts &amp; Payments by Mode</h1>
+        <PageHeader title="Receipts &amp; Payments by Mode" className="!mb-0" />
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
       <p className="text-sm text-gray-500">

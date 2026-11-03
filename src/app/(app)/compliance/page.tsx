@@ -4,6 +4,7 @@ import { ComplianceDashboard } from "./compliance-dashboard";
 import { CatchupPrompt } from "./catchup-prompt";
 import { ExcisePermitAlert } from "./excise-permit-alert";
 import { ComplianceProfileNotice } from "./profile-notice";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function CompliancePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const denied = await guardView("compliance");
@@ -12,7 +13,7 @@ export default async function CompliancePage({ searchParams }: { searchParams: P
   const data = await getComplianceDashboard(typeof sp.fy === "string" ? sp.fy : null);
   return (
     <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance</h1>
+      <PageHeader title="Compliance" className="!mb-0" />
       <ComplianceProfileNotice />
       <ExcisePermitAlert />
       <CatchupPrompt />

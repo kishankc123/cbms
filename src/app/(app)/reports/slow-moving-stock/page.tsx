@@ -4,6 +4,7 @@ import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getReportDefaultAsOf } from "@/lib/fiscal";
 import { SlowMovingStockView } from "./slow-moving-stock-view";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const THRESHOLDS = [30, 60, 90, 180];
@@ -23,7 +24,7 @@ export default async function SlowMovingStockPage({ searchParams }: { searchPara
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Slow/Non-moving Stock</h1>
+        <PageHeader title="Slow/Non-moving Stock" className="!mb-0" />
       </div>
       <SlowMovingStockView rows={rows} asOf={asOf} thresholdDays={thresholdDays} fiscal={fiscal} />
     </div>

@@ -7,6 +7,7 @@ import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { LedgerView } from "./ledger-view";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -35,7 +36,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Promi
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Ledger</h1>
+        <PageHeader title="Ledger" className="!mb-0" />
       </div>
       <LedgerView
         accounts={list}

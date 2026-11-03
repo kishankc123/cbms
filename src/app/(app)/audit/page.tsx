@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { getAuditOverview } from "./actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 const ACTION_LABEL: Record<string, string> = {
   period_closed: "Period closed",
@@ -27,10 +28,7 @@ export default async function AuditOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Audit</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Exceptions, locked periods, rules and the audit trail — what keeps your records clean.</p>
-      </div>
+      <PageHeader title="Audit" description="Exceptions, locked periods, rules and the audit trail — what keeps your records clean." />
 
       {data.exceptionsFiscalYear && <p className="text-xs text-gray-500">Exceptions are counted for fiscal year {data.exceptionsFiscalYear}, the one in view in the sidebar.</p>}
       <div className="grid grid-cols-4 gap-4">

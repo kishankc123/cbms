@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances, type AccountRow } from "@/lib/ledger/chart";
 import { Balance, SystemBadge, TYPE_LABEL } from "../shared";
+import { PageHeader } from "@/components/ui/page-header";
 
 const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as const;
 
@@ -27,10 +28,7 @@ export default async function ChartStructurePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Chart of Accounts — Structure</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Every account and where it sits. A group&apos;s balance includes its sub-groups.</p>
-      </div>
+      <PageHeader title="Chart of Accounts — Structure" description="Every account and where it sits. A group&apos;s balance includes its sub-groups." />
 
       {TYPE_ORDER.map((type) => {
         rows.length = 0;

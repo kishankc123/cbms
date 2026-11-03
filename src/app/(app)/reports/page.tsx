@@ -1,6 +1,7 @@
 import { can, requireTenantSession } from "@/lib/session";
 import { REPORT_CATALOG } from "./report-catalog";
 import { ReportsLanding } from "./reports-landing";
+import { PageHeader } from "@/components/ui/page-header";
 
 // The module whose View each report needs, matching the check inside the report page itself. The landing page only
 // lists what the person can open (each report still checks for itself: this is a convenience, not the protection).
@@ -49,10 +50,7 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Reports</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Every report reads from the same posted General Ledger — nothing here recalculates on its own.</p>
-      </div>
+      <PageHeader title="Reports" description="Every report reads from the same posted General Ledger — nothing here recalculates on its own." />
       {categories.length > 0 ? <ReportsLanding categories={categories} /> : <p className="text-sm text-gray-500">None of the reports are included in your role.</p>}
     </div>
   );

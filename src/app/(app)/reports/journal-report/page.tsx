@@ -4,6 +4,7 @@ import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { JournalReportView } from "./journal-report-view";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const asStr = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
@@ -29,7 +30,7 @@ export default async function JournalReportPage({ searchParams }: { searchParams
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Journal Report</h1>
+        <PageHeader title="Journal Report" className="!mb-0" />
       </div>
       <JournalReportView entries={entries} truncated={truncated} from={from} to={to} fiscal={fiscal} sourceType={sourceType} search={search} />
     </div>

@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { getDepreciationPageData } from "../actions";
 import { DepreciationView } from "./depreciation-view";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function DepreciationPage() {
   const denied = await guardView("assets");
@@ -8,10 +9,7 @@ export default async function DepreciationPage() {
   const data = await getDepreciationPageData();
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Depreciation</h1>
-        <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Post a month&apos;s depreciation for every asset in one entry, and review earlier runs.</p>
-      </div>
+      <PageHeader title="Depreciation" description="Post a month&apos;s depreciation for every asset in one entry, and review earlier runs." />
       <DepreciationView data={data} />
     </div>
   );

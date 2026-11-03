@@ -7,6 +7,7 @@ import { peekNextVoucher } from "@/lib/ledger/voucher";
 import { JournalEntryForm } from "./journal-entry-form";
 import { reverseEntry } from "./actions";
 import { D } from "@/components/calendar/date-text";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function JournalPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
@@ -24,7 +25,7 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Journal Entries</h1>
+      <PageHeader title="Journal Entries" className="!mb-0" />
 
       <JournalEntryForm accounts={accountList} nextVoucher={nextVoucher} />
 

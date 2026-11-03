@@ -2,6 +2,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { ReadOnlyNotice } from "../ui";
 import { getOpeningSheet } from "./actions";
 import { OpeningBalancesForm } from "./opening-balances-form";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function OpeningBalancesPage() {
   const session = await requireTenantSession();
@@ -10,7 +11,7 @@ export default async function OpeningBalancesPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Opening balances</h1>
+      <PageHeader title="Opening balances" className="!mb-0" />
       <ReadOnlyNotice canEdit={canEdit} />
       <OpeningBalancesForm sheet={sheet} canSave={canEdit} />
     </div>

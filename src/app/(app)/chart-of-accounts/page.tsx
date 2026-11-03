@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { listAccountsWithBalances } from "@/lib/ledger/chart";
 import { AccountsTable } from "./accounts-table";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function ChartOfAccountsPage() {
   const denied = await guardView("chart_of_accounts");
@@ -11,7 +12,7 @@ export default async function ChartOfAccountsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Chart of Accounts — Groups</h1>
+      <PageHeader title="Chart of Accounts — Groups" className="!mb-0" />
 
       <AccountsTable accounts={list.map((a) => ({ id: a.id, code: a.code, name: a.name, category: a.category, subCategory: a.subCategory, tdsHeadKey: a.tdsHeadKey, isActive: a.isActive, total: a.total, system: a.system, contra: a.contra }))} />
     </div>

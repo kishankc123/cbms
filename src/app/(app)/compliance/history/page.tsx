@@ -2,6 +2,7 @@ import { guardView } from "@/components/page-guard";
 import { requireTenantSession } from "@/lib/session";
 import { loadComplianceHistory } from "@/lib/compliance/history";
 import { HistoryList } from "./history-list";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function ComplianceHistoryPage() {
   const denied = await guardView("compliance");
@@ -10,10 +11,7 @@ export default async function ComplianceHistoryPage() {
   const items = await loadComplianceHistory(session.tenantId);
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Compliance History</h1>
-        <p className="mt-0.5 text-sm text-gray-500">What changed in your compliance information, from what to what, by whom and when. Nothing here is ever deleted when a current value changes.</p>
-      </div>
+      <PageHeader title="Compliance History" description="What changed in your compliance information, from what to what, by whom and when. Nothing here is ever deleted when a current value changes." />
       <HistoryList items={items} />
     </div>
   );

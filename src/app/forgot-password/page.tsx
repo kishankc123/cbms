@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { requestPasswordReset } from "./actions";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4">
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Forgot password</h1>
+        <PageHeader title="Forgot password" className="!mb-0" />
 
         {!submitted ? (
           <form onSubmit={handleSubmit} className="space-y-4">

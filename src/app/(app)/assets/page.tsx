@@ -5,6 +5,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getAssetListData } from "./actions";
 import { AssetFilters } from "./asset-filters";
 import { STATUS_LABEL, STATUS_TONE, money } from "./shared";
+import { PageHeader } from "@/components/ui/page-header";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
@@ -48,10 +49,7 @@ export default async function AssetListPage({ searchParams }: { searchParams: Se
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Asset list</h1>
-          <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Every fixed asset, its cost, accumulated depreciation and net book value.</p>
-        </div>
+        <PageHeader title="Asset list" description="Every fixed asset, its cost, accumulated depreciation and net book value." />
         {canCreate && (
           <Link href="/assets/transactions" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
             + Add asset

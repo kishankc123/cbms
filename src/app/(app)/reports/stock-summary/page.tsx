@@ -2,6 +2,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { getInventoryValuation } from "@/lib/inventory/valuation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const fmt = (n: number) => n.toFixed(2);
 const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -16,7 +17,7 @@ export default async function StockSummaryPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Stock Summary</h1>
+        <PageHeader title="Stock Summary" className="!mb-0" />
       </div>
       <p className="text-sm text-gray-500">{active.length} active tracked item{active.length === 1 ? "" : "s"}, as of today</p>
 

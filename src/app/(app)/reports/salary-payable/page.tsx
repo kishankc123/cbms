@@ -6,6 +6,7 @@ import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { SalaryPayableView } from "./salary-payable-view";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -22,7 +23,7 @@ export default async function SalaryPayablePage({ searchParams }: { searchParams
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Salary Payable</h1>
+        <PageHeader title="Salary Payable" className="!mb-0" />
       </div>
       <ReportFilter from={to} to={to} fiscal={fiscal} asOfOnly />
       <p className="text-sm text-gray-500">

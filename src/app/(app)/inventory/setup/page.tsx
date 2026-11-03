@@ -6,6 +6,7 @@ import { getAllowNegativeStock } from "@/lib/inventory/stock";
 import { requireTenantSession } from "@/lib/session";
 import { ProductTabs } from "../product-tabs";
 import { SetupTabs } from "./setup-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function InventorySetupPage() {
   const denied = await guardView("inventory");
@@ -21,7 +22,7 @@ export default async function InventorySetupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Product</h1>
+      <PageHeader title="Product" className="!mb-0" />
       <ProductTabs />
       <SetupTabs units={units} groups={groups} categories={categories} allowNegativeStock={allowNegativeStock} />
     </div>

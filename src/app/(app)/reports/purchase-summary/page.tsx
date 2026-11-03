@@ -5,6 +5,7 @@ import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/l
 import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { BackButton } from "@/components/ui/back-button";
+import { PageHeader } from "@/components/ui/page-header";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 const fmt = (n: number) => n.toFixed(2);
@@ -25,7 +26,7 @@ export default async function PurchaseSummaryPage({ searchParams }: { searchPara
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <BackButton href="/reports" label="Back to Reports" />
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Purchase Summary</h1>
+        <PageHeader title="Purchase Summary" className="!mb-0" />
       </div>
       <ReportFilter from={from} to={to} fiscal={fiscal} />
 

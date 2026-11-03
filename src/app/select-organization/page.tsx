@@ -8,6 +8,7 @@ import { VerifyEmailNotice } from "./verify-email-notice";
 import { verificationEmailProblem } from "@/lib/email-log";
 import { AddNoticeBanner } from "@/components/add-notice-banner";
 import { listAddNotices } from "@/lib/org-members";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function SelectOrganizationPage() {
   // A token that no longer matches the account (disabled, password reset, old
@@ -20,7 +21,7 @@ export default async function SelectOrganizationPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md bg-white rounded-lg shadow p-8 space-y-5">
         <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Select an Organization</h1>
+          <PageHeader title="Select an Organization" className="!mb-0" />
           <p className="text-sm text-gray-500">Signed in as {user.email}</p>
         </div>
 

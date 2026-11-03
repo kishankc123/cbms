@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { roleLabel } from "@/lib/roles";
 import { loadInvitation, invitationHasAccount } from "@/lib/invitations";
 import { AcceptExisting, AcceptNew } from "./accept-forms";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function AcceptInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -44,7 +45,7 @@ export default async function AcceptInvitePage({ params }: { params: Promise<{ t
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4">
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Organization invitation</h1>
+        <PageHeader title="Organization invitation" className="!mb-0" />
         {body}
       </div>
     </div>
