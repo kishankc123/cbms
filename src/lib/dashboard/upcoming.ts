@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, expenses, purchaseBills, salesInvoices, vendors } from "@/db/schema";
+import { pendingCheques } from "@/lib/cheques/pending";
 import { emptyTotals, soonLimit, type BucketTotals, type DueBucket, type UpcomingItem, type UpcomingKind, type UpcomingParty } from "./upcoming-rules";
 
 export * from "./upcoming-rules";
@@ -126,7 +127,17 @@ export async function upcomingParties(tenantId: string, today: string, side: "co
     merged.set(a.key, have ? { ...have, count: have.count + a.count, outstanding: round2(have.outstanding + a.outstanding), earliestDue: have.earliestDue < a.earliestDue ? have.earliestDue : a.earliestDue } : a);
   }
   const sorted = [...merged.values()].sort((a, b) => (a.earliestDue < b.earliestDue ? -1 : a.earliestDue > b.earliestDue ? 1 : b.outstanding - a.outstanding));
-  return { parties: sorted.slice(0, limit), hasMore: sorted.length > limit };
+  const shown = sorted.slice(0, limit);
+  if (side === "going" && shown.some((p) => p.kind === "supplier")) {
+    // Cheques already written for a supplier cover their bills from the oldest; say how much of the balance is already promised.
+    const byVendor = new Map<string, number>();
+    for (const c of await pendingCheques(tenantId)) if (c.payeeKind === "supplier" && c.vendorId) byVendor.set(c.vendorId, round2((byVendor.get(c.vendorId) ?? 0) + c.amount));
+    for (const p of shown) {
+      const covered = p.kind === "supplier" && p.partyId ? byVendor.get(p.partyId) : undefined;
+      if (covered) p.chequeCovered = Math.min(covered, p.outstanding);
+    }
+  }
+  return { parties: shown, hasMore: sorted.length > limit };
 }
 
 /** One party's open documents, oldest due first, for when its row is opened. At most `limit` come back, and `hasMore` says if there were others. */

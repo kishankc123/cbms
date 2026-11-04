@@ -22,6 +22,7 @@ const NEEDS_ATTENTION_HREF: Record<string, string> = {
   draft_bills: "/purchases",
   negative_stock: "/inventory/items",
   overdue_receivables: "/reports/receivable-ageing",
+  cheques_due: "/payments/cheques",
 };
 
 const NEEDS_ATTENTION_TONE: Record<"critical" | "action", { tone: StatusTone; label: string }> = {

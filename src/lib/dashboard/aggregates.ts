@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines, salesInvoices, purchaseBills, items, inventorySettings, complianceObligations } from "@/db/schema";
 import { effectiveStatus, summarize as summarizeCompliance, type EffectiveStatus } from "@/lib/compliance/engine/status";
 import { cashAccountRows } from "./cash-flow";
+import { pendingCheques } from "@/lib/cheques/pending";
 
 /**
  * Purpose-built aggregate queries for the Dashboard — each one pushes SUM/GROUP BY into
@@ -125,7 +126,7 @@ export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): P
 // ------------------------------------------------------------ Needs Attention
 
 export type NeedsAttentionItem = {
-  id: "trial_balance" | "draft_invoices" | "draft_bills" | "negative_stock" | "overdue_receivables";
+  id: "trial_balance" | "draft_invoices" | "draft_bills" | "negative_stock" | "overdue_receivables" | "cheques_due";
   label: string;
   detail: string;
   severity: "critical" | "action";
@@ -209,6 +210,22 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
       severity: "action",
       count: overdueCount,
       amount: overdueAmount,
+    });
+  }
+
+  // Cheques that can be presented within a week are cash already promised, whatever the bank balance in the books says.
+  const week = new Date(Date.parse(asOfIso + "T00:00:00Z") + 7 * 86_400_000).toISOString().slice(0, 10);
+  const dueCheques = (await pendingCheques(tenantId)).filter((c) => c.chequeDate <= week);
+  if (dueCheques.length > 0) {
+    const amount = round2(dueCheques.reduce((s, c) => s + c.amount, 0));
+    const cash = (await cashAndBankBreakdown(tenantId, asOfIso)).total;
+    items_.push({
+      id: "cheques_due",
+      label: `${dueCheques.length} cheque${dueCheques.length === 1 ? "" : "s"} can be presented in the next 7 days`,
+      detail: amount > cash ? `More than the cash you hold today (${cash.toLocaleString()})` : "Cash in hand covers them today",
+      severity: amount > cash ? "critical" : "action",
+      count: dueCheques.length,
+      amount,
     });
   }
 

@@ -44,11 +44,16 @@ export async function getSupplierPreview(vendorId: string, amount: number) {
   return { owed: Math.round(bills.reduce((s, b) => s + b.outstanding, 0) * 100) / 100, ...settlementPreview(bills, Number.isFinite(amount) ? amount : 0) };
 }
 
-/** The cash forecast for the next 180 days, so the form can show what a cheque does to cash on its date. Computed here, once, when the form opens. */
-export async function getFundingOutlook() {
+/**
+ * The cash forecast for the next 180 days with the cheque being written already in it (not saved), so the form can show what the cheque
+ * does to cash on its date. The forecast already counts every cheque in the register and leaves out the bills they cover.
+ */
+export async function getFundingOutlook(draft: { payeeKind: "supplier" | "expense"; vendorId: string | null; expenseId: string | null; amount: number; chequeDate: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  const r = await loadForecast(session.tenantId, todayIso(), 180);
+  const amount = Number.isFinite(draft.amount) && draft.amount > 0 ? draft.amount : 0;
+  const extra = amount > 0 ? [{ id: "draft", chequeNumber: "new", payeeKind: draft.payeeKind, vendorId: draft.vendorId, expenseId: draft.expenseId, payeeName: "This cheque", amount, chequeDate: draft.chequeDate }] : [];
+  const r = await loadForecast(session.tenantId, todayIso(), 180, { extraCheques: extra });
   return { openingCash: r.forecast.openingCash, days: r.forecast.days, reserve: r.forecast.reserve };
 }
 

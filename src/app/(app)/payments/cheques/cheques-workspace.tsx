@@ -39,7 +39,6 @@ export function ChequesWorkspace({ cheques, today, canCreate, canEdit, canVoid }
   const [, start] = useTransition();
 
   const summary = useMemo(() => summarize(cheques, today), [cheques, today]);
-  const outstanding = useMemo(() => cheques.filter((c) => c.status === "issued"), [cheques]);
 
   const shown = cheques.filter((c) => {
     const v = viewOf(c, today);
@@ -182,7 +181,7 @@ export function ChequesWorkspace({ cheques, today, canCreate, canEdit, canVoid }
         </tbody>
       </DataTable>
 
-      {dialog?.kind === "issue" && <IssueChequeModal outstanding={outstanding} replacing={dialog.replacing ?? null} today={today} onClose={() => setDialog(null)} onSaved={() => done("Cheque written into the register")} />}
+      {dialog?.kind === "issue" && <IssueChequeModal replacing={dialog.replacing ?? null} today={today} onClose={() => setDialog(null)} onSaved={() => done("Cheque written into the register")} />}
       {dialog?.kind === "clear" && <ClearChequeModal cheque={dialog.cheque} today={today} onClose={() => setDialog(null)} onDone={() => done("Cheque marked as cleared and the payment recorded")} />}
       {dialog?.kind === "close" && <CloseChequeModal cheque={dialog.cheque} how={dialog.how} onClose={() => setDialog(null)} onDone={() => done(dialog.how === "stopped" ? "Cheque stopped" : "Cheque marked as bounced")} />}
     </div>

@@ -52,6 +52,7 @@ export function PartyRows({ parties, today, side, bucket, empty }: { parties: Up
                     <p className="truncate text-[13px] text-ink">{p.name}</p>
                     <p className="text-xs text-ink-2">
                       {p.count} {p.count === 1 ? "document" : "documents"}
+                      {p.chequeCovered ? <span className="text-accent-text"> · {money(p.chequeCovered)} covered by cheques</span> : null}
                     </p>
                   </div>
                 </div>

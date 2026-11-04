@@ -8,7 +8,7 @@ import { Field, Input, Select, controlClass } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { addDays, type ForecastDay } from "@/lib/dashboard/forecast-rules";
-import { positionOf, rollForward, safestDate, type EventDraft, type Flow } from "@/lib/dashboard/planning-rules";
+import { positionOf, rollForward, safestDate, type EventDraft } from "@/lib/dashboard/planning-rules";
 import type { ChequeListRow } from "@/lib/cheques/cheques";
 import type { ChequeInput, PayeeKind } from "@/lib/cheques/cheque-rules";
 import { getChequeFormData, getFundingOutlook, getNextChequeNumber, getSupplierPreview, issueChequeAction } from "./actions";
@@ -21,9 +21,9 @@ type Preview = Awaited<ReturnType<typeof getSupplierPreview>>;
 
 // Writing a cheque into the register. Beside the form, the forecast shows what the cheque does to cash on the day it can be presented,
 // so a cheque that would not be covered is seen before it is handed over.
-export function IssueChequeModal({ outstanding, replacing, today, onClose, onSaved }: { outstanding: ChequeListRow[]; replacing: ChequeListRow | null; today: string; onClose: () => void; onSaved: () => void }) {
+export function IssueChequeModal({ replacing, today, onClose, onSaved }: { replacing: ChequeListRow | null; today: string; onClose: () => void; onSaved: () => void }) {
   const [data, setData] = useState<FormData | null>(null);
-  const [outlook, setOutlook] = useState<Outlook | null>(null);
+  const [outlook, setOutlook] = useState<{ key: string; data: Outlook } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [bankAccountId, setBankAccountId] = useState(replacing?.bankAccountId ?? "");
   const [chequeNumber, setChequeNumber] = useState("");
@@ -40,11 +40,10 @@ export function IssueChequeModal({ outstanding, replacing, today, onClose, onSav
 
   useEffect(() => {
     let live = true;
-    Promise.all([getChequeFormData(), getFundingOutlook()])
-      .then(([d, o]) => {
+    getChequeFormData()
+      .then((d) => {
         if (!live) return;
         setData(d);
-        setOutlook(o);
         setBankAccountId((cur) => cur || d.banks[0]?.id || "");
         if (!replacing) setChequeNumber(d.firstNumber);
       })
@@ -83,21 +82,37 @@ export function IssueChequeModal({ outstanding, replacing, today, onClose, onSav
 
   const expense = data?.expenses.find((e) => e.id === expenseId) ?? null;
 
-  // Cash on the day: the forecast, plus every cheque already waiting to clear (a cheque already past its date is counted from today).
+  // The forecast with this cheque in it, asked for a moment after the payee, amount or date stops changing (it is a full forecast, so not on every key).
+  const payeeRef = payeeKind === "supplier" ? vendorId : expenseId;
+  const outlookKey = payeeRef && amountNum > 0 && chequeDate ? `${payeeKind}|${payeeRef}|${amountNum}|${chequeDate}` : "";
+  useEffect(() => {
+    if (!outlookKey) return;
+    let live = true;
+    const t = setTimeout(() => {
+      getFundingOutlook({ payeeKind, vendorId: payeeKind === "supplier" ? vendorId : null, expenseId: payeeKind === "expense" ? expenseId : null, amount: amountNum, chequeDate })
+        .then((o) => live && setOutlook({ key: outlookKey, data: o }))
+        .catch(() => undefined);
+    }, 700);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outlookKey]);
+
+  // Cash on the day, from the forecast that already includes this cheque. Moving the cheque to another day only shifts that one amount.
   const funding = useMemo(() => {
-    if (!outlook || !(amountNum > 0)) return null;
-    const flows: Flow[] = outstanding.filter((c) => c.id !== replacing?.id).map((c) => ({ date: c.chequeDate < today ? today : c.chequeDate, amount: -c.amount }));
+    if (!outlook || outlook.key !== outlookKey) return null;
+    const { openingCash, days, reserve: res } = outlook.data;
     const day = chequeDate < today ? today : chequeDate;
-    const draft = (date: string): EventDraft => ({ estimate: amountNum, high: null, plannedDate: date, pattern: "full", advancePct: null, balanceDays: null, instalments: null, intervalDays: null, creditDays: null, salesEffect: "none", salesEffectMonthly: null, salesEffectDays: null });
-    const withoutDays: ForecastDay[] = rollForward(outlook.openingCash, outlook.days, flows);
-    const withDays = rollForward(outlook.openingCash, outlook.days, [...flows, { date: day, amount: -amountNum }]);
-    const at = (days: ForecastDay[]) => days.find((d) => d.date === day)?.balance ?? null;
-    const before = at(withoutDays);
-    const after = at(withDays);
-    const position = positionOf(withDays, outlook.reserve);
-    const safest = safestDate(outlook.openingCash, outlook.days, flows, draft(day), { earliest: day, latest: addDays(day, 30) }, outlook.reserve);
-    return { day, before, after, position, safest, within: before !== null };
-  }, [outlook, outstanding, replacing?.id, amountNum, chequeDate, today]);
+    const after = days.find((d) => d.date === day)?.balance ?? null;
+    if (after === null) return { within: false as const };
+    const position = positionOf(days, res);
+    const without: ForecastDay[] = rollForward(openingCash, days, [{ date: day, amount: amountNum }]);
+    const draft: EventDraft = { estimate: amountNum, high: null, plannedDate: day, pattern: "full", advancePct: null, balanceDays: null, instalments: null, intervalDays: null, creditDays: null, salesEffect: "none", salesEffectMonthly: null, salesEffectDays: null };
+    const safest = safestDate(openingCash, without, [], draft, { earliest: day, latest: addDays(day, 30) }, res);
+    return { within: true as const, day, after, position, safest };
+  }, [outlook, outlookKey, chequeDate, today, amountNum]);
 
   function save() {
     setError(null);
@@ -109,7 +124,7 @@ export function IssueChequeModal({ outstanding, replacing, today, onClose, onSav
     });
   }
 
-  const reserve = outlook?.reserve ?? 0;
+  const reserve = outlook?.data.reserve ?? 0;
   const postDated = chequeDate > today;
 
   return (
@@ -240,23 +255,19 @@ export function IssueChequeModal({ outstanding, replacing, today, onClose, onSav
               <p className="mb-1.5 flex items-center gap-2 font-semibold text-ink">
                 Cash on the day <StatusPill tone="pending">Forecast</StatusPill>
               </p>
-              {!outlook ? (
-                <p className="text-xs text-ink-2">Loading the forecast…</p>
+              {!outlookKey ? (
+                <p className="text-xs text-ink-2">Choose who the cheque is for and enter the amount to see what it does to your cash.</p>
               ) : !funding ? (
-                <p className="text-xs text-ink-2">Enter the amount to see what this cheque does to your cash.</p>
+                <p className="text-xs text-ink-2">Working out your cash on that day…</p>
               ) : !funding.within ? (
                 <p className="text-xs text-ink-2">That date is more than 180 days away, beyond the forecast.</p>
               ) : (
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between gap-2">
                     <span className="text-ink-2">
-                      Expected on <D value={funding.day} style="short" />, before this cheque
+                      Expected on <D value={funding.day} style="short" />, after this cheque
                     </span>
-                    <span className="tnum text-ink">{money(funding.before ?? 0)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-ink-2">After this cheque</span>
-                    <span className={`tnum font-medium ${(funding.after ?? 0) < 0 ? "text-[var(--danger-text)]" : "text-ink"}`}>{money(funding.after ?? 0)}</span>
+                    <span className={`tnum font-medium ${funding.after < 0 ? "text-[var(--danger-text)]" : "text-ink"}`}>{money(funding.after)}</span>
                   </div>
                   {reserve > 0 && (
                     <div className="flex justify-between gap-2">

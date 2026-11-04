@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, like, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, like, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accountRoles,
@@ -19,6 +19,7 @@ import {
 } from "@/db/schema";
 import { getAccountByRole, taxPayableRole } from "@/lib/compliance/tax-accounts";
 import { salaryPayable } from "@/lib/payroll/salary-payable";
+import { pendingCheques, type PendingCheque } from "@/lib/cheques/pending";
 import { cashAccountRows, cashBalanceAsOf } from "./cash-flow";
 import {
   FALLBACK_COLLECTION_DAYS,
@@ -105,17 +106,33 @@ export type ForecastResult = {
     overdueDays: number;
   };
   settings: PlanningSettings;
+  /** Cheques written and not yet cleared, and the ones the forecast expects the account cannot cover on the day. */
+  cheques: { count: number; amount: number; atRisk: ChequeRisk[] };
+};
+
+export type ChequeRisk = { id: string; chequeNumber: string; payee: string; amount: number; date: string; balance: number };
+
+export type ForecastOptions = {
+  /** A cheque that is still being written, tried as if it were already in the register (not saved anywhere). */
+  extraCheques?: PendingCheque[];
 };
 
 /**
  * One forecast for the whole page: a handful of queries (cash, open invoices, bills, expenses, scheduled recurring costs,
  * payroll, taxes, a 6-month payment history), all shared by every number shown, so the figures can never disagree.
  */
-export async function loadForecast(tenantId: string, today: string, horizonDays: number): Promise<ForecastResult> {
+export async function loadForecast(tenantId: string, today: string, horizonDays: number, options: ForecastOptions = {}): Promise<ForecastResult> {
   const horizonEnd = addDays(today, horizonDays);
   const settings = await getPlanningSettings(tenantId);
 
-  const [cashAccounts, history] = await Promise.all([cashAccountRows(tenantId), settledSummaries(tenantId, today)]);
+  const [cashAccounts, history, savedCheques] = await Promise.all([cashAccountRows(tenantId), settledSummaries(tenantId, today), pendingCheques(tenantId)]);
+  const cheques = [...savedCheques, ...(options.extraCheques ?? [])];
+  // A bill or expense that a cheque already covers is not forecast on its own due date: the cheque is the cash going out, on its date.
+  const coveredVendors = [...new Set(cheques.filter((c) => c.payeeKind === "supplier" && c.vendorId).map((c) => c.vendorId!))];
+  const coveredExpenses = [...new Set(cheques.filter((c) => c.payeeKind === "expense" && c.expenseId).map((c) => c.expenseId!))];
+  const idList = (ids: string[]) => sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  const billNotCovered = coveredVendors.length ? sql`(${purchaseBills.vendorId} is null or ${purchaseBills.vendorId} not in (${idList(coveredVendors)}))` : sql`true`;
+  const expenseNotCovered = coveredExpenses.length ? sql`${expenses.id} not in (${idList(coveredExpenses)})` : sql`true`;
   const openingCash = await cashBalanceAsOf(tenantId, cashAccounts.map((a) => a.id), today);
 
   const learned = usualDaysToPay(history);
@@ -137,17 +154,17 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   const expOutstanding = sql<string>`(${expenses.amountPayable} - ${expenses.amountPaid})`;
   const expAgreed = sql<string>`coalesce(${expenses.dueDate}, ${expenses.expenseDate})`;
 
-  const [invoiceAgg, billAgg, expenseAgg, invoiceRows, billRows, expenseRows, instanceRows, salaryRows, lastRun, taxRows, recurringDefs, stockRow, taxAccounts] = await Promise.all([
+  const [invoiceAgg, billAgg, expenseAgg, invoiceRows, billRows, expenseRows, coveredBills, coveredExpenseRows, instanceRows, salaryRows, lastRun, taxRows, recurringDefs, stockRow, taxAccounts] = await Promise.all([
     db
       .select({ total: sql<string>`coalesce(sum(${invOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${invOutstanding}) filter (where ${invAgreed} < ${nearFrom}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${invAgreed} < ${nearFrom}::date)` })
       .from(salesInvoices)
       .where(openInvoice(tenantId)),
     db
-      .select({ total: sql<string>`coalesce(sum(${billOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${billOutstanding}) filter (where ${billAgreed} < ${today}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${billAgreed} < ${today}::date)` })
+      .select({ total: sql<string>`coalesce(sum(${billOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${billOutstanding}) filter (where ${billAgreed} < ${today}::date and ${billNotCovered}), 0)`, oldCount: sql<string>`count(*) filter (where ${billAgreed} < ${today}::date and ${billNotCovered})` })
       .from(purchaseBills)
       .where(openBill(tenantId)),
     db
-      .select({ total: sql<string>`coalesce(sum(${expOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${expOutstanding}) filter (where ${expAgreed} < ${today}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${expAgreed} < ${today}::date)` })
+      .select({ total: sql<string>`coalesce(sum(${expOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${expOutstanding}) filter (where ${expAgreed} < ${today}::date and ${expenseNotCovered}), 0)`, oldCount: sql<string>`count(*) filter (where ${expAgreed} < ${today}::date and ${expenseNotCovered})` })
       .from(expenses)
       .where(openExpense(tenantId)),
     db
@@ -159,12 +176,27 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
       .select({ id: purchaseBills.id, vendor: vendors.name, docDate: purchaseBills.billDate, dueDate: purchaseBills.dueDate, outstanding: billOutstanding })
       .from(purchaseBills)
       .leftJoin(vendors, eq(vendors.id, purchaseBills.vendorId))
-      .where(and(openBill(tenantId), gte(billAgreed, today), lte(billAgreed, horizonEnd))),
+      .where(and(openBill(tenantId), gte(billAgreed, today), lte(billAgreed, horizonEnd), billNotCovered)),
     db
       .select({ id: expenses.id, vendor: vendors.name, payee: expenses.payeeName, docDate: expenses.expenseDate, dueDate: expenses.dueDate, outstanding: expOutstanding })
       .from(expenses)
       .leftJoin(vendors, eq(vendors.id, expenses.vendorId))
-      .where(and(openExpense(tenantId), gte(expAgreed, today), lte(expAgreed, horizonEnd))),
+      .where(and(openExpense(tenantId), gte(expAgreed, today), lte(expAgreed, horizonEnd), expenseNotCovered)),
+    coveredVendors.length
+      ? db
+          .select({ id: purchaseBills.id, vendorId: purchaseBills.vendorId, vendor: vendors.name, docDate: purchaseBills.billDate, dueDate: purchaseBills.dueDate, outstanding: billOutstanding })
+          .from(purchaseBills)
+          .leftJoin(vendors, eq(vendors.id, purchaseBills.vendorId))
+          .where(and(openBill(tenantId), sql`${purchaseBills.vendorId} in (${idList(coveredVendors)})`))
+          .orderBy(asc(purchaseBills.billDate), asc(purchaseBills.billNumber))
+      : Promise.resolve([]),
+    coveredExpenses.length
+      ? db
+          .select({ id: expenses.id, vendor: vendors.name, payee: expenses.payeeName, docDate: expenses.expenseDate, dueDate: expenses.dueDate, outstanding: expOutstanding })
+          .from(expenses)
+          .leftJoin(vendors, eq(vendors.id, expenses.vendorId))
+          .where(and(openExpense(tenantId), sql`${expenses.id} in (${idList(coveredExpenses)})`))
+      : Promise.resolve([]),
     db
       .select({ id: recurringExpenseInstances.id, name: recurringExpenses.expenseName, date: sql<string>`coalesce(${recurringExpenseInstances.dueDate}, ${recurringExpenseInstances.expenseDate})`, amount: recurringExpenseInstances.expectedAmount })
       .from(recurringExpenseInstances)
@@ -206,6 +238,30 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   for (const r of expenseRows) {
     const { date, basis } = paymentDate({ dueDate: r.dueDate, docDate: r.docDate, today });
     events.push({ id: `exp-${r.id}`, category: "expenses", side: "out", date, amount: round2(num(r.outstanding)), party: r.vendor ?? r.payee ?? "Expense", basis, certainty: basis === "due_date" ? "confirmed" : "expected" });
+  }
+  // What a cheque does not cover of a bill or expense is still forecast as before; what it covers is replaced by the cheque itself.
+  const chequeLeft = new Map<string, number>();
+  for (const c of cheques) if (c.payeeKind === "supplier" && c.vendorId) chequeLeft.set(c.vendorId, round2((chequeLeft.get(c.vendorId) ?? 0) + c.amount));
+  for (const r of coveredBills) {
+    const left = chequeLeft.get(r.vendorId ?? "") ?? 0;
+    const take = Math.min(left, round2(num(r.outstanding)));
+    chequeLeft.set(r.vendorId ?? "", round2(left - take));
+    const remaining = round2(num(r.outstanding) - take);
+    if (remaining <= 0.005) continue;
+    const { date, basis } = paymentDate({ dueDate: r.dueDate, docDate: r.docDate, today });
+    events.push({ id: `bill-${r.id}`, category: "supplier_payments", side: "out", date, amount: remaining, party: r.vendor ?? "No supplier", basis, certainty: basis === "due_date" ? "confirmed" : "expected" });
+  }
+  const expenseCheque = new Map<string, number>();
+  for (const c of cheques) if (c.payeeKind === "expense" && c.expenseId) expenseCheque.set(c.expenseId, round2((expenseCheque.get(c.expenseId) ?? 0) + c.amount));
+  for (const r of coveredExpenseRows) {
+    const remaining = round2(num(r.outstanding) - (expenseCheque.get(r.id) ?? 0));
+    if (remaining <= 0.005) continue;
+    const { date, basis } = paymentDate({ dueDate: r.dueDate, docDate: r.docDate, today });
+    events.push({ id: `exp-${r.id}`, category: "expenses", side: "out", date, amount: remaining, party: r.vendor ?? r.payee ?? "Expense", basis, certainty: basis === "due_date" ? "confirmed" : "expected" });
+  }
+  // The cheques themselves go out on the date written on them (a cheque already past its date is presented now).
+  for (const c of cheques) {
+    events.push({ id: `chq-${c.id}`, category: "cheques", side: "out", date: c.chequeDate < today ? today : c.chequeDate, amount: round2(c.amount), party: `${c.payeeName} (cheque ${c.chequeNumber})`, basis: "due_date", certainty: "confirmed" });
   }
   for (const r of instanceRows) {
     events.push({ id: `rec-${r.id}`, category: "recurring", side: "out", date: r.date, amount: round2(num(r.amount)), party: r.name, basis: "scheduled", certainty: "expected" });
@@ -278,7 +334,17 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   const notYetOwed = futurePayroll.reduce((sum, e) => sum + e.amount, 0) + instanceRows.reduce((sum, r) => sum + num(r.amount), 0);
   const projectedWorkingCapital = round2(workingCapital.workingCapital - notYetOwed);
 
+  // A cheque is at risk when the forecast has the account below zero on the day it can be presented.
+  const balanceOn = new Map(forecast.days.map((d) => [d.date, d.balance]));
+  const atRisk: ChequeRisk[] = [];
+  for (const c of savedCheques) {
+    const date = c.chequeDate < today ? today : c.chequeDate;
+    const balance = balanceOn.get(date);
+    if (balance !== undefined && balance < 0) atRisk.push({ id: c.id, chequeNumber: c.chequeNumber, payee: c.payeeName, amount: c.amount, date, balance });
+  }
+
   return {
+    cheques: { count: savedCheques.length, amount: round2(savedCheques.reduce((s, c) => s + c.amount, 0)), atRisk },
     forecast,
     workingCapital,
     projectedWorkingCapital,
