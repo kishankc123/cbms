@@ -31,10 +31,10 @@ export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { 
           </p>
         )}
       </div>
-      <div className="mb-4 flex items-center justify-between gap-3 border-b border-line">
+      <div className="mb-4 flex flex-col gap-2 border-b border-line sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <DashboardTabs />
         {from && to && (
-          <div className="pb-1">
+          <div className="order-first sm:order-none sm:pb-1">
             <DashboardPeriod from={from} to={to} fiscal={fiscal ?? null} />
           </div>
         )}

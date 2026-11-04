@@ -1,75 +1,15 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { guardView } from "@/components/page-guard";
 import { requireTenantSession, requireUserSession } from "@/lib/session";
 import { validateADDate, todayIso } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
-import { D } from "@/components/calendar/date-text";
 import { StatStrip } from "@/components/ui/stat-strip";
-import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
-import { BUCKETS, bucketOf, dueLabel, isBucket, totalOf, upcomingParties, upcomingSummary, type DueBucket, type UpcomingParty } from "@/lib/dashboard/upcoming";
+import { BUCKETS, isBucket, totalOf, upcomingParties, upcomingSummary, type DueBucket } from "@/lib/dashboard/upcoming";
 import { DashboardHeader } from "../dashboard-header";
 import { money } from "../cash-sections";
+import { PartyRows } from "./party-rows";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
-
-const BUCKET_TONE: Record<DueBucket, StatusTone> = { overdue: "critical", today: "action", soon: "pending", scheduled: "neutral" };
-
-// A party's ledger is where its balance is dealt with: the customer's or supplier's statement. A payee written on an expense has no ledger,
-// so its documents link to the Expenses list.
-const ledgerHref = (p: UpcomingParty) => (p.kind === "customer" ? `/reports/customer-statement?customer=${p.partyId}` : p.kind === "supplier" ? `/reports/supplier-statement?vendor=${p.partyId}` : "/expenses");
-const DOC_LABEL = { receivable: "Invoice", bill: "Bill", expense: "Expense" } as const;
-
-function PartyRows({ parties, today, empty }: { parties: UpcomingParty[]; today: string; empty: string }) {
-  if (parties.length === 0) return <p className="border-y border-line py-4 text-[13px] text-ink-2">{empty}</p>;
-  return (
-    <ul className="divide-y divide-[var(--border)] border-y border-line">
-      {parties.map((p) => {
-        const b = bucketOf(p.earliestDue, today);
-        return (
-          <li key={p.key}>
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 [&::-webkit-details-marker]:hidden">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <ChevronRight size={14} className="shrink-0 text-ink-2 transition-transform group-open:rotate-90" />
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] text-ink">{p.name}</p>
-                    <p className="text-xs text-ink-2">
-                      {p.count} {p.count === 1 ? "document" : "documents"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="tnum text-[13px] font-medium text-ink">{money(p.outstanding)}</span>
-                  <StatusPill tone={BUCKET_TONE[b]}>{dueLabel(p.earliestDue, today)}</StatusPill>
-                </div>
-              </summary>
-              <div className="mb-2 ml-5 rounded-md bg-surface-2 px-3 py-2">
-                <ul className="divide-y divide-[var(--border)]">
-                  {p.items.map((i) => (
-                    <li key={`${i.kind}-${i.id}`} className="flex items-center justify-between gap-3 py-1.5 text-xs">
-                      <span className="min-w-0 truncate text-ink-2">
-                        {DOC_LABEL[i.kind]} {i.reference} · {i.hasDueDate ? "due" : "dated"} <D value={i.dueDate} style="short" />
-                        {!i.hasDueDate && " (no due date set)"}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="tnum text-ink">{money(i.outstanding)}</span>
-                        <span className="w-24 text-right text-ink-2">{dueLabel(i.dueDate, today)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href={ledgerHref(p)} className="mt-1.5 inline-block text-xs font-medium text-accent-text hover:underline">
-                  {p.kind === "payee" ? "Open Expenses →" : "Open ledger →"}
-                </Link>
-              </div>
-            </details>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
 
 export default async function UpcomingTab({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const denied = await guardView("chart_of_accounts");
@@ -137,7 +77,7 @@ export default async function UpcomingTab({ searchParams }: { searchParams: Prom
               {coming.parties.length}{coming.hasMore ? "+" : ""} {coming.parties.length === 1 && !coming.hasMore ? "customer" : "customers"} · <span className="tnum font-medium text-ink">{money(shown("coming").amount)}</span>
             </span>
           </div>
-          <PartyRows parties={coming.parties} today={today} empty="Nothing waiting to be collected." />
+          <PartyRows parties={coming.parties} today={today} side="coming" bucket={show} empty="Nothing waiting to be collected." />
           {coming.hasMore && <p className="mt-1.5 text-xs text-ink-2">Showing the 30 most overdue. The Receivable Ageing report lists everyone.</p>}
         </section>
         <section>
@@ -147,7 +87,7 @@ export default async function UpcomingTab({ searchParams }: { searchParams: Prom
               {going.parties.length}{going.hasMore ? "+" : ""} {going.parties.length === 1 && !going.hasMore ? "party" : "parties"} · <span className="tnum font-medium text-ink">{money(shown("going").amount)}</span>
             </span>
           </div>
-          <PartyRows parties={going.parties} today={today} empty="Nothing waiting to be paid." />
+          <PartyRows parties={going.parties} today={today} side="going" bucket={show} empty="Nothing waiting to be paid." />
           {going.hasMore && <p className="mt-1.5 text-xs text-ink-2">Showing the 30 most overdue. The Payable Ageing report lists everything.</p>}
         </section>
       </div>

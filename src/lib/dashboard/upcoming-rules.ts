@@ -66,3 +66,15 @@ export function dueLabel(dueDate: string, today: string): string {
   if (d === -1) return "1 day overdue";
   return d < 0 ? `${-d} days overdue` : `In ${d} days`;
 }
+
+export type UpcomingParty = {
+  key: string;
+  /** Whose ledger to open: a customer, a supplier, or only a name written on an expense (no ledger). */
+  kind: "customer" | "supplier" | "payee";
+  partyId: string | null;
+  name: string;
+  count: number;
+  outstanding: number;
+  /** The nearest (or most overdue) due date among this party's open documents. */
+  earliestDue: string;
+};

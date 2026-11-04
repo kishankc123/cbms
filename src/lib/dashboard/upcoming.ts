@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, expenses, purchaseBills, salesInvoices, vendors } from "@/db/schema";
-import { emptyTotals, soonLimit, type BucketTotals, type DueBucket, type UpcomingItem, type UpcomingKind } from "./upcoming-rules";
+import { emptyTotals, soonLimit, type BucketTotals, type DueBucket, type UpcomingItem, type UpcomingKind, type UpcomingParty } from "./upcoming-rules";
 
 export * from "./upcoming-rules";
 
@@ -75,24 +75,11 @@ export async function upcomingSummary(tenantId: string, today: string): Promise<
   return { coming, going: merge(goingBills, goingExpenses), goingBills, goingExpenses };
 }
 
-export type UpcomingParty = {
-  key: string;
-  /** Whose ledger to open: a customer, a supplier, or only a name written on an expense (no ledger). */
-  kind: "customer" | "supplier" | "payee";
-  partyId: string | null;
-  name: string;
-  count: number;
-  outstanding: number;
-  /** The nearest (or most overdue) due date among this party's open documents. */
-  earliestDue: string;
-  items: UpcomingItem[];
-};
-
-type PartyAgg = Omit<UpcomingParty, "items">;
+type PartyAgg = UpcomingParty;
 
 /**
- * One row per customer, supplier or payee with what they owe or are owed, most overdue first, and their documents for the
- * expanded view. Grouping happens in the database, and only the documents of the parties shown are loaded.
+ * One row per customer, supplier or payee with what they owe or are owed, most overdue first. Grouping happens in the database;
+ * a party's own documents are only loaded when its row is opened (see upcomingDocuments).
  */
 export async function upcomingParties(tenantId: string, today: string, side: "coming" | "going", bucket: DueBucket | null, limit = 30): Promise<{ parties: UpcomingParty[]; hasMore: boolean }> {
   const soon = soonLimit(today);
@@ -139,37 +126,48 @@ export async function upcomingParties(tenantId: string, today: string, side: "co
     merged.set(a.key, have ? { ...have, count: have.count + a.count, outstanding: round2(have.outstanding + a.outstanding), earliestDue: have.earliestDue < a.earliestDue ? have.earliestDue : a.earliestDue } : a);
   }
   const sorted = [...merged.values()].sort((a, b) => (a.earliestDue < b.earliestDue ? -1 : a.earliestDue > b.earliestDue ? 1 : b.outstanding - a.outstanding));
-  const shown = sorted.slice(0, limit);
-  const byKey = new Map(shown.map((p) => [p.key, { ...p, items: [] as UpcomingItem[] }]));
+  return { parties: sorted.slice(0, limit), hasMore: sorted.length > limit };
+}
 
-  // Documents, only for the parties on screen.
-  const ids = (kind: "customer" | "supplier") => shown.filter((p) => p.kind === kind && p.partyId).map((p) => p.partyId!);
-  const payees = shown.filter((p) => p.kind === "payee").map((p) => p.name);
-  const push = (key: string, item: UpcomingItem) => byKey.get(key)?.items.push(item);
+/** One party's open documents, oldest due first, for when its row is opened. At most `limit` come back, and `hasMore` says if there were others. */
+export async function upcomingDocuments(tenantId: string, today: string, side: "coming" | "going", partyKey: string, bucket: DueBucket | null, limit = 50): Promise<{ items: UpcomingItem[]; hasMore: boolean }> {
+  const soon = soonLimit(today);
+  const filter = (due: SQL<string>): SQL | undefined => (bucket ? sql`${bucketSql(due, today, soon)} = ${bucket}` : undefined);
+  const s = sources(tenantId);
+  const [prefix, ...rest] = partyKey.split(":");
+  const ref = rest.join(":");
+  const take = limit + 1;
 
-  if (side === "coming" && ids("customer").length) {
+  const items: UpcomingItem[] = [];
+  if (side === "coming" && prefix === "c") {
     const rows = await db
-      .select({ id: salesInvoices.id, reference: salesInvoices.invoiceNumber, partyId: salesInvoices.customerId, due: s.receivable.due, hasDue: s.receivable.hasDue, outstanding: s.receivable.outstanding })
+      .select({ id: salesInvoices.id, reference: salesInvoices.invoiceNumber, due: s.receivable.due, hasDue: s.receivable.hasDue, outstanding: s.receivable.outstanding })
       .from(salesInvoices)
-      .where(and(s.receivable.where, filter(s.receivable.due), inArray(salesInvoices.customerId, ids("customer"))))
-      .orderBy(asc(s.receivable.due));
-    for (const r of rows) push(`c:${r.partyId}`, { kind: "receivable", id: r.id, reference: r.reference, partyId: r.partyId, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
-  }
-  if (side === "going") {
-    const supplierIds = ids("supplier");
+      .where(and(s.receivable.where, filter(s.receivable.due), eq(salesInvoices.customerId, ref)))
+      .orderBy(asc(s.receivable.due))
+      .limit(take);
+    for (const r of rows) items.push({ kind: "receivable", id: r.id, reference: r.reference, partyId: ref, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
+  } else if (side === "going" && (prefix === "v" || prefix === "p")) {
     const [bills, exps] = await Promise.all([
       db
-        .select({ id: purchaseBills.id, reference: purchaseBills.billNumber, partyId: purchaseBills.vendorId, due: s.bill.due, hasDue: s.bill.hasDue, outstanding: s.bill.outstanding })
+        .select({ id: purchaseBills.id, reference: purchaseBills.billNumber, due: s.bill.due, hasDue: s.bill.hasDue, outstanding: s.bill.outstanding })
         .from(purchaseBills)
-        .where(and(s.bill.where, filter(s.bill.due), supplierIds.length ? inArray(purchaseBills.vendorId, supplierIds) : sql`${purchaseBills.vendorId} is null`)),
-      db
-        .select({ id: expenses.id, reference: expenses.expenseNumber, partyId: expenses.vendorId, payee: expenses.payeeName, due: s.expense.due, hasDue: s.expense.hasDue, outstanding: s.expense.outstanding })
-        .from(expenses)
-        .where(and(s.expense.where, filter(s.expense.due), or(supplierIds.length ? inArray(expenses.vendorId, supplierIds) : undefined, payees.length ? and(isNull(expenses.vendorId), inArray(sql<string>`coalesce(${expenses.payeeName}, 'Other expenses')`, payees)) : undefined))),
+        .where(and(s.bill.where, filter(s.bill.due), prefix === "v" ? eq(purchaseBills.vendorId, ref) : isNull(purchaseBills.vendorId)))
+        .orderBy(asc(s.bill.due))
+        .limit(take),
+      prefix === "v" || ref !== "No supplier"
+        ? db
+            .select({ id: expenses.id, reference: expenses.expenseNumber, due: s.expense.due, hasDue: s.expense.hasDue, outstanding: s.expense.outstanding })
+            .from(expenses)
+            .where(and(s.expense.where, filter(s.expense.due), prefix === "v" ? eq(expenses.vendorId, ref) : and(isNull(expenses.vendorId), sql`coalesce(${expenses.payeeName}, 'Other expenses') = ${ref}`)))
+            .orderBy(asc(s.expense.due))
+            .limit(take)
+        : Promise.resolve([]),
     ]);
-    for (const r of bills) push(r.partyId ? `v:${r.partyId}` : "p:No supplier", { kind: "bill", id: r.id, reference: r.reference, partyId: r.partyId, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
-    for (const r of exps) push(r.partyId ? `v:${r.partyId}` : `p:${r.payee ?? "Other expenses"}`, { kind: "expense", id: r.id, reference: r.reference, partyId: r.partyId, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
+    const partyId = prefix === "v" ? ref : null;
+    for (const r of bills) items.push({ kind: "bill", id: r.id, reference: r.reference, partyId, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
+    for (const r of exps) items.push({ kind: "expense", id: r.id, reference: r.reference, partyId, party: "", dueDate: r.due, hasDueDate: r.hasDue, outstanding: round2(Number(r.outstanding)) });
   }
-  for (const p of byKey.values()) p.items.sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
-  return { parties: shown.map((p) => byKey.get(p.key)!), hasMore: sorted.length > limit };
+  items.sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
+  return { items: items.slice(0, limit), hasMore: items.length > limit };
 }

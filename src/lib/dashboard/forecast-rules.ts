@@ -27,6 +27,8 @@ export type ForecastEvent = {
   party: string;
   basis: Basis;
   certainty: Certainty;
+  /** How many documents this stands for, when it adds up several (overdue ones). Absent means one. */
+  count?: number;
 };
 
 /** An overdue item is assumed to move this many days from today. */
@@ -47,15 +49,48 @@ export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + 
 
 export type SettledInvoice = { customerId: string; invoiceId: string; amount: number; docDate: string; dueDate: string | null; paidDate: string };
 
-const weighted = (rows: { weight: number; value: number }[]) => {
-  const w = rows.reduce((s, r) => s + r.weight, 0);
-  return w > 0 ? rows.reduce((s, r) => s + r.weight * r.value, 0) / w : null;
+/**
+ * What settled invoices say about how a customer pays, reduced to sums the database can work out per customer, so history of any
+ * length arrives as one small row per customer. Amounts weight every sum, so a large invoice counts for more than a small one.
+ */
+export type SettledSummary = {
+  customerId: string;
+  /** Settled invoices behind the sums. */
+  invoices: number;
+  amount: number;
+  /** Sum of amount x days from invoice date to the last payment. */
+  daysFromDoc: number;
+  /** Sum of amount x days from the due date to the last payment, for invoices that had a due date. */
+  lagFromDue: number;
+  /** For invoices with no due date: their amount, and the sum of amount x days from invoice date to payment. */
+  amountNoDue: number;
+  daysFromDocNoDue: number;
 };
 
+/** The same sums the database produces, built from the invoices themselves (used to check the two agree). */
+export function summarizeSettled(history: SettledInvoice[]): SettledSummary[] {
+  const by = new Map<string, SettledSummary>();
+  for (const h of history) {
+    const s = by.get(h.customerId) ?? { customerId: h.customerId, invoices: 0, amount: 0, daysFromDoc: 0, lagFromDue: 0, amountNoDue: 0, daysFromDocNoDue: 0 };
+    const fromDoc = daysBetween(h.docDate, h.paidDate);
+    s.invoices += 1;
+    s.amount += h.amount;
+    s.daysFromDoc += h.amount * fromDoc;
+    if (h.dueDate) s.lagFromDue += h.amount * daysBetween(h.dueDate, h.paidDate);
+    else {
+      s.amountNoDue += h.amount;
+      s.daysFromDocNoDue += h.amount * fromDoc;
+    }
+    by.set(h.customerId, s);
+  }
+  return [...by.values()];
+}
+
 /** The usual days from invoice date to payment across everyone (amount-weighted), or null when nothing has been settled yet. */
-export function usualDaysToPay(history: SettledInvoice[]): number | null {
-  const avg = weighted(history.map((h) => ({ weight: h.amount, value: daysBetween(h.docDate, h.paidDate) })));
-  return avg === null ? null : Math.max(0, Math.round(avg));
+export function usualDaysToPay(history: SettledSummary[]): number | null {
+  const amount = history.reduce((s, h) => s + h.amount, 0);
+  if (amount <= 0) return null;
+  return Math.max(0, Math.round(history.reduce((s, h) => s + h.daysFromDoc, 0) / amount));
 }
 
 export type CustomerHabit = { lagDays: number; samples: number };
@@ -64,14 +99,12 @@ export type CustomerHabit = { lagDays: number; samples: number };
  * How many days after the agreed date each customer actually pays, weighted by invoice size. Only customers with at least MIN_HISTORY
  * settled invoices get one. A negative lag means they pay early. The agreed date is the due date, or the invoice date plus `defaultDays`.
  */
-export function customerHabits(history: SettledInvoice[], defaultDays: number): Map<string, CustomerHabit> {
-  const by = new Map<string, SettledInvoice[]>();
-  for (const h of history) by.set(h.customerId, [...(by.get(h.customerId) ?? []), h]);
+export function customerHabits(history: SettledSummary[], defaultDays: number): Map<string, CustomerHabit> {
   const out = new Map<string, CustomerHabit>();
-  for (const [customerId, rows] of by) {
-    if (new Set(rows.map((r) => r.invoiceId)).size < MIN_HISTORY) continue;
-    const lag = weighted(rows.map((r) => ({ weight: r.amount, value: daysBetween(r.dueDate ?? addDays(r.docDate, defaultDays), r.paidDate) })));
-    if (lag !== null) out.set(customerId, { lagDays: Math.round(lag), samples: new Set(rows.map((r) => r.invoiceId)).size });
+  for (const h of history) {
+    if (h.invoices < MIN_HISTORY || h.amount <= 0) continue;
+    const lag = (h.lagFromDue + h.daysFromDocNoDue - defaultDays * h.amountNoDue) / h.amount;
+    out.set(h.customerId, { lagDays: Math.round(lag), samples: h.invoices });
   }
   return out;
 }
@@ -185,7 +218,7 @@ export function buildForecast(input: { today: string; horizonDays: number; openi
 
   const byCategory = FORECAST_CATEGORIES.map((c) => {
     const rows = inRange.filter((e) => e.category === c.key);
-    return { ...c, amount: round2(rows.reduce((s, e) => s + e.amount, 0)), count: rows.length };
+    return { ...c, amount: round2(rows.reduce((s, e) => s + e.amount, 0)), count: rows.reduce((s, e) => s + (e.count ?? 1), 0) };
   }).filter((c) => c.count > 0);
 
   const warnings: ForecastWarning[] = [];

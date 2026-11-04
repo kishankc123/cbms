@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildForecast, collectionDate, customerHabits, fixedMonthly, parseHorizon, paymentDate, payrollEvents, reserveOf, usualDaysToPay, workingCapitalOf, type ForecastEvent, type SettledInvoice } from "./forecast-rules";
+import { buildForecast, collectionDate, customerHabits, fixedMonthly, parseHorizon, paymentDate, payrollEvents, reserveOf, summarizeSettled, usualDaysToPay, workingCapitalOf, type ForecastEvent, type SettledInvoice } from "./forecast-rules";
 
 const today = "2026-11-03";
 const ev = (p: Partial<ForecastEvent> & Pick<ForecastEvent, "date" | "amount" | "side">): ForecastEvent => ({ id: Math.random().toString(), category: p.side === "in" ? "collections" : "supplier_payments", party: "x", basis: "due_date", certainty: "confirmed", ...p });
@@ -8,15 +8,18 @@ const settled = (customerId: string, n: number, due: string, paid: string, amoun
 describe("when customers pay", () => {
   it("learns the usual days to pay across everyone, weighted by size", () => {
     const h = [settled("a", 1, "2026-02-01", "2026-01-11", 3000), settled("b", 1, "2026-02-01", "2026-01-31", 1000)];
-    expect(usualDaysToPay(h)).toBe(15); // (10*3000 + 30*1000) / 4000
-    expect(usualDaysToPay([])).toBeNull();
+    expect(usualDaysToPay(summarizeSettled(h))).toBe(15); // (10*3000 + 30*1000) / 4000
+    expect(usualDaysToPay(summarizeSettled([]))).toBeNull();
   });
 
   it("only gives a customer a habit after three settled invoices", () => {
     const two = [settled("a", 1, "2026-02-01", "2026-02-11"), settled("a", 2, "2026-03-01", "2026-03-11")];
-    expect(customerHabits(two, 30).size).toBe(0);
+    expect(customerHabits(summarizeSettled(two), 30).size).toBe(0);
     const three = [...two, settled("a", 3, "2026-04-01", "2026-04-11")];
-    expect(customerHabits(three, 30).get("a")).toEqual({ lagDays: 10, samples: 3 });
+    expect(customerHabits(summarizeSettled(three), 30).get("a")).toEqual({ lagDays: 10, samples: 3 });
+    // invoices with no due date are measured against the invoice date plus the usual days
+    const noDue = ["1", "2", "3"].map((n) => ({ customerId: "b", invoiceId: "b" + n, amount: 1000, docDate: "2026-01-01", dueDate: null, paidDate: "2026-02-10" }));
+    expect(customerHabits(summarizeSettled(noDue), 30).get("b")).toEqual({ lagDays: 10, samples: 3 });
   });
 
   it("uses the due date when nothing else is known", () => {

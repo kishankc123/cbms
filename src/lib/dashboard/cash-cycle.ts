@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, customers, items, journalEntries, journalLines, purchaseBills, salesInvoices } from "@/db/schema";
-import { addDays, customerHabits, FALLBACK_COLLECTION_DAYS, settledInvoices, usualDaysToPay } from "./forecast";
+import { addDays, customerHabits, FALLBACK_COLLECTION_DAYS, settledSummaries, usualDaysToPay } from "./forecast";
 import { CYCLE_DAYS, cycleOf, type Cycle, type CycleInputs, type SlowPayer } from "./cash-cycle-rules";
 
 export * from "./cash-cycle-rules";
@@ -47,7 +47,7 @@ export async function loadCashCycle(tenantId: string, today: string): Promise<Ca
       .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
       .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
       .where(and(eq(journalEntries.tenantId, tenantId), gte(journalEntries.entryDate, from), lte(journalEntries.entryDate, today), or(eq(accounts.code, "5000"), like(accounts.code, "5000.%")))),
-    settledInvoices(tenantId, today),
+    settledSummaries(tenantId, today),
   ]);
 
   const inputs: CycleInputs = {

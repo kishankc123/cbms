@@ -8,8 +8,6 @@ import {
   items,
   journalEntries,
   journalLines,
-  paymentAllocations,
-  payments,
   payrollLines,
   payrollRuns,
   planningSettings,
@@ -37,7 +35,7 @@ import {
   workingCapitalOf,
   type Forecast,
   type ForecastEvent,
-  type SettledInvoice,
+  type SettledSummary,
   type WorkingCapital,
 } from "./forecast-rules";
 
@@ -68,17 +66,29 @@ async function creditBalance(tenantId: string, accountIds: string[]): Promise<nu
   return round2(num(r?.c) - num(r?.d));
 }
 
-/** Invoices settled in the last 6 months, with the day the last payment against each was made. Paid on the day they were raised is a cash sale, not a habit of paying late, so those are left out. */
-export async function settledInvoices(tenantId: string, today: string): Promise<SettledInvoice[]> {
-  const rows = await db
-    .select({ invoiceId: salesInvoices.id, customerId: salesInvoices.customerId, total: salesInvoices.total, docDate: salesInvoices.invoiceDate, dueDate: salesInvoices.dueDate, paidDate: sql<string>`max(${payments.paymentDate})` })
-    .from(salesInvoices)
-    .innerJoin(paymentAllocations, and(eq(paymentAllocations.targetType, "sales_invoice"), eq(paymentAllocations.targetId, salesInvoices.id)))
-    .innerJoin(payments, and(eq(payments.id, paymentAllocations.paymentId), eq(payments.status, "posted")))
-    .where(and(eq(salesInvoices.tenantId, tenantId), eq(salesInvoices.status, "paid"), gte(payments.paymentDate, addDays(today, -183))))
-    .groupBy(salesInvoices.id, salesInvoices.customerId, salesInvoices.total, salesInvoices.invoiceDate, salesInvoices.dueDate)
-    .having(sql`max(${payments.paymentDate}) > ${salesInvoices.invoiceDate}`);
-  return rows.map((r) => ({ customerId: r.customerId, invoiceId: r.invoiceId, amount: num(r.total), docDate: r.docDate, dueDate: r.dueDate, paidDate: r.paidDate }));
+/**
+ * How customers have paid, from invoices settled in the last 6 months: one small row of sums per customer, worked out in the database,
+ * so a long history never travels to the server. Paid on the day they were raised is a cash sale, not a habit of paying late, so those are left out.
+ */
+export async function settledSummaries(tenantId: string, today: string): Promise<SettledSummary[]> {
+  const res = (await db.execute(sql`
+    select customer_id, count(*)::int as invoices, sum(total) as amount,
+           sum(total * (paid - invoice_date)) as days_from_doc,
+           sum(case when due_date is not null then total * (paid - due_date) else 0 end) as lag_from_due,
+           sum(case when due_date is null then total else 0 end) as amount_no_due,
+           sum(case when due_date is null then total * (paid - invoice_date) else 0 end) as days_from_doc_no_due
+    from (
+      select si.id, si.customer_id, si.total, si.invoice_date, si.due_date, max(p.payment_date) as paid
+      from sales_invoices si
+      join payment_allocations pa on pa.target_type = 'sales_invoice' and pa.target_id = si.id
+      join payments_ledger p on p.id = pa.payment_id and p.status = 'posted'
+      where si.tenant_id = ${tenantId}::uuid and si.status = 'paid' and p.payment_date >= ${addDays(today, -183)}::date
+      group by si.id, si.customer_id, si.total, si.invoice_date, si.due_date
+      having max(p.payment_date) > si.invoice_date
+    ) settled
+    group by customer_id`)) as unknown as Record<string, string>[] | { rows: Record<string, string>[] };
+  const rows = Array.isArray(res) ? res : res.rows;
+  return rows.map((r) => ({ customerId: r.customer_id, invoices: Number(r.invoices), amount: num(r.amount), daysFromDoc: num(r.days_from_doc), lagFromDue: num(r.lag_from_due), amountNoDue: num(r.amount_no_due), daysFromDocNoDue: num(r.days_from_doc_no_due) }));
 }
 
 export type ForecastResult = {
@@ -105,7 +115,7 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   const horizonEnd = addDays(today, horizonDays);
   const settings = await getPlanningSettings(tenantId);
 
-  const [cashAccounts, history] = await Promise.all([cashAccountRows(tenantId), settledInvoices(tenantId, today)]);
+  const [cashAccounts, history] = await Promise.all([cashAccountRows(tenantId), settledSummaries(tenantId, today)]);
   const openingCash = await cashBalanceAsOf(tenantId, cashAccounts.map((a) => a.id), today);
 
   const learned = usualDaysToPay(history);
@@ -113,22 +123,48 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   const defaultDaysSource = settings.defaultCollectionDays !== null ? "setting" : learned !== null ? "learned" : "fallback";
   const habits = customerHabits(history, defaultDays);
 
-  const [invoiceRows, billRows, expenseRows, instanceRows, salaryRows, lastRun, taxRows, recurringDefs, stockRow, taxAccounts] = await Promise.all([
+  // Only documents that can land inside the horizon are fetched one by one. Everything already overdue moves on the same assumed day,
+  // so it arrives as a total, and every open document is totalled once for working capital.
+  const lags = [...habits.values()].map((h) => h.lagDays);
+  const maxLate = Math.min(Math.max(0, ...lags), 365);
+  const maxEarly = Math.min(Math.max(0, ...lags.map((l) => -l)), 365);
+  const nearFrom = addDays(today, -maxLate);
+  const nearTo = addDays(horizonEnd, maxEarly);
+  const invOutstanding = sql<string>`(${salesInvoices.total} - ${salesInvoices.amountPaid})`;
+  const invAgreed = sql<string>`coalesce(${salesInvoices.dueDate}, ${salesInvoices.invoiceDate} + ${defaultDays}::int)`;
+  const billOutstanding = sql<string>`(${purchaseBills.total} - ${purchaseBills.amountPaid})`;
+  const billAgreed = sql<string>`coalesce(${purchaseBills.dueDate}, ${purchaseBills.billDate})`;
+  const expOutstanding = sql<string>`(${expenses.amountPayable} - ${expenses.amountPaid})`;
+  const expAgreed = sql<string>`coalesce(${expenses.dueDate}, ${expenses.expenseDate})`;
+
+  const [invoiceAgg, billAgg, expenseAgg, invoiceRows, billRows, expenseRows, instanceRows, salaryRows, lastRun, taxRows, recurringDefs, stockRow, taxAccounts] = await Promise.all([
     db
-      .select({ id: salesInvoices.id, customerId: salesInvoices.customerId, customer: customers.name, docDate: salesInvoices.invoiceDate, dueDate: salesInvoices.dueDate, outstanding: sql<string>`(${salesInvoices.total} - ${salesInvoices.amountPaid})` })
+      .select({ total: sql<string>`coalesce(sum(${invOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${invOutstanding}) filter (where ${invAgreed} < ${nearFrom}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${invAgreed} < ${nearFrom}::date)` })
       .from(salesInvoices)
-      .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
       .where(openInvoice(tenantId)),
     db
-      .select({ id: purchaseBills.id, vendor: vendors.name, docDate: purchaseBills.billDate, dueDate: purchaseBills.dueDate, outstanding: sql<string>`(${purchaseBills.total} - ${purchaseBills.amountPaid})` })
+      .select({ total: sql<string>`coalesce(sum(${billOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${billOutstanding}) filter (where ${billAgreed} < ${today}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${billAgreed} < ${today}::date)` })
       .from(purchaseBills)
-      .leftJoin(vendors, eq(vendors.id, purchaseBills.vendorId))
       .where(openBill(tenantId)),
     db
-      .select({ id: expenses.id, vendor: vendors.name, payee: expenses.payeeName, docDate: expenses.expenseDate, dueDate: expenses.dueDate, outstanding: sql<string>`(${expenses.amountPayable} - ${expenses.amountPaid})` })
+      .select({ total: sql<string>`coalesce(sum(${expOutstanding}), 0)`, oldAmount: sql<string>`coalesce(sum(${expOutstanding}) filter (where ${expAgreed} < ${today}::date), 0)`, oldCount: sql<string>`count(*) filter (where ${expAgreed} < ${today}::date)` })
+      .from(expenses)
+      .where(openExpense(tenantId)),
+    db
+      .select({ id: salesInvoices.id, customerId: salesInvoices.customerId, customer: customers.name, docDate: salesInvoices.invoiceDate, dueDate: salesInvoices.dueDate, outstanding: invOutstanding })
+      .from(salesInvoices)
+      .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
+      .where(and(openInvoice(tenantId), gte(invAgreed, nearFrom), lte(invAgreed, nearTo))),
+    db
+      .select({ id: purchaseBills.id, vendor: vendors.name, docDate: purchaseBills.billDate, dueDate: purchaseBills.dueDate, outstanding: billOutstanding })
+      .from(purchaseBills)
+      .leftJoin(vendors, eq(vendors.id, purchaseBills.vendorId))
+      .where(and(openBill(tenantId), gte(billAgreed, today), lte(billAgreed, horizonEnd))),
+    db
+      .select({ id: expenses.id, vendor: vendors.name, payee: expenses.payeeName, docDate: expenses.expenseDate, dueDate: expenses.dueDate, outstanding: expOutstanding })
       .from(expenses)
       .leftJoin(vendors, eq(vendors.id, expenses.vendorId))
-      .where(openExpense(tenantId)),
+      .where(and(openExpense(tenantId), gte(expAgreed, today), lte(expAgreed, horizonEnd))),
     db
       .select({ id: recurringExpenseInstances.id, name: recurringExpenses.expenseName, date: sql<string>`coalesce(${recurringExpenseInstances.dueDate}, ${recurringExpenseInstances.expenseDate})`, amount: recurringExpenseInstances.expectedAmount })
       .from(recurringExpenseInstances)
@@ -152,6 +188,13 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
 
   const events: ForecastEvent[] = [];
 
+  const overdueEvent = (id: string, category: ForecastEvent["category"], side: ForecastEvent["side"], party: string, agg: { oldAmount: string; oldCount: string }) => {
+    const amount = round2(num(agg.oldAmount));
+    if (amount > 0) events.push({ id, category, side, date: addDays(today, OVERDUE_DAYS), amount, party, basis: "overdue", certainty: "expected", count: Number(agg.oldCount) });
+  };
+  overdueEvent("inv-overdue", "collections", "in", "Overdue invoices", invoiceAgg[0]);
+  overdueEvent("bill-overdue", "supplier_payments", "out", "Overdue bills", billAgg[0]);
+  overdueEvent("exp-overdue", "expenses", "out", "Overdue expenses", expenseAgg[0]);
   for (const r of invoiceRows) {
     const { date, basis } = collectionDate({ dueDate: r.dueDate, docDate: r.docDate, today, habit: habits.get(r.customerId) ?? null, defaultDays });
     events.push({ id: `inv-${r.id}`, category: "collections", side: "in", date, amount: round2(num(r.outstanding)), party: r.customer, basis, certainty: basis === "due_date" ? "confirmed" : "expected" });
@@ -227,8 +270,8 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
   const forecast = buildForecast({ today, horizonDays, openingCash, reserve: reserve.amount, events });
 
   // Working capital: what the business holds to run on, less what it owes in the short term.
-  const receivables = round2(invoiceRows.reduce((s, r) => s + num(r.outstanding), 0));
-  const payables = round2([...billRows, ...expenseRows].reduce((s, r) => s + num(r.outstanding), 0));
+  const receivables = round2(num(invoiceAgg[0]?.total));
+  const payables = round2(num(billAgg[0]?.total) + num(expenseAgg[0]?.total));
   const taxPayable = await creditBalance(tenantId, taxAccounts.map((a) => a.accountId));
   const workingCapital = workingCapitalOf({ cash: round2(openingCash), receivables, stock: round2(num(stockRow[0]?.v)), payables, salaryPayable: salaryOwed, taxPayable });
   // Collecting a receivable or paying a payable only moves value between the two sides. What lowers it is spending that is not owed yet.
