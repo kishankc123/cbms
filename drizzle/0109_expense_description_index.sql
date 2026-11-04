@@ -1,0 +1,1 @@
+CREATE INDEX "expenses_tenant_description" ON "expenses" USING btree ("tenant_id",lower("description") text_pattern_ops);
