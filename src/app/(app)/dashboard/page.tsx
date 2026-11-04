@@ -1,33 +1,18 @@
 import Link from "next/link";
 import { requireTenantSession, requireUserSession, can } from "@/lib/session";
-import { greetingFor } from "@/lib/greeting";
-import { validateADDate, todayIso, ymdOf, monthNames } from "@/lib/calendar";
-import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange, fiscalYearDefaultAsOf, isFiscalYearOpen } from "@/lib/fiscal";
-import { ReportFilter } from "@/components/calendar/report-filter";
+import { validateADDate, todayIso } from "@/lib/calendar";
+import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange, fiscalYearDefaultAsOf } from "@/lib/fiscal";
 import { D } from "@/components/calendar/date-text";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
-import { RowCardList, RowCard, RowMeta, RowValue } from "@/components/ui/row-card";
-import {
-  dashboardKpis,
-  cashAndBankBreakdown,
-  revenueExpenseTrend,
-  expenseBreakdown,
-  needsAttention,
-  receivableAgeingSummary,
-  complianceSummary,
-  upcomingComplianceDeadlines,
-} from "@/lib/dashboard/aggregates";
-import { LazyRevenueExpenseChart } from "./revenue-expense-chart-lazy";
-import { ExpenseTracker } from "./expense-tracker";
-import { SpeedInsights } from "@vercel/speed-insights/next"
+import { StatStrip } from "@/components/ui/stat-strip";
+import { cashFlow, defaultGrain } from "@/lib/dashboard/cash-flow";
+import { dashboardKpis, cashAndBankBreakdown, needsAttention, complianceSummary, upcomingComplianceDeadlines } from "@/lib/dashboard/aggregates";
+import { DashboardHeader } from "./dashboard-header";
+import { MoneyFlowSection, OutflowBreakdown, money } from "./cash-sections";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
-const currency = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 const pct = (n: number | null) => (n === null ? null : `${n >= 0 ? "↑" : "↓"} ${Math.abs(n).toFixed(1)}%`);
 const rangeQs = (from: string, to: string) => new URLSearchParams({ from, to }).toString();
-
-const linkCard = "block rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 transition-shadow hover:shadow-sm";
-const drillLink = "text-xs font-medium text-[var(--accent-text)] hover:underline";
 
 // Where each Needs Attention item's own detail lives — the module/report that either created the
 // issue (drafts) or is the natural place to resolve or investigate it.
@@ -41,14 +26,14 @@ const NEEDS_ATTENTION_HREF: Record<string, string> = {
 
 const NEEDS_ATTENTION_TONE: Record<"critical" | "action", { tone: StatusTone; label: string }> = {
   critical: { tone: "critical", label: "Critical" },
-  action: { tone: "action", label: "Action Required" },
+  action: { tone: "action", label: "Action required" },
 };
 
 const COMPLIANCE_TONE: Record<string, { tone: StatusTone; label: string }> = {
   overdue: { tone: "critical", label: "Overdue" },
   pending: { tone: "pending", label: "Pending" },
-  in_progress: { tone: "pending", label: "In Progress" },
-  partially_paid: { tone: "action", label: "Partially Paid" },
+  in_progress: { tone: "pending", label: "In progress" },
+  partially_paid: { tone: "action", label: "Partially paid" },
 };
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -56,211 +41,141 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const user = await requireUserSession();
   const sp = await searchParams;
 
-  const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
+  const fiscal = await getFiscalRange(session.tenantId);
+  const activeFiscalYear = await getActiveFiscalYear(session.tenantId);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
   const today = todayIso();
-  // "As of" balances/checks track today (or the fiscal year's own end date if today falls
-  // outside it — e.g. viewing a closed year), never the selected range's `to`, which for the
-  // default "whole fiscal year" range is the year's end date and can be far in the future.
+  // "As of" balances track today (or the fiscal year's own end date if today falls outside it, as in a closed year), never the selected
+  // range's `to`, which for the default "whole fiscal year" range can be far in the future.
   const asOf = asIso(sp.to) ?? fiscalYearDefaultAsOf(activeFiscalYear);
 
   const canViewLedger = can(session, "chart_of_accounts", "view");
-  const canViewSales = can(session, "sales", "view");
   const canViewCompliance = can(session, "compliance", "view");
 
-  const [kpis, cashAndBank, trend, expenses, attention, ageing, compliance, deadlines] = await Promise.all([
+  const [kpis, cash, flow, attention, compliance, deadlines] = await Promise.all([
     canViewLedger ? dashboardKpis(session.tenantId, { from, to }) : Promise.resolve(null),
     canViewLedger ? cashAndBankBreakdown(session.tenantId, asOf) : Promise.resolve(null),
-    canViewLedger ? revenueExpenseTrend(session.tenantId, 7, asOf) : Promise.resolve(null),
-    canViewLedger ? expenseBreakdown(session.tenantId, { from, to }) : Promise.resolve(null),
+    canViewLedger ? cashFlow(session.tenantId, from, to) : Promise.resolve(null),
     canViewLedger ? needsAttention(session.tenantId, asOf) : Promise.resolve(null),
-    canViewSales ? receivableAgeingSummary(session.tenantId, asOf) : Promise.resolve(null),
     canViewCompliance ? complianceSummary(session.tenantId, today) : Promise.resolve(null),
     canViewCompliance ? upcomingComplianceDeadlines(session.tenantId, today) : Promise.resolve(null),
   ]);
-
-  const monthLabel = (iso: string) => {
-    const ymd = ymdOf(session.calendar, iso);
-    return ymd ? monthNames(session.calendar)[ymd.month - 1].slice(0, 3) : iso.slice(5, 7);
-  };
-  const trendData = trend?.map((p) => ({ label: monthLabel(p.monthEnd), revenue: p.revenue, expenses: p.expenses })) ?? [];
-  const ageingMax = ageing ? Math.max(...ageing.buckets.map((b) => b.amount), 1) : 1;
+  const qs = rangeQs(from, to);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* The greeting is the page heading. */}
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
-          {greetingFor(new Date())}, {user.name}
-        </h1>
-        {"allTime" in activeFiscalYear ? (
-          <StatusPill tone="pending">All Time</StatusPill>
-        ) : "suggested" in activeFiscalYear ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-            FY {activeFiscalYear.code}
-            <StatusPill tone="action">Not yet added</StatusPill>
-            <Link href="/settings/fiscal-years" className="text-xs text-[var(--accent-text)] hover:underline">
-              Add it →
-            </Link>
-          </p>
-        ) : (
-          <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-            FY {activeFiscalYear.code}
-            <StatusPill tone={isFiscalYearOpen(activeFiscalYear) ? "success" : "pending"}>
-              {activeFiscalYear.status === "open" ? "Open" : activeFiscalYear.status === "reopened" ? "Reopened" : "Closed"}
-            </StatusPill>
-          </p>
-        )}
-      </div>
+    <div className="space-y-5">
+      <DashboardHeader name={user.name ?? ""} activeFiscalYear={activeFiscalYear} from={from} to={to} fiscal={fiscal} />
 
-      <ReportFilter from={from} to={to} fiscal={fiscal} />
+      {cash && flow && (
+        <div className="space-y-3">
+          <StatStrip
+            items={[
+              { label: "Cash and bank today", value: money(cash.total), tone: cash.total < 0 ? "danger" : "default" },
+              { label: "Money in (actual)", value: money(flow.moneyIn) },
+              { label: "Money out (actual)", value: money(flow.moneyOut) },
+              { label: "Net cash movement", value: money(flow.netMovement), tone: flow.netMovement < 0 ? "warning" : "default" },
+            ]}
+          />
+          <details className="text-xs text-ink-2">
+            <summary className="cursor-pointer select-none hover:text-ink">Where the cash is ({cash.accounts.length} {cash.accounts.length === 1 ? "account" : "accounts"})</summary>
+            <ul className="mt-1.5 divide-y divide-[var(--border)] border-y border-line">
+              {cash.accounts.map((a) => (
+                <li key={a.accountId} className="flex justify-between gap-3 py-1.5">
+                  <span className="text-ink">{a.name}</span>
+                  <span className="tnum font-medium text-ink">{money(a.balance)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      )}
 
       {kpis && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          <Link href={`/reports/profit-and-loss?${rangeQs(from, to)}`} className={linkCard}>
-            <p className="text-sm text-[var(--text-secondary)]">Revenue</p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{currency(kpis.revenue)}</p>
-            {pct(kpis.revenueTrendPct) && <p className="mt-1 text-xs font-medium text-green-600">{pct(kpis.revenueTrendPct)} vs prior period</p>}
-          </Link>
-          <Link href={`/reports/profit-and-loss?${rangeQs(from, to)}`} className={linkCard}>
-            <p className="text-sm text-[var(--text-secondary)]">Expenses</p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{currency(kpis.expenses)}</p>
-            {pct(kpis.expenseTrendPct) && <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">{pct(kpis.expenseTrendPct)} vs prior period</p>}
-          </Link>
-          <Link href={`/reports/profit-and-loss?${rangeQs(from, to)}`} className={linkCard}>
-            <p className="text-sm text-[var(--text-secondary)]">Net Profit</p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{currency(kpis.netProfit)}</p>
-            {pct(kpis.netProfitTrendPct) && <p className="mt-1 text-xs font-medium text-green-600">{pct(kpis.netProfitTrendPct)} vs prior period</p>}
-          </Link>
+        <StatStrip
+          className="!border-y-0"
+          items={[
+            { label: "Revenue", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.revenue)}</Link> },
+            { label: "Expenses", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.expenses)}</Link> },
+            { label: "Net profit", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.netProfit)}</Link>, tone: kpis.netProfit < 0 ? "danger" : "default" },
+          ]}
+        />
+      )}
+      {kpis && (pct(kpis.revenueTrendPct) || pct(kpis.netProfitTrendPct)) && (
+        <p className="-mt-3 text-xs text-ink-2">
+          Compared with the period before: revenue {pct(kpis.revenueTrendPct) ?? "no change measured"}, expenses {pct(kpis.expenseTrendPct) ?? "no change measured"}, net profit {pct(kpis.netProfitTrendPct) ?? "no change measured"}.
+        </p>
+      )}
 
-          {cashAndBank && (
-            <Link href={`/reports/cash-bank-movement?${rangeQs(from, to)}`} className={`${linkCard} sm:col-span-3 lg:col-span-1`}>
-              <p className="text-sm text-[var(--text-secondary)]">Cash &amp; Bank Balance</p>
-              <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{currency(cashAndBank.total)}</p>
-              <div className="mt-2 flex flex-col gap-1.5">
-                {cashAndBank.accounts.map((a) => (
-                  <div key={a.accountId} className="flex items-center justify-between border-t border-[var(--card-border)] pt-1.5 text-xs">
-                    <span className="text-[var(--text-secondary)]">{a.name}</span>
-                    <span className="font-semibold text-[var(--text-primary)]">{currency(a.balance)}</span>
-                  </div>
-                ))}
-              </div>
-            </Link>
-          )}
+      {flow && (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[3fr_2fr]">
+          <MoneyFlowSection flow={flow} grain={defaultGrain(from, to)} calendar={session.calendar} />
+          <OutflowBreakdown flow={flow} moreHref={`/dashboard/cash-flow?${qs}`} />
         </div>
       )}
 
-      {(trendData.length > 0 || expenses) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-          {trendData.length > 0 && (
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">Revenue vs Expenses</h2>
-                <Link href={`/reports/profit-and-loss?${rangeQs(from, to)}`} className={drillLink}>
-                  View P&amp;L →
-                </Link>
-              </div>
-              <LazyRevenueExpenseChart data={trendData} />
-            </div>
-          )}
-          {expenses && (
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
-              <ExpenseTracker categories={expenses.categories} otherAmount={expenses.otherAmount} total={expenses.total} reportHref={`/reports/profit-and-loss?${rangeQs(from, to)}`} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {attention && attention.length > 0 && (
-        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
-          <h2 className="mb-3 text-sm font-bold text-[var(--text-primary)]">Needs Attention</h2>
-          <RowCardList>
-            {attention.map((item) => {
-              const { tone, label } = NEEDS_ATTENTION_TONE[item.severity];
-              const href = NEEDS_ATTENTION_HREF[item.id];
-              const title = href ? (
-                <Link href={href} className="hover:underline hover:text-[var(--accent-text)]">
-                  {item.label}
-                </Link>
-              ) : (
-                item.label
-              );
-              return (
-                <RowCard key={item.id}>
-                  <RowMeta title={title} subtitle={item.detail} />
-                  <RowValue primary={item.amount !== undefined ? currency(item.amount) : item.count !== undefined ? `${item.count} items` : ""}>
-                    <StatusPill tone={tone}>{label}</StatusPill>
-                  </RowValue>
-                </RowCard>
-              );
-            })}
-          </RowCardList>
-        </div>
-      )}
-
-      {(ageing || deadlines) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {ageing && (
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">Receivable Ageing</h2>
-                <Link href={`/reports/receivable-ageing?to=${asOf}`} className={drillLink}>
-                  View report →
-                </Link>
-              </div>
-              <div className="flex flex-col gap-3">
-                {ageing.buckets.map((b) => (
-                  <div key={b.label}>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-[var(--text-secondary)]">{b.label}</span>
-                      <span className="font-semibold text-[var(--text-primary)]">{currency(b.amount)}</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted-bg)]">
-                      <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.max((b.amount / ageingMax) * 100, 2)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {((attention && attention.length > 0) || deadlines) && (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          {attention && attention.length > 0 && (
+            <section>
+              <h2 className="mb-2 text-sm font-semibold text-ink">Needs attention</h2>
+              <ul className="divide-y divide-[var(--border)] border-y border-line">
+                {attention.map((item) => {
+                  const { tone, label } = NEEDS_ATTENTION_TONE[item.severity];
+                  const href = NEEDS_ATTENTION_HREF[item.id];
+                  return (
+                    <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] text-ink">{href ? <Link href={href} className="hover:underline">{item.label}</Link> : item.label}</p>
+                        <p className="truncate text-xs text-ink-2">{item.detail}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="tnum text-[13px] font-medium text-ink">{item.amount !== undefined ? money(item.amount) : item.count !== undefined ? `${item.count} items` : ""}</span>
+                        <StatusPill tone={tone}>{label}</StatusPill>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
 
           {deadlines && (
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">Compliance Deadlines</h2>
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-ink">Compliance deadlines</h2>
                 <div className="flex items-center gap-2">
                   {compliance && compliance.overdue > 0 && <StatusPill tone="critical">{compliance.overdue} overdue</StatusPill>}
-                  <Link href="/compliance" className={drillLink}>
+                  <Link href="/compliance" className="text-xs font-medium text-accent-text hover:underline">
                     View all →
                   </Link>
                 </div>
               </div>
               {deadlines.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">Nothing due soon.</p>
+                <p className="text-[13px] text-ink-2">Nothing due soon.</p>
               ) : (
-                <RowCardList>
+                <ul className="divide-y divide-[var(--border)] border-y border-line">
                   {deadlines.map((d) => {
                     const { tone, label } = COMPLIANCE_TONE[d.status] ?? { tone: "pending" as StatusTone, label: d.status };
                     return (
-                      <RowCard key={d.id}>
-                        <RowMeta
-                          title={
-                            <Link href="/compliance" className="hover:underline hover:text-[var(--accent-text)]">
-                              {d.name}
-                            </Link>
-                          }
-                          subtitle={<D value={d.dueDate} style="short" />}
-                        />
+                      <li key={d.id} className="flex items-center justify-between gap-3 py-2">
+                        <div className="min-w-0">
+                          <Link href="/compliance" className="truncate text-[13px] text-ink hover:underline">
+                            {d.name}
+                          </Link>
+                          <p className="text-xs text-ink-2">
+                            <D value={d.dueDate} style="short" />
+                          </p>
+                        </div>
                         <StatusPill tone={tone}>{label}</StatusPill>
-                      </RowCard>
+                      </li>
                     );
                   })}
-                </RowCardList>
+                </ul>
               )}
-            </div>
+            </section>
           )}
         </div>
       )}

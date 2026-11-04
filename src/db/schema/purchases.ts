@@ -104,7 +104,7 @@ export const purchaseBills = pgTable("purchase_bills", {
   billAvailable: boolean("bill_available"),
   /** Set when the bill came in through Import Purchases. */
   importId: uuid("import_id").references(() => purchaseImports.id),
-});
+}, (t) => [index("purchase_bills_tenant_due").on(t.tenantId, t.dueDate)]);
 
 // A purchase return (credit note for the supplier): goods sent back to them. Mirrors a stockable
 // purchase invoice in shape, but reduces what we owe the supplier.

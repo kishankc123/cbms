@@ -8,6 +8,7 @@ import {
   numeric,
   pgEnum,
   AnyPgColumn,
+  index,
 } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { paymentModes } from "./payment-modes";
@@ -58,7 +59,12 @@ export const journalEntries = pgTable("journal_entries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   isReversed: boolean("is_reversed").notNull().default(false),
   reversalOfId: uuid("reversal_of_id").references((): AnyPgColumn => journalEntries.id),
-});
+}, (t) => [
+  // What the reports and the dashboard filter on: an organization's entries in a date range, an entry's source document, and the reversal of an entry.
+  index("journal_entries_tenant_date").on(t.tenantId, t.entryDate),
+  index("journal_entries_source").on(t.sourceType, t.sourceId),
+  index("journal_entries_reversal_of").on(t.reversalOfId),
+]);
 
 // SUM(debitAmount) must equal SUM(creditAmount) for a given journalEntryId.
 // Enforced in the posting service (see src/lib/ledger/post.ts), not just at the DB layer,
@@ -78,4 +84,8 @@ export const journalLines = pgTable("journal_lines", {
   // if the mode is renamed or deleted. Blank on everything posted before modes existed.
   paymentModeId: uuid("payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
   paymentModeName: text("payment_mode_name"),
-});
+}, (t) => [
+  // A balance or movement for some accounts, and every line of an entry.
+  index("journal_lines_account").on(t.accountId),
+  index("journal_lines_entry").on(t.journalEntryId),
+]);
