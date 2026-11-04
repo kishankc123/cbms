@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { accounts, journalEntries, journalLines, salesInvoices, purchaseBills, items, inventorySettings, complianceObligations } from "@/db/schema";
 import { effectiveStatus, summarize as summarizeCompliance, type EffectiveStatus } from "@/lib/compliance/engine/status";
 import { cashAccountRows } from "./cash-flow";
-import { pendingCheques } from "@/lib/cheques/pending";
+import { pendingCheques, pendingReceivedCheques } from "@/lib/cheques/pending";
 
 /**
  * Purpose-built aggregate queries for the Dashboard — each one pushes SUM/GROUP BY into
@@ -126,7 +126,7 @@ export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): P
 // ------------------------------------------------------------ Needs Attention
 
 export type NeedsAttentionItem = {
-  id: "trial_balance" | "draft_invoices" | "draft_bills" | "negative_stock" | "overdue_receivables" | "cheques_due";
+  id: "trial_balance" | "draft_invoices" | "draft_bills" | "negative_stock" | "overdue_receivables" | "cheques_due" | "received_cheques_ready";
   label: string;
   detail: string;
   severity: "critical" | "action";
@@ -226,6 +226,19 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
       severity: amount > cash ? "critical" : "action",
       count: dueCheques.length,
       amount,
+    });
+  }
+
+  // Customer cheques whose date has come and that are still in the drawer: money that could already be on its way to the bank.
+  const ready = (await pendingReceivedCheques(tenantId)).filter((c) => c.status === "received" && c.chequeDate <= asOfIso);
+  if (ready.length > 0) {
+    items_.push({
+      id: "received_cheques_ready",
+      label: `${ready.length} customer cheque${ready.length === 1 ? "" : "s"} ready to deposit`,
+      detail: "Dated today or earlier, not yet deposited",
+      severity: "action",
+      count: ready.length,
+      amount: round2(ready.reduce((s, c) => s + c.amount, 0)),
     });
   }
 

@@ -72,6 +72,7 @@ const NAV: NavEntry[] = [
       { href: "/payments/money-in", label: "Money In" },
       { href: "/payments/money-out", label: "Money Out" },
       { href: "/payments/cheques", label: "Issued Cheques" },
+      { href: "/payments/cheques-received", label: "Received Cheques" },
       { href: "/payments/inter-transfer", label: "Inter-Transfer" },
     ],
   },

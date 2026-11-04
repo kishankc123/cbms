@@ -1,10 +1,11 @@
 // The cash forecast: what is expected to come in and go out, day by day, from the cash held today. Pure rules, no database.
 // Everything here is an estimate built from documents already in the books. Nothing is posted and no figure is promised.
 
-export type ForecastCategory = "collections" | "supplier_payments" | "expenses" | "recurring" | "payroll" | "taxes" | "cheques";
+export type ForecastCategory = "collections" | "supplier_payments" | "expenses" | "recurring" | "payroll" | "taxes" | "cheques" | "cheques_received";
 
 export const FORECAST_CATEGORIES: { key: ForecastCategory; label: string; side: "in" | "out" }[] = [
   { key: "collections", label: "Customer collections", side: "in" },
+  { key: "cheques_received", label: "Cheques received, waiting to clear", side: "in" },
   { key: "supplier_payments", label: "Supplier bills", side: "out" },
   { key: "expenses", label: "Unpaid expenses", side: "out" },
   { key: "recurring", label: "Recurring expenses not yet booked", side: "out" },

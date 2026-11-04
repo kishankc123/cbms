@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, expenses, purchaseBills, salesInvoices, vendors } from "@/db/schema";
-import { pendingCheques } from "@/lib/cheques/pending";
+import { pendingCheques, pendingReceivedCheques } from "@/lib/cheques/pending";
 import { emptyTotals, soonLimit, type BucketTotals, type DueBucket, type UpcomingItem, type UpcomingKind, type UpcomingParty } from "./upcoming-rules";
 
 export * from "./upcoming-rules";
@@ -134,6 +134,15 @@ export async function upcomingParties(tenantId: string, today: string, side: "co
     for (const c of await pendingCheques(tenantId)) if (c.payeeKind === "supplier" && c.vendorId) byVendor.set(c.vendorId, round2((byVendor.get(c.vendorId) ?? 0) + c.amount));
     for (const p of shown) {
       const covered = p.kind === "supplier" && p.partyId ? byVendor.get(p.partyId) : undefined;
+      if (covered) p.chequeCovered = Math.min(covered, p.outstanding);
+    }
+  }
+  if (side === "coming" && shown.some((p) => p.kind === "customer")) {
+    // Cheques a customer has already given cover their invoices from the oldest once they clear.
+    const byCustomer = new Map<string, number>();
+    for (const c of await pendingReceivedCheques(tenantId)) byCustomer.set(c.customerId, round2((byCustomer.get(c.customerId) ?? 0) + c.amount));
+    for (const p of shown) {
+      const covered = p.kind === "customer" && p.partyId ? byCustomer.get(p.partyId) : undefined;
       if (covered) p.chequeCovered = Math.min(covered, p.outstanding);
     }
   }

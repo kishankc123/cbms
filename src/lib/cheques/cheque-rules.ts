@@ -9,7 +9,7 @@ export const VALID_DAYS = 180;
 export type ChequeRow = { status: ChequeStatus; chequeDate: string; amount: number };
 
 const DAY = 86_400_000;
-const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * DAY).toISOString().slice(0, 10);
+export const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * DAY).toISOString().slice(0, 10);
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / DAY);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

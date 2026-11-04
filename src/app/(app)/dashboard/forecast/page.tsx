@@ -239,6 +239,7 @@ export default async function ForecastTab({ searchParams }: { searchParams: Prom
           <li>Supplier bills and expenses: on their due date, or on the document date when none is set.</li>
           <li>Anything already overdue is assumed to move within {a.overdueDays} days.</li>
           <li>Salaries owed are assumed paid within {a.overdueDays} days. Later months repeat the last finalised month&apos;s pay, a week after the month ends.</li>
+          <li>Cheques customers have given you are counted as money coming in on the date written on them. The invoices they will settle are not counted again on their own dates. A cheque can still bounce, so these are marked as expected, not certain.</li>
           <li>Cheques you have written are counted on the date written on them. The bills they cover are not counted again on their due dates, and a cheque already past its date is counted today.</li>
           <li>Recurring expenses are counted from their schedule until the expense is booked, then as an unpaid expense.</li>
           <li>Taxes use the amount entered on the deadline, or else what the books say is owed to that tax, against its earliest deadline.</li>

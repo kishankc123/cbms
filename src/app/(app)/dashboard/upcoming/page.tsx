@@ -9,7 +9,7 @@ import { BUCKETS, isBucket, totalOf, upcomingParties, upcomingSummary, type DueB
 import { DashboardHeader } from "../dashboard-header";
 import { money } from "../cash-sections";
 import { PartyRows } from "./party-rows";
-import { pendingCheques } from "@/lib/cheques/pending";
+import { pendingCheques, pendingReceivedCheques } from "@/lib/cheques/pending";
 import { viewOf } from "@/lib/cheques/cheque-rules";
 import { D } from "@/components/calendar/date-text";
 
@@ -31,7 +31,8 @@ export default async function UpcomingTab({ searchParams }: { searchParams: Prom
   const today = todayIso();
   const show = isBucket(sp.show) ? sp.show : null;
 
-  const [summary, coming, going, cheques] = await Promise.all([upcomingSummary(session.tenantId, today), upcomingParties(session.tenantId, today, "coming", show), upcomingParties(session.tenantId, today, "going", show), pendingCheques(session.tenantId)]);
+  const [summary, coming, going, cheques, held] = await Promise.all([upcomingSummary(session.tenantId, today), upcomingParties(session.tenantId, today, "coming", show), upcomingParties(session.tenantId, today, "going", show), pendingCheques(session.tenantId), pendingReceivedCheques(session.tenantId)]);
+  const heldTotal = Math.round(held.reduce((s, c) => s + c.amount, 0) * 100) / 100;
   const chequeTotal = Math.round(cheques.reduce((s, c) => s + c.amount, 0) * 100) / 100;
   const inAll = totalOf(summary.coming);
   const outAll = totalOf(summary.going);
@@ -52,6 +53,7 @@ export default async function UpcomingTab({ searchParams }: { searchParams: Prom
           { label: "Still to pay", value: money(outAll.amount) },
           { label: "Overdue to collect", value: money(summary.coming.overdue.amount), tone: summary.coming.overdue.amount > 0 ? "warning" : "default" },
           { label: "Overdue to pay", value: money(summary.going.overdue.amount), tone: summary.going.overdue.amount > 0 ? "danger" : "default" },
+          { label: "Cheques held from customers", value: money(heldTotal) },
           { label: "Cheques waiting to clear", value: money(chequeTotal) },
         ]}
       />
@@ -83,6 +85,35 @@ export default async function UpcomingTab({ searchParams }: { searchParams: Prom
               {coming.parties.length}{coming.hasMore ? "+" : ""} {coming.parties.length === 1 && !coming.hasMore ? "customer" : "customers"} · <span className="tnum font-medium text-ink">{money(shown("coming").amount)}</span>
             </span>
           </div>
+          {held.length > 0 && (
+            <div className="mb-4">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-2">Cheques held from customers</h3>
+                <Link href="/payments/cheques-received" className="text-xs font-medium text-accent-text hover:underline">
+                  See all →
+                </Link>
+              </div>
+              <ul className="divide-y divide-[var(--border)] border-y border-line">
+                {held.slice(0, 5).map((c) => {
+                  const ready = c.chequeDate <= today;
+                  return (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] text-ink">{c.payerName}</p>
+                        <p className="text-xs text-ink-2">
+                          Cheque {c.chequeNumber} · <D value={c.chequeDate} style="short" />
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="tnum text-[13px] font-medium text-ink">{money(c.amount)}</span>
+                        <StatusPill tone={c.status === "deposited" ? "pending" : ready ? "action" : "pending"}>{c.status === "deposited" ? "At the bank" : ready ? "Ready to deposit" : "Post-dated"}</StatusPill>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <PartyRows parties={coming.parties} today={today} side="coming" bucket={show} empty="Nothing waiting to be collected." />
           {coming.hasMore && <p className="mt-1.5 text-xs text-ink-2">Showing the 30 most overdue. The Receivable Ageing report lists everyone.</p>}
         </section>
