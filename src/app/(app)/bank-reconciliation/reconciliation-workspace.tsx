@@ -19,6 +19,8 @@ import type { MatchCandidate } from "@/lib/banking/matching";
 import { UploadStatementModal } from "./upload-statement-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
 import { LinePanel } from "./line-panel";
+import { confirmChequeMatch, getChequeMatchesForAccount } from "./cheque-actions";
+import type { ChequeCandidate } from "@/lib/cheques/reconcile-rules";
 import type { AccountOption } from "./account-picker";
 import { NewPaymentModal } from "../payments/new-payment-modal";
 import { getPaymentFormOptions } from "../payments/actions";
@@ -39,7 +41,7 @@ type Reconciliation = Awaited<ReturnType<typeof listReconciliationHistory>>[numb
 
 // What each bank line is waiting for: nothing (matched), your OK (an exact or a likely match found), or a transaction to be found or created.
 type State = "matched" | "exact" | "likely" | "none";
-type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null; combo: UnmatchedLedgerRow[] };
+type Row = { line: StatementLineRow; state: State; entries: MatchedEntry[]; suggestion: MatchCandidate | null; combo: UnmatchedLedgerRow[]; cheque: ChequeCandidate | null };
 type Filter = "todo" | "matched" | "flagged" | "all";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "todo", label: "To do" },
@@ -70,6 +72,8 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, MatchCandidate>>({});
+  // Cheques that have not cleared in the books yet and could be what a bank line is (see Issued and Received Cheques).
+  const [chequeMatches, setChequeMatches] = useState<Record<string, ChequeCandidate[]>>({});
   const [history, setHistory] = useState<Reconciliation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("todo");
@@ -92,9 +96,10 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
     if (!bankAccountId) return;
     setLoading(true);
     try {
-      const [ws, sugg, hist] = await Promise.all([getReconciliationWorkspace(bankAccountId), getSuggestedMatchesForAccount(bankAccountId), listReconciliationHistory(bankAccountId)]);
+      const [ws, sugg, hist, cheques] = await Promise.all([getReconciliationWorkspace(bankAccountId), getSuggestedMatchesForAccount(bankAccountId), listReconciliationHistory(bankAccountId), getChequeMatchesForAccount(bankAccountId)]);
       setWorkspace(ws);
       setSuggestions(sugg);
+      setChequeMatches(cheques);
       setHistory(hist);
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to load", null);
@@ -126,6 +131,18 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
   const confirmCombination = (line: StatementLineRow, entries: UnmatchedLedgerRow[]) =>
     run(() => confirmMatch({ bankAccountId, statementLineIds: [line.id], journalLineIds: entries.map((e) => e.journalLineId), matchType: "suggested" }), "Failed to confirm the match");
+
+  // A bank line that proves a cheque cleared: this records the cheque's payment or receipt, dated the day of the line, and matches it.
+  async function confirmCheque(line: StatementLineRow, c: ChequeCandidate) {
+    const what = c.kind === "issued" ? `a payment of ${fmt(c.amount)} to ${c.party}` : `a receipt of ${fmt(c.amount)} from ${c.party}`;
+    const yes = await ask(`Mark cheque ${c.chequeNumber} as cleared on ${line.transactionDate}? This records ${what} in your books and matches it to this bank line.`, { confirmLabel: "Clear and match" });
+    if (!yes) return;
+    setFindingFor(null);
+    await run(async () => {
+      const r = await confirmChequeMatch({ bankAccountId, statementLineId: line.id, kind: c.kind, chequeId: c.chequeId, score: c.score });
+      if (!r.ok) throw new Error(r.error);
+    }, "The cheque couldn't be matched");
+  }
 
   // The receipt or payment form from Payments, filled in from the bank line, for money from a customer or to a supplier.
   async function recordPayment(line: StatementLineRow) {
@@ -214,13 +231,15 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
     }
   }
   const rows: Row[] = workspace.statementLines.map((line) => {
-    if (line.matchStatus !== "unmatched") return { line, state: "matched", entries: workspace.matches[line.matchId ?? ""] ?? [], suggestion: null, combo: [] };
+    if (line.matchStatus !== "unmatched") return { line, state: "matched", entries: workspace.matches[line.matchId ?? ""] ?? [], suggestion: null, combo: [], cheque: null };
     const suggestion = suggestions[line.id] ?? null;
     const combo = combos[line.id] ?? [];
-    return { line, state: suggestion ? (suggestion.tier === "exact" ? "exact" : "likely") : combo.length ? "likely" : "none", entries: [], suggestion, combo };
+    // A ledger entry or a combination of entries wins; otherwise a cheque that has not cleared in the books yet.
+    const cheque = !suggestion && combo.length === 0 ? (chequeMatches[line.id]?.[0] ?? null) : null;
+    return { line, state: suggestion ? (suggestion.tier === "exact" ? "exact" : "likely") : combo.length ? "likely" : cheque ? (cheque.tier === "exact" ? "exact" : "likely") : "none", entries: [], suggestion, combo, cheque };
   });
   const todo = rows.filter((r) => r.state !== "matched");
-  const exactCount = todo.filter((r) => r.state === "exact" && !lockedOn(r.line.transactionDate)).length;
+  const exactCount = todo.filter((r) => r.state === "exact" && !r.cheque && !lockedOn(r.line.transactionDate)).length;
   const flaggedCount = rows.filter((r) => r.line.flagged).length;
   const shown = rows.filter((r) => (filter === "todo" ? r.state !== "matched" : filter === "matched" ? r.state === "matched" : filter === "flagged" ? r.line.flagged : true));
   const unmatchedBank = workspace.statementLines.filter((l) => l.matchStatus === "unmatched");
@@ -316,7 +335,9 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
               ? r.entries
               : r.suggestion
                 ? [{ date: r.suggestion.entryDate, text: r.suggestion.memo || r.suggestion.description || r.suggestion.referenceNumber || "Ledger entry", amount: r.suggestion.signedAmount }]
-                : r.combo.map((l) => ({ date: l.entryDate, text: l.memo || l.description || l.referenceNumber || "Ledger entry", amount: l.signedAmount }));
+                : r.cheque
+                  ? [{ date: r.cheque.chequeDate, text: `Cheque ${r.cheque.chequeNumber} ${r.cheque.kind === "issued" ? "to" : "from"} ${r.cheque.party}. Not in your books until it is cleared here.`, amount: r.line.amount }]
+                  : r.combo.map((l) => ({ date: l.entryDate, text: l.memo || l.description || l.referenceNumber || "Ledger entry", amount: l.signedAmount }));
           return (
             <div key={r.line.id} className="grid grid-cols-[2rem_1fr_1fr] items-stretch gap-2 lg:grid-cols-[2rem_1fr_1fr_11rem]">
               <div className="flex items-center justify-center text-xs text-[var(--text-secondary)]">{i + 1}</div>
@@ -351,6 +372,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                       <p className="text-xs opacity-80">
                         <D value={m.date} />
                         {r.state === "likely" && r.suggestion ? ` · ${r.suggestion.score}% sure` : ""}
+                        {r.cheque ? ` · cheque date · ${r.cheque.score}% sure` : ""}
                         {r.combo.length > 1 && k === 0 ? ` · ${r.combo.length} entries add up to ${fmt(r.line.amount)}` : ""}
                       </p>
                       <p className="flex items-center justify-between gap-3">
@@ -371,6 +393,11 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
                   </>
                 ) : (
                   <>
+                    {r.cheque && (
+                      <button type="button" disabled={busy || locked} onClick={() => confirmCheque(r.line, r.cheque!)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
+                        Clear cheque
+                      </button>
+                    )}
                     {(r.suggestion || r.combo.length > 0) && (
                       <button type="button" disabled={busy || locked} onClick={() => (r.suggestion ? confirmSuggested(r.line, r.suggestion) : confirmCombination(r.line, r.combo))} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
                         OK
@@ -416,6 +443,8 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
           locked={lockedOn(findingFor.transactionDate)}
           onClose={() => setFindingFor(null)}
           onDone={load}
+          chequeCandidates={chequeMatches[findingFor.id] ?? []}
+          onConfirmCheque={(c) => confirmCheque(findingFor, c)}
           onRecordPayment={() => recordPayment(findingFor)}
           onFlag={() => setFlagging(findingFor)}
         />
