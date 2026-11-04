@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { Logo } from "@/components/brand/logo";
 
 // Only ever return to a relative path inside this app.
 function safeCallback(): string {
@@ -34,82 +35,103 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-lg shadow p-8 space-y-4" autoComplete="on">
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Client Books Sign In</h1>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
-          />
+    <div className="grid min-h-screen grid-cols-1 bg-surface lg:grid-cols-2">
+      <aside className="flex flex-col justify-between bg-[#1e2133] px-6 py-5 text-white lg:px-10 lg:py-10">
+        <Logo tone="dark" size={28} className="text-white" />
+        <div className="hidden lg:block">
+          <p className="max-w-sm text-[28px] font-semibold leading-9 tracking-tight">
+            Your books, your cash,
+            <br />
+            one clear picture.
+          </p>
         </div>
+        <p className="hidden text-xs text-[#8d90ad] lg:block">Made for every business around the globe</p>
+      </aside>
 
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-gray-700">Password</label>
-            <Link href="/forgot-password" className="text-xs text-[var(--accent-text)] hover:underline">
-              Forgot password?
-            </Link>
-          </div>
-          <div className="relative">
+      <main className="flex items-center justify-center px-6 py-10">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4" autoComplete="on">
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Sign in</h1>
+
+          <div>
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-ink-2">
+              Email
+            </label>
             <input
-              type={showPassword ? "text" : "password"}
-              name="password"
+              id="email"
+              type="email"
+              name="email"
               required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 pr-16 text-sm"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              aria-pressed={showPassword}
-              className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-gray-500 hover:text-gray-800"
-            >
-              {showPassword ? "Hide" : "Show"}
-            </button>
           </div>
-        </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
-          Remember me
-        </label>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="password" className="block text-sm font-medium text-ink-2">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-xs text-[var(--accent-text)] hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-[5px] pr-16 text-[13px] text-ink transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-ink-2 hover:text-ink"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+          <label className="flex items-center gap-2 text-sm text-ink-2">
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4 rounded border-line-strong" />
+            Remember me
+          </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 w-full"
-        >
-          {loading ? "Signing in..." : "Login"}
-        </button>
+          {error && <p className="text-sm text-[var(--danger-text)]">{error}</p>}
 
-        <div className="space-y-2 border-t border-gray-100 pt-4 text-center text-sm text-gray-500">
-          <p>
-            Setting up a business?{" "}
-            <Link href="/register" className="text-[var(--accent-text)] hover:underline">
-              Create a business account
-            </Link>
-          </p>
-          <p>
-            Joining an organization that already uses Client Books?{" "}
-            <Link href="/register/user" className="text-[var(--accent-text)] hover:underline">
-              Create a user account
-            </Link>
-          </p>
-        </div>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+
+          <div className="space-y-2 border-t border-line pt-4 text-center text-sm text-ink-2">
+            <p>
+              Setting up a business?{" "}
+              <Link href="/register" className="text-[var(--accent-text)] hover:underline">
+                Create a business account
+              </Link>
+            </p>
+            <p>
+              Joining an organization that already uses Workdela?{" "}
+              <Link href="/register/user" className="text-[var(--accent-text)] hover:underline">
+                Create a user account
+              </Link>
+            </p>
+          </div>
+          <p className="pt-2 text-center text-xs text-ink-2 lg:hidden">Made for every business around the globe</p>
+        </form>
+      </main>
     </div>
   );
 }

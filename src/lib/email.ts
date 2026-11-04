@@ -1,6 +1,6 @@
 // Email delivery through Resend's HTTP API (no SDK needed). Configure with:
 //   RESEND_API_KEY  — from resend.com
-//   EMAIL_FROM      — e.g. "Client Books <noreply@yourdomain.com>" (needs a
+//   EMAIL_FROM      — e.g. "Workdela <noreply@yourdomain.com>" (needs a
 //                     verified domain; defaults to Resend's test sender, which
 //                     can only deliver to your own Resend account email)
 //   APP_URL         — public base URL used in links (default http://localhost:3100)
@@ -63,7 +63,7 @@ ${input.text}
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: process.env.EMAIL_FROM ?? "Client Books <onboarding@resend.dev>",
+        from: process.env.EMAIL_FROM ?? "Workdela <onboarding@resend.dev>",
         to: [input.to],
         subject: input.subject,
         html: input.html,
@@ -99,7 +99,7 @@ function layout(title: string, body: string, link: string, cta: string) {
 
 export function verificationEmail(name: string, link: string) {
   return {
-    subject: "Verify your email — Client Books",
+    subject: "Verify your email — Workdela",
     html: layout("Verify your email", `Hi ${esc(name)}, please confirm this is your email address.`, link, "Verify email"),
     text: `Hi ${name}, verify your email: ${link}`,
   };
@@ -107,7 +107,7 @@ export function verificationEmail(name: string, link: string) {
 
 export function passwordResetEmail(link: string) {
   return {
-    subject: "Reset your password — Client Books",
+    subject: "Reset your password — Workdela",
     html: layout("Reset your password", "We received a request to reset your password. This link expires in 1 hour. If you didn't ask for this, ignore this email.", link, "Reset password"),
     text: `Reset your password (valid 1 hour): ${link}`,
   };
@@ -115,15 +115,15 @@ export function passwordResetEmail(link: string) {
 
 export function addedToOrganizationEmail(orgName: string, adderName: string, roleLabel: string, link: string) {
   return {
-    subject: `You've been added to ${orgName} — Client Books`,
-    html: layout(`You're now part of ${esc(orgName)}`, `${esc(adderName)} added you to <b>${esc(orgName)}</b> as <b>${esc(roleLabel)}</b>. You can sign in with your existing email and password; if this isn't expected you can leave the organization from your account.`, link, "Open Client Books"),
+    subject: `You've been added to ${orgName} — Workdela`,
+    html: layout(`You're now part of ${esc(orgName)}`, `${esc(adderName)} added you to <b>${esc(orgName)}</b> as <b>${esc(roleLabel)}</b>. You can sign in with your existing email and password; if this isn't expected you can leave the organization from your account.`, link, "Open Workdela"),
     text: `${adderName} added you to ${orgName} as ${roleLabel}. Sign in with your existing account: ${link}`,
   };
 }
 
 export function invitationEmail(orgName: string, inviterName: string, roleLabel: string, link: string) {
   return {
-    subject: `You've been invited to ${orgName} — Client Books`,
+    subject: `You've been invited to ${orgName} — Workdela`,
     html: layout(`Join ${esc(orgName)}`, `${esc(inviterName)} invited you to <b>${esc(orgName)}</b> as <b>${esc(roleLabel)}</b>. This invitation expires in 7 days.`, link, "View invitation"),
     text: `${inviterName} invited you to ${orgName} as ${roleLabel}. Open: ${link}`,
   };

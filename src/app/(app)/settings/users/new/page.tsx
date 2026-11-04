@@ -11,7 +11,7 @@ export default async function AddUserPage() {
   const data = await getAddUserData();
   return (
     <div className="space-y-5">
-      <SettingsHeader title="Add user" description="Add someone who already has a Client Books account, by their email address." />
+      <SettingsHeader title="Add user" description="Add someone who already has a Workdela account, by their email address." />
       <UserTabs active="new" />
       <AddUserForm data={data} />
     </div>

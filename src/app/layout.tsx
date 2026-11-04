@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Client Books",
-  description: "Multi-tenant client accounting platform",
+  title: "Workdela",
+  description: "Accounting, cash planning and compliance for your business",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

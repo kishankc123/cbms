@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavIconKey } from "@/components/shell/icons";
 import { UserMenu } from "./user-menu";
+import { Logo } from "@/components/brand/logo";
 import { sidebarCookieName } from "@/lib/sidebar";
 import { themeCookieName, parseTheme } from "@/lib/theme";
 
@@ -245,7 +246,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <InventoryProvider openingDate={inventoryOpeningDate}>
     <AppShell
       initialCollapsed={sidebarCollapsed}
-      brand={<p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-text-active)]">Client Books</p>}
+      brand={<Logo tone="dark" className="text-[var(--sidebar-text-active)]" />}
       nav={<AppNav items={visibleNav(NAV, session)} />}
       topLeft={
         <>
