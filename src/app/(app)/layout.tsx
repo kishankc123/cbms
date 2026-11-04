@@ -71,6 +71,7 @@ const NAV: NavEntry[] = [
     children: [
       { href: "/payments/money-in", label: "Money In" },
       { href: "/payments/money-out", label: "Money Out" },
+      { href: "/payments/cheques", label: "Issued Cheques" },
       { href: "/payments/inter-transfer", label: "Inter-Transfer" },
     ],
   },
