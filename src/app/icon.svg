@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="32" height="32">
+  <style>
+    .a { stroke: #5b5fc7; }
+    .b { stroke: #1d9e75; }
+    @media (prefers-color-scheme: dark) {
+      .a { stroke: #afa9ec; }
+      .b { stroke: #5dcaa5; }
+    }
+  </style>
+  <polyline class="a" points="6,14 18,42 30,14" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <polyline class="b" points="26,14 38,42 50,14" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+</svg>
