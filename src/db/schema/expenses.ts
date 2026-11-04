@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, date, numeric, integer, jsonb, pgEnum, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
@@ -71,4 +72,4 @@ export const expenses = pgTable("expenses", {
   /** Set when the expense came in through Import Expenses. */
   importId: uuid("import_id").references(() => expenseImports.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("expenses_tenant_number").on(t.tenantId, t.expenseNumber), index("expenses_tenant_due").on(t.tenantId, t.dueDate)]);
+}, (t) => [uniqueIndex("expenses_tenant_number").on(t.tenantId, t.expenseNumber), index("expenses_tenant_due").on(t.tenantId, t.dueDate), index("expenses_tenant_description").on(t.tenantId, sql`lower(${t.description}) text_pattern_ops`)]);

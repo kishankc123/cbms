@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createExpense, getTdsRateOn, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import type { ExpenseSuggestion } from "@/lib/expenses/suggestion-rules";
+import { D } from "@/components/calendar/date-text";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
@@ -104,11 +106,40 @@ export function ExpenseFormModal({
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [asking, setAsking] = useState(false);
+  // What the typed description meant last time. Only for a new expense; it is shown, never filled in without a click.
+  const [found, setFound] = useState<{ text: string; suggestion: ExpenseSuggestion | null } | null>(null);
+  const [applied, setApplied] = useState<string | null>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
   // Payments recorded later in Payments pin the amounts: then only the details can be edited.
   const locked = Boolean(initial?.detailsOnly);
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const ask = useConfirm();
   const { problem, report, dialog } = useProblem();
+
+  // The date is already today, so the cursor starts in the description.
+  useEffect(() => {
+    if (initial) return;
+    const t = setTimeout(() => descriptionRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Looks up the description a quarter of a second after typing stops. A late answer for older text is thrown away.
+  useEffect(() => {
+    const text = description.trim();
+    if (initial || text.length < 2) return;
+    let live = true;
+    const t = setTimeout(() => {
+      suggestExpense(text)
+        .then((suggestion) => live && setFound({ text, suggestion }))
+        .catch(() => live && setFound(null));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [description, initial]);
+  const suggestion = !initial && found && found.text === description.trim() ? found.suggestion : null;
 
   // The TDS heading follows the chosen category (set on it or its group in the Chart of Accounts); its rate is the platform's, on the expense date.
   const tdsHead = categoryAccounts.find((c) => c.id === categoryAccountId)?.tdsHeadKey ?? null;
@@ -148,6 +179,16 @@ export function ExpenseFormModal({
     else categoryGroups.push({ label, items: [a] });
   }
   categoryGroups.sort((a, b) => (a.label === null ? -1 : b.label === null ? 1 : a.label.localeCompare(b.label)));
+
+  const categoryName = (id: string) => {
+    const c = categoryAccounts.find((x) => x.id === id);
+    return c ? `${c.code} — ${c.name}` : null;
+  };
+  function applySuggestion(categoryId: string, amount: number | null) {
+    setCategoryAccountId(categoryId);
+    if (amount !== null) setTaxableAmount(String(amount));
+    setApplied(suggestion?.last.number ?? "");
+  }
 
   const accountLabels: Record<string, string> = {};
   for (const g of cashBankAccounts) {
@@ -227,7 +268,7 @@ export function ExpenseFormModal({
   return (
     <>
       <Modal
-        size="lg"
+        size="xl"
         title={initial ? `Edit expense ${initial.expenseNumber}` : "New expense"}
         onClose={onClose}
         dismissible={!showPayment && !problem && !saving && !asking}
@@ -245,22 +286,95 @@ export function ExpenseFormModal({
           </>
         }
       >
-        <div className="space-y-5">
+        <div className="space-y-4">
           {locked && (
             <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
               Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
             </p>
           )}
 
-          <section className="space-y-3">
-            <SectionTitle>Expense information</SectionTitle>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Expense number">
-                <Input disabled value={initial?.expenseNumber ?? "Auto-generated on save"} readOnly />
-              </Field>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.95fr)]">
+            <section className="space-y-3">
+              <SectionTitle>What and when</SectionTitle>
               <Field label="Expense date">
                 <DatePicker id="exp-expenseDate" disabled={locked} max={today()} value={expenseDate} onChange={(v) => setExpenseDate(v)} className={`${controlClass} w-full`} />
               </Field>
+              <Field label="Description">
+                <Input ref={descriptionRef} value={description} onChange={(e) => setDescription(e.target.value)} autoComplete="off" />
+              </Field>
+
+              {suggestion && (
+                <div className="rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink" aria-live="polite">
+                  <p className="font-medium">
+                    You have used &ldquo;{suggestion.description}&rdquo; {suggestion.times === 1 ? "once" : `${suggestion.times} times`} before
+                  </p>
+                  <dl className="mt-1.5 space-y-0.5 text-xs text-ink-2">
+                    <div className="flex justify-between gap-3">
+                      <dt>Last category</dt>
+                      <dd className="text-right text-ink">{categoryName(suggestion.last.categoryAccountId) ?? "No longer available"}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Last date</dt>
+                      <dd className="text-right text-ink">
+                        <D value={suggestion.last.date} />
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Last amount</dt>
+                      <dd className="text-right text-ink">
+                        <Amount value={suggestion.last.amount} />
+                      </dd>
+                    </div>
+                    {suggestion.range && (
+                      <div className="flex justify-between gap-3">
+                        <dt>Usually</dt>
+                        <dd className="text-right text-ink">
+                          <Amount value={suggestion.range.min} /> to <Amount value={suggestion.range.max} />
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                  {applied !== null ? (
+                    <p className="mt-2 text-xs text-ink-2">Filled in from {applied || "the last one"}. You can change anything.</p>
+                  ) : (
+                    categoryName(suggestion.last.categoryAccountId) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <Button size="sm" onClick={() => applySuggestion(suggestion.last.categoryAccountId, null)}>
+                          Use category
+                        </Button>
+                        <Button size="sm" onClick={() => applySuggestion(suggestion.last.categoryAccountId, suggestion.last.amount)}>
+                          Use category and amount
+                        </Button>
+                      </div>
+                    )
+                  )}
+                  {applied === null && suggestion.others.some((o) => categoryName(o.categoryAccountId)) && (
+                    <p className="mt-2 text-xs text-ink-2">
+                      Also used for:{" "}
+                      {suggestion.others
+                        .filter((o) => categoryName(o.categoryAccountId))
+                        .slice(0, 3)
+                        .map((o, i) => (
+                          <span key={o.categoryAccountId}>
+                            {i > 0 && ", "}
+                            <button type="button" className="text-accent-text hover:underline" onClick={() => applySuggestion(o.categoryAccountId, null)}>
+                              {categoryName(o.categoryAccountId)}
+                            </button>{" "}
+                            ({o.count})
+                          </span>
+                        ))}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Field label="Expense number">
+                <Input disabled value={initial?.expenseNumber ?? "Auto-generated on save"} readOnly />
+              </Field>
+            </section>
+
+            <section className="space-y-3">
+              <SectionTitle>Category and supplier</SectionTitle>
               <Field label="Expense category">
                 <Select data-field="category" disabled={locked} value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)}>
                   <option value="">Select category</option>
@@ -291,94 +405,85 @@ export function ExpenseFormModal({
                   <SupplierSelect value={vendorId} options={vendors} onChange={(id) => setVendorId(id)} onAdded={addVendor} disabled={locked} className={`${controlClass} w-full bg-surface text-left`} />
                 </div>
               </div>
-              <Field label="Description" className="sm:col-span-2">
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} />
-              </Field>
-            </div>
-          </section>
 
-          <section className="space-y-3">
-            <SectionTitle>Invoice / supporting document</SectionTitle>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Bill type">
-                <Select data-field="billType" disabled={locked} value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)}>
-                  {BILL_TYPES.map((b) => (
-                    <option key={b.value} value={b.value}>
-                      {b.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Invoice number (optional)">
-                <Input data-field="invoiceNumber" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
-              </Field>
-              <Field label="Invoice date">
-                <DatePicker id="exp-invoiceDate" max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className={`${controlClass} w-full`} />
-              </Field>
-              <Field label="Due date (optional)">
-                <DatePicker id="exp-dueDate" min={invoiceDate || expenseDate} value={dueDate} onChange={(v) => setDueDate(v)} className={`${controlClass} w-full`} />
-              </Field>
-            </div>
-            <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
-          </section>
-
-          <fieldset disabled={locked} className="min-w-0 border-0 p-0">
-            <section className="space-y-3">
-              <SectionTitle>Tax information</SectionTitle>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Taxable amount">
-                  <Input type="number" step="0.01" min="0" data-field="taxable" value={taxableAmount} onChange={(e) => setTaxableAmount(e.target.value)} className="text-right" />
-                </Field>
-                <Field label="Tax treatment">
-                  <Select data-field="taxTreatment" value={taxTreatment} onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}>
-                    {TAX_TREATMENTS.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
+              <div className="pt-2">
+                <SectionTitle>Invoice / supporting document</SectionTitle>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Bill type">
+                  <Select data-field="billType" disabled={locked} value={billType} onChange={(e) => setBillType(e.target.value as ExpenseBillType)}>
+                    {BILL_TYPES.map((b) => (
+                      <option key={b.value} value={b.value}>
+                        {b.label}
                       </option>
                     ))}
                   </Select>
                 </Field>
-                <div className="hidden sm:block" />
-                <Field label={`VAT (${vatRate}% default)${billType !== "vat" ? " — VAT bill only" : ""}`}>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    data-field="vat"
-                    disabled={billType !== "vat"}
-                    value={vatAmount}
-                    onChange={(e) => {
-                      setVatTouched(true);
-                      setVatAmount(e.target.value);
-                    }}
-                    className="text-right"
-                  />
+                <Field label="Invoice number (optional)">
+                  <Input data-field="invoiceNumber" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
                 </Field>
-                <Field label={`TDS ${tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}`}>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    data-field="tds"
-                    value={tdsAmount}
-                    onChange={(e) => {
-                      setTdsTouched(true);
-                      setTdsAmount(e.target.value);
-                    }}
-                    className="text-right"
-                  />
+                <Field label="Invoice date">
+                  <DatePicker id="exp-invoiceDate" max={today()} value={invoiceDate} onChange={(v) => setInvoiceDate(v)} className={`${controlClass} w-full`} />
                 </Field>
-                <Field label="Other applicable tax">
-                  <Input type="number" step="0.01" min="0" value={otherTaxAmount} onChange={(e) => setOtherTaxAmount(e.target.value)} className="text-right" />
+                <Field label="Due date (optional)">
+                  <DatePicker id="exp-dueDate" min={invoiceDate || expenseDate} value={dueDate} onChange={(v) => setDueDate(v)} className={`${controlClass} w-full`} />
                 </Field>
               </div>
+              <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
             </section>
-          </fieldset>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <div>
-              <SectionTitle>Amount</SectionTitle>
-              <div className="mt-2 space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
+            <section className="space-y-3">
+              <fieldset disabled={locked} className="min-w-0 space-y-3 border-0 p-0">
+                <SectionTitle>Amount and tax</SectionTitle>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Taxable amount">
+                    <Input type="number" step="0.01" min="0" data-field="taxable" value={taxableAmount} onChange={(e) => setTaxableAmount(e.target.value)} className="text-right" />
+                  </Field>
+                  <Field label="Tax treatment">
+                    <Select data-field="taxTreatment" value={taxTreatment} onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}>
+                      {TAX_TREATMENTS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label={`VAT (${vatRate}% default)${billType !== "vat" ? " — VAT bill only" : ""}`}>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      data-field="vat"
+                      disabled={billType !== "vat"}
+                      value={vatAmount}
+                      onChange={(e) => {
+                        setVatTouched(true);
+                        setVatAmount(e.target.value);
+                      }}
+                      className="text-right"
+                    />
+                  </Field>
+                  <Field label="Other applicable tax">
+                    <Input type="number" step="0.01" min="0" value={otherTaxAmount} onChange={(e) => setOtherTaxAmount(e.target.value)} className="text-right" />
+                  </Field>
+                  <Field label={`TDS ${tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}`} className="sm:col-span-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      data-field="tds"
+                      value={tdsAmount}
+                      onChange={(e) => {
+                        setTdsTouched(true);
+                        setTdsAmount(e.target.value);
+                      }}
+                      className="text-right"
+                    />
+                  </Field>
+                </div>
+              </fieldset>
+
+              <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
                 <Line label="Subtotal" value={<Amount value={subtotal} />} />
                 <Line label="VAT" value={<Amount value={vat} />} />
                 <Line label="Other tax" value={<Amount value={otherTax} />} />
@@ -386,11 +491,8 @@ export function ExpenseFormModal({
                 <Line label="TDS withheld" value={<span className="tnum">-{tds.toFixed(2)}</span>} className="text-ink-2" />
                 <Line label="Amount payable" value={<Amount value={amountPayable} />} className="border-t border-line pt-1 font-semibold" />
               </div>
-            </div>
 
-            <div>
-              <SectionTitle>Settlement</SectionTitle>
-              <div className="mt-2 space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
+              <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
                 {payments.length === 0 && remaining <= 0 && <p className="text-ink-2">Unpaid</p>}
                 {payments.map((p, i) => (
                   <Line key={i} label={accountLabels[p.accountId] ?? "Account"} value={<Amount value={p.amount} />} />
@@ -398,8 +500,8 @@ export function ExpenseFormModal({
                 {remaining > 0 && <Line label="Expense Payable (unpaid)" value={<Amount value={remaining} />} />}
                 <Line label="Amount payable" value={<Amount value={amountPayable} />} className="border-t border-line pt-1 font-semibold" />
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </Modal>
 

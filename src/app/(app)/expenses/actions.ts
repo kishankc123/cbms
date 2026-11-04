@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { expenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { tdsRateOn } from "@/lib/compliance/tds-rate";
+import { suggestForDescription } from "@/lib/expenses/suggestions";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
@@ -363,6 +364,14 @@ export async function getExpenseTaxDefaults() {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "view")) throw new Error("Not permitted");
   return { vatRate: await getCurrentTaxRate(session.tenantId, "vat") };
+}
+
+/** The rate of a TDS heading on a given date (0 when none is published), for the Expense form: by the supplier's business type where the heading asks for it. */
+/** What the typed description meant last time (category, date, amount), for the new-expense form. Nothing is saved or filled in by this. */
+export async function suggestExpense(description: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "create")) throw new Error("Not permitted");
+  return suggestForDescription(session.tenantId, typeof description === "string" ? description : "");
 }
 
 /** The rate of a TDS heading on a given date (0 when none is published), for the Expense form: by the supplier's business type where the heading asks for it. */
