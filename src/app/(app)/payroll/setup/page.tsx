@@ -1,26 +1,20 @@
 import { guardView, guardSalary } from "@/components/page-guard";
-import { asc, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { payrollComponents } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getOrCreateSettings } from "@/lib/payroll/settings";
-import { SetupTabs } from "./setup-tabs";
+import { SettingsForm } from "./settings-form";
 import { PageHeader } from "@/components/ui/page-header";
 
-export default async function PayrollSetupPage() {
+// How a payroll month is worked out: proration, working days, holidays, the pay period and rounding. Allowances and deductions are under Salary structure.
+export default async function PayrollSettingsPage() {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
   if (denied) return denied;
   const session = await requireTenantSession();
-
-  const [settings, components] = await Promise.all([
-    getOrCreateSettings(session.tenantId),
-    db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId)).orderBy(asc(payrollComponents.name)),
-  ]);
+  const settings = await getOrCreateSettings(session.tenantId);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Payroll setup" className="!mb-0" />
-      <SetupTabs settings={settings} components={components} />
+      <PageHeader title="Payroll settings" className="!mb-0" />
+      <SettingsForm settings={settings} />
     </div>
   );
 }

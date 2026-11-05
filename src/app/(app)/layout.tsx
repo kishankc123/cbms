@@ -103,13 +103,14 @@ const NAV: NavEntry[] = [
     icon: "payroll",
     label: "Payroll",
     children: [
+      { href: "/payroll", label: "Overview" },
       { href: "/payroll/employees", label: "Employees" },
-      { href: "/payroll/attendance", label: "Attendance" },
-      { href: "/payroll/salary-sheet", label: "Salary sheet" },
-      { href: "/payroll/benefits", label: "Benefits" },
+      { href: "/payroll/structure", label: "Salary structure" },
+      { href: "/payroll/salary-sheet", label: "Payroll processing" },
       { href: "/payroll/contributions", label: "Contributions" },
+      { href: "/payroll/tax", label: "Tax configuration" },
       { href: "/payroll/reports", label: "Reports" },
-      { href: "/payroll/setup", label: "Setup" },
+      { href: "/payroll/setup", label: "Settings" },
     ],
   },
   {
