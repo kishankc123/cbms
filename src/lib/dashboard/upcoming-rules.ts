@@ -77,4 +77,6 @@ export type UpcomingParty = {
   outstanding: number;
   /** The nearest (or most overdue) due date among this party's open documents. */
   earliestDue: string;
+  /** What cheques already written for this supplier cover of what they are owed. */
+  chequeCovered?: number;
 };

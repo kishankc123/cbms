@@ -771,6 +771,20 @@
       "when": 1793757446815,
       "tag": "0109_expense_description_index",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1793762510120,
+      "tag": "0110_issued_cheques",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1793764583194,
+      "tag": "0111_received_cheques",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { useProblem } from "@/components/problem-dialog";
 import { confirmMatch, createBankTransaction, type StatementLineRow, type UnmatchedLedgerRow } from "./actions";
 import { AccountPicker, postableAccounts, type AccountOption } from "./account-picker";
 import { FlagIcon } from "./flag-dialog";
+import type { ChequeCandidate } from "@/lib/cheques/reconcile-rules";
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -34,6 +35,8 @@ export function LinePanel({
   locked,
   onClose,
   onDone,
+  chequeCandidates,
+  onConfirmCheque,
   onRecordPayment,
   onFlag,
 }: {
@@ -45,6 +48,9 @@ export function LinePanel({
   locked: boolean;
   onClose: () => void;
   onDone: () => void;
+  /** Cheques not yet cleared in the books that this line could be, and what to do when one is chosen. */
+  chequeCandidates: ChequeCandidate[];
+  onConfirmCheque: (c: ChequeCandidate) => void;
   onRecordPayment: () => void;
   onFlag: () => void;
 }) {
@@ -128,6 +134,24 @@ export function LinePanel({
 
         {tab === "find" ? (
           <>
+            {chequeCandidates.length > 0 && (
+              <div className="space-y-2 rounded border border-[var(--status-action-border)] bg-[var(--status-action-bg)] p-3">
+                <p className="text-sm font-medium text-[var(--status-action-text)]">This could be a cheque that has not cleared in your books yet</p>
+                <ul className="space-y-1.5">
+                  {chequeCandidates.map((c) => (
+                    <li key={c.chequeId} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 text-[var(--text-primary)]">
+                        Cheque {c.chequeNumber} {c.kind === "issued" ? "to" : "from"} {c.party}, <D value={c.chequeDate} />
+                        <span className="block text-xs text-[var(--text-secondary)]">{c.reasons.join(". ")}.</span>
+                      </span>
+                      <button type="button" disabled={busy || locked} onClick={() => onConfirmCheque(c)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
+                        Clear and match
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search your books by description, reference or amount" className={field} />
             <div className="max-h-64 overflow-y-auto rounded border border-[var(--card-border)]">
               {sorted.length === 0 ? (
