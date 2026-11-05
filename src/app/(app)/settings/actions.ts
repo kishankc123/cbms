@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { tenants } from "@/db/schema";
+import { inventorySettings, tenants } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { INVOICE_NUMBER_FORMATS } from "@/lib/invoice-number";
 import { logAuditEvent } from "@/lib/audit";
@@ -25,6 +25,17 @@ export async function updateCompanyDetails(formData: FormData) {
   revalidatePath("/settings", "layout");
   revalidatePath("/dashboard");
   revalidatePath("/compliance");
+}
+
+// Whether this organization keeps stock and works out cost of goods sold. Turning it off only changes how NEW purchases are entered (by bill
+// amount, with no item lines); stock already in the books stays where it is.
+export async function updateTrackInventory(input: { track: boolean }) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
+  const track = Boolean(input.track);
+  await db.insert(inventorySettings).values({ tenantId: session.tenantId, trackInventory: track }).onConflictDoUpdate({ target: inventorySettings.tenantId, set: { trackInventory: track } });
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "track_inventory_changed", entityType: "inventory_settings", entityId: session.tenantId, after: { trackInventory: track } });
+  revalidatePath("/", "layout");
 }
 
 export async function updateOtherSettings(formData: FormData) {

@@ -18,6 +18,7 @@ import { todayIso } from "@/lib/calendar";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment, nextAutoBillNumber } from "@/lib/purchases/bill-records";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
+import { getTrackInventory } from "@/lib/inventory/stock";
 import {
   billLineItems,
   cashPurchaseEntryLines,
@@ -598,4 +599,71 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
   await recalculateAfter(session.tenantId, [...validLines, ...(existing.lineItems ?? [])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
+}
+
+// ---- Purchases recorded by bill amount only (an organization that does not track inventory) ----
+
+/** One row of the amount-only grid: a whole purchase bill, with no items. The amount is before VAT; VAT is added for a VAT bill. */
+export type AmountPurchaseRow = {
+  billDate: string;
+  vendorId: string;
+  billNumber: string;
+  billType: CashBillType;
+  /** The Purchases account, or one of its sub-accounts. */
+  categoryId: string;
+  description: string;
+  amount: number;
+  discount: number;
+  billAvailable?: boolean;
+  payments: CashPaymentLine[];
+};
+
+const asBill = (r: AmountPurchaseRow): CashPurchaseInput => ({
+  billNumber: r.billNumber,
+  billDate: r.billDate,
+  vendorId: r.vendorId,
+  billType: r.billType,
+  billAvailable: r.billAvailable,
+  lines: [{ description: r.description, categoryId: r.categoryId, rate: r.amount, quantity: 1, discount: r.discount }],
+  payments: r.payments,
+});
+
+export type AmountPurchasesResult = { saved: number } & ({ ok: true } | { ok: false; error: string });
+
+/**
+ * Records many purchase bills in one go, one per row, by their amount. It posts exactly like any other bill (the Purchases account, VAT, the
+ * supplier's payable, the payments), through the same writer, so nothing about the books differs. Every row is checked first; if one fails while
+ * saving, the rows before it stay saved and the message says which row stopped.
+ */
+export async function recordAmountPurchases(input: { rows: AmountPurchaseRow[] }): Promise<AmountPurchasesResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  if (await getTrackInventory(session.tenantId)) throw new Error("This organization keeps stock, so purchases are entered with the items bought (Stockable purchase).");
+  const rows = input.rows;
+  if (rows.length === 0) throw new Error("Add at least one purchase");
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      if (!rows[i].billDate) throw new Error("Enter the bill date");
+      await prepareCashPurchase(session.tenantId, asBill(rows[i]));
+    } catch (e) {
+      throw new Error(`Row ${i + 1}: ${e instanceof Error ? e.message : "could not be checked"}`);
+    }
+  }
+
+  const taken = new Set((await db.select({ n: purchaseBills.billNumber }).from(purchaseBills).where(eq(purchaseBills.tenantId, session.tenantId))).map((r) => r.n));
+  let saved = 0;
+  let failure: string | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      await createCashPurchaseCore({ tenantId: session.tenantId, userId: session.userId }, asBill(rows[i]), { takenNumbers: taken });
+      saved++;
+    } catch (e) {
+      failure = `Row ${i + 1} could not be saved: ${e instanceof Error ? e.message : "an error occurred"}${saved > 0 ? ` Rows 1 to ${saved} were saved.` : ""}`;
+      break;
+    }
+  }
+
+  for (const path of ["/purchases/stockable", "/purchases/consumable", "/suppliers", "/dashboard", "/journal"]) revalidatePath(path);
+  return failure ? { ok: false, saved, error: failure } : { ok: true, saved };
 }

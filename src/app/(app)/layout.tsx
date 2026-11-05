@@ -13,7 +13,7 @@ import { AddNoticeBanner } from "@/components/add-notice-banner";
 import { listAddNotices } from "@/lib/org-members";
 import { CalendarProvider } from "@/components/calendar/calendar-provider";
 import { InventoryProvider } from "@/components/inventory/opening-date";
-import { getOpeningDate } from "@/lib/inventory/stock";
+import { getOpeningDate, getTrackInventory } from "@/lib/inventory/stock";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavIconKey } from "@/components/shell/icons";
@@ -206,10 +206,12 @@ const NAV_ACCESS: Record<string, string> = {
 type NavEntry = { href: string; label: string; icon: NavIconKey; children?: { href: string; label: string }[] };
 
 /** Only what this person may open: a group with no visible children disappears with them. */
-function visibleNav(items: NavEntry[], session: Awaited<ReturnType<typeof requireTenantSession>>): NavEntry[] {
+function visibleNav(items: NavEntry[], session: Awaited<ReturnType<typeof requireTenantSession>>, trackInventory: boolean): NavEntry[] {
   const allowed = (access: string | undefined) => !access || (access === "admin" ? isOrgAdmin(session.role) : can(session, access, "view"));
   return items
-    .map((item) => {
+    .map((original) => {
+      // An organization that does not keep stock has one Purchases entry: bills are entered by amount.
+      const item = !trackInventory && original.href === "/purchases" ? { ...original, children: [{ href: "/purchases/stockable", label: "Purchases" }] } : original;
       if (!item.children) return allowed(NAV_ACCESS[item.href]) ? item : null;
       const own = NAV_ACCESS[item.href];
       const children = item.children.filter((c) => allowed(NAV_ACCESS[c.href] ?? own));
@@ -235,10 +237,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUserSession();
   // Independent reads, so run them together. (getActiveFiscalYear never writes — fiscal years are
   // only created explicitly in Settings — so listFiscalYears can't race an auto-create.)
-  const [orgs, notices, inventoryOpeningDate, activeFiscalYear, fiscalYearsList, cookieStore] = await Promise.all([
+  const [orgs, notices, inventoryOpeningDate, trackInventory, activeFiscalYear, fiscalYearsList, cookieStore] = await Promise.all([
     listActiveMemberships(user.id),
     listAddNotices(user.id),
     getOpeningDate(session.tenantId),
+    getTrackInventory(session.tenantId),
     getActiveFiscalYear(session.tenantId),
     listFiscalYears(session.tenantId),
     cookies(),
@@ -252,7 +255,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       initialCollapsed={sidebarCollapsed}
       brand={<Logo tone="dark" className="text-[var(--sidebar-text-active)]" />}
-      nav={<AppNav items={visibleNav(NAV, session)} />}
+      nav={<AppNav items={visibleNav(NAV, session, trackInventory)} />}
       topLeft={
         <>
           <OrgSwitcher

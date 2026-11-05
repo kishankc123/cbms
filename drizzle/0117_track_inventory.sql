@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_settings" ADD COLUMN "track_inventory" boolean DEFAULT true NOT NULL;

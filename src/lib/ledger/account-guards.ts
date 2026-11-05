@@ -4,6 +4,7 @@ import { paymentAllocations, payments, vendors } from "@/db/schema";
 import { getCashBankAccounts } from "./cash-bank-accounts";
 import { modeAccountIds } from "@/lib/payment-modes";
 import { getCogsSubGroups } from "./control-accounts";
+import { getPurchaseCategories } from "./purchases-accounts";
 import { assertSourceNotReconciled } from "./reconciliation-guards";
 
 /**
@@ -16,6 +17,15 @@ export async function assertCashBankAccounts(tenantId: string, accountIds: strin
   const allowed = new Set(groups.flatMap((g) => [g.id, ...g.children.map((c) => c.id)]));
   for (const id of await modeAccountIds(tenantId)) allowed.add(id);
   if (accountIds.some((id) => !allowed.has(id))) throw new Error("Choose a Cash or Bank account of this organization for the payment");
+}
+
+/**
+ * The category of a purchase bill without items must be one of this organization's Cost of Goods Sold sub-groups, or the Purchases account (or
+ * one of its sub-accounts) that an organization not tracking inventory books its bills to.
+ */
+export async function assertPurchaseCategory(tenantId: string, accountId: string) {
+  const allowed = new Set([...(await getCogsSubGroups(tenantId)).map((c) => c.id), ...(await getPurchaseCategories(tenantId)).map((c) => c.id)]);
+  if (!allowed.has(accountId)) throw new Error("Choose a valid purchase category");
 }
 
 /** The category of a consumable purchase must be one of this organization's Cost of Goods Sold sub-groups. */

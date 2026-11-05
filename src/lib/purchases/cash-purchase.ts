@@ -5,7 +5,7 @@ import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertCashBankAccounts, assertPurchaseCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -52,7 +52,7 @@ export function computeCashLine(line: CashPurchaseLine, vatRate: number) {
 export async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput) {
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one line with a rate and quantity");
-  for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertCogsCategory(tenantId, categoryId);
+  for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertPurchaseCategory(tenantId, categoryId);
 
   const vatRate = input.billType === "vat" ? await getTaxRate(tenantId, "vat", input.billDate) : 0;
   const computed = validLines.map((l) => ({ line: l, ...computeCashLine(l, vatRate) }));
