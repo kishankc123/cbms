@@ -2,7 +2,7 @@
 
 import { nextEmployeeCode } from "@/lib/payroll/employee-code";
 import { revalidatePath } from "next/cache";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -12,6 +12,7 @@ import {
   payrollRuns,
   employeeBenefits,
   employeeComponents,
+  employeeRetirement,
   payrollComponents,
   auditLog,
   type employmentTypeEnum,
@@ -25,6 +26,8 @@ import { computeNewSalary } from "@/lib/payroll/salary-change";
 import { createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
 
 import { todayIso } from "@/lib/calendar";
+import { checkEnrolment, type Enrolment } from "@/lib/payroll/employee-retirement";
+import type { EmployeeScheme } from "@/lib/payroll/retirement-rules";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 type EmploymentType = (typeof employmentTypeEnum.enumValues)[number];
@@ -482,4 +485,76 @@ export async function endComponentAssignment(input: { assignmentId: string }) {
   }
   await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "end", entityType: "employee_component", entityId: row.employeeId, afterValue: { component: component?.name ?? row.componentId } });
   revalidatePath(`/payroll/employees/${row.employeeId}`);
+}
+
+export type RetirementInput = { employeeId: string; scheme: EmployeeScheme; registrationNumber: string; startDate: string; endDate: string; citMode: "fixed" | "percent" | null; citValue: number | null; citEmployerValue: number | null; notes: string };
+
+const asEnrolment = (r: typeof employeeRetirement.$inferSelect): Enrolment => ({ id: r.id, scheme: r.scheme as EmployeeScheme, registrationNumber: r.registrationNumber, startDate: r.startDate, endDate: r.endDate, citMode: r.citMode === "percent" ? "percent" : r.citMode === "fixed" ? "fixed" : null, citValue: r.citValue === null ? null : Number(r.citValue), citEmployerValue: r.citEmployerValue === null ? null : Number(r.citEmployerValue) });
+
+// Enrolling someone in SSF, PF or CIT. Nobody is enrolled automatically. SSF and PF can't overlap; CIT can sit beside either.
+export async function addRetirement(input: RetirementInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  if (!["ssf", "pf", "cit"].includes(input.scheme)) throw new Error("Choose a retirement scheme");
+  const [employee] = await db.select().from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId))).limit(1);
+  if (!employee) throw new Error("Employee not found");
+
+  const existing = (await db.select().from(employeeRetirement).where(and(eq(employeeRetirement.tenantId, session.tenantId), eq(employeeRetirement.employeeId, input.employeeId)))).map(asEnrolment);
+  const isCit = input.scheme === "cit";
+  const enrolment: Enrolment = { scheme: input.scheme, registrationNumber: input.registrationNumber.trim() || null, startDate: input.startDate, endDate: input.endDate || null, citMode: isCit ? input.citMode : null, citValue: isCit ? input.citValue : null, citEmployerValue: isCit ? input.citEmployerValue : null };
+  const problem = checkEnrolment(enrolment, existing, { joiningDate: employee.joiningDate, leavingDate: employee.leavingDate });
+  if (problem) throw new Error(problem);
+
+  await db.insert(employeeRetirement).values({
+    tenantId: session.tenantId,
+    employeeId: input.employeeId,
+    scheme: input.scheme,
+    registrationNumber: enrolment.registrationNumber,
+    startDate: enrolment.startDate,
+    endDate: enrolment.endDate,
+    citMode: enrolment.citMode,
+    citValue: enrolment.citValue === null ? null : round2(enrolment.citValue).toFixed(2),
+    citEmployerValue: enrolment.citEmployerValue === null ? null : round2(enrolment.citEmployerValue).toFixed(2),
+    notes: input.notes.trim() || null,
+    createdBy: session.userId,
+  });
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "enrol", entityType: "employee_retirement", entityId: input.employeeId, afterValue: { scheme: input.scheme, startDate: input.startDate, endDate: input.endDate || null } });
+  revalidatePath(`/payroll/employees/${input.employeeId}`);
+}
+
+// Ends a scheme on a date (so payroll stops contributing after it). Earlier months keep what they paid.
+export async function endRetirement(input: { id: string; endDate: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [row] = await db.select().from(employeeRetirement).where(and(eq(employeeRetirement.id, input.id), eq(employeeRetirement.tenantId, session.tenantId))).limit(1);
+  if (!row) throw new Error("That enrolment was not found");
+  if (!input.endDate) throw new Error("Enter the last day of contributions");
+  if (input.endDate < row.startDate) throw new Error(`The end date can't be before the start date (${row.startDate}).`);
+  // Months already finalized keep their figures, so a scheme can't be ended before a period that was already paid with it.
+  const [paid] = await db
+    .select({ end: payrollRuns.periodEnd })
+    .from(payrollLines)
+    .innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.payrollRunId))
+    .where(and(eq(payrollLines.tenantId, session.tenantId), eq(payrollLines.employeeId, row.employeeId), eq(payrollRuns.status, "finalized"), gte(payrollRuns.periodEnd, input.endDate)))
+    .orderBy(desc(payrollRuns.periodEnd))
+    .limit(1);
+  if (paid) throw new Error(`Payroll up to ${paid.end} is already finalized for this employee, so the scheme can't end before then. Reverse that run first, or end it from a later date.`);
+  await db.update(employeeRetirement).set({ endDate: input.endDate }).where(and(eq(employeeRetirement.id, row.id), eq(employeeRetirement.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "end", entityType: "employee_retirement", entityId: row.employeeId, afterValue: { scheme: row.scheme, endDate: input.endDate } });
+  revalidatePath(`/payroll/employees/${row.employeeId}`);
+}
+
+// Tax residency and whether the employee is confirmed for the first-band exemption. Both are recorded in the audit log.
+export async function updateTaxInfo(input: { employeeId: string; taxResidency: "resident" | "non_resident"; sstEligible: boolean }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  if (input.taxResidency !== "resident" && input.taxResidency !== "non_resident") throw new Error("Choose resident or non-resident");
+  const [employee] = await db.select().from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId))).limit(1);
+  if (!employee) throw new Error("Employee not found");
+  await db.update(employees).set({ taxResidency: input.taxResidency, sstEligible: input.sstEligible }).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "update", entityType: "employee_tax", entityId: input.employeeId, beforeValue: { taxResidency: employee.taxResidency, sstEligible: employee.sstEligible }, afterValue: { taxResidency: input.taxResidency, sstEligible: input.sstEligible } });
+  revalidatePath(`/payroll/employees/${input.employeeId}`);
 }

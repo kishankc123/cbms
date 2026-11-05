@@ -1,12 +1,15 @@
 import { guardView } from "@/components/page-guard";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, salaryHistory, employeeBenefits, employeeComponents, payrollComponents, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
+import { employeeRetirement, tenants, employees, salaryHistory, employeeBenefits, employeeComponents, payrollComponents, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { listEmployeeAdvances } from "@/lib/payroll/staff-advances";
 import { ProfileTabs } from "./profile-tabs";
+import { payrollRulesOn } from "@/lib/payroll/platform-rules";
+import { enrolmentsOn, enrolmentWarnings, type Enrolment } from "@/lib/payroll/employee-retirement";
+import type { EmployeeScheme } from "@/lib/payroll/retirement-rules";
 import type { AttendanceStatus } from "../attendance-actions";
 
 export default async function EmployeeProfilePage({ params }: { params: Promise<{ employeeId: string }> }) {
@@ -81,10 +84,19 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
     listEmployeeAdvances(session.tenantId, employeeId),
     db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId)).orderBy(payrollComponents.name),
     db.select().from(employeeComponents).where(and(eq(employeeComponents.tenantId, session.tenantId), eq(employeeComponents.employeeId, employeeId))).orderBy(desc(employeeComponents.effectiveFrom)),
+    db.select().from(employeeRetirement).where(and(eq(employeeRetirement.tenantId, session.tenantId), eq(employeeRetirement.employeeId, employeeId))).orderBy(desc(employeeRetirement.startDate)),
+    db.select({ countryCode: tenants.countryCode }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1),
     ]);
 
   const [attendanceRows, pay] = await Promise.all([db.select().from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))), seesPay ? loadPay() : Promise.resolve(null)]);
-  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows, componentCatalog, componentAssignments] = pay ?? [null, [], [], [], [], [], []];
+  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows, componentCatalog, componentAssignments, retirementRows, tenantRows] = pay ?? [null, [], [], [], [], [], [], [], []];
+
+  // The payroll rules in force today for the organization's country, and anything worth a look about this employee's enrolment.
+  const today = todayIso();
+  const rulesNow = seesPay && tenantRows[0]?.countryCode ? await payrollRulesOn(tenantRows[0].countryCode, today) : null;
+  const enrolments: Enrolment[] = retirementRows.map((r) => ({ id: r.id, scheme: r.scheme as EmployeeScheme, registrationNumber: r.registrationNumber, startDate: r.startDate, endDate: r.endDate, citMode: r.citMode === "percent" ? "percent" : r.citMode === "fixed" ? "fixed" : null, citValue: r.citValue === null ? null : Number(r.citValue), citEmployerValue: r.citEmployerValue === null ? null : Number(r.citEmployerValue) }));
+  const retirementWarnings = enrolmentWarnings(enrolments, employee, rulesNow?.rules ?? null, today);
+  const canExempt = enrolmentsOn(enrolments, today).some((e) => e.scheme === "ssf" && Boolean(rulesNow?.rules.schemes.ssf.sstExemptionPossible));
 
   const attendanceMap: Record<string, AttendanceStatus> = {};
   for (const r of attendanceRows) attendanceMap[r.date] = r.status as AttendanceStatus;
@@ -103,6 +115,10 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         benefits={benefitRows}
         componentCatalog={componentCatalog}
         componentAssignments={componentAssignments}
+        retirementRows={retirementRows}
+        retirementWarnings={retirementWarnings}
+        rulesInForce={rulesNow ? { verified: rulesNow.isVerified } : null}
+        canExempt={canExempt}
         attendanceMonth={month}
         attendanceYear={year}
         attendanceRecords={attendanceMap}

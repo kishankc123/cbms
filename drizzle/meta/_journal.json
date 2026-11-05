@@ -799,6 +799,13 @@
       "when": 1793868518476,
       "tag": "0113_salary_components",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1793875584855,
+      "tag": "0114_employee_retirement",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,8 @@ import { ProfilePanel } from "./profile-panel";
 import { SalaryHistoryPanel } from "./salary-history-panel";
 import { BenefitsPanel } from "./benefits-panel";
 import { SalaryComponentsPanel } from "./components-panel";
+import { RetirementPanel } from "./retirement-panel";
+import { TaxPanel } from "./tax-panel";
 import { AttendancePanel } from "./attendance-panel";
 import { PayslipsPanel } from "./payslips-panel";
 import { AdvancesPanel } from "./advances-panel";
@@ -14,6 +16,8 @@ const TABS = [
   { id: "profile", label: "Profile" },
   { id: "salary", label: "Salary History" },
   { id: "components", label: "Salary components" },
+  { id: "retirement", label: "Retirement" },
+  { id: "tax", label: "Tax" },
   { id: "benefits", label: "Benefits" },
   { id: "attendance", label: "Attendance" },
   { id: "payslips", label: "Payslips" },
@@ -30,6 +34,11 @@ export function ProfileTabs(props: {
   benefits: Parameters<typeof BenefitsPanel>[0]["benefits"];
   componentCatalog: Parameters<typeof SalaryComponentsPanel>[0]["catalog"];
   componentAssignments: Parameters<typeof SalaryComponentsPanel>[0]["assignments"];
+  retirementRows: Parameters<typeof RetirementPanel>[0]["rows"];
+  retirementWarnings: string[];
+  rulesInForce: Parameters<typeof RetirementPanel>[0]["rulesInForce"];
+  /** True when the employee is in a scheme that can qualify them for the first-band exemption today. */
+  canExempt: boolean;
   attendanceMonth: number;
   attendanceYear: number;
   attendanceRecords: Record<string, AttendanceStatus>;
@@ -58,6 +67,8 @@ export function ProfileTabs(props: {
         <SalaryHistoryPanel employeeId={props.employee.id} currentSalary={props.currentSalary} records={props.salaryRecords} />
       )}
       {tab === "components" && props.currentSalary !== null && <SalaryComponentsPanel employeeId={props.employee.id} catalog={props.componentCatalog} assignments={props.componentAssignments} />}
+      {tab === "retirement" && props.currentSalary !== null && <RetirementPanel employeeId={props.employee.id} rows={props.retirementRows} warnings={props.retirementWarnings} rulesInForce={props.rulesInForce} />}
+      {tab === "tax" && props.currentSalary !== null && <TaxPanel employee={props.employee} canExempt={props.canExempt} />}
       {tab === "benefits" && <BenefitsPanel employeeId={props.employee.id} benefits={props.benefits} />}
       {tab === "attendance" && (
         <AttendancePanel

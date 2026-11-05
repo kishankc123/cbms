@@ -28,6 +28,11 @@ export const employees = pgTable("employees", {
   // For someone who joined after the fiscal year began: what the earlier employer paid and withheld in the same fiscal year.
   priorIncome: numeric("prior_income", { precision: 18, scale: 2 }).notNull().default("0"),
   priorTds: numeric("prior_tds", { precision: 18, scale: 2 }).notNull().default("0"),
+  // "resident" or "non_resident" for income tax.
+  taxResidency: text("tax_residency").notNull().default("resident"),
+  // Confirmed by the organization as qualifying for the first-band (social security tax) exemption. Kept apart from the retirement
+  // scheme on purpose: being in SSF does not by itself establish the right to the exemption.
+  sstEligible: boolean("sst_eligible").notNull().default(false),
   // The Chart of Accounts liability sub-account this employee posts salary
   // accruals to — a sub-group under the tenant's Salary Payable group,
   // created alongside the employee (see payroll-accounts.ts).
@@ -198,4 +203,25 @@ export const attendanceRecords = pgTable("attendance_records", {
   date: date("date").notNull(),
   status: attendanceStatusEnum("status").notNull().default("present"),
   notes: text("notes"),
+});
+
+// The retirement schemes an employee is in, from when to when. SSF and PF never overlap each other; CIT can sit beside either.
+// Rates come from the platform's payroll rules for the pay date, not from here.
+export const employeeRetirement = pgTable("employee_retirement", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  /** "ssf" | "pf" | "cit" */
+  scheme: text("scheme").notNull(),
+  registrationNumber: text("registration_number"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  /** CIT only: what the employee chose to put in each month, as a fixed sum or a percentage of basic salary. */
+  citMode: text("cit_mode"),
+  citValue: numeric("cit_value", { precision: 18, scale: 2 }),
+  /** CIT only: what the employer adds each month, where the rules allow it. */
+  citEmployerValue: numeric("cit_employer_value", { precision: 18, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").references(() => users.id),
 });
