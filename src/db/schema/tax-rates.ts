@@ -107,3 +107,24 @@ export const platformSlabDrafts = pgTable(
   },
   (t) => [uniqueIndex("platform_slab_drafts_country_head_from").on(t.countryCode, t.headKey, t.effectiveFrom)]
 );
+
+// Payroll rules (retirement schemes, the limit on retirement savings that reduce tax, the first-band exemption) published for a whole
+// country in dated versions, like slabs. `rules` is one document (see PayrollRules). Organizations read the version in force on the pay
+// date; finalized payroll keeps what it used, so a new version never changes a past run.
+export const platformPayrollRuleVersions = pgTable(
+  "platform_payroll_rule_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    rules: jsonb("rules").notNull(),
+    isVerified: boolean("is_verified").notNull().default(false),
+    /** The Act, notice or rule the figures come from. */
+    source: text("source"),
+    /** null for versions seeded by a migration. */
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("platform_payroll_rules_country_from").on(t.countryCode, t.effectiveFrom)]
+);
