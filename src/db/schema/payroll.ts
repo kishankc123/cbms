@@ -97,6 +97,29 @@ export const payrollComponents = pgTable("payroll_components", {
   type: payrollComponentTypeEnum("type").notNull(),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
   taxable: boolean("taxable").notNull().default(true),
+  /** "fixed" = amount is a sum of money; "percent" = amount is a percentage of the basic salary paid in the period. */
+  calcType: text("calc_type").notNull().default("fixed"),
+  /** Counts toward the salary SSF / PF contributions are worked on (see the retirement rules). */
+  countsForRetirement: boolean("counts_for_retirement").notNull().default(false),
+  /** "recurring" = every month while assigned; "one_time" = only the run whose period holds its date (bonus, festival allowance, overtime). */
+  recurrence: text("recurrence").notNull().default("recurring"),
+  /** Given to every employee when added (and to existing ones when the component is created). Off means each employee is assigned by hand. */
+  autoAssign: boolean("auto_assign").notNull().default(false),
+});
+
+// Which components an employee gets, from when to when. A change closes the old row and opens a new one so history stays.
+// amount null = use the catalog's amount; a value is this person's own amount (or percentage, or the one-time sum).
+export const employeeComponents = pgTable("employee_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  componentId: uuid("component_id").notNull().references(() => payrollComponents.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 18, scale: 2 }),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").references(() => users.id),
 });
 
 export const prorationMethodEnum = pgEnum("proration_method", ["prorate", "new_full_month", "old_full_month"]);
@@ -161,6 +184,8 @@ export const payrollLines = pgTable("payroll_lines", {
   taxablePay: numeric("taxable_pay", { precision: 18, scale: 2 }),
   tdsAmount: numeric("tds_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   tdsDetail: jsonb("tds_detail"),
+  // Each component that made up this month's allowances and deductions (name, kind, amount, taxable, counts for retirement), so a payslip can list them.
+  componentsDetail: jsonb("components_detail"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 

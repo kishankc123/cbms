@@ -2,7 +2,7 @@
 
 import { nextEmployeeCode } from "@/lib/payroll/employee-code";
 import { revalidatePath } from "next/cache";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -11,6 +11,8 @@ import {
   payrollLines,
   payrollRuns,
   employeeBenefits,
+  employeeComponents,
+  payrollComponents,
   auditLog,
   type employmentTypeEnum,
   type employmentStatusEnum,
@@ -150,6 +152,10 @@ export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> 
     reason: "Initial salary",
     createdBy: session.userId,
   });
+
+  // The components the organization gives to everyone start with the employee, from the day they join.
+  const everyoneGets = (await db.select({ id: payrollComponents.id }).from(payrollComponents).where(and(eq(payrollComponents.tenantId, session.tenantId), eq(payrollComponents.autoAssign, true), eq(payrollComponents.recurrence, "recurring"))));
+  if (everyoneGets.length > 0) await db.insert(employeeComponents).values(everyoneGets.map((c) => ({ tenantId: session.tenantId, employeeId: employee!.id, componentId: c.id, effectiveFrom: input.joiningDate, createdBy: session.userId })));
 
   await db.insert(auditLog).values({
     tenantId: session.tenantId,
@@ -421,4 +427,59 @@ export async function deactivateBenefit(input: { benefitId: string }) {
     .where(eq(employeeBenefits.id, input.benefitId));
 
   revalidatePath(`/payroll/employees/${benefit.employeeId}`);
+}
+
+export type ComponentAssignmentInput = { employeeId: string; componentId: string; /** null = the catalog's amount */ amount: number | null; effectiveFrom: string; notes: string };
+
+// Gives an employee a component. A recurring one replaces any open one of the same component (the old row ends the day before, so history is kept);
+// a one-time one (a bonus, overtime) is just another row dated in the month it should be paid.
+export async function assignComponent(input: ComponentAssignmentInput) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  if (!input.effectiveFrom) throw new Error("Enter the date it starts from");
+  if (input.amount !== null && (!Number.isFinite(input.amount) || input.amount < 0)) throw new Error("The amount can't be negative");
+
+  const [employee] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId))).limit(1);
+  if (!employee) throw new Error("Employee not found");
+  const [component] = await db.select().from(payrollComponents).where(and(eq(payrollComponents.id, input.componentId), eq(payrollComponents.tenantId, session.tenantId))).limit(1);
+  if (!component) throw new Error("That component was not found");
+  if (component.calcType === "percent" && input.amount !== null && input.amount > 100) throw new Error("A percentage can't be more than 100");
+  if (component.recurrence === "one_time" && input.amount === null && Number(component.amount) === 0) throw new Error(`Enter the amount for ${component.name}`);
+
+  if (component.recurrence === "recurring") {
+    const open = await db.select().from(employeeComponents).where(and(eq(employeeComponents.tenantId, session.tenantId), eq(employeeComponents.employeeId, input.employeeId), eq(employeeComponents.componentId, input.componentId)));
+    for (const row of open) {
+      if (row.effectiveTo && row.effectiveTo < input.effectiveFrom) continue;
+      if (row.effectiveFrom >= input.effectiveFrom) throw new Error(`${component.name} is already assigned from ${row.effectiveFrom}. Pick a later date, or end it first.`);
+      const day = new Date(input.effectiveFrom + "T00:00:00Z");
+      day.setUTCDate(day.getUTCDate() - 1);
+      await db.update(employeeComponents).set({ effectiveTo: day.toISOString().slice(0, 10) }).where(and(eq(employeeComponents.id, row.id), eq(employeeComponents.tenantId, session.tenantId)));
+    }
+  }
+
+  await db.insert(employeeComponents).values({ tenantId: session.tenantId, employeeId: input.employeeId, componentId: input.componentId, amount: input.amount === null ? null : round2(input.amount).toFixed(2), effectiveFrom: input.effectiveFrom, notes: input.notes.trim() || null, createdBy: session.userId });
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "assign", entityType: "employee_component", entityId: input.employeeId, afterValue: { component: component.name, amount: input.amount, effectiveFrom: input.effectiveFrom } });
+  revalidatePath(`/payroll/employees/${input.employeeId}`);
+}
+
+// Ends a recurring component today. A one-time entry is removed instead, as long as no finished payroll run already paid it.
+export async function endComponentAssignment(input: { assignmentId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [row] = await db.select().from(employeeComponents).where(and(eq(employeeComponents.id, input.assignmentId), eq(employeeComponents.tenantId, session.tenantId))).limit(1);
+  if (!row) throw new Error("That assignment was not found");
+  const [component] = await db.select().from(payrollComponents).where(and(eq(payrollComponents.id, row.componentId), eq(payrollComponents.tenantId, session.tenantId))).limit(1);
+
+  if (component?.recurrence === "one_time") {
+    const [paid] = await db.select({ id: payrollRuns.id }).from(payrollRuns).where(and(eq(payrollRuns.tenantId, session.tenantId), eq(payrollRuns.status, "finalized"), lte(payrollRuns.periodStart, row.effectiveFrom), gte(payrollRuns.periodEnd, row.effectiveFrom))).limit(1);
+    if (paid) throw new Error("This was already paid in a finished payroll run, so it can't be removed.");
+    await db.delete(employeeComponents).where(and(eq(employeeComponents.id, row.id), eq(employeeComponents.tenantId, session.tenantId)));
+  } else {
+    const today = todayIso();
+    await db.update(employeeComponents).set({ effectiveTo: row.effectiveFrom > today ? row.effectiveFrom : today }).where(and(eq(employeeComponents.id, row.id), eq(employeeComponents.tenantId, session.tenantId)));
+  }
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "end", entityType: "employee_component", entityId: row.employeeId, afterValue: { component: component?.name ?? row.componentId } });
+  revalidatePath(`/payroll/employees/${row.employeeId}`);
 }

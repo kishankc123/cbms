@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ProfilePanel } from "./profile-panel";
 import { SalaryHistoryPanel } from "./salary-history-panel";
 import { BenefitsPanel } from "./benefits-panel";
+import { SalaryComponentsPanel } from "./components-panel";
 import { AttendancePanel } from "./attendance-panel";
 import { PayslipsPanel } from "./payslips-panel";
 import { AdvancesPanel } from "./advances-panel";
@@ -12,6 +13,7 @@ import type { AttendanceStatus } from "../attendance-actions";
 const TABS = [
   { id: "profile", label: "Profile" },
   { id: "salary", label: "Salary History" },
+  { id: "components", label: "Salary components" },
   { id: "benefits", label: "Benefits" },
   { id: "attendance", label: "Attendance" },
   { id: "payslips", label: "Payslips" },
@@ -26,6 +28,8 @@ export function ProfileTabs(props: {
   currentSalary: number | null;
   salaryRecords: Parameters<typeof SalaryHistoryPanel>[0]["records"];
   benefits: Parameters<typeof BenefitsPanel>[0]["benefits"];
+  componentCatalog: Parameters<typeof SalaryComponentsPanel>[0]["catalog"];
+  componentAssignments: Parameters<typeof SalaryComponentsPanel>[0]["assignments"];
   attendanceMonth: number;
   attendanceYear: number;
   attendanceRecords: Record<string, AttendanceStatus>;
@@ -53,6 +57,7 @@ export function ProfileTabs(props: {
       {tab === "salary" && props.currentSalary !== null && (
         <SalaryHistoryPanel employeeId={props.employee.id} currentSalary={props.currentSalary} records={props.salaryRecords} />
       )}
+      {tab === "components" && props.currentSalary !== null && <SalaryComponentsPanel employeeId={props.employee.id} catalog={props.componentCatalog} assignments={props.componentAssignments} />}
       {tab === "benefits" && <BenefitsPanel employeeId={props.employee.id} benefits={props.benefits} />}
       {tab === "attendance" && (
         <AttendancePanel

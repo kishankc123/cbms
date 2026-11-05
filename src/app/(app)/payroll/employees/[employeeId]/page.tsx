@@ -1,7 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, salaryHistory, employeeBenefits, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
+import { employees, salaryHistory, employeeBenefits, employeeComponents, payrollComponents, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
@@ -79,10 +79,12 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       )
       .orderBy(desc(payrollRuns.periodStart)),
     listEmployeeAdvances(session.tenantId, employeeId),
+    db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId)).orderBy(payrollComponents.name),
+    db.select().from(employeeComponents).where(and(eq(employeeComponents.tenantId, session.tenantId), eq(employeeComponents.employeeId, employeeId))).orderBy(desc(employeeComponents.effectiveFrom)),
     ]);
 
   const [attendanceRows, pay] = await Promise.all([db.select().from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))), seesPay ? loadPay() : Promise.resolve(null)]);
-  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows] = pay ?? [null, [], [], [], []];
+  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows, componentCatalog, componentAssignments] = pay ?? [null, [], [], [], [], [], []];
 
   const attendanceMap: Record<string, AttendanceStatus> = {};
   for (const r of attendanceRows) attendanceMap[r.date] = r.status as AttendanceStatus;
@@ -99,6 +101,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         currentSalary={seesPay ? currentSalary ?? 0 : null}
         salaryRecords={salaryRows.map((r) => ({ ...r, createdByName: r.createdByName ?? "—", createdAt: r.createdAt.toISOString() }))}
         benefits={benefitRows}
+        componentCatalog={componentCatalog}
+        componentAssignments={componentAssignments}
         attendanceMonth={month}
         attendanceYear={year}
         attendanceRecords={attendanceMap}

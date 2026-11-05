@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, employeeBenefits, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
+import { employees, employeeBenefits, employeeComponents, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
+import { componentPay, type Assignment, type CatalogComponent } from "@/lib/payroll/components";
 import { requireTenantSession, can } from "@/lib/session";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
@@ -105,10 +106,9 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     .filter((e) => e.joiningDate <= periodEnd && (!e.leavingDate || e.leavingDate >= periodStart));
   if (employeeList.length === 0) throw new Error("No employees were employed during this period, so there is nothing to include in this payroll run");
 
-  const components = await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId));
-  const allowanceTotal = components.filter((c) => c.type === "allowance").reduce((s, c) => s + Number(c.amount), 0);
-  const deductionTotal = components.filter((c) => c.type === "deduction").reduce((s, c) => s + Number(c.amount), 0);
-  const taxableAllowanceTotal = components.filter((c) => c.type === "allowance" && c.taxable).reduce((s, c) => s + Number(c.amount), 0);
+  // Each employee gets the components assigned to them (see Employees > profile > Salary components), not one company-wide total.
+  const catalog: CatalogComponent[] = (await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId))).map((c) => ({ id: c.id, name: c.name, type: c.type, amount: Number(c.amount), taxable: c.taxable, calcType: c.calcType === "percent" ? "percent" : "fixed", countsForRetirement: c.countsForRetirement, recurrence: c.recurrence === "one_time" ? "one_time" : "recurring" }));
+  const assignmentRows = await db.select().from(employeeComponents).where(eq(employeeComponents.tenantId, session.tenantId));
   // Salary TDS: the fiscal year this pay falls in, the months left in it, and the slabs in force on the pay date (null = none published).
   const taxCtx = await payrollTaxContext(session.tenantId, periodStart);
   const slabInfo = taxCtx.headKey ? await slabsOn(taxCtx.countryCode, taxCtx.headKey, periodEnd) : null;
@@ -190,6 +190,12 @@ export async function generatePayrollRun(input: GenerateRunInput) {
         }, 0)
     );
 
+    const assignments: Assignment[] = assignmentRows.filter((a) => a.employeeId === employee.id).map((a) => ({ componentId: a.componentId, amount: a.amount === null ? null : Number(a.amount), effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo }));
+    const pay = componentPay(catalog, assignments, { periodStart, periodEnd, proratedBasic });
+    const allowanceTotal = pay.allowances;
+    const deductionTotal = pay.deductions;
+    const taxableAllowanceTotal = pay.taxableAllowances;
+
     const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal);
 
     // Salary TDS: projected for the year, less what was already withheld, split over the months left. It can't be more than the pay itself.
@@ -232,6 +238,7 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       taxablePay: taxablePay.toFixed(2),
       tdsAmount: tdsAmount.toFixed(2),
       tdsDetail,
+      componentsDetail: pay.lines,
       netPay: netPay.toFixed(2),
     });
   }
