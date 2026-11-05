@@ -191,6 +191,11 @@ export const payrollLines = pgTable("payroll_lines", {
   tdsDetail: jsonb("tds_detail"),
   // Each component that made up this month's allowances and deductions (name, kind, amount, taxable, counts for retirement), so a payslip can list them.
   componentsDetail: jsonb("components_detail"),
+  // Retirement contributions for the month: taken from the employee's pay, and added on top by the employer (never taken from net pay),
+  // with the line-by-line breakdown (scheme, contribution, employee, employer). Zero and null for anyone not in a scheme.
+  employeeRetirement: numeric("employee_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
+  employerRetirement: numeric("employer_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
+  retirementDetail: jsonb("retirement_detail"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 
