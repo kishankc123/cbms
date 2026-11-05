@@ -14,6 +14,8 @@ import { TaxRatesAdmin } from "../tax-rates/tax-rates-admin";
 import { SlabsAdmin } from "../tax-rates/slabs-admin";
 import { FiscalYearFilter } from "./fiscal-year-filter";
 import { ModulesAdmin } from "../modules/modules-admin";
+import { getPayrollRulesAdminData } from "../payroll-rules/actions";
+import { PayrollRulesAdmin } from "../payroll-rules/payroll-rules-admin";
 import { listModuleTaxes } from "@/lib/compliance/module-tax-admin";
 import { TAX_MODULES } from "@/lib/compliance/module-taxes";
 import { getPenaltyAdminData } from "../penalties/actions";
@@ -107,6 +109,8 @@ async function ModulesTab({ code, countryName, module }: { code: string; country
         ))}
       </div>
       <ModulesAdmin key={selected} countryCode={code} countryName={countryName} moduleKey={selected} data={data} />
+      {/* Retirement schemes and the limits around them belong to payroll, so they sit under it. */}
+      {selected === "payroll" && <PayrollRulesAdmin data={await getPayrollRulesAdminData(code)} />}
     </div>
   );
 }
