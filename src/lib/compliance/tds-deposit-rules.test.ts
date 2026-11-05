@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { depositStatus, positionByHeading, uncoveredRows, type DepositMonthRow } from "./tds-deposit-rules";
 
-const row = (over: Partial<DepositMonthRow>): DepositMonthRow => ({ obligationId: "o1", period: "Poush 2082", periodStart: "2026-01-01", periodEnd: "2026-01-31", headKey: "payroll", heading: "Payroll", withheld: 1000, deposited: 0, remaining: 1000, status: "none", ...over });
+const row = (over: Partial<DepositMonthRow>): DepositMonthRow => ({ obligationId: "o1", period: "Poush 2082", periodStart: "2026-01-01", periodEnd: "2026-01-31", headKey: "payroll", heading: "Payroll", withheld: 1000, deposited: 0, remaining: 1000, status: "none", fine: null, ...over });
 
 describe("deposit status", () => {
   it("is deposited when nothing is left, part when some is, none when none is", () => {
@@ -24,8 +24,8 @@ describe("position by heading", () => {
     ];
     const p = positionByHeading(rows);
     expect(p).toEqual([
-      { headKey: "payroll", heading: "Payroll", withheld: 2000, deposited: 1300, remaining: 700, status: "part" },
-      { headKey: "rent", heading: "Rent", withheld: 500, deposited: 500, remaining: 0, status: "deposited" },
+      { headKey: "payroll", heading: "Payroll", withheld: 2000, deposited: 1300, remaining: 700, status: "part", fine: null },
+      { headKey: "rent", heading: "Rent", withheld: 500, deposited: 500, remaining: 0, status: "deposited", fine: null },
     ]);
   });
 

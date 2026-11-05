@@ -95,10 +95,11 @@ export function tdsDepositReport(rows: DepositMonthRow[]): ReportTable {
     { key: "withheld", label: "Withheld", numeric: true },
     { key: "deposited", label: "Deposited", numeric: true },
     { key: "remaining", label: "Still to deposit", numeric: true },
+    { key: "fine", label: "Fine and interest (estimate)", numeric: true },
     { key: "status", label: "Status" },
   ];
-  const body = rows.map((r) => ({ period: r.period, withheld: r.withheld, deposited: r.deposited, remaining: r.remaining, status: DEPOSIT_STATUS_LABEL[r.status] }));
-  return withTotals(columns, body, "Total");
+  const body = rows.map((r) => ({ period: r.period, withheld: r.withheld, deposited: r.deposited, remaining: r.remaining, fine: r.fine?.total ?? 0, status: DEPOSIT_STATUS_LABEL[r.status] }));
+  return withTotals(columns, body, "Total", "Fines are estimates to today from the TDS fine rates in force on each due date. The tax office's assessment decides what is payable.");
 }
 
 /** Each employee's year: pay, tax withheld and what they put into retirement schemes. */
