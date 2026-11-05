@@ -42,6 +42,8 @@ import { obligationAmounts, syncObligationFromPayments } from "@/lib/compliance/
 import { getOrCreateCustomerReceivableAccountId, getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 import { getOrCreateExpensePayableAccount } from "./expense-accounts";
 import { getOrCreateOwnerDrawingsAccount } from "./advance-accounts";
+import { retirementBalances } from "@/lib/payroll/contributions";
+import type { RetirementAccountKey } from "@/lib/payroll/retirement-pay";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -67,6 +69,7 @@ export const MONEY_OUT_TYPES: PaymentType[] = [
   "staff_advance",
   "expense_payment",
   "tax_payment",
+  "retirement_payment",
   "loan_repayment",
   "supplier_advance",
   "owner_withdrawal",
@@ -110,6 +113,8 @@ export type CreatePaymentInput = {
   allocations?: AllocationInput[];
   origin?: "standalone" | "embedded";
   confirmDuplicate?: boolean;
+  /** Retirement payment only: how much of each contribution payable account this remittance clears. It sets the total. */
+  retirementSplit?: { account: RetirementAccountKey; amount: number }[] | null;
   /** Staff advance only: the payroll month it is taken against, in the calendar it was chosen in. */
   advanceMonth?: { calendar: CalendarSystem; month: number; year: number } | null;
 };
@@ -251,6 +256,18 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
         const taxAccountId = input.categoryAccountId ?? (await findControlAccount(tenantId, ["2100"], "Tax Payable"))?.id;
         if (!taxAccountId) throw new Error("Select which tax liability account this payment settles");
         lines.push({ accountId: taxAccountId, debitAmount: rest, description: label });
+      }
+      lines.push(primaryLine);
+      return lines;
+    }
+    case "retirement_payment": {
+      // Clears the contribution payable accounts payroll credited (employee share, employer share, gratuity, CIT) for what is being remitted.
+      const balances = await retirementBalances(tenantId);
+      const lines: PostLineInput[] = [];
+      for (const part of input.retirementSplit ?? []) {
+        const accountId = balances[part.account].accountId;
+        if (!accountId) throw new Error("There is nothing owed in that contribution account");
+        lines.push({ accountId, debitAmount: round2(part.amount), description: label });
       }
       lines.push(primaryLine);
       return lines;
@@ -484,6 +501,20 @@ async function validateStaffAdvance(tenantId: string, input: CreatePaymentInput)
   await assertMonthOpenForAdvance(tenantId, m.calendar, m.month, m.year, forPeriodStart);
 }
 
+// A contribution remittance can only clear what payroll still owes in each account, and the total is the sum of its parts.
+async function validateRetirementPayment(tenantId: string, input: CreatePaymentInput) {
+  if (input.paymentType !== "retirement_payment") return;
+  const split = (input.retirementSplit ?? []).filter((p) => p.amount > 0);
+  if (split.length === 0) throw new Error("Enter how much of each contribution you are paying.");
+  if (new Set(split.map((p) => p.account)).size !== split.length) throw new Error("Each contribution account can only be listed once.");
+  if (Math.abs(round2(split.reduce((s, p) => s + p.amount, 0)) - round2(input.amount)) > 0.005) throw new Error("The amounts paid to each account have to add up to the payment.");
+  const balances = await retirementBalances(tenantId);
+  for (const p of split) {
+    if (!balances[p.account]) throw new Error("Unknown contribution account");
+    if (round2(p.amount) > round2(balances[p.account].owed) + 0.005) throw new Error(`Only ${balances[p.account].owed.toFixed(2)} is owed in that account, so ${round2(p.amount).toFixed(2)} is too much.`);
+  }
+}
+
 // Undoes a payment that was only partly recorded: allocations already applied, the journal entry, and the row.
 async function rollbackCreated(tenantId: string, userId: string, paymentId: string, entryId: string | null, applied: AllocationInput[]) {
   for (const a of applied) {
@@ -512,6 +543,7 @@ export async function createPayment(
   await validateRefund(tenantId, input);
   await validateSalaryPayment(tenantId, input);
   await validateStaffAdvance(tenantId, input);
+  await validateRetirementPayment(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
   const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
@@ -798,6 +830,7 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
   if (!payment) throw new Error("Payment not found");
   if (payment.status === "voided") throw new Error("A voided payment can't be edited");
   if (payment.status !== "posted") throw new Error("Only a posted payment can be edited");
+  if (payment.paymentType === "retirement_payment") throw new Error("A contribution payment can't be edited. Void it and record it again.");
   if (payment.origin === "embedded") throw new Error("This payment was recorded automatically by Sales/Purchases — edit the source invoice/bill instead.");
   if (payment.journalEntryId && (await isReconciled(payment.journalEntryId))) {
     throw new Error("This payment has been matched in a bank reconciliation — undo that match before editing it");

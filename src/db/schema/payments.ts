@@ -31,6 +31,8 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "staff_advance",
   "expense_payment",
   "tax_payment",
+  // Paying SSF, PF, CIT and gratuity out of the contribution payable accounts payroll builds up (Payroll > Contributions).
+  "retirement_payment",
   "loan_repayment",
   "supplier_advance",
   "owner_withdrawal",

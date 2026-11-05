@@ -20,6 +20,9 @@ vi.mock("@/lib/session", () => ({
 const { createEmployee } = await import("./employees/actions");
 const { addRetirement, updateTaxInfo } = await import("./employees/actions");
 const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun } = await import("./salary-sheet/actions");
+const { getContributions, payContributions } = await import("./contributions/actions");
+const { voidPayment } = await import("@/lib/ledger/payments-engine");
+const { getCashBankAccounts } = await import("@/lib/ledger/cash-bank-accounts");
 
 // A throwaway country whose fiscal year is the calendar year, so the real countries, slabs and rules are never touched.
 const CODE = "ZR";
@@ -122,6 +125,29 @@ describe("retirement contributions in payroll", () => {
     const j = await journalOf(run);
     expect(j.byName["Employee SSF Payable"].credit).toBe(3300);
     near(j.debits, j.credits);
+  });
+
+  it("shows what is owed to each fund, and paying SSF clears its three accounts through a real payment", async () => {
+    const owed = async () => Object.fromEntries((await getContributions()).funds.map((f) => [f.key, Object.fromEntries(f.accounts.map((a) => [a.key, a.owed]))]));
+    expect(await owed()).toEqual({ ssf: { employee_ssf: 3300, employer_ssf: 3501, gratuity: 2499 }, pf: { employee_pf: 3000, employer_pf: 3000 }, cit: { cit: 0 } });
+    const [cash] = await getCashBankAccounts(org.tenantId);
+    const base = { fund: "ssf" as const, paymentDate: "2026-11-05", accountId: cash.id, paymentMethod: "bank_transfer" as const, referenceNumber: "SSF-V1" };
+
+    // more than is owed, an account from another fund, and nothing at all are refused
+    await expect(payContributions({ ...base, parts: [{ account: "employee_ssf", amount: 9999 }] })).rejects.toThrow(/too much/);
+    await expect(payContributions({ ...base, parts: [{ account: "employee_pf", amount: 100 }] })).rejects.toThrow(/does not belong/);
+    await expect(payContributions({ ...base, parts: [] })).rejects.toThrow(/how much/);
+
+    // pay SSF in two parts: all of the employee share and gratuity, and part of the employer share
+    const r = await payContributions({ ...base, parts: [{ account: "employee_ssf", amount: 3300 }, { account: "employer_ssf", amount: 1000 }, { account: "gratuity", amount: 2499 }] });
+    expect(r.duplicateWarning).toBe(false);
+    expect(await owed()).toEqual({ ssf: { employee_ssf: 0, employer_ssf: 2501, gratuity: 0 }, pf: { employee_pf: 3000, employer_pf: 3000 }, cit: { cit: 0 } });
+    const recent = (await getContributions()).recent;
+    expect(recent[0]).toMatchObject({ amount: "6799.00", status: "posted", payee: "Social Security Fund (SSF)" });
+
+    // voiding it puts everything back owed
+    await voidPayment(org.tenantId, recent[0].id, org.userId, "test");
+    expect(await owed()).toEqual({ ssf: { employee_ssf: 3300, employer_ssf: 3501, gratuity: 2499 }, pf: { employee_pf: 3000, employer_pf: 3000 }, cit: { cit: 0 } });
   });
 
   it("later months count what was already put aside, and a rule change does not touch a finished month", async () => {
