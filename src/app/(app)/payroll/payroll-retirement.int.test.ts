@@ -22,6 +22,8 @@ const { addRetirement, updateTaxInfo } = await import("./employees/actions");
 const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun } = await import("./salary-sheet/actions");
 const { getContributions, payContributions } = await import("./contributions/actions");
 const { voidPayment } = await import("@/lib/ledger/payments-engine");
+const { loadLiabilities, loadRegistrations, loadReportLines } = await import("@/lib/payroll/payroll-report-data");
+const reportsRules = await import("@/lib/payroll/payroll-reports");
 const { getCashBankAccounts } = await import("@/lib/ledger/cash-bank-accounts");
 
 // A throwaway country whose fiscal year is the calendar year, so the real countries, slabs and rules are never touched.
@@ -148,6 +150,27 @@ describe("retirement contributions in payroll", () => {
     // voiding it puts everything back owed
     await voidPayment(org.tenantId, recent[0].id, org.userId, "test");
     expect(await owed()).toEqual({ ssf: { employee_ssf: 3300, employer_ssf: 3501, gratuity: 2499 }, pf: { employee_pf: 3000, employer_pf: 3000 }, cit: { cit: 0 } });
+  });
+
+  it("the reports read the finalized October run: contributions, tax, employer cost and what is owed", async () => {
+    const lines = await loadReportLines(org.tenantId, { from: "2026-10-01", to: "2026-10-31" });
+    expect(lines).toHaveLength(3);
+    const regs = await loadRegistrations(org.tenantId);
+    const ssfReport = reportsRules.contributionReport("ssf", lines, regs);
+    expect(ssfReport.rows).toHaveLength(1);
+    expect(ssfReport.rows[0]).toMatchObject({ registration: "S-1", employeeShare: 3300, employerShare: 6000, gratuity: 2499, total: 9300 });
+    expect(reportsRules.contributionReport("pf", lines, regs).totals).toMatchObject({ employeeShare: 3000, employerShare: 3000 });
+    // gross 90,000 plus 9,000 the employer adds
+    expect(reportsRules.employerExpenseReport(lines).rows[0]).toMatchObject({ employees: 3, gross: 90000, employer: 9000, cost: 99000 });
+    expect(reportsRules.annualTaxSummary(lines).totals).toMatchObject({ months: 3, gross: 90000, retirement: 6300 });
+    // a range with no finalized run is empty, and another employee is filtered out
+    expect(await loadReportLines(org.tenantId, { from: "2026-09-01", to: "2026-09-30" })).toEqual([]);
+    expect(await loadReportLines(org.tenantId, { from: "2026-10-01", to: "2026-10-31" }, pf)).toHaveLength(1);
+    // owed today: the retirement accounts hold what the October run put there
+    const owed = Object.fromEntries((await loadLiabilities(org.tenantId)).map((i) => [i.label, i.amount]));
+    expect(owed["SSF: Employee SSF Payable"]).toBe(3300);
+    expect(owed["SSF: Gratuity Payable"]).toBe(2499);
+    expect(owed["PF: Employer PF Payable"]).toBe(3000);
   });
 
   it("later months count what was already put aside, and a rule change does not touch a finished month", async () => {

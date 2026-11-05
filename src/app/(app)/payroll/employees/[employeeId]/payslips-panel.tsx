@@ -12,6 +12,7 @@ type Payslip = {
   netPay: string;
 };
 
+import Link from "next/link";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
 import { TdsCell } from "../../tds-working";
@@ -28,6 +29,7 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
           <th className="px-2.5 py-1.5 font-medium">Advance Recovered</th>
           <th className="px-2.5 py-1.5 font-medium">Net Pay</th>
           <th className="px-2.5 py-1.5 font-medium">Status</th>
+          <th />
         </tr>
       </thead>
       <tbody>
@@ -44,11 +46,16 @@ export function PayslipsPanel({ payslips }: { payslips: Payslip[] }) {
             <td className="px-2.5 py-1.5">{Number(p.advanceRecovered).toFixed(2)}</td>
             <td className="px-2.5 py-1.5">{Number(p.netPay).toFixed(2)}</td>
             <td className="px-2.5 py-1.5 capitalize">{p.status}</td>
+            <td className="px-2.5 py-1.5 text-right">
+              <Link href={`/payroll/payslips/${p.id}`} className="text-xs text-accent hover:underline">
+                View payslip
+              </Link>
+            </td>
           </tr>
         ))}
         {payslips.length === 0 && (
           <tr>
-            <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+            <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
               No finalized payslips yet
             </td>
           </tr>

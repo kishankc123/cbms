@@ -108,6 +108,7 @@ const NAV: NavEntry[] = [
       { href: "/payroll/salary-sheet", label: "Salary sheet" },
       { href: "/payroll/benefits", label: "Benefits" },
       { href: "/payroll/contributions", label: "Contributions" },
+      { href: "/payroll/reports", label: "Reports" },
       { href: "/payroll/setup", label: "Setup" },
     ],
   },
