@@ -64,7 +64,7 @@ export function ReportFilters({ years, employees, current, usesRange }: { years:
   );
 }
 
-export function ReportActions({ table, title, filename }: { table: ReportTable; title: string; filename: string }) {
+export function ReportActions({ table, title, filename, extra }: { table: ReportTable; title: string; filename: string; /** A second table for a second sheet in the workbook. */ extra?: { title: string; table: ReportTable } }) {
   async function exportExcel() {
     const XLSX = await import("xlsx");
     const header = table.columns.map((c) => c.label);
@@ -74,6 +74,11 @@ export function ReportActions({ table, title, filename }: { table: ReportTable; 
     sheet["!cols"] = table.columns.map((c) => ({ wch: Math.max(c.label.length + 2, c.numeric ? 14 : 22) }));
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, title.slice(0, 31));
+    if (extra) {
+      const second = XLSX.utils.aoa_to_sheet([[extra.title], [], extra.table.columns.map((c) => c.label), ...extra.table.rows.map((r) => extra.table.columns.map((c) => r[c.key] ?? "")), ...(extra.table.totals ? [extra.table.columns.map((c) => extra.table.totals?.[c.key] ?? "")] : [])]);
+      second["!cols"] = extra.table.columns.map((c) => ({ wch: Math.max(c.label.length + 2, c.numeric ? 14 : 22) }));
+      XLSX.utils.book_append_sheet(book, second, extra.title.slice(0, 31));
+    }
     XLSX.writeFile(book, `${filename}.xlsx`);
   }
   return (

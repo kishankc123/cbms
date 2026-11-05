@@ -4,6 +4,8 @@ import { Fragment, useState } from "react";
 import { useErrorDialog } from "@/components/problem-dialog";
 import { generateReport } from "../actions";
 import type { ComplianceReportType } from "@/lib/compliance/reports";
+import type { TdsDepositPosition } from "@/lib/compliance/tds-deposit-rules";
+import { TdsDepositTables } from "@/components/compliance/tds-deposit-tables";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { presetRange } from "@/lib/calendar";
@@ -203,8 +205,10 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
   }
 
   if (type === "tds_report") {
-    const r = result as { rows: { expenseNumber: string; expenseDate: string; payee: string; taxableAmount: string; tdsAmount: string; heading: string }[]; byHeading: { key: string | null; name: string; taxable: number; withheld: number }[]; totalTaxable: number; totalTds: number };
+    const r = result as { rows: { expenseNumber: string; expenseDate: string; payee: string; taxableAmount: string; tdsAmount: string; heading: string }[]; byHeading: { key: string | null; name: string; taxable: number; withheld: number }[]; totalTaxable: number; totalTds: number; deposits?: TdsDepositPosition };
     return (
+      <div className="space-y-4">
+        {r.deposits && <TdsDepositTables position={r.deposits} />}
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
@@ -257,6 +261,7 @@ function ReportOutput({ type, result, mode }: { type: ComplianceReportType; resu
             </tr>
           </tfoot>
         </table>
+      </div>
       </div>
     );
   }

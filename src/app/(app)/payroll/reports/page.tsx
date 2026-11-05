@@ -7,7 +7,10 @@ import { employees, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { todayIso } from "@/lib/calendar";
 import { fiscalYearsFor } from "@/lib/compliance/platform-tax-rates";
-import { annualReconciliation, annualTaxSummary, contributionReport, employerExpenseReport, liabilityReport, monthlyTdsReport, netSalaryPaymentReport, REPORTS, type ReportKey, type ReportTable } from "@/lib/payroll/payroll-reports";
+import { TdsDepositTables } from "@/components/compliance/tds-deposit-tables";
+import { tdsDepositPosition } from "@/lib/compliance/tds-deposits";
+import { payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
+import { tdsDepositReport, annualReconciliation, annualTaxSummary, contributionReport, employerExpenseReport, liabilityReport, monthlyTdsReport, netSalaryPaymentReport, REPORTS, type ReportKey, type ReportTable } from "@/lib/payroll/payroll-reports";
 import { loadLiabilities, loadOwedNow, loadRegistrations, loadReportLines, loadSalaryPaid } from "@/lib/payroll/payroll-report-data";
 import { ReportActions, ReportFilters } from "./report-controls";
 
@@ -49,6 +52,9 @@ export default async function PayrollReportsPage({ searchParams }: { searchParam
       table = netSalaryPaymentReport(lines, await loadSalaryPaid(session.tenantId, range), await loadOwedNow(session.tenantId, ids));
     }
   }
+  // The monthly tax report also shows what has been deposited, by deposit period, for the salary heading.
+  const salaryHead = key === "tds" ? await payrollTdsHeadKey(session.tenantId) : null;
+  const deposits = key === "tds" && salaryHead ? await tdsDepositPosition(session.tenantId, from, to, salaryHead) : null;
   const title = REPORTS.find((r) => r.key === key)?.label ?? "Payroll report";
   const rangeText = key === "liability" ? `As of ${today}` : `${from === "0000-01-01" ? "Start" : from} to ${to === "9999-12-31" ? "today" : to}`;
 
@@ -71,11 +77,12 @@ export default async function PayrollReportsPage({ searchParams }: { searchParam
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <ReportFilters years={years.map((y) => ({ startYear: y.startYear, label: y.label }))} employees={employeeList.map((e) => ({ id: e.id, name: `${e.code} ${e.name}` }))} current={{ report: key, fy, from: q.from ?? "", to: q.to ?? "", employee: employeeId ?? "" }} usesRange={key !== "liability"} />
-        <ReportActions table={table} title={title} filename={`payroll-${key}-${today}`} />
+        <ReportActions table={table} title={title} filename={`payroll-${key}-${today}`} extra={deposits ? { title: "Salary tax deposits", table: tdsDepositReport(deposits.rows) } : undefined} />
       </div>
 
       <style>{`@media print { body * { visibility: hidden; } #payroll-report, #payroll-report * { visibility: visible; } #payroll-report { position: absolute; left: 0; top: 0; width: 100%; } }`}</style>
-      <section id="payroll-report" className="space-y-2">
+      <section id="payroll-report" className="space-y-4">
+        {deposits && <TdsDepositTables position={deposits} title="Salary tax withheld and deposited" />}
         <div>
           <h2 className="text-base font-semibold text-ink">{title}</h2>
           <p className="text-xs text-ink-2">{rangeText}{employeeId ? ` · ${employeeList.find((e) => e.id === employeeId)?.name}` : ""} · finalized payroll runs only</p>

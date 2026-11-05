@@ -3,6 +3,7 @@
 
 import type { TdsWorking } from "./salary-tax-calc";
 import type { RetirementLine } from "./retirement-pay";
+import { DEPOSIT_STATUS_LABEL, type DepositMonthRow } from "@/lib/compliance/tds-deposit-rules";
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -86,6 +87,19 @@ const groupByEmployee = (lines: ReportLine[]) => {
   for (const list of m.values()) list.sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   return [...m.values()].sort((a, b) => a[0].fullName.localeCompare(b[0].fullName));
 };
+
+/** Salary tax withheld against deposited, by deposit period (the same figures as the compliance TDS report, for the salary heading only). */
+export function tdsDepositReport(rows: DepositMonthRow[]): ReportTable {
+  const columns: Column[] = [
+    { key: "period", label: "Deposit period" },
+    { key: "withheld", label: "Withheld", numeric: true },
+    { key: "deposited", label: "Deposited", numeric: true },
+    { key: "remaining", label: "Still to deposit", numeric: true },
+    { key: "status", label: "Status" },
+  ];
+  const body = rows.map((r) => ({ period: r.period, withheld: r.withheld, deposited: r.deposited, remaining: r.remaining, status: DEPOSIT_STATUS_LABEL[r.status] }));
+  return withTotals(columns, body, "Total");
+}
 
 /** Each employee's year: pay, tax withheld and what they put into retirement schemes. */
 export function annualTaxSummary(lines: ReportLine[]): ReportTable {
