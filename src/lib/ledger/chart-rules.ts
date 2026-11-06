@@ -6,11 +6,11 @@
  * postings that rely on them would start failing.
  */
 export const SYSTEM_ACCOUNT_CODES = new Set([
-  "1000", "1010", "1100", "1200", "1300", "1350", // cash, bank, receivable, inventory, input VAT, supplier advances
-  "2000", "2090", "2100", "2200", "2300", "2310", "2320", "2340", "2350", // payables, taxes payable, VAT, loans, payroll, TDS, advances
+  "1000", "1010", "1100", "1200", "1210", "1300", "1350", // cash, bank, receivable, inventory, input VAT, supplier advances
+  "2000", "2090", "2100", "2200", "2300", "2310", "2320", "2340", "2350", "2360", // payables, taxes payable, VAT, loans, payroll, TDS, advances
   "3000", "3050", "3100", "3200", // capital, drawings, retained earnings, brought forward
   "4000", "4050", "4100", // sales, sales returns, other income
-  "5000", "5200", "5900", "5910", // COGS, salaries, miscellaneous, tax fines & penalties
+  "5000", "5050", "5200", "5210", "5900", "5910", // COGS, salaries, miscellaneous, tax fines & penalties
 ]);
 
 /** A top-level control account, or one an account role points at, is a system account. */

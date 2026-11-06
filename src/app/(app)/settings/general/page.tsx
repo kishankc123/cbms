@@ -4,6 +4,8 @@ import { tenants } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { INVOICE_NUMBER_FORMATS, buildInvoiceNumber } from "@/lib/invoice-number";
 import { updateCalendarSystem, updateOtherSettings, updatePaymentNumbering } from "../actions";
+import { getInventorySettings } from "@/lib/inventory/stock";
+import { TrackInventorySetting } from "./track-inventory-setting";
 import { ReadOnlyNotice, SettingsHeader, SettingsSection, settingsButton, settingsCard, settingsInput, settingsLabel } from "../ui";
 
 export default async function GeneralSettingsPage() {
@@ -12,6 +14,8 @@ export default async function GeneralSettingsPage() {
   const canEdit = can(session, "settings", "edit");
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
   if (!tenant) return <p className="text-sm text-gray-500">Tenant not found.</p>;
+
+  const inventory = await getInventorySettings(session.tenantId);
 
   const save = canEdit && (
     <button type="submit" className={settingsButton}>
@@ -42,6 +46,10 @@ export default async function GeneralSettingsPage() {
             {save}
           </fieldset>
         </form>
+      </SettingsSection>
+
+      <SettingsSection title="Inventory">
+        <TrackInventorySetting track={inventory.trackInventory} canEdit={canEdit} stockLosses={inventory.overviewStockLossesInCogs} />
       </SettingsSection>
 
       <SettingsSection title="Invoice numbering">

@@ -4,14 +4,13 @@ import { validateADDate, todayIso } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange, fiscalYearDefaultAsOf } from "@/lib/fiscal";
 import { D } from "@/components/calendar/date-text";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
-import { StatStrip } from "@/components/ui/stat-strip";
-import { cashFlow, defaultGrain } from "@/lib/dashboard/cash-flow";
-import { dashboardKpis, cashAndBankBreakdown, needsAttention, complianceSummary, upcomingComplianceDeadlines } from "@/lib/dashboard/aggregates";
+import { needsAttention, complianceSummary, upcomingComplianceDeadlines } from "@/lib/dashboard/aggregates";
+import { loadPerformance } from "@/lib/dashboard/performance";
 import { DashboardHeader } from "./dashboard-header";
-import { MoneyFlowSection, OutflowBreakdown, money } from "./cash-sections";
+import { PerformanceSection } from "./performance-section";
+import { money } from "./cash-sections";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
-const pct = (n: number | null) => (n === null ? null : `${n >= 0 ? "↑" : "↓"} ${Math.abs(n).toFixed(1)}%`);
 const rangeQs = (from: string, to: string) => new URLSearchParams({ from, to }).toString();
 
 // Where each Needs Attention item's own detail lives — the module/report that either created the
@@ -20,6 +19,7 @@ const NEEDS_ATTENTION_HREF: Record<string, string> = {
   trial_balance: "/reports/trial-balance",
   draft_invoices: "/sales",
   draft_bills: "/purchases",
+  details_pending: "/purchases/stockable",
   negative_stock: "/inventory/items",
   overdue_receivables: "/reports/receivable-ageing",
   cheques_due: "/payments/cheques",
@@ -57,10 +57,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const canViewLedger = can(session, "chart_of_accounts", "view");
   const canViewCompliance = can(session, "compliance", "view");
 
-  const [kpis, cash, flow, attention, compliance, deadlines] = await Promise.all([
-    canViewLedger ? dashboardKpis(session.tenantId, { from, to }) : Promise.resolve(null),
-    canViewLedger ? cashAndBankBreakdown(session.tenantId, asOf) : Promise.resolve(null),
-    canViewLedger ? cashFlow(session.tenantId, from, to) : Promise.resolve(null),
+  // Revenue, cost of goods sold, expenses and profit with their comparisons and expectation. (Cash has its own tabs: Cash flow, Forecast and Planning.)
+  const [perf, attention, compliance, deadlines] = await Promise.all([
+    canViewLedger ? loadPerformance(session.tenantId, { from, to }, session.calendar, today) : Promise.resolve(null),
     canViewLedger ? needsAttention(session.tenantId, asOf) : Promise.resolve(null),
     canViewCompliance ? complianceSummary(session.tenantId, today) : Promise.resolve(null),
     canViewCompliance ? upcomingComplianceDeadlines(session.tenantId, today) : Promise.resolve(null),
@@ -71,52 +70,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <div className="space-y-5">
       <DashboardHeader name={user.name ?? ""} activeFiscalYear={activeFiscalYear} from={from} to={to} fiscal={fiscal} />
 
-      {cash && flow && (
-        <div className="space-y-3">
-          <StatStrip
-            items={[
-              { label: "Cash and bank today", value: money(cash.total), tone: cash.total < 0 ? "danger" : "default" },
-              { label: "Money in (actual)", value: money(flow.moneyIn) },
-              { label: "Money out (actual)", value: money(flow.moneyOut) },
-              { label: "Net cash movement", value: money(flow.netMovement), tone: flow.netMovement < 0 ? "warning" : "default" },
-            ]}
-          />
-          <details className="text-xs text-ink-2">
-            <summary className="cursor-pointer select-none hover:text-ink">Where the cash is ({cash.accounts.length} {cash.accounts.length === 1 ? "account" : "accounts"})</summary>
-            <ul className="mt-1.5 divide-y divide-[var(--border)] border-y border-line">
-              {cash.accounts.map((a) => (
-                <li key={a.accountId} className="flex justify-between gap-3 py-1.5">
-                  <span className="text-ink">{a.name}</span>
-                  <span className="tnum font-medium text-ink">{money(a.balance)}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
-      )}
-
-      {kpis && (
-        <StatStrip
-          className="!border-y-0"
-          items={[
-            { label: "Revenue", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.revenue)}</Link> },
-            { label: "Expenses", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.expenses)}</Link> },
-            { label: "Net profit", value: <Link href={`/reports/profit-and-loss?${qs}`} className="hover:underline">{money(kpis.netProfit)}</Link>, tone: kpis.netProfit < 0 ? "danger" : "default" },
-          ]}
-        />
-      )}
-      {kpis && (pct(kpis.revenueTrendPct) || pct(kpis.netProfitTrendPct)) && (
-        <p className="-mt-3 text-xs text-ink-2">
-          Compared with the period before: revenue {pct(kpis.revenueTrendPct) ?? "no change measured"}, expenses {pct(kpis.expenseTrendPct) ?? "no change measured"}, net profit {pct(kpis.netProfitTrendPct) ?? "no change measured"}.
-        </p>
-      )}
-
-      {flow && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[3fr_2fr]">
-          <MoneyFlowSection flow={flow} grain={defaultGrain(from, to)} calendar={session.calendar} />
-          <OutflowBreakdown flow={flow} moreHref={`/dashboard/cash-flow?${qs}`} />
-        </div>
-      )}
+      {perf && <PerformanceSection perf={perf} qs={qs} />}
 
       {((attention && attention.length > 0) || deadlines) && (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

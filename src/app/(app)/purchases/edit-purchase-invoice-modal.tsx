@@ -46,7 +46,7 @@ export function EditPurchaseInvoiceModal({
 
       <div className="relative w-full max-w-4xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Edit invoice</h2>
+          <h2 className="text-base font-semibold text-gray-900">{data?.detailsPending ? "Add item details" : "Edit invoice"}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
             ✕
           </button>
@@ -71,6 +71,7 @@ export function EditPurchaseInvoiceModal({
               billType: data.billType,
               lines: data.lineItems,
               payments: data.payments,
+              pendingTotal: data.detailsPending ? data.recordedTotal : null,
             }}
             onDone={onClose}
           />

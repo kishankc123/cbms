@@ -24,15 +24,16 @@ export async function payrollTaxContext(tenantId: string, periodStart: string) {
   return { countryCode, fy, monthsLeft, headKey: head?.key ?? null };
 }
 
-/** What an employee was paid (taxable pay) and had withheld in this fiscal year, in the runs before this period. */
+/** What an employee was paid (taxable pay), had withheld and put into retirement schemes in this fiscal year, in the runs before this period. */
 export async function earlierInFiscalYear(tenantId: string, employeeId: string, fyFrom: string, periodStart: string, excludeRunId: string) {
   const [row] = await db
     .select({
       earned: sql<string>`coalesce(sum(coalesce(${payrollLines.taxablePay}, ${payrollLines.grossPay})), 0)`,
       withheld: sql<string>`coalesce(sum(${payrollLines.tdsAmount}), 0)`,
+      retirement: sql<string>`coalesce(sum(${payrollLines.employeeRetirement}), 0)`,
     })
     .from(payrollLines)
     .innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.payrollRunId))
     .where(and(eq(payrollLines.tenantId, tenantId), eq(payrollLines.employeeId, employeeId), gte(payrollRuns.periodStart, fyFrom), lt(payrollRuns.periodEnd, periodStart), ne(payrollRuns.id, excludeRunId)));
-  return { earned: Number(row.earned), withheld: Number(row.withheld) };
+  return { earned: Number(row.earned), withheld: Number(row.withheld), retirement: Number(row.retirement) };
 }

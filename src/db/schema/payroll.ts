@@ -28,6 +28,11 @@ export const employees = pgTable("employees", {
   // For someone who joined after the fiscal year began: what the earlier employer paid and withheld in the same fiscal year.
   priorIncome: numeric("prior_income", { precision: 18, scale: 2 }).notNull().default("0"),
   priorTds: numeric("prior_tds", { precision: 18, scale: 2 }).notNull().default("0"),
+  // "resident" or "non_resident" for income tax.
+  taxResidency: text("tax_residency").notNull().default("resident"),
+  // Confirmed by the organization as qualifying for the first-band (social security tax) exemption. Kept apart from the retirement
+  // scheme on purpose: being in SSF does not by itself establish the right to the exemption.
+  sstEligible: boolean("sst_eligible").notNull().default(false),
   // The Chart of Accounts liability sub-account this employee posts salary
   // accruals to — a sub-group under the tenant's Salary Payable group,
   // created alongside the employee (see payroll-accounts.ts).
@@ -97,6 +102,29 @@ export const payrollComponents = pgTable("payroll_components", {
   type: payrollComponentTypeEnum("type").notNull(),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
   taxable: boolean("taxable").notNull().default(true),
+  /** "fixed" = amount is a sum of money; "percent" = amount is a percentage of the basic salary paid in the period. */
+  calcType: text("calc_type").notNull().default("fixed"),
+  /** Counts toward the salary SSF / PF contributions are worked on (see the retirement rules). */
+  countsForRetirement: boolean("counts_for_retirement").notNull().default(false),
+  /** "recurring" = every month while assigned; "one_time" = only the run whose period holds its date (bonus, festival allowance, overtime). */
+  recurrence: text("recurrence").notNull().default("recurring"),
+  /** Given to every employee when added (and to existing ones when the component is created). Off means each employee is assigned by hand. */
+  autoAssign: boolean("auto_assign").notNull().default(false),
+});
+
+// Which components an employee gets, from when to when. A change closes the old row and opens a new one so history stays.
+// amount null = use the catalog's amount; a value is this person's own amount (or percentage, or the one-time sum).
+export const employeeComponents = pgTable("employee_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  componentId: uuid("component_id").notNull().references(() => payrollComponents.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 18, scale: 2 }),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").references(() => users.id),
 });
 
 export const prorationMethodEnum = pgEnum("proration_method", ["prorate", "new_full_month", "old_full_month"]);
@@ -161,6 +189,13 @@ export const payrollLines = pgTable("payroll_lines", {
   taxablePay: numeric("taxable_pay", { precision: 18, scale: 2 }),
   tdsAmount: numeric("tds_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   tdsDetail: jsonb("tds_detail"),
+  // Each component that made up this month's allowances and deductions (name, kind, amount, taxable, counts for retirement), so a payslip can list them.
+  componentsDetail: jsonb("components_detail"),
+  // Retirement contributions for the month: taken from the employee's pay, and added on top by the employer (never taken from net pay),
+  // with the line-by-line breakdown (scheme, contribution, employee, employer). Zero and null for anyone not in a scheme.
+  employeeRetirement: numeric("employee_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
+  employerRetirement: numeric("employer_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
+  retirementDetail: jsonb("retirement_detail"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 
@@ -173,4 +208,25 @@ export const attendanceRecords = pgTable("attendance_records", {
   date: date("date").notNull(),
   status: attendanceStatusEnum("status").notNull().default("present"),
   notes: text("notes"),
+});
+
+// The retirement schemes an employee is in, from when to when. SSF and PF never overlap each other; CIT can sit beside either.
+// Rates come from the platform's payroll rules for the pay date, not from here.
+export const employeeRetirement = pgTable("employee_retirement", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  /** "ssf" | "pf" | "cit" */
+  scheme: text("scheme").notNull(),
+  registrationNumber: text("registration_number"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  /** CIT only: what the employee chose to put in each month, as a fixed sum or a percentage of basic salary. */
+  citMode: text("cit_mode"),
+  citValue: numeric("cit_value", { precision: 18, scale: 2 }),
+  /** CIT only: what the employer adds each month, where the rules allow it. */
+  citEmployerValue: numeric("cit_employer_value", { precision: 18, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").references(() => users.id),
 });

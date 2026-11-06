@@ -1,4 +1,5 @@
 import { NOT_ASSIGNED, tdsHeadNames, tdsWithheldLines, totalsByHeading } from "./tds-by-heading";
+import { tdsDepositPosition } from "./tds-deposits";
 import { and, eq, ne, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, assetDisposals, salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
@@ -136,7 +137,10 @@ export async function getVatReturn(tenantId: string, from: string, to: string) {
 export async function getTdsReport(tenantId: string, from: string, to: string) {
   const names = await tdsHeadNames(tenantId);
   const lines = await tdsWithheldLines(tenantId, from, to);
+  // What has been deposited against it: by deposit period and heading, so an unpaid month cannot hide in a total.
+  const deposits = await tdsDepositPosition(tenantId, from, to);
   return {
+    deposits,
     rows: lines.map((l) => ({
       expenseNumber: l.reference,
       expenseDate: l.date,

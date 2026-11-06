@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, employeeBenefits, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
+import { employees, employeeBenefits, employeeComponents, employeeRetirement, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
+import { componentPay, type Assignment, type CatalogComponent } from "@/lib/payroll/components";
+import { payrollRulesOn } from "@/lib/payroll/platform-rules";
+import { retirementPay } from "@/lib/payroll/retirement-pay";
+import type { Enrolment } from "@/lib/payroll/employee-retirement";
+import type { EmployeeScheme } from "@/lib/payroll/retirement-rules";
 import { requireTenantSession, can } from "@/lib/session";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
@@ -105,13 +110,15 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     .filter((e) => e.joiningDate <= periodEnd && (!e.leavingDate || e.leavingDate >= periodStart));
   if (employeeList.length === 0) throw new Error("No employees were employed during this period, so there is nothing to include in this payroll run");
 
-  const components = await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId));
-  const allowanceTotal = components.filter((c) => c.type === "allowance").reduce((s, c) => s + Number(c.amount), 0);
-  const deductionTotal = components.filter((c) => c.type === "deduction").reduce((s, c) => s + Number(c.amount), 0);
-  const taxableAllowanceTotal = components.filter((c) => c.type === "allowance" && c.taxable).reduce((s, c) => s + Number(c.amount), 0);
+  // Each employee gets the components assigned to them (see Employees > profile > Salary components), not one company-wide total.
+  const catalog: CatalogComponent[] = (await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId))).map((c) => ({ id: c.id, name: c.name, type: c.type, amount: Number(c.amount), taxable: c.taxable, calcType: c.calcType === "percent" ? "percent" : "fixed", countsForRetirement: c.countsForRetirement, recurrence: c.recurrence === "one_time" ? "one_time" : "recurring" }));
+  const assignmentRows = await db.select().from(employeeComponents).where(eq(employeeComponents.tenantId, session.tenantId));
   // Salary TDS: the fiscal year this pay falls in, the months left in it, and the slabs in force on the pay date (null = none published).
   const taxCtx = await payrollTaxContext(session.tenantId, periodStart);
   const slabInfo = taxCtx.headKey ? await slabsOn(taxCtx.countryCode, taxCtx.headKey, periodEnd) : null;
+  // Retirement contributions: the rates are the platform's rules in force on the pay date; who is in which scheme is each employee's own enrolment.
+  const rulesInfo = taxCtx.countryCode ? await payrollRulesOn(taxCtx.countryCode, periodEnd) : null;
+  const enrolmentRows = await db.select().from(employeeRetirement).where(eq(employeeRetirement.tenantId, session.tenantId));
 
   const periodDates = eachDate(periodStart, periodEnd);
   const totalPeriodDays = periodDates.length;
@@ -190,12 +197,25 @@ export async function generatePayrollRun(input: GenerateRunInput) {
         }, 0)
     );
 
+    const assignments: Assignment[] = assignmentRows.filter((a) => a.employeeId === employee.id).map((a) => ({ componentId: a.componentId, amount: a.amount === null ? null : Number(a.amount), effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo }));
+    const pay = componentPay(catalog, assignments, { periodStart, periodEnd, proratedBasic });
+    const allowanceTotal = pay.allowances;
+    const deductionTotal = pay.deductions;
+    const taxableAllowanceTotal = pay.taxableAllowances;
+
     const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal);
+
+    // Employee contributions come out of pay; the employer's are an extra cost and never reduce net pay.
+    const enrolments: Enrolment[] = enrolmentRows
+      .filter((r) => r.employeeId === employee.id)
+      .map((r) => ({ id: r.id, scheme: r.scheme as EmployeeScheme, registrationNumber: r.registrationNumber, startDate: r.startDate, endDate: r.endDate, citMode: r.citMode === "percent" ? "percent" : r.citMode === "fixed" ? "fixed" : null, citValue: r.citValue === null ? null : Number(r.citValue), citEmployerValue: r.citEmployerValue === null ? null : Number(r.citEmployerValue) }));
+    const retirement = retirementPay({ enrolments, rules: rulesInfo?.rules ?? null, proratedBasic, retirementAllowances: pay.retirementAllowances, periodStart, periodEnd });
+    const employeeRetirementAmount = retirement.employee;
 
     // Salary TDS: projected for the year, less what was already withheld, split over the months left. It can't be more than the pay itself.
     const taxablePay = round2(proratedBasic + benefitsAmount + taxableAllowanceTotal);
     const taxpayerClass: TaxpayerClass = employee.taxStatus === "couple" ? "couple" : "single";
-    const earlier = taxCtx.fy ? await earlierInFiscalYear(session.tenantId, employee.id, taxCtx.fy.from, periodStart, run.id) : { earned: 0, withheld: 0 };
+    const earlier = taxCtx.fy ? await earlierInFiscalYear(session.tenantId, employee.id, taxCtx.fy.from, periodStart, run.id) : { earned: 0, withheld: 0, retirement: 0 };
     const joinedThisYear = Boolean(taxCtx.fy && employee.joiningDate >= taxCtx.fy.from); // earlier-employer figures only count in the year the person joined
     const working = computeMonthlyTds({
       taxablePay,
@@ -206,13 +226,17 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       monthsLeft: taxCtx.monthsLeft,
       slabs: slabInfo?.tables[taxpayerClass] ?? null,
       rounding: settings.roundingRule,
+      // What the employee puts into retirement schemes this year (earlier months plus this one for each month left) reduces taxable income up to the limits.
+      retirement: rulesInfo && (employeeRetirementAmount > 0 || earlier.retirement > 0) ? { actualAnnual: round2(earlier.retirement + employeeRetirementAmount * taxCtx.monthsLeft), limits: rulesInfo.rules.retirementDeduction } : undefined,
+      // The first band is waived only for an employee confirmed for it who is in SSF this month.
+      sstExemptBands: rulesInfo && employee.sstEligible && retirement.inSsf && rulesInfo.rules.schemes.ssf.sstExemptionPossible ? rulesInfo.rules.sst.exemptBands : 0,
     });
-    const tdsAmount = Math.min(working.tds, Math.max(round2(grossPay - deductionTotal), 0));
+    const tdsAmount = Math.min(working.tds, Math.max(round2(grossPay - deductionTotal - employeeRetirementAmount), 0));
     const tdsDetail: TdsWorking = { ...working, tds: tdsAmount, taxpayerClass, classAssumed: !employee.taxStatus, slabVersion: slabInfo ? { id: slabInfo.id, label: slabInfo.label } : null };
     // Staff advances taken against this month (or earlier ones still unrecovered) come out of the pay, oldest first, but never
     // more than the employee takes home — anything left over is recovered from later months.
-    const { total: advanceRecovered } = await planEmployeeRecovery(session.tenantId, employee.id, periodEnd, grossPay - deductionTotal - tdsAmount, run.id);
-    const netPay = round2(grossPay - deductionTotal - tdsAmount - advanceRecovered);
+    const { total: advanceRecovered } = await planEmployeeRecovery(session.tenantId, employee.id, periodEnd, grossPay - deductionTotal - tdsAmount - employeeRetirementAmount, run.id);
+    const netPay = round2(grossPay - deductionTotal - tdsAmount - employeeRetirementAmount - advanceRecovered);
 
     await db.insert(payrollLines).values({
       tenantId: session.tenantId,
@@ -232,6 +256,10 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       taxablePay: taxablePay.toFixed(2),
       tdsAmount: tdsAmount.toFixed(2),
       tdsDetail,
+      componentsDetail: pay.lines,
+      employeeRetirement: employeeRetirementAmount.toFixed(2),
+      employerRetirement: retirement.employer.toFixed(2),
+      retirementDetail: retirement.lines.length > 0 || retirement.warnings.length > 0 ? { lines: retirement.lines, warnings: retirement.warnings, rulesVersionId: rulesInfo?.id ?? null, rulesVerified: rulesInfo?.isVerified ?? null } : null,
       netPay: netPay.toFixed(2),
     });
   }

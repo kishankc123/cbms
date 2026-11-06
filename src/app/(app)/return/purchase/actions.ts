@@ -11,7 +11,7 @@ import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { resettleParty } from "@/lib/ledger/party-settlement";
-import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { allocateProportional, assertTrackingOn, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
@@ -47,6 +47,7 @@ function refresh() {
 export async function createPurchaseReturn(input: PurchaseReturnInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  await assertTrackingOn(session.tenantId, "Returns of stocked goods");
 
   const noteNumber = input.noteNumber.trim();
   if (!noteNumber) throw new Error("Credit note number is required");

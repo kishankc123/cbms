@@ -10,6 +10,8 @@ import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { getRunRecoveryBreakdown } from "@/lib/payroll/staff-advances";
 import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
 import { TdsCell } from "../../tds-working";
+import Link from "next/link";
+import { StatStrip } from "@/components/ui/stat-strip";
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
@@ -43,12 +45,23 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       tdsAmount: payrollLines.tdsAmount,
       tdsDetail: payrollLines.tdsDetail,
       netPay: payrollLines.netPay,
+      employeeRetirement: payrollLines.employeeRetirement,
+      employerRetirement: payrollLines.employerRetirement,
+      retirementDetail: payrollLines.retirementDetail,
     })
     .from(payrollLines)
     .innerJoin(employees, eq(employees.id, payrollLines.employeeId))
     .where(eq(payrollLines.payrollRunId, runId));
 
-  const totalNet = lines.reduce((s, l) => s + Number(l.netPay), 0);
+  const sum = (f: (l: (typeof lines)[number]) => number) => Math.round(lines.reduce((s, l) => s + f(l), 0) * 100) / 100;
+  const totalNet = sum((l) => Number(l.netPay));
+  const totalGross = sum((l) => Number(l.grossPay));
+  const totalTds = sum((l) => Number(l.tdsAmount));
+  const totalEmployerRetirement = sum((l) => Number(l.employerRetirement));
+  const totalEmployeeDeductions = sum((l) => Number(l.deductions) + Number(l.employeeRetirement) + Number(l.tdsAmount) + Number(l.advanceRecovered));
+  // Why a contribution was not taken (no registration number, no rules published, a CIT ceiling), kept on the line when the run was calculated.
+  const retirementNotes = lines.flatMap((l) => ((l.retirementDetail as { warnings?: string[] } | null)?.warnings ?? []).map((w) => `${l.fullName}: ${w}`));
+  const unverifiedRules = lines.some((l) => (l.retirementDetail as { rulesVerified?: boolean | null } | null)?.rulesVerified === false);
   const workingOf = (l: (typeof lines)[number]) => (l.tdsDetail as TdsWorking | null) ?? null;
   const slabsMissing = lines.some((l) => workingOf(l)?.missing === "slabs");
   const assumedStatus = lines.filter((l) => workingOf(l)?.classAssumed).length;
@@ -73,6 +86,30 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       {slabsMissing && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">Salary-tax slabs are not set for this fiscal year, so no TDS was taken in this run. Once the platform administrator has published them, recalculate the run.</p>}
       {assumedStatus > 0 && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{assumedStatus} employee{assumedStatus === 1 ? " has" : "s have"} no tax status, so the Single slabs were used. Choose Single or Couple on the employee&apos;s profile, then recalculate.</p>}
 
+      {unverifiedRules && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">The retirement contribution rates used in this run have not been confirmed against current law yet. Check them with your platform administrator before relying on it.</p>}
+      {retirementNotes.length > 0 && (
+        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="font-medium">Retirement contributions to check:</p>
+          <ul className="list-disc pl-5">
+            {retirementNotes.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <StatStrip
+        items={[
+          { label: "Employees", value: lines.length },
+          { label: "Gross salary", value: totalGross.toFixed(2) },
+          { label: "Employee deductions", value: totalEmployeeDeductions.toFixed(2) },
+          { label: "Remuneration tax", value: totalTds.toFixed(2) },
+          { label: "Net salary payable", value: totalNet.toFixed(2) },
+          { label: "Employer contributions", value: totalEmployerRetirement.toFixed(2) },
+          { label: "Employer payroll cost", value: (totalGross + totalEmployerRetirement).toFixed(2) },
+        ]}
+      />
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
@@ -87,9 +124,12 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
               <th className="px-3 py-2 font-medium whitespace-nowrap">Benefits</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Deductions</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Gross Pay</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">SSF / PF / CIT</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">TDS</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Advance Recovered</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Net Pay</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Employer contribution</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -107,16 +147,23 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.benefitsAmount).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.deductions).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.grossPay).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{Number(l.employeeRetirement).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <TdsCell amount={Number(l.tdsAmount)} working={workingOf(l)} title={l.fullName} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.advanceRecovered).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.netPay).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-ink-2">{Number(l.employerRetirement).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-right">
+                  <Link href={`/payroll/payslips/${l.id}`} className="text-xs text-accent hover:underline">
+                    Payslip
+                  </Link>
+                </td>
               </tr>
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={16} className="px-4 py-6 text-center text-gray-400">
                   No lines in this run
                 </td>
               </tr>
@@ -125,10 +172,12 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           {lines.length > 0 && (
             <tfoot>
               <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                <td colSpan={12} className="px-3 py-2 text-right">
+                <td colSpan={13} className="px-3 py-2 text-right">
                   Total Net Pay
                 </td>
                 <td className="px-3 py-2">{totalNet.toFixed(2)}</td>
+                <td className="px-3 py-2 text-ink-2">{totalEmployerRetirement.toFixed(2)}</td>
+                <td />
               </tr>
             </tfoot>
           )}

@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_settings" ADD COLUMN "overview_stock_losses_in_cogs" boolean DEFAULT false NOT NULL;

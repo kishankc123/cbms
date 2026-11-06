@@ -70,6 +70,8 @@ export type InitialInvoice = {
   billType: CashBillType;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
+  /** A purchase recorded by amount, waiting for its items: the amount it was recorded with. The items should add up to it. */
+  pendingTotal?: number | null;
 };
 
 type FieldErrors = { invoiceNumber?: string; date?: string; dueDate?: string; vendorId?: string; items?: string };
@@ -121,6 +123,8 @@ export function PurchaseInvoiceForm({
       : Array.from({ length: MIN_LINES }, emptyLine)
   );
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
+  // Adding items to a purchase recorded by amount: the person can say the recorded amount was wrong and the items' total should stand.
+  const [acceptDifferent, setAcceptDifferent] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
@@ -241,7 +245,7 @@ export function PurchaseInvoiceForm({
       };
 
       if (initial) {
-        await updatePurchaseInvoice({ ...payload, billId: initial.billId });
+        await updatePurchaseInvoice({ ...payload, billId: initial.billId, ...(initial.pendingTotal != null && acceptDifferent ? { acceptDifferentTotal: true } : {}) });
       } else {
         await createPurchaseInvoice(payload);
       }
@@ -269,7 +273,7 @@ export function PurchaseInvoiceForm({
         [/due date/i, "#inv-due"],
         [/supplier/i, '[data-field="supplier"]'],
         [/Cash or Bank|payment/i, '[data-field="pay"]'],
-        [/item line|in stock/i, '[data-field="items"]'],
+        [/item line|in stock|add up to/i, '[data-field="items"]'],
       ];
       report(message, rules.find(([re]) => re.test(message))?.[1] ?? null);
     } finally {
@@ -277,8 +281,27 @@ export function PurchaseInvoiceForm({
     }
   }
 
+  const pendingTotal = initial?.pendingTotal ?? null;
+  const difference = pendingTotal === null ? 0 : Math.round((grandTotal - pendingTotal) * 100) / 100;
+
   return (
     <div className="space-y-4">
+      {pendingTotal !== null && (
+        <section className="space-y-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            <span className="font-medium">Adding item details.</span> This purchase was recorded as <span className="font-semibold tabular-nums">{fmt(pendingTotal)}</span>. Add the items so they add up to it. Stock comes in when you save.
+          </p>
+          <p className="tabular-nums">
+            Items so far: {fmt(grandTotal)} {Math.abs(difference) > 0.005 ? <span className="font-medium">({difference > 0 ? "over" : "short by"} {fmt(Math.abs(difference))})</span> : <span className="font-medium">(matches)</span>}
+          </p>
+          {Math.abs(difference) > 0.005 && (
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={acceptDifferent} onChange={(e) => setAcceptDifferent(e.target.checked)} />
+              The recorded amount was wrong: use the items&apos; total instead
+            </label>
+          )}
+        </section>
+      )}
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Details</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">

@@ -59,6 +59,7 @@ export function classify(sourceType: string, paymentType: string | null, isDebit
       case "expense_payment":
         return "expense_payments";
       case "salary_payment":
+      case "retirement_payment":
       case "staff_advance":
         return "payroll";
       case "tax_payment":

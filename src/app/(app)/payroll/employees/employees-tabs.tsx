@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { EmployeesTable } from "./employees-table";
 import { EmployeeAddForm } from "./employee-add-form";
 
@@ -36,6 +37,15 @@ export function EmployeesTabs({ employees, currentSalaries }: { employees: Emplo
             {t.label}
           </button>
         ))}
+        {/* Attendance and benefits are their own pages; they sit with the employees they belong to. */}
+        {currentSalaries !== null && (
+          <Link href="/payroll/benefits" className="relative inline-flex h-9 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-[13px] text-ink-2 transition-colors hover:text-ink">
+            Benefits
+          </Link>
+        )}
+        <Link href="/payroll/attendance" className="relative inline-flex h-9 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-[13px] text-ink-2 transition-colors hover:text-ink">
+          Attendance
+        </Link>
       </div>
 
       {tab === "employees" && <EmployeesTable employees={employees} currentSalaries={currentSalaries} />}

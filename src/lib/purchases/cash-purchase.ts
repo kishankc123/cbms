@@ -5,7 +5,7 @@ import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertCashBankAccounts, assertCogsCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertCashBankAccounts, assertPurchaseCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -49,10 +49,10 @@ export function computeCashLine(line: CashPurchaseLine, vatRate: number) {
 // Checks everything about a consumable purchase before anything is saved or reversed, and works out the amounts.
 // VAT applies only when the bill type is VAT; the payments may not exceed the bill total (VAT included). Taxed at
 // the rate that applied on the BILL'S date, not today's — a backdated bill is not re-taxed at the current rate.
-export async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput) {
+export async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput, opts: { skipCategoryCheck?: boolean } = {}) {
   const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
   if (validLines.length === 0) throw new Error("Add at least one line with a rate and quantity");
-  for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertCogsCategory(tenantId, categoryId);
+  if (!opts.skipCategoryCheck) for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertPurchaseCategory(tenantId, categoryId);
 
   const vatRate = input.billType === "vat" ? await getTaxRate(tenantId, "vat", input.billDate) : 0;
   const computed = validLines.map((l) => ({ line: l, ...computeCashLine(l, vatRate) }));
@@ -115,12 +115,14 @@ export function billLineItems(computed: { line: CashPurchaseLine }[]): PurchaseL
 export async function createCashPurchaseCore(
   ctx: { tenantId: string; userId: string },
   input: CashPurchaseInput,
-  opts: { importId?: string; takenNumbers?: Set<string> } = {}
+  // `pending`: a stockable purchase recorded by amount, its items still to be added: it is a credit-type bill with no lines, flagged so the items can
+  // be added later. The caller supplies the waiting account as the line's category.
+  opts: { importId?: string; takenNumbers?: Set<string>; pending?: boolean } = {}
 ): Promise<{ billId: string; billNumber: string }> {
   const { tenantId, userId } = ctx;
   if (!input.billDate) throw new Error("Bill date is required");
 
-  const prepared = await prepareCashPurchase(tenantId, input);
+  const prepared = await prepareCashPurchase(tenantId, input, { skipCategoryCheck: opts.pending });
   const vendorId = input.vendorId || null;
 
   // Bills without a supplier number get AUTO-n, skipping any already used.
@@ -145,11 +147,12 @@ export async function createCashPurchaseCore(
       billDate: input.billDate,
       billType: input.billType,
       description: prepared.description,
-      lineItems: billLineItems(prepared.computed),
+      lineItems: opts.pending ? [] : billLineItems(prepared.computed),
       subtotal: prepared.subtotal.toFixed(2),
       taxAmount: prepared.tax.toFixed(2),
       total: prepared.total.toFixed(2),
-      purchaseType: "cash",
+      purchaseType: opts.pending ? "credit" : "cash",
+      detailsPending: Boolean(opts.pending),
       status: prepared.status,
       amountPaid: prepared.paid.toFixed(2),
       billAvailable: input.billAvailable ?? null,
@@ -164,7 +167,7 @@ export async function createCashPurchaseCore(
       sourceType: "purchase",
       sourceId: bill.id,
       referenceNumber: billNumber,
-      memo: `Consumable purchase ${billNumber}`,
+      memo: opts.pending ? `Stockable purchase ${billNumber} (item details to come)` : `Consumable purchase ${billNumber}`,
       createdBy: userId,
       lines: cashPurchaseEntryLines(prepared.computed, prepared.tax, taxReceivableId, billNumber, input.payments, payable),
     });

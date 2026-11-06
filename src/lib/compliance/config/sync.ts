@@ -11,6 +11,7 @@ import {
 import { COMPLIANCE_CATEGORIES, type CountryConfig } from "./types";
 import { COUNTRY_CONFIGS } from "./index";
 import { validateCountryConfig } from "./validate";
+import { seedPlatformRules } from "./platform-rule-seeds";
 
 /**
  * Loads the shipped country configuration into the database. Insert-only: a row
@@ -74,6 +75,8 @@ export async function syncComplianceConfig(configs: CountryConfig[] = COUNTRY_CO
         }))
       )
       .onConflictDoNothing();
+
+    await seedPlatformRules(countryCode);
 
     if (c.penaltyRules?.length) {
       await db

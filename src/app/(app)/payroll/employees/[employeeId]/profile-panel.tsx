@@ -22,6 +22,8 @@ type Employee = {
   taxStatus?: string | null;
   priorIncome?: string;
   priorTds?: string;
+  taxResidency?: string;
+  sstEligible?: boolean;
 };
 
 function Field({ label, value }: { label: string; value: string }) {

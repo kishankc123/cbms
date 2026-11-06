@@ -18,6 +18,8 @@ import { todayIso } from "@/lib/calendar";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment, nextAutoBillNumber } from "@/lib/purchases/bill-records";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
+import { assertTrackingOn, getTrackInventory } from "@/lib/inventory/stock";
+import { getOrCreatePendingPurchasesAccount } from "@/lib/ledger/purchases-accounts";
 import {
   billLineItems,
   cashPurchaseEntryLines,
@@ -335,6 +337,8 @@ export type PurchaseInvoiceInput = {
   billAvailable?: boolean;
   lines: PurchaseLineItem[];
   payments: PurchaseInvoicePayment[];
+  /** Adding the items to a purchase recorded by amount: they must add up to the amount it was recorded with, unless this confirms that amount was wrong. */
+  acceptDifferentTotal?: boolean;
 };
 
 // A Stockable purchase invoice is a single vendor bill with multiple item
@@ -343,6 +347,7 @@ export type PurchaseInvoiceInput = {
 export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  await assertTrackingOn(session.tenantId, "Purchases with items");
 
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
@@ -454,6 +459,9 @@ export type PurchaseInvoiceEditData = {
   billType: CashBillType;
   lineItems: PurchaseLineItem[];
   payments: PurchaseInvoicePayment[];
+  /** A purchase recorded by amount whose items are still to be added, and the amount it was recorded with. */
+  detailsPending: boolean;
+  recordedTotal: number;
 };
 
 // Reconstructs the payment split (accounts credited besides Accounts
@@ -487,6 +495,8 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
     billType: bill.billType as CashBillType,
     lineItems: bill.lineItems as PurchaseLineItem[],
     payments,
+    detailsPending: bill.detailsPending,
+    recordedTotal: Number(bill.total),
   };
 }
 
@@ -495,6 +505,7 @@ export type UpdatePurchaseInvoiceInput = PurchaseInvoiceInput & { billId: string
 export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await assertTrackingOn(session.tenantId, "Purchases with items");
 
   const [existing] = await db
     .select()
@@ -509,6 +520,9 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
 
   const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType, input.invoiceDate);
   if (validLines.length === 0) throw new Error("Add at least one item line");
+  if (existing.detailsPending && !input.acceptDifferentTotal && Math.abs(total - Number(existing.total)) > 0.005) {
+    throw new Error(`The items add up to ${total.toFixed(2)}, but this bill was recorded as ${Number(existing.total).toFixed(2)}. Make the items add up to the bill, or confirm that the recorded amount was wrong.`);
+  }
   await assertItemsUsable(session.tenantId, validLines, { requireItem: true, stillAllowed: (existing.lineItems ?? []).map((l) => l.itemId) });
 
   const paid = round2(input.payments.filter((p) => p.accountId && p.amount > 0).reduce((s, p) => s + p.amount, 0));
@@ -570,6 +584,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
       total: total.toFixed(2),
       status,
       amountPaid: paid.toFixed(2),
+      detailsPending: false,
       ...(input.billAvailable !== undefined ? { billAvailable: input.billAvailable } : {}),
     })
     .where(eq(purchaseBills.id, input.billId));
@@ -598,4 +613,84 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   revalidatePath("/inventory/items");
   revalidatePath("/journal");
   await recalculateAfter(session.tenantId, [...validLines, ...(existing.lineItems ?? [])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
+}
+
+// ---- Purchases recorded by bill amount only (an organization that does not track inventory) ----
+
+/** One row of the amount-only grid: a whole purchase bill, with no items. The amount is before VAT; VAT is added for a VAT bill. */
+export type AmountPurchaseRow = {
+  billDate: string;
+  vendorId: string;
+  billNumber: string;
+  billType: CashBillType;
+  /** The Purchases account, or one of its sub-accounts. */
+  categoryId: string;
+  description: string;
+  amount: number;
+  discount: number;
+  billAvailable?: boolean;
+  payments: CashPaymentLine[];
+};
+
+const asBill = (r: AmountPurchaseRow): CashPurchaseInput => ({
+  billNumber: r.billNumber,
+  billDate: r.billDate,
+  vendorId: r.vendorId,
+  billType: r.billType,
+  billAvailable: r.billAvailable,
+  lines: [{ description: r.description, categoryId: r.categoryId, rate: r.amount, quantity: 1, discount: r.discount }],
+  payments: r.payments,
+});
+
+export type AmountPurchasesResult = { saved: number } & ({ ok: true } | { ok: false; error: string });
+
+// Many bills by amount in one go, one per row, through the ordinary bill writer. Every row is checked first; if one fails while saving, the rows
+// before it stay saved and the message says which row stopped. `pending` is for an organization that keeps stock: the bills are stockable
+// purchases whose items are still to be added, waiting in "Purchases awaiting item details" until they are.
+async function recordAmountBatch(session: Awaited<ReturnType<typeof requireTenantSession>>, rows: AmountPurchaseRow[], pending: boolean): Promise<AmountPurchasesResult> {
+  if (pending) await assertTrackingOn(session.tenantId, "Purchases to be itemised later");
+  else if (await getTrackInventory(session.tenantId)) throw new Error("This organization keeps stock, so purchases are entered with the items bought (Stockable purchase).");
+  if (rows.length === 0) throw new Error("Add at least one purchase");
+
+  const waitingId = pending ? (await getOrCreatePendingPurchasesAccount(session.tenantId)).id : null;
+  const bills = rows.map((r) => (waitingId ? asBill({ ...r, categoryId: waitingId }) : asBill(r)));
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      if (!rows[i].billDate) throw new Error("Enter the bill date");
+      await prepareCashPurchase(session.tenantId, bills[i], { skipCategoryCheck: pending });
+    } catch (e) {
+      throw new Error(`Row ${i + 1}: ${e instanceof Error ? e.message : "could not be checked"}`);
+    }
+  }
+
+  const taken = new Set((await db.select({ n: purchaseBills.billNumber }).from(purchaseBills).where(eq(purchaseBills.tenantId, session.tenantId))).map((r) => r.n));
+  let saved = 0;
+  let failure: string | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      await createCashPurchaseCore({ tenantId: session.tenantId, userId: session.userId }, bills[i], { takenNumbers: taken, pending });
+      saved++;
+    } catch (e) {
+      failure = `Row ${i + 1} could not be saved: ${e instanceof Error ? e.message : "an error occurred"}${saved > 0 ? ` Rows 1 to ${saved} were saved.` : ""}`;
+      break;
+    }
+  }
+
+  for (const path of ["/purchases/stockable", "/purchases/consumable", "/suppliers", "/dashboard", "/journal"]) revalidatePath(path);
+  return failure ? { ok: false, saved, error: failure } : { ok: true, saved };
+}
+
+/** Purchase bills by amount for an organization that does not keep stock: booked to Purchases, no items. */
+export async function recordAmountPurchases(input: { rows: AmountPurchaseRow[] }): Promise<AmountPurchasesResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  return recordAmountBatch(session, input.rows, false);
+}
+
+/** Stockable purchases recorded by amount, with the items to be added later (Add item details on the bill). Stock does not move until then. */
+export async function recordPendingPurchases(input: { rows: AmountPurchaseRow[] }): Promise<AmountPurchasesResult> {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  return recordAmountBatch(session, input.rows, true);
 }

@@ -22,7 +22,6 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
   const [busy, setBusy] = useState(false);
 
   const rowOf = (taxKey: string) => data.rows.find((r) => r.moduleKey === moduleKey && r.taxTypeKey === taxKey && r.isActive);
-  const modulesOf = (taxKey: string) => [...new Set(data.rows.filter((r) => r.taxTypeKey === taxKey && r.isActive).map((r) => r.moduleKey))];
   const reach = `${data.organizations} organization${data.organizations === 1 ? "" : "s"} in ${countryName}`;
 
   async function save() {
@@ -172,20 +171,6 @@ export function ModulesAdmin({ countryCode, countryName, moduleKey, data }: { co
           </div>
         </section>
       )}
-
-      <section className={`${adminCard} overflow-x-auto p-5`}>
-        <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Where each tax is used</h2>
-        <table className="w-full text-sm">
-          <tbody>
-            {data.taxes.map((t) => (
-              <tr key={t.key} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="py-1.5 pr-3 font-medium text-[var(--text-primary)]">{t.name}</td>
-                <td className="py-1.5 text-[var(--text-secondary)]">{modulesOf(t.key).length ? modulesOf(t.key).map(moduleLabel).join(", ") : "No module yet"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
     </div>
   );
 }

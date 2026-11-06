@@ -97,4 +97,10 @@ export const inventorySettings = pgTable("inventory_settings", {
   allowNegativeStock: boolean("allow_negative_stock").notNull().default(false),
   // When inventory history begins. Opening stock belongs to this date, and no stock movement may be dated before it. Empty = not set yet.
   openingDate: date("opening_date"),
+  // Whether this organization keeps stock and works out cost of goods sold. When off, a purchase is recorded by its bill amount only (no item
+  // lines, no stock) and nothing is costed as COGS. On by default, so existing organizations are unchanged.
+  trackInventory: boolean("track_inventory").notNull().default(true),
+  // Overview only: count what the stock count writes off (the Inventory Adjustments account) as cost of goods sold instead of as an expense.
+  // Off by default; the books themselves are never changed by it.
+  overviewStockLossesInCogs: boolean("overview_stock_losses_in_cogs").notNull().default(false),
 });

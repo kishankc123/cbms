@@ -11,6 +11,7 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
   staff_advance: "Staff Advance",
   expense_payment: "Expense Payment",
   tax_payment: "Tax Payment",
+  retirement_payment: "Retirement Contribution Payment",
   loan_repayment: "Loan Repayment",
   supplier_advance: "Supplier Advance",
   owner_withdrawal: "Owner Withdrawal",

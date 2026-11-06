@@ -6,6 +6,8 @@ import { getOrCreateEmployeeAdvanceAccountId } from "@/lib/ledger/advance-accoun
 import { getOrCreateSalaryExpenseAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
 import { getOrCreateTdsHeadPayableAccount, payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+import { getOrCreateEmployerRetirementExpense, getOrCreateRetirementPayable } from "@/lib/ledger/retirement-accounts";
+import { creditsFor, RETIREMENT_ACCOUNTS, type RetirementAccountKey, type RetirementLine } from "@/lib/payroll/retirement-pay";
 
 type Run = typeof payrollRuns.$inferSelect;
 
@@ -21,7 +23,10 @@ export async function activePayrollEntries(tenantId: string, runId: string) {
  * Posts the ledger accrual for a finalized run: every employee's own Salary Payable sub-account is credited with
  * their net pay, Salary Expense is debited with gross pay, deductions withheld go to Payroll Deductions Payable, and any staff
  * advance recovered from the pay clears the employee's Staff Advance account, and the salary TDS withheld goes to TDS Payable — Salary
- * (gross = net + deductions + advance recovered + TDS).
+ * (gross = net + deductions + advance recovered + TDS + the employee's retirement contribution).
+ * Retirement contributions (only for employees in a scheme): the employee's share is credited to the matching payable account, and the
+ * employer's share is debited to Employer Retirement Contributions and credited to its payable account (the employer's gratuity has an account
+ * of its own). One entry covers the whole run, so a run is never posted twice.
  * Returns the entry's id. It refuses to post twice for the same run, and refuses when there is nothing to post (so a
  * run can never be finalized with no accounting behind it).
  */
@@ -29,7 +34,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
   if ((await activePayrollEntries(tenantId, run.id)).length > 0) throw new Error("This payroll run has already been posted to the ledger");
 
   const lines = await db
-    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, netPay: payrollLines.netPay, advanceRecovered: payrollLines.advanceRecovered, tdsAmount: payrollLines.tdsAmount })
+    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, netPay: payrollLines.netPay, advanceRecovered: payrollLines.advanceRecovered, tdsAmount: payrollLines.tdsAmount, employeeRetirement: payrollLines.employeeRetirement, employerRetirement: payrollLines.employerRetirement, retirementDetail: payrollLines.retirementDetail })
     .from(payrollLines)
     .where(eq(payrollLines.payrollRunId, run.id));
   if (lines.length === 0) throw new Error("This payroll run has no employee lines — generate it first");
@@ -48,6 +53,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
   const tdsAccount = totalTds > 0 ? (payrollHead ? await getOrCreateTdsHeadPayableAccount(tenantId, payrollHead) : await getOrCreateSalaryTdsPayableAccount(tenantId)) : null;
 
   const postLines: PostLineInput[] = [];
+  const retirementLines: RetirementLine[] = [];
   for (const line of lines) {
     const employee = employeeById.get(line.employeeId);
     if (!employee) continue;
@@ -64,6 +70,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     const advance = Number(line.advanceRecovered);
     const tds = Number(line.tdsAmount);
     if (gross <= 0) continue;
+    retirementLines.push(...(((line.retirementDetail as { lines?: RetirementLine[] } | null)?.lines ?? []) as RetirementLine[]));
 
     postLines.push({ accountId: salaryExpense.id, debitAmount: gross, description: `Salary expense - ${employee.fullName}` });
     if (net > 0) postLines.push({ accountId: payableAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
@@ -72,6 +79,15 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     if (deductions > 0 && deductionsAccount) postLines.push({ accountId: deductionsAccount.id, creditAmount: deductions, description: `Payroll deductions - ${employee.fullName}` });
   }
   if (postLines.length === 0) throw new Error("Nobody has any pay in this run, so there is nothing to post");
+
+  // Retirement contributions: what was taken from employees, and what the employer owes on top, by account.
+  const credits = creditsFor(retirementLines);
+  const employerCost = Math.round(retirementLines.reduce((sum, l) => sum + l.employer, 0) * 100) / 100;
+  if (employerCost > 0) postLines.push({ accountId: (await getOrCreateEmployerRetirementExpense(tenantId)).id, debitAmount: employerCost, description: "Employer retirement contributions" });
+  for (const key of Object.keys(credits) as RetirementAccountKey[]) {
+    const amount = credits[key] ?? 0;
+    if (amount > 0) postLines.push({ accountId: (await getOrCreateRetirementPayable(tenantId, key)).id, creditAmount: amount, description: RETIREMENT_ACCOUNTS[key] });
+  }
 
   const entry = await postJournalEntry({
     tenantId,
