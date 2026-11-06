@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { D } from "@/components/calendar/date-text";
 import type { Change, Performance, Projection, Totals } from "@/lib/dashboard/performance";
 import { LazyPerformanceChart } from "./performance-chart-lazy";
 import { money } from "./cash-sections";
@@ -74,9 +73,6 @@ export function PerformanceSection({ perf, qs }: { perf: Performance; qs: string
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-ink-2">
-        <D value={perf.range.from} /> to <D value={perf.range.to} />. Compared with <D value={perf.previous.range.from} /> to <D value={perf.previous.range.to} /> and <D value={perf.lastYear.range.from} /> to <D value={perf.lastYear.range.to} />. From posted entries.
-      </p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Revenue" value={c.revenue} href={href}>
           {cmp("revenue", "income")}
