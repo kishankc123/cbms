@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Banknote, Bell, CalendarClock, ClipboardList, Coins, FileText, Landmark, PackageX, Receipt, Scale, Users, type LucideIcon } from "lucide-react";
+import { Banknote, Bell, CalendarClock, Calculator, ClipboardList, Coins, FileText, Landmark, PackageX, Receipt, Scale, Users, type LucideIcon } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { GROUP_LABEL, type NotifGroup, type NotifView, type StateAction } from "@/lib/notifications/notification-rules";
 import { getNotifications, setNotificationState, type NotificationsData } from "./notifications/actions";
@@ -28,6 +28,7 @@ const ICON: Record<string, LucideIcon> = {
   contributions_owed: Coins,
   compliance_overdue: CalendarClock,
   compliance_due: CalendarClock,
+  tax_depreciation_review: Calculator,
   trial_balance: Scale,
 };
 

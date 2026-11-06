@@ -11,6 +11,8 @@ import { taxYearOf, taxYearStarting } from "@/lib/tax-depreciation/dates";
 import { NEPAL_TAX_DEPRECIATION_RULES } from "@/lib/tax-depreciation/rules";
 import { addOpeningDeferred, addStatutoryAddition, cancelDeferred, ensureTaxCategoryMap, listDeferred, listOpeningPools, rulesForTaxYear, saveAssetTaxProfile, saveOpeningPool, setCategoryClass, type OpeningDeferredInput } from "@/lib/tax-depreciation/setup";
 import { finaliseTaxYear, previewTaxYear, reopenTaxYear } from "@/lib/tax-depreciation/year";
+import { booksVsTax, reviewItems, type BooksVsTax, type ReviewItem } from "@/lib/tax-depreciation/reports";
+import { buildSchedule, scheduleCsv, type Schedule } from "@/lib/tax-depreciation/schedule";
 
 // Tax depreciation set-up for the signed-in organization. Nothing here posts to the ledger.
 
@@ -25,7 +27,7 @@ export async function getTaxDepreciationSetupData(requestedYear?: number) {
   const taxYear = requestedYear ?? current?.startYear ?? 2082;
   const published = await rulesForTaxYear(session.tenantId, taxYear);
   const years = [taxYear - 1, taxYear, taxYear + 1].map((y) => ({ startYear: y, label: taxYearStarting(y, NEPAL_TAX_DEPRECIATION_RULES)?.label ?? String(y) }));
-  if (!published) return { canEdit: can(session, "assets", "edit"), canVoid: can(session, "assets", "void"), canReopen: isOrgAdmin(session.role), taxYear, years, rules: null, isVerified: false, categories: [], openings: [], individualAssets: [], deferred: [], statutory: [], calc: null, calcError: null as string | null, assetRows: [] };
+  if (!published) return { canEdit: can(session, "assets", "edit"), canVoid: can(session, "assets", "void"), canReopen: isOrgAdmin(session.role), taxYear, years, rules: null, isVerified: false, categories: [], openings: [], individualAssets: [], deferred: [], statutory: [], calc: null, calcError: null as string | null, assetRows: [], schedule: null as Schedule | null, scheduleCsv: "", compare: null as BooksVsTax | null, review: [] as ReviewItem[] };
 
   const [categories, openings, deferred, statutory, intangible, calc, profiled] = await Promise.all([
     ensureTaxCategoryMap(session.tenantId),
@@ -36,6 +38,8 @@ export async function getTaxDepreciationSetupData(requestedYear?: number) {
     previewTaxYear(session.tenantId, taxYear),
     db.select({ asset: assets, profile: assetTaxProfiles }).from(assets).leftJoin(assetTaxProfiles, eq(assetTaxProfiles.assetId, assets.id)).where(eq(assets.tenantId, session.tenantId)).orderBy(asc(assets.assetCode)),
   ]);
+  const [compare, review] = await Promise.all([calc.ok ? booksVsTax(session.tenantId, calc.preview) : Promise.resolve(null), reviewItems(session.tenantId, taxYear)]);
+  const schedule = calc.ok ? buildSchedule(calc.preview.pools) : null;
   const assetRows = profiled.filter((r) => r.asset.status !== "draft" && r.asset.status !== "voided").map(({ asset: a, profile: p }) => {
     const cat = categories.find((c) => c.categoryId === a.categoryId);
     return {
@@ -62,6 +66,10 @@ export async function getTaxDepreciationSetupData(requestedYear?: number) {
     calc: calc.ok ? calc.preview : null,
     calcError: calc.ok ? null : calc.error,
     assetRows,
+    schedule,
+    scheduleCsv: schedule ? scheduleCsv(schedule) : "",
+    compare,
+    review,
     deferred: deferred.map((d) => ({ id: d.id, assetLabel: d.assetLabel, poolKey: d.poolKey, originalTaxYear: d.originalTaxYear, originalDate: d.originalDate, originalCost: Number(d.originalCost), originalThirds: d.originalThirds, includedInOriginalYear: Number(d.includedInOriginalYear), remainingDeferred: Number(d.remainingDeferred), dueTaxYear: d.dueTaxYear, status: d.status, source: d.source })),
     statutory: statutory.map((s) => ({ id: s.id, poolKey: s.poolKey, typeKey: s.typeKey, description: s.description, amount: Number(s.amount), legalReference: s.legalReference, evidence: s.evidence })),
   };

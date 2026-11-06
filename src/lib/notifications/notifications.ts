@@ -5,6 +5,7 @@ import { addDays } from "@/lib/calendar";
 import { DUE_SOON_DAYS } from "@/lib/compliance/engine/status";
 import { complianceSummary, needsAttention, type NeedsAttentionItem } from "@/lib/dashboard/aggregates";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
+import { currentTaxYearFor, reviewItems } from "@/lib/tax-depreciation/reports";
 import { plural, type Notif, type NotifGroup, type NotifState, type StateAction } from "./notification-rules";
 
 export * from "./notification-rules";
@@ -111,6 +112,18 @@ export async function loadNotifications(tenantId: string, today: string, allowed
         if (s.overdue > 0 && allowed("compliance_overdue")) out.push({ key: "compliance_overdue", group: "alert", severity: "critical", title: `${plural(s.overdue, "compliance item is", "compliance items are")} overdue`, detail: "Past the due date and not filed or paid.", href: "/compliance", count: s.overdue, amount: null, sinceDays: null });
         if (s.dueSoon > 0 && allowed("compliance_due")) out.push({ key: "compliance_due", group: "due", severity: "action", title: `${plural(s.dueSoon, "compliance item is", "compliance items are")} due in the next ${DUE_SOON_DAYS} days`, detail: "See the compliance calendar for which ones.", href: "/compliance", count: s.dueSoon, amount: null, sinceDays: null });
       })
+    );
+  }
+
+  // Tax depreciation decisions waiting: unclear asset classes, flagged assets, unconfirmed concessions, missing periods of use.
+  if (allowed("tax_depreciation_review")) {
+    tasks.push(
+      (async () => {
+        const year = await currentTaxYearFor(tenantId, today);
+        if (year === null) return;
+        const items = await reviewItems(tenantId, year);
+        if (items.length > 0) out.push({ key: "tax_depreciation_review", group: "verify", severity: "info", title: `${plural(items.length, "tax depreciation item needs", "tax depreciation items need")} a decision`, detail: "Asset classes, concessions or periods of use to confirm.", href: "/assets/tax-depreciation", count: items.length, amount: null, sinceDays: null });
+      })()
     );
   }
 

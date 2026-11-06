@@ -9,11 +9,14 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { AssetsPanel, CalculationPanel } from "./calculation-panels";
+import { ReportsPanel, ReviewPanel } from "./report-panels";
 import { addTaxOpeningDeferred, addTaxStatutoryAddition, cancelTaxDeferred, saveTaxOpeningPool, setTaxCategoryClass, type TaxDepreciationSetupData } from "./actions";
 
 const TABS = [
   { id: "calculation", label: "Calculation" },
   { id: "assets", label: "Asset tax details" },
+  { id: "reports", label: "Reports" },
+  { id: "review", label: "Review" },
   { id: "classes", label: "Asset classes" },
   { id: "opening", label: "Balances brought forward" },
   { id: "deferred", label: "Deferred additions" },
@@ -40,7 +43,7 @@ export function TaxDepreciationSetup({ data }: { data: TaxDepreciationSetupData 
         <div className="flex gap-1 overflow-x-auto border-b border-line">
           {TABS.map((t) => (
             <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${tab === t.id ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}>
-              {t.label}
+              {t.label}{t.id === "review" && data.review.length > 0 && <span className="ml-1.5 rounded-full bg-surface-2 px-1.5 text-[11px] text-ink-2">{data.review.length}</span>}
             </button>
           ))}
         </div>
@@ -57,6 +60,8 @@ export function TaxDepreciationSetup({ data }: { data: TaxDepreciationSetupData 
 
       {tab === "calculation" && <CalculationPanel data={ready} />}
       {tab === "assets" && <AssetsPanel data={ready} />}
+      {tab === "reports" && <ReportsPanel data={ready} />}
+      {tab === "review" && <ReviewPanel data={ready} go={setTab} />}
       {tab === "classes" && <ClassesPanel data={ready} />}
       {tab === "opening" && <OpeningPanel data={ready} />}
       {tab === "deferred" && <DeferredPanel data={ready} />}
