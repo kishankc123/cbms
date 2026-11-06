@@ -1,4 +1,4 @@
-import { checkPayments, type PaySlot } from "@/lib/import-payments";
+import { checkPayments, snapPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive, rowTotals } from "./amounts";
 import type { SalesBillTypeValue } from "./values";
 
@@ -72,7 +72,7 @@ export function checkRow(i: RowCheckInput): RowCheck {
     // The file's amount is what the customer pays: VAT included. Work back to the amount before VAT.
     const net = netFromInclusive(round2(i.amount.value!), billType === "taxable" ? vatRate : 0);
     const t = rowTotals(net, 0, billType, vatRate);
-    const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "invoice", "received into");
+    const pay = checkPayments(snapPayments(i.pays, i.amount.value, t.total), t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "invoice", "received into");
     for (const p of pay.problems) flag(p.issue, p.message);
     const paid = pay.paid;
     // Only a fully paid invoice can go without a customer: otherwise the unpaid part has nobody to be owed by.
