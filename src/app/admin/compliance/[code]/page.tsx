@@ -16,6 +16,8 @@ import { FiscalYearFilter } from "./fiscal-year-filter";
 import { ModulesAdmin } from "../modules/modules-admin";
 import { getPayrollRulesAdminData } from "../payroll-rules/actions";
 import { PayrollRulesAdmin } from "../payroll-rules/payroll-rules-admin";
+import { getTaxDepreciationRulesAdminData } from "../tax-depreciation-rules/actions";
+import { TaxDepreciationRulesAdmin } from "../tax-depreciation-rules/tax-depreciation-rules-admin";
 import { listModuleTaxes } from "@/lib/compliance/module-tax-admin";
 import { TAX_MODULES } from "@/lib/compliance/module-taxes";
 import { getPenaltyAdminData } from "../penalties/actions";
@@ -111,6 +113,8 @@ async function ModulesTab({ code, countryName, module }: { code: string; country
       <ModulesAdmin key={selected} countryCode={code} countryName={countryName} moduleKey={selected} data={data} />
       {/* Retirement schemes and the limits around them belong to payroll, so they sit under it. */}
       {selected === "payroll" && <PayrollRulesAdmin data={await getPayrollRulesAdminData(code)} />}
+      {/* Tax depreciation (classes, rates, timing) belongs to fixed assets, so it sits under it. */}
+      {selected === "assets" && <TaxDepreciationRulesAdmin data={await getTaxDepreciationRulesAdminData(code)} />}
     </div>
   );
 }

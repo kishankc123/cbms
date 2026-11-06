@@ -96,6 +96,7 @@ const NAV: NavEntry[] = [
       { href: "/assets", label: "Asset list" },
       { href: "/assets/depreciation", label: "Depreciation" },
       { href: "/assets/transactions", label: "Purchase / Sell asset" },
+      { href: "/assets/tax-depreciation", label: "Tax depreciation" },
       { href: "/assets/setup", label: "Setup" },
     ],
   },
