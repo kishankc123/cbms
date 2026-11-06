@@ -46,7 +46,7 @@ async function trackedItemIds(tenantId: string, ids: (string | null | undefined)
 
 export async function getInventorySettings(tenantId: string) {
   const [s] = await db.select().from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1);
-  return { allowNegativeStock: s?.allowNegativeStock ?? false, openingDate: s?.openingDate ?? null, trackInventory: s?.trackInventory ?? true };
+  return { allowNegativeStock: s?.allowNegativeStock ?? false, openingDate: s?.openingDate ?? null, trackInventory: s?.trackInventory ?? true, overviewStockLossesInCogs: s?.overviewStockLossesInCogs ?? false };
 }
 
 /** Whether the organization keeps stock and works out COGS (the default). Off means purchases are recorded by amount only. */

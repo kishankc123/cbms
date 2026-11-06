@@ -38,6 +38,17 @@ export async function updateTrackInventory(input: { track: boolean }) {
   revalidatePath("/", "layout");
 }
 
+// Overview only: whether stock written off counts as cost of goods sold there. Nothing posted changes.
+export async function updateOverviewStockLosses(input: { value: boolean }) {
+  const session = await requireTenantSession();
+  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
+  const value = Boolean(input.value);
+  await db.insert(inventorySettings).values({ tenantId: session.tenantId, overviewStockLossesInCogs: value }).onConflictDoUpdate({ target: inventorySettings.tenantId, set: { overviewStockLossesInCogs: value } });
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "overview_stock_losses_changed", entityType: "inventory_settings", entityId: session.tenantId, after: { overviewStockLossesInCogs: value } });
+  revalidatePath("/dashboard");
+  revalidatePath("/settings", "layout");
+}
+
 export async function updateOtherSettings(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "settings", "edit")) throw new Error("Not permitted");

@@ -834,6 +834,13 @@
       "when": 1793938827753,
       "tag": "0118_details_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1793950037076,
+      "tag": "0119_overview_stock_losses",
+      "breakpoints": true
     }
   ]
 }

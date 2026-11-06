@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
 import { useToast } from "@/components/ui/toast";
-import { updateTrackInventory } from "../actions";
+import { updateOverviewStockLosses, updateTrackInventory } from "../actions";
 import { settingsCard } from "../ui";
 
 // One switch for the whole organization: does it keep stock and work out cost of goods sold, or just record purchase bill amounts?
-export function TrackInventorySetting({ track, canEdit }: { track: boolean; canEdit: boolean }) {
+export function TrackInventorySetting({ track, canEdit, stockLosses }: { track: boolean; canEdit: boolean; stockLosses: boolean }) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
   const { report, dialog } = useProblem();
   const [value, setValue] = useState(track);
   const [busy, setBusy] = useState(false);
+  const [losses, setLosses] = useState(stockLosses);
 
   async function choose(next: boolean) {
     if (next === value || busy) return;
@@ -28,6 +29,19 @@ export function TrackInventorySetting({ track, canEdit }: { track: boolean; canE
       await updateTrackInventory({ track: next });
       setValue(next);
       toast.success(next ? "Inventory tracking is on" : "Purchases will be recorded by amount only");
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not save the setting", null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseLosses(next: boolean) {
+    setBusy(true);
+    try {
+      await updateOverviewStockLosses({ value: next });
+      setLosses(next);
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Could not save the setting", null);
@@ -53,6 +67,15 @@ export function TrackInventorySetting({ track, canEdit }: { track: boolean; canE
         {option(true, "Track inventory", "Purchases are entered with the items bought. Stock, average cost and cost of goods sold are worked out for you.")}
         {option(false, "Record purchase amounts only", "Purchases are entered by bill amount, with no items and no stock. They are booked to a Purchases account and no cost of goods sold is worked out. Supplier ledger, VAT, payments and payable ageing work as usual.")}
       </div>
+      {value && (
+        <label className="flex items-start gap-3 border-t border-[var(--card-border)] pt-3 text-sm">
+          <input type="checkbox" checked={losses} disabled={!canEdit || busy} onChange={(e) => chooseLosses(e.target.checked)} className="mt-1" />
+          <span>
+            <span className="block font-medium text-[var(--text-primary)]">Count stock written off as cost of goods sold on the Overview</span>
+            <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">Off by default: stock counts that write goods off are shown as an expense. This only changes how the Overview groups them. Nothing posted changes, and profit is the same either way.</span>
+          </span>
+        </label>
+      )}
       {dialog}
     </div>
   );
