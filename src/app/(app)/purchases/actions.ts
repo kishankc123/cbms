@@ -647,9 +647,7 @@ export type AmountPurchasesResult = { saved: number } & ({ ok: true } | { ok: fa
 // Many bills by amount in one go, one per row, through the ordinary bill writer. Every row is checked first; if one fails while saving, the rows
 // before it stay saved and the message says which row stopped. `pending` is for an organization that keeps stock: the bills are stockable
 // purchases whose items are still to be added, waiting in "Purchases awaiting item details" until they are.
-async function recordAmountBatch(rows: AmountPurchaseRow[], pending: boolean): Promise<AmountPurchasesResult> {
-  const session = await requireTenantSession();
-  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+async function recordAmountBatch(session: Awaited<ReturnType<typeof requireTenantSession>>, rows: AmountPurchaseRow[], pending: boolean): Promise<AmountPurchasesResult> {
   if (pending) await assertTrackingOn(session.tenantId, "Purchases to be itemised later");
   else if (await getTrackInventory(session.tenantId)) throw new Error("This organization keeps stock, so purchases are entered with the items bought (Stockable purchase).");
   if (rows.length === 0) throw new Error("Add at least one purchase");
@@ -685,10 +683,14 @@ async function recordAmountBatch(rows: AmountPurchaseRow[], pending: boolean): P
 
 /** Purchase bills by amount for an organization that does not keep stock: booked to Purchases, no items. */
 export async function recordAmountPurchases(input: { rows: AmountPurchaseRow[] }): Promise<AmountPurchasesResult> {
-  return recordAmountBatch(input.rows, false);
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  return recordAmountBatch(session, input.rows, false);
 }
 
 /** Stockable purchases recorded by amount, with the items to be added later (Add item details on the bill). Stock does not move until then. */
 export async function recordPendingPurchases(input: { rows: AmountPurchaseRow[] }): Promise<AmountPurchasesResult> {
-  return recordAmountBatch(input.rows, true);
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  return recordAmountBatch(session, input.rows, true);
 }
