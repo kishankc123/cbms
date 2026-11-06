@@ -40,8 +40,11 @@ export function ItemsTabs({
   groups = [],
   categories = [],
   accounts = [],
+  trackInventory = true,
 }: {
   itemType?: ItemType;
+  /** False when the organization keeps no stock: the list then shows prices instead of stock. */
+  trackInventory?: boolean;
   /** The first tab's label, and what an empty/searched list calls its rows ("Items", "Services", "SaaS items", "Other items"). */
   itemsLabel?: string;
   rateLabel?: string;
@@ -69,7 +72,7 @@ export function ItemsTabs({
         ))}
       </div>
 
-      {tab === "items" && <ItemsTable itemType={itemType} rateLabel={rateLabel} items={items} units={units} groups={groups} categories={categories} accounts={accounts} />}
+      {tab === "items" && <ItemsTable itemType={itemType} trackInventory={trackInventory} rateLabel={rateLabel} items={items} units={units} groups={groups} categories={categories} accounts={accounts} />}
       {tab === "add" && <ItemAddForm itemType={itemType} rateLabel={rateLabel} units={units} groups={groups} categories={categories} accounts={accounts} />}
     </div>
   );

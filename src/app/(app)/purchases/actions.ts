@@ -18,7 +18,7 @@ import { todayIso } from "@/lib/calendar";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, discardBill, insertEmbeddedSupplierPayment, nextAutoBillNumber } from "@/lib/purchases/bill-records";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
-import { getTrackInventory } from "@/lib/inventory/stock";
+import { assertTrackingOn, getTrackInventory } from "@/lib/inventory/stock";
 import {
   billLineItems,
   cashPurchaseEntryLines,
@@ -344,6 +344,7 @@ export type PurchaseInvoiceInput = {
 export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
+  await assertTrackingOn(session.tenantId, "Purchases with items");
 
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
@@ -496,6 +497,7 @@ export type UpdatePurchaseInvoiceInput = PurchaseInvoiceInput & { billId: string
 export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  await assertTrackingOn(session.tenantId, "Purchases with items");
 
   const [existing] = await db
     .select()

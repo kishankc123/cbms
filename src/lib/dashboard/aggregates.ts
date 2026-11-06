@@ -152,7 +152,7 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
       .from(purchaseBills)
       .where(and(eq(purchaseBills.tenantId, tenantId), eq(purchaseBills.status, "draft")))
       .then((r) => r[0]),
-    db.select({ allowNegativeStock: inventorySettings.allowNegativeStock }).from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1),
+    db.select({ allowNegativeStock: inventorySettings.allowNegativeStock, trackInventory: inventorySettings.trackInventory }).from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1),
     db
       .select({ count: sql<string>`count(*)` })
       .from(items)
@@ -196,7 +196,8 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
   }
 
   const negativeStockCount = Number(negativeStockRows[0]?.count ?? 0);
-  if (!invSettings?.allowNegativeStock && negativeStockCount > 0) {
+  // No stock is kept when inventory tracking is off, so there is nothing to be negative.
+  if (invSettings?.trackInventory !== false && !invSettings?.allowNegativeStock && negativeStockCount > 0) {
     items_.push({ id: "negative_stock", label: `${negativeStockCount} item${negativeStockCount === 1 ? "" : "s"} with negative stock`, detail: "Stock on hand below zero", severity: "critical", count: negativeStockCount });
   }
 

@@ -7,12 +7,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ProductTabs } from "../product-tabs";
 import { ItemsTabs } from "./items-tabs";
 import { listRevenueAccountOptions } from "./actions";
+import { getTrackInventory } from "@/lib/inventory/stock";
 
 export default async function ItemsPage() {
   const denied = await guardView("inventory");
   if (denied) return denied;
   const session = await requireTenantSession();
 
+  const trackInventory = await getTrackInventory(session.tenantId);
   const [itemList, units, groups, categories, revenueAccounts] = await Promise.all([
     db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.itemType, "product"))).orderBy(asc(items.name)),
     db.select().from(itemUnits).where(eq(itemUnits.tenantId, session.tenantId)).orderBy(asc(itemUnits.name)),
@@ -23,9 +25,9 @@ export default async function ItemsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Product" description="Inventory-tracked items — the only type that ever moves stock or carries a cost." className="!mb-0" />
+      <PageHeader title="Product" description={trackInventory ? "Inventory-tracked items — the only type that ever moves stock or carries a cost." : "The goods you sell, with their names and prices. Stock is not kept for this organization."} className="!mb-0" />
       <ProductTabs />
-      <ItemsTabs items={itemList} units={units} groups={groups} categories={categories} accounts={revenueAccounts} />
+      <ItemsTabs items={itemList} units={units} groups={groups} categories={categories} accounts={revenueAccounts} trackInventory={trackInventory} />
     </div>
   );
 }

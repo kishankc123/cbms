@@ -211,7 +211,7 @@ function visibleNav(items: NavEntry[], session: Awaited<ReturnType<typeof requir
   return items
     .map((original) => {
       // An organization that does not keep stock has one Purchases entry: bills are entered by amount.
-      const item = !trackInventory && original.href === "/purchases" ? { ...original, children: [{ href: "/purchases/stockable", label: "Purchases" }] } : original;
+      const item = !trackInventory && original.href === "/purchases" ? { ...original, children: [{ href: "/purchases/stockable", label: "Purchases" }] } : !trackInventory && original.href === "/inventory" ? { ...original, label: "Items" } : original;
       if (!item.children) return allowed(NAV_ACCESS[item.href]) ? item : null;
       const own = NAV_ACCESS[item.href];
       const children = item.children.filter((c) => allowed(NAV_ACCESS[c.href] ?? own));

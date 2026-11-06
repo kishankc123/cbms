@@ -47,8 +47,10 @@ export function ItemsTable({
   groups = [],
   categories = [],
   accounts = [],
+  trackInventory = true,
 }: {
   itemType?: ItemType;
+  trackInventory?: boolean;
   rateLabel?: string;
   items: Item[];
   units: Unit[];
@@ -57,6 +59,8 @@ export function ItemsTable({
   accounts?: Account[];
 }) {
   const isProduct = itemType === "product";
+  // Stock columns only make sense when the organization keeps stock; otherwise the list shows prices, like the other item types.
+  const showStock = isProduct && trackInventory;
   const router = useRouter();
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
@@ -132,7 +136,7 @@ export function ItemsTable({
           { label: "Items", value: items.length },
           { label: "Active", value: activeCount },
           { label: "Inactive", value: items.length - activeCount },
-          ...(isProduct ? [{ label: "Stock value", value: <Amount value={stockValue} /> }] : []),
+          ...(showStock ? [{ label: "Stock value", value: <Amount value={stockValue} /> }] : []),
         ]}
       />
 
@@ -172,7 +176,7 @@ export function ItemsTable({
                 Category
               </SortableTh>
             )}
-            {isProduct ? (
+            {showStock ? (
               <>
                 <Th align="right">On hand</Th>
                 <Th align="right">Stock value</Th>
@@ -197,7 +201,7 @@ export function ItemsTable({
                 {it.revenueAccountId && <p className="text-xs text-ink-2">→ {accountById.get(it.revenueAccountId)?.name ?? "Revenue account"}</p>}
               </Td>
               {isProduct && <Td className="text-ink-2">{categoryById.get(it.categoryId ?? "")?.name ?? "—"}</Td>}
-              {isProduct ? (
+              {showStock ? (
                 <>
                   <Td numeric>{Number(it.stockQuantity)}</Td>
                   <Td numeric>

@@ -65,6 +65,13 @@ export async function getOpeningDate(tenantId: string): Promise<string | null> {
 
 export class InventoryDateError extends Error {}
 
+/** Refuses work that needs stock when the organization has turned inventory tracking off (Settings > General). */
+export async function assertTrackingOn(tenantId: string, what: string) {
+  if (!(await getTrackInventory(tenantId))) {
+    throw new Error(`${what} need inventory tracking, which is turned off for this organization. Turn on "Track inventory" in Settings > General to use them, or record the amount under Purchases.`);
+  }
+}
+
 /**
  * Nothing that moves stock may be dated before the Inventory Opening Date — it would fall outside the inventory history. Until an
  * opening date has been set there is no limit. Documents without any item lines don't touch stock, so they are not held to it.
@@ -75,7 +82,9 @@ export async function assertInventoryDate(tenantId: string, date: string, lines:
   // The "x" sentinel default is an internal signal (moveStock uses it after already filtering to real tracked lines),
   // not a real item — skip the DB round trip for it rather than looking it up.
   if (!(ids.length === 1 && ids[0] === "x") && (await trackedItemIds(tenantId, ids)).size === 0) return;
-  const opening = await getOpeningDate(tenantId);
+  const settings = await getInventorySettings(tenantId);
+  if (!settings.trackInventory) return; // no stock is kept, so there is no inventory history to be before
+  const opening = settings.openingDate;
   if (!opening || date >= opening) return;
   const [t] = await db.select({ calendar: tenants.calendarSystem }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   const cal = t?.calendar === "BS" ? "BS" : "AD";
@@ -124,11 +133,17 @@ async function applyMovement(tx: Tx, tenantId: string, ctx: StockCtx, itemId: st
 export async function moveStock(tenantId: string, ctx: StockCtx, lines: StockLine[], opts: { allowNegative?: boolean } = {}): Promise<{ value: number }> {
   const candidates = lines.filter((l) => l.itemId && round3(l.quantity) !== 0);
   if (candidates.length === 0) return { value: 0 };
+  // An organization that does not keep stock: a sale or a sales return leaves stock (and so cost of goods sold) alone, and nothing else may move it.
+  const settings = await getInventorySettings(tenantId);
+  if (!settings.trackInventory && ctx.type !== "recost") {
+    if (ctx.type === "sale" || ctx.type === "sales_return") return { value: 0 };
+    throw new Error("Stock can't be moved while inventory tracking is turned off. Turn on \"Track inventory\" in Settings > General to work with stock.");
+  }
   const tracked = await trackedItemIds(tenantId, candidates.map((l) => l.itemId));
   const real = candidates.filter((l) => tracked.has(l.itemId as string));
   if (real.length === 0) return { value: 0 };
   if (ctx.type !== "opening" && ctx.type !== "recost") await assertInventoryDate(tenantId, ctx.date);
-  const allowNegative = opts.allowNegative ?? (await getAllowNegativeStock(tenantId));
+  const allowNegative = opts.allowNegative ?? settings.allowNegativeStock;
 
   return db.transaction(async (tx) => {
     let total = 0;
@@ -196,7 +211,8 @@ function tooLow(name: string, lowest: number, date: string | null, requested: nu
  * negative stock.
  */
 export async function assertStockTimeline(tenantId: string, opts: { add?: { itemId?: string | null; date: string; quantity: number }[]; excludeSource?: { sourceType: string; sourceId?: string } }) {
-  if (await getAllowNegativeStock(tenantId)) return;
+  const settings = await getInventorySettings(tenantId);
+  if (!settings.trackInventory || settings.allowNegativeStock) return;
   const candidates = (opts.add ?? []).filter((a) => a.itemId && a.quantity !== 0);
   const tracked = await trackedItemIds(tenantId, candidates.map((a) => a.itemId));
   const add = candidates.filter((a) => tracked.has(a.itemId as string));
