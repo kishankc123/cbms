@@ -19,6 +19,8 @@ export type Notif = {
   amount: number | null;
   /** How long the oldest of them has been waiting, in days, when that is known. */
   sinceDays: number | null;
+  /** A button the bell shows instead of Open, for something fixed right there (resending the verification email). */
+  action?: "resend_verification";
 };
 
 /** `snoozedUntil` is the day a snoozed notification comes back (snoozed on the 6th for one day: back on the 7th). */
@@ -92,3 +94,22 @@ export const hasCriticalUnseen = (list: NotifView[]) => list.some((n) => !n.seen
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 export { plural };
+
+/** Kinds that belong to the person, not to an organization's books, so they need no module permission. */
+export const PERSONAL_KEYS = ["verify_email"] as const;
+
+/** The notification for a person who hasn't verified their email address. `problem` is why the last email couldn't be sent, when it couldn't. */
+export function verifyEmailNotif(problem: string | null): Notif {
+  return {
+    key: "verify_email",
+    group: "verify",
+    severity: "action",
+    title: "Verify your email address",
+    detail: problem ? `You can't invite other users until it is verified. The verification email could not be sent: ${problem}` : "You can't invite other users until it is verified. Check your inbox, or send the email again.",
+    href: "",
+    count: 1,
+    amount: null,
+    sinceDays: null,
+    action: "resend_verification",
+  };
+}
