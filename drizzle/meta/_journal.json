@@ -841,6 +841,13 @@
       "when": 1793950037076,
       "tag": "0119_overview_stock_losses",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793964938812,
+      "tag": "0120_notification_states",
+      "breakpoints": true
     }
   ]
 }

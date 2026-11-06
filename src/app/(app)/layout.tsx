@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavIconKey } from "@/components/shell/icons";
 import { UserMenu } from "./user-menu";
+import { NotificationBell } from "./notification-bell";
 import { Logo } from "@/components/brand/logo";
 import { sidebarCookieName } from "@/lib/sidebar";
 import { themeCookieName, parseTheme } from "@/lib/theme";
@@ -272,6 +273,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }
       topRight={
         <>
+          <NotificationBell />
           <div className="hidden sm:block">
             <ThemeToggle initial={activeTheme} />
           </div>
