@@ -5,6 +5,7 @@ import { BillsTable } from "./bills-table";
 import { PurchaseInvoiceForm } from "./purchase-invoice-form";
 import { EditPurchaseInvoiceModal } from "./edit-purchase-invoice-modal";
 import { ConfirmDialog } from "../sales/confirm-dialog";
+import { AmountPurchaseGrid } from "./amount-purchase-grid";
 
 type Vendor = { id: string; name: string };
 type Item = { id: string; name: string; purchasePrice: string };
@@ -17,11 +18,13 @@ type Bill = {
   billDate: string;
   total: string;
   status: string;
+  detailsPending?: boolean;
 };
 
 const TABS = [
   { id: "invoices", label: "Invoices" },
   { id: "add", label: "Add Invoices" },
+  { id: "amount", label: "Add by amount" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -32,6 +35,7 @@ export function StockableTabs({
   paymentModes,
   items,
   cashBankAccounts,
+  vendorBalances,
   vatRate,
 }: {
   vendors: Vendor[];
@@ -39,6 +43,7 @@ export function StockableTabs({
   paymentModes: Record<string, string[]>;
   items: Item[];
   cashBankAccounts: CashBankGroup[];
+  vendorBalances: Record<string, number>;
   vatRate: number;
 }) {
   const [tab, setTab] = useState<TabId>("invoices");
@@ -86,6 +91,8 @@ export function StockableTabs({
           onDirtyChange={setDirty}
         />
       )}
+
+      {tab === "amount" && <AmountPurchaseGrid vendors={vendors} categories={[]} cashBankAccounts={cashBankAccounts} vendorBalances={vendorBalances} vatRate={vatRate} pending onDirtyChange={setDirty} />}
 
       {pendingTab && (
         <ConfirmDialog

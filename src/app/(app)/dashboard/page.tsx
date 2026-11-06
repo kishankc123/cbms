@@ -20,6 +20,7 @@ const NEEDS_ATTENTION_HREF: Record<string, string> = {
   trial_balance: "/reports/trial-balance",
   draft_invoices: "/sales",
   draft_bills: "/purchases",
+  details_pending: "/purchases/stockable",
   negative_stock: "/inventory/items",
   overdue_receivables: "/reports/receivable-ageing",
   cheques_due: "/payments/cheques",

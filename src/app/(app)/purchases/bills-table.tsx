@@ -29,6 +29,8 @@ type Bill = {
   total: string;
   amountPaid?: string;
   status: string;
+  /** Recorded by amount: the items are still to be added. */
+  detailsPending?: boolean;
 };
 
 const STATUS_OPTIONS = [
@@ -253,7 +255,14 @@ export function BillsTable({
                 <Td className="whitespace-nowrap">
                   <D value={b.billDate} />
                 </Td>
-                <Td className="font-mono text-xs">{b.billNumber}</Td>
+                <Td className="font-mono text-xs">
+                  {b.billNumber}
+                  {b.detailsPending && b.status !== "void" && (
+                    <span className="ml-2 align-middle">
+                      <StatusPill tone="pending">Details pending</StatusPill>
+                    </span>
+                  )}
+                </Td>
                 <Td className="max-w-56 truncate">{nameOf(b) || "—"}</Td>
                 <Td numeric className="font-medium">
                   <Amount value={Number(b.total)} />
@@ -266,7 +275,7 @@ export function BillsTable({
                   <RowActions>
                     <RowMenu
                       items={[
-                        { label: "Edit", onClick: () => onEdit?.(b.id), hidden: b.status === "void" || !onEdit },
+                        { label: b.detailsPending ? "Add item details" : "Edit", onClick: () => onEdit?.(b.id), hidden: b.status === "void" || !onEdit },
                         { label: "Void", onClick: () => voidRow(b), danger: true, hidden: b.status === "void" },
                       ]}
                     />

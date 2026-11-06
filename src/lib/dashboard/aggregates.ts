@@ -126,7 +126,7 @@ export async function cashAndBankBreakdown(tenantId: string, asOfIso: string): P
 // ------------------------------------------------------------ Needs Attention
 
 export type NeedsAttentionItem = {
-  id: "trial_balance" | "draft_invoices" | "draft_bills" | "negative_stock" | "overdue_receivables" | "cheques_due" | "received_cheques_ready";
+  id: "trial_balance" | "draft_invoices" | "draft_bills" | "details_pending" | "negative_stock" | "overdue_receivables" | "cheques_due" | "received_cheques_ready";
   label: string;
   detail: string;
   severity: "critical" | "action";
@@ -135,7 +135,7 @@ export type NeedsAttentionItem = {
 };
 
 export async function needsAttention(tenantId: string, asOfIso: string): Promise<NeedsAttentionItem[]> {
-  const [tbRow, draftInvoiceRow, draftBillRow, [invSettings], negativeStockRows, overdueRow] = await Promise.all([
+  const [tbRow, draftInvoiceRow, draftBillRow, pendingDetailsRow, [invSettings], negativeStockRows, overdueRow] = await Promise.all([
     db
       .select({ debit: sql<string>`sum(${journalLines.debitAmount})`, credit: sql<string>`sum(${journalLines.creditAmount})` })
       .from(journalLines)
@@ -151,6 +151,12 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
       .select({ count: sql<string>`count(*)` })
       .from(purchaseBills)
       .where(and(eq(purchaseBills.tenantId, tenantId), eq(purchaseBills.status, "draft")))
+      .then((r) => r[0]),
+    // Stockable purchases recorded by amount, whose items have not been added yet.
+    db
+      .select({ count: sql<string>`count(*)`, amount: sql<string>`coalesce(sum(${purchaseBills.total}), 0)` })
+      .from(purchaseBills)
+      .where(and(eq(purchaseBills.tenantId, tenantId), eq(purchaseBills.detailsPending, true), ne(purchaseBills.status, "void")))
       .then((r) => r[0]),
     db.select({ allowNegativeStock: inventorySettings.allowNegativeStock, trackInventory: inventorySettings.trackInventory }).from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1),
     db
@@ -193,6 +199,11 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
   const draftBillCount = Number(draftBillRow?.count ?? 0);
   if (draftBillCount > 0) {
     items_.push({ id: "draft_bills", label: `${draftBillCount} draft purchase bill${draftBillCount === 1 ? "" : "s"}`, detail: "Not posted to ledger yet", severity: "action", count: draftBillCount });
+  }
+
+  const pendingDetailsCount = Number(pendingDetailsRow?.count ?? 0);
+  if (pendingDetailsCount > 0) {
+    items_.push({ id: "details_pending", label: `${pendingDetailsCount} purchase${pendingDetailsCount === 1 ? "" : "s"} waiting for item details`, detail: "Recorded by amount: add the items so stock and cost are right", severity: "action", count: pendingDetailsCount, amount: round2(num(pendingDetailsRow?.amount)) });
   }
 
   const negativeStockCount = Number(negativeStockRows[0]?.count ?? 0);

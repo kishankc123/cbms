@@ -102,6 +102,9 @@ export const purchaseBills = pgTable("purchase_bills", {
   billType: billTypeEnum("bill_type").notNull().default("no_bill"),
   // Whether the paper bill is physically in hand (an audit-readiness input). Null on bills entered before it was asked.
   billAvailable: boolean("bill_available"),
+  // A stockable purchase recorded by its amount only, with the items still to be added. Its amount waits in "Purchases awaiting item details"
+  // (not Inventory) until the items are added, which moves it into Inventory and brings the stock in.
+  detailsPending: boolean("details_pending").notNull().default(false),
   /** Set when the bill came in through Import Purchases. */
   importId: uuid("import_id").references(() => purchaseImports.id),
 }, (t) => [index("purchase_bills_tenant_due").on(t.tenantId, t.dueDate)]);

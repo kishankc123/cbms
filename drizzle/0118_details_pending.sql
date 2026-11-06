@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_bills" ADD COLUMN "details_pending" boolean DEFAULT false NOT NULL;

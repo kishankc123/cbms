@@ -45,7 +45,7 @@ export default async function StockablePurchasePage() {
     );
   }
 
-  const [vendorList, billList, itemList, cashBankAccounts, vatRate] = await Promise.all([
+  const [vendorList, billList, itemList, cashBankAccounts, vatRate, vendorBalances] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     db
       .select()
@@ -57,6 +57,7 @@ export default async function StockablePurchasePage() {
     db.select().from(items).where(and(eq(items.tenantId, session.tenantId), eq(items.isActive, true), eq(items.inventoryTracking, true))).orderBy(asc(items.name)),
     getCashBankAccounts(session.tenantId),
     getCurrentTaxRate(session.tenantId, "vat"),
+    getSupplierBalances(session.tenantId),
   ]);
 
   const paymentModes = await paymentModesByBill(session.tenantId, billList.map((b) => b.id));
@@ -71,6 +72,7 @@ export default async function StockablePurchasePage() {
         paymentModes={paymentModes}
         items={itemList}
         cashBankAccounts={cashBankAccounts}
+        vendorBalances={vendorBalances}
         vatRate={vatRate}
       />
     </div>

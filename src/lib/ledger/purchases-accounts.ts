@@ -17,6 +17,19 @@ export async function getOrCreatePurchasesAccount(tenantId: string) {
   return created;
 }
 
+export const PENDING_PURCHASES_CODE = "1210";
+
+/**
+ * Where a stockable purchase waits when it was recorded by its amount and the items are still to be added: a current asset, not Inventory, so the
+ * ledger's Inventory always equals the stock's value. Adding the items moves the amount from here into Inventory.
+ */
+export async function getOrCreatePendingPurchasesAccount(tenantId: string) {
+  const existing = await findControlAccount(tenantId, [PENDING_PURCHASES_CODE], "Purchases awaiting item details");
+  if (existing) return existing;
+  const [created] = await db.insert(accounts).values({ tenantId, code: PENDING_PURCHASES_CODE, name: "Purchases awaiting item details", category: "asset", subCategory: "Current assets" }).returning();
+  return created;
+}
+
 /** The Purchases account and its sub-accounts, for a purchase bill's category. Empty until the account exists. */
 export async function getPurchaseCategories(tenantId: string) {
   const [root] = await db.select().from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.code, PURCHASES_CODE))).limit(1);

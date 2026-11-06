@@ -827,6 +827,13 @@
       "when": 1793900746106,
       "tag": "0117_track_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793938827753,
+      "tag": "0118_details_pending",
+      "breakpoints": true
     }
   ]
 }

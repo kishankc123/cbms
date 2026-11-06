@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select, controlClass } from "@/components/ui/field";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
-import { recordAmountPurchases, type AmountPurchaseRow, type CashBillType } from "./actions";
+import { recordAmountPurchases, recordPendingPurchases, type AmountPurchaseRow, type CashBillType } from "./actions";
 import { RecordPayModal } from "./record-pay-modal";
 
 type Vendor = { id: string; name: string };
@@ -37,7 +37,7 @@ const touched = (r: Row) => Boolean(parseFloat(r.amount) > 0 || r.vendorId || r.
 
 // Many purchase bills at once, one per row, by their amount. It is for organizations that do not keep stock: there are no items to pick, and
 // each bill is booked to the Purchases account (or one of its sub-accounts). Everything else (VAT, the supplier's balance, payments) is as on any bill.
-export function AmountPurchaseGrid({ vendors: vendorsProp, categories, cashBankAccounts, vendorBalances, vatRate, onDirtyChange }: { vendors: Vendor[]; categories: Account[]; cashBankAccounts: CashBankGroup[]; vendorBalances: Record<string, number>; vatRate: number; onDirtyChange?: (dirty: boolean) => void }) {
+export function AmountPurchaseGrid({ vendors: vendorsProp, categories, cashBankAccounts, vendorBalances, vatRate, pending = false, onDirtyChange }: { vendors: Vendor[]; categories: Account[]; cashBankAccounts: CashBankGroup[]; vendorBalances: Record<string, number>; vatRate: number; /** An organization that keeps stock: the purchases are stockable ones whose items are added later, so there is no category to choose. */ pending?: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const router = useRouter();
   const toast = useToast();
   const { report, dialog } = useProblem();
@@ -70,14 +70,14 @@ export function AmountPurchaseGrid({ vendors: vendorsProp, categories, cashBankA
       const f = figures(r);
       if (!r.billDate) return report(`Row ${i + 1}: enter the bill date.`, null);
       if (!(f.amount > 0)) return report(`Row ${i + 1}: enter the amount.`, null);
-      if (!r.categoryId) return report(`Row ${i + 1}: choose where it is booked.`, null);
+      if (!pending && !r.categoryId) return report(`Row ${i + 1}: choose where it is booked.`, null);
       if (f.paid - f.total > 0.004) return report(`Row ${i + 1}: the payment (${money(f.paid)}) can't be more than the bill total (${money(f.total)}).`, null);
       if (f.total - f.paid > 0.004 && !r.vendorId) return report(`Row ${i + 1}: choose a supplier. The unpaid ${money(f.total - f.paid)} is owed to them.`, null);
     }
     setSaving(true);
     try {
       const payload: AmountPurchaseRow[] = filled.map(({ r }) => ({ billDate: r.billDate, vendorId: r.vendorId, billNumber: r.billNumber.trim(), billType: r.billType, categoryId: r.categoryId, description: r.description.trim(), amount: parseFloat(r.amount) || 0, discount: 0, payments: r.payments }));
-      const result = await recordAmountPurchases({ rows: payload });
+      const result = pending ? await recordPendingPurchases({ rows: payload }) : await recordAmountPurchases({ rows: payload });
       if (result.ok) {
         toast.success(`${result.saved} purchase${result.saved === 1 ? "" : "s"} recorded`);
         setRows(Array.from({ length: MIN_ROWS }, blank));
@@ -102,7 +102,11 @@ export function AmountPurchaseGrid({ vendors: vendorsProp, categories, cashBankA
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-ink-2">Enter each purchase bill by its amount. There are no items to pick: the amount is booked to Purchases, VAT is added for a VAT bill, and anything unpaid is owed to the supplier.</p>
+      <p className="text-sm text-ink-2">
+        {pending
+          ? "Enter each purchase bill by its amount now and add the items later. The amount waits in Purchases awaiting item details, and stock does not change until you add the items on the bill. VAT is added for a VAT bill, and anything unpaid is owed to the supplier."
+          : "Enter each purchase bill by its amount. There are no items to pick: the amount is booked to Purchases, VAT is added for a VAT bill, and anything unpaid is owed to the supplier."}
+      </p>
       <div className="overflow-x-auto rounded-lg border border-line bg-surface">
         <table className="w-full min-w-[1100px] border-collapse text-[13px]">
           <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
