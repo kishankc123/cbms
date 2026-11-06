@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyState, countsByGroup, hasCriticalUnseen, NOTIF_KEYS, NOTIF_MODULE, sortNotifs, unseenCount, type Notif, type NotifState } from "./notification-rules";
+import { applyState, countsByGroup, hasCriticalUnseen, NOTIF_KEYS, NOTIF_MODULE, PERSONAL_KEYS, sortNotifs, unseenCount, verifyEmailNotif, type Notif, type NotifState } from "./notification-rules";
 
 const n = (over: Partial<Notif> & { key: string }): Notif => ({ group: "verify", severity: "action", title: over.key, detail: "", href: "/x", count: 3, amount: null, sinceDays: null, ...over });
 const today = "2026-11-06";
@@ -56,5 +56,23 @@ describe("who sees what", () => {
     for (const key of NOTIF_KEYS) expect(NOTIF_MODULE[key].module).toBeTruthy();
     expect(NOTIF_MODULE.payroll_runs.salary).toBe(true); // salary figures need the salary permission as well
     expect(NOTIF_MODULE.draft_bills.salary).toBeUndefined();
+  });
+});
+
+describe("verifying the email address", () => {
+  it("is a Verification pending item with a Resend button, shown to the person whatever their permissions", () => {
+    const v = verifyEmailNotif(null);
+    expect(v).toMatchObject({ key: "verify_email", group: "verify", action: "resend_verification", count: 1 });
+    expect(PERSONAL_KEYS).toContain("verify_email");
+    expect(NOTIF_MODULE.verify_email).toBeUndefined(); // no module permission is needed for your own email address
+  });
+  it("says why the last email could not be sent, when it could not", () => {
+    expect(verifyEmailNotif("The mail service refused it.").detail).toMatch(/could not be sent: The mail service refused it/);
+    expect(verifyEmailNotif(null).detail).not.toMatch(/could not be sent/);
+  });
+  it("can be marked seen like any other, and comes back unseen after a snooze", () => {
+    const list = [verifyEmailNotif(null)];
+    expect(applyState(list, [{ key: "verify_email", state: "seen", snoozedUntil: null, countAt: 1 }], today)[0].seen).toBe(true);
+    expect(applyState(list, [{ key: "verify_email", state: "snoozed", snoozedUntil: today, countAt: 1 }], today)[0].seen).toBe(false);
   });
 });

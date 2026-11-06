@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Banknote, Bell, CalendarClock, Calculator, ClipboardList, Coins, FileText, Landmark, PackageX, Receipt, Scale, Users, type LucideIcon } from "lucide-react";
+import { Banknote, Bell, CalendarClock, Calculator, MailCheck, ClipboardList, Coins, FileText, Landmark, PackageX, Receipt, Scale, Users, type LucideIcon } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { GROUP_LABEL, type NotifGroup, type NotifView, type StateAction } from "@/lib/notifications/notification-rules";
 import { getNotifications, setNotificationState, type NotificationsData } from "./notifications/actions";
+import { resendVerification } from "../verify-email/actions";
 
 type Tab = "all" | NotifGroup;
 const TABS: { key: Tab; label: string }[] = [
@@ -29,6 +30,7 @@ const ICON: Record<string, LucideIcon> = {
   compliance_overdue: CalendarClock,
   compliance_due: CalendarClock,
   tax_depreciation_review: Calculator,
+  verify_email: MailCheck,
   trial_balance: Scale,
 };
 
@@ -50,6 +52,7 @@ export function NotificationBell() {
   const [data, setData] = useState<NotificationsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
+  const [resending, setResending] = useState(false);
   const fetchedAt = useRef(0);
   const root = useRef<HTMLDivElement>(null);
 
@@ -106,6 +109,21 @@ export function NotificationBell() {
     void load();
   }
 
+  // Sends the verification email again, right from the bell.
+  async function resend() {
+    setResending(true);
+    try {
+      const r = await resendVerification();
+      if (r.ok) toast.success("Verification email sent. Check your inbox.");
+      else toast.error(r.error ?? "Could not send the email.");
+    } catch {
+      toast.error("Could not send the email. Try again.");
+    } finally {
+      setResending(false);
+      void load();
+    }
+  }
+
   const shown = (data?.items ?? []).filter((i) => tab === "all" || i.group === tab);
   const unseen = data?.counts.all ?? 0;
 
@@ -148,9 +166,15 @@ export function NotificationBell() {
                     <p className="text-[13px] font-medium leading-snug text-ink">{n.title}</p>
                     <p className="mt-0.5 text-xs text-ink-2">{n.detail}</p>
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                      <Link href={n.href} onClick={() => setOpen(false)} className="font-medium text-accent-text hover:underline">
-                        Open
-                      </Link>
+                      {n.action === "resend_verification" ? (
+                        <button type="button" disabled={resending} onClick={resend} className="font-medium text-accent-text hover:underline disabled:opacity-50">
+                          {resending ? "Sending…" : "Resend email"}
+                        </button>
+                      ) : (
+                        <Link href={n.href} onClick={() => setOpen(false)} className="font-medium text-accent-text hover:underline">
+                          Open
+                        </Link>
+                      )}
                       <button type="button" onClick={() => choose([n], n.seen ? "unseen" : "seen")} className="text-ink-2 hover:text-ink">
                         {n.seen ? "Mark unseen" : "Mark seen"}
                       </button>
