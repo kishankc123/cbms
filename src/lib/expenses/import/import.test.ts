@@ -85,3 +85,14 @@ describe("whether an expense row can be imported", () => {
     expect(check({ duplicate: true, dateIso: null }).status).toBe("attention");
   });
 });
+
+describe("the same figure as the Amount and the Paid amount", () => {
+  // At 13% VAT these amounts can't be reached exactly by working back to the amount before VAT.
+  it.each([1000.01, 1000.09, 1000.18, 1000.27])("the total is exactly the amount typed, and paying it is paying in full, for %s", (amount) => {
+    const r = check({ amount: { value: amount, invalid: false }, pays: pays(amount, "ok") });
+    expect(r.issues).toEqual([]);
+    expect(r.computed!.total).toBe(amount);
+    expect(r.computed!.payable).toBe(amount);
+    expect(r.computed!.paid).toBe(amount);
+  });
+});

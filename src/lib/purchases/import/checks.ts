@@ -1,4 +1,4 @@
-import { checkPayments, type PaySlot } from "@/lib/import-payments";
+import { checkPayments, snapPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive, rowTotals } from "@/lib/sales/import/amounts";
 import type { PurchaseBillTypeValue } from "./values";
 
@@ -75,7 +75,7 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
     } else {
       t = rowTotals(i.amount.value!, 0, "zero_rated", vatRate);
     }
-    const pay = checkPayments(i.pays, t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "bill", "paid from");
+    const pay = checkPayments(snapPayments(i.pays, i.amount.value, t.total), t.total, i.settings.paidMode, i.settings.hasDefaultAccount, "bill", "paid from");
     for (const p of pay.problems) flag(p.issue, p.message);
     const paid = pay.paid;
     // Only a fully paid bill can go without a supplier: otherwise the unpaid part has nobody to be owed to.

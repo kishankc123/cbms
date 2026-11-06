@@ -95,3 +95,16 @@ describe("whether a purchase row can be imported", () => {
     expect(check({ amount: { value: 1130, invalid: false }, billType: "pan" }).computed).toMatchObject({ subtotal: 1130, tax: 0, total: 1130 });
   });
 });
+
+describe("the same figure as the Amount and the Paid amount", () => {
+  // At 13% VAT these amounts can't be reached exactly (no amount before VAT adds back to them to the cent).
+  it.each([1000.01, 1000.09, 1000.18, 1000.27])("is paid in full for %s, never a cent over or short", (amount) => {
+    const r = check({ amount: { value: amount, invalid: false }, pays: pays(amount, "ok") });
+    expect(r.issues).toEqual([]);
+    expect(r.status).toBe("ready");
+    expect(r.computed!.paid).toBe(r.computed!.total);
+  });
+  it("still reports a payment that is not the Amount", () => {
+    expect(check({ amount: { value: 1000.01, invalid: false }, pays: pays(1200, "ok") }).issues).toEqual(["paid"]);
+  });
+});

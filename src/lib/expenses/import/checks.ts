@@ -88,7 +88,9 @@ export function checkExpenseRow(i: ExpenseRowInput): ExpenseRowCheck {
       taxable = round2(a - vat);
     } else if (rate > 0) {
       taxable = netFromInclusive(a, rate);
-      vat = round2(taxable * (rate / 100));
+      // The amount is the whole bill: the VAT is what is left of it, so the total is always exactly the amount typed, even when no amount
+      // before VAT adds back to it to the cent.
+      vat = round2(a - taxable);
     } else {
       taxable = a;
       vat = 0;

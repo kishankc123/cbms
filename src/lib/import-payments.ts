@@ -49,6 +49,21 @@ export function readPaySlots(cell: (key: PayKey) => string, resolver: PaymentRes
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * For an amount that includes VAT, a few totals can't be made exactly (no amount before VAT adds back to them to the cent), so the invoice or bill
+ * total can land a cent either side of the Amount column. Someone who types the same figure as the Amount and the Paid amount means "paid in full",
+ * so that payment is moved by the cent to match the total. Anything further off, or a payment that isn't the Amount, is left as typed and reported.
+ */
+export function snapPayments(slots: PaySlot[], fileAmount: number | null, total: number): PaySlot[] {
+  if (fileAmount === null) return slots;
+  const gap = round2(total - fileAmount);
+  if (gap === 0 || Math.abs(gap) > 0.011) return slots;
+  const paid = round2(slots.reduce((s, p) => s + Math.max(p.amount.value ?? 0, 0), 0));
+  if (paid !== round2(fileAmount)) return slots;
+  const first = slots.findIndex((p) => (p.amount.value ?? 0) > 0);
+  return slots.map((p, i) => (i === first ? { ...p, amount: { ...p.amount, value: round2((p.amount.value ?? 0) + gap) } } : p));
+}
+
 /** What is paid on a row, and what is wrong with it. `verb` finishes "the money was ...": "received into" or "paid from". */
 export function checkPayments(slots: PaySlot[], total: number, mode: PayMode, hasDefaultAccount: boolean, doc: string, verb: string) {
   const problems: { issue: "paid" | "account"; message: string }[] = [];

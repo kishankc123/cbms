@@ -14,7 +14,7 @@ import { salesVatRate } from "@/lib/sales/vat";
 import { checkRow, type CustomerState } from "./checks";
 import { IMPORT_FIELDS, type SalesColumnMapping } from "./fields";
 import { assertColumns, templateMapping, templateRows } from "@/lib/import-columns";
-import { paymentLines, readPaySlots } from "@/lib/import-payments";
+import { paymentLines, readPaySlots, snapPayments } from "@/lib/import-payments";
 import type { CheckResult, CustomerGroup, GroupDecision, ImportSettings, Overrides, ReviewResult, ReviewRow, RunInput, RunResult } from "./types";
 import { bestNameMatch, normalizeName, parseAmountCell, parseBillTypeCell } from "./values";
 
@@ -199,7 +199,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, settings: ImportSet
       customerId,
       newCustomerName: state === "create" ? (decisions[key!] as { name: string }).name : null,
       gross: check.computed?.gross ?? 0,
-      payLines: check.computed ? paymentLines(pays, check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
+      payLines: check.computed ? paymentLines(snapPayments(pays, amount.value, check.computed.total), check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       revenueAccountId: revenueId ?? (settings.defaultRevenueAccountId && revenueList.some((a) => a.id === settings.defaultRevenueAccountId) ? settings.defaultRevenueAccountId : null),
     });
   });

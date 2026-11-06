@@ -12,7 +12,7 @@ import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { getCogsSubGroups } from "@/lib/ledger/control-accounts";
 import { createCashPurchaseCore } from "@/lib/purchases/cash-purchase";
 import { assertColumns, templateMapping, templateRows } from "@/lib/import-columns";
-import { paymentLines, readPaySlots } from "@/lib/import-payments";
+import { paymentLines, readPaySlots, snapPayments } from "@/lib/import-payments";
 import { bestNameMatch, normalizeName, parseAmountCell } from "@/lib/sales/import/values";
 import { checkPurchaseRow, type CategoryState, type SupplierState } from "./checks";
 import { PURCHASE_FIELDS, type PurchaseColumnMapping } from "./fields";
@@ -257,7 +257,7 @@ async function buildRows(
       newSupplierName: supplier === "create" && supplierDecision?.action === "create" ? supplierDecision.name : null,
       categoryId,
       gross: check.computed?.gross ?? 0,
-      payLines: check.computed ? paymentLines(pays, check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
+      payLines: check.computed ? paymentLines(snapPayments(pays, amount.value, check.computed.total), check.computed.total, settings.paidMode, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId }) : [],
       billNumber,
       description: cell(r, "description"),
     });
