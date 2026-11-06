@@ -8,9 +8,12 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
+import { AssetsPanel, CalculationPanel } from "./calculation-panels";
 import { addTaxOpeningDeferred, addTaxStatutoryAddition, cancelTaxDeferred, saveTaxOpeningPool, setTaxCategoryClass, type TaxDepreciationSetupData } from "./actions";
 
 const TABS = [
+  { id: "calculation", label: "Calculation" },
+  { id: "assets", label: "Asset tax details" },
   { id: "classes", label: "Asset classes" },
   { id: "opening", label: "Balances brought forward" },
   { id: "deferred", label: "Deferred additions" },
@@ -22,11 +25,11 @@ const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 
 const th = "border-b border-line bg-app py-1.5 pr-3 text-left text-xs font-medium text-ink-2";
 const td = "border-b border-line py-2 pr-3 align-top";
 
-type Ready = TaxDepreciationSetupData & { rules: NonNullable<TaxDepreciationSetupData["rules"]> };
+export type Ready = TaxDepreciationSetupData & { rules: NonNullable<TaxDepreciationSetupData["rules"]> };
 
 export function TaxDepreciationSetup({ data }: { data: TaxDepreciationSetupData }) {
   const router = useRouter();
-  const [tab, setTab] = useState<TabId>("classes");
+  const [tab, setTab] = useState<TabId>("calculation");
   if (!data.rules) {
     return <p className="rounded-lg border border-line bg-surface p-5 text-sm text-ink-2">No tax depreciation rules are published for your country yet, so there is nothing to set up. Your administrator can publish them.</p>;
   }
@@ -52,6 +55,8 @@ export function TaxDepreciationSetup({ data }: { data: TaxDepreciationSetupData 
       {!data.isVerified && <p className="rounded-md border border-[var(--status-action-border)] bg-[var(--status-action-bg)] px-3 py-2 text-sm text-[var(--status-action-text)]">The published rates and rules have not been checked against current law yet. Treat figures calculated from them as provisional.</p>}
       {!data.canEdit && <p className="rounded bg-surface-2 px-3 py-2 text-xs text-ink-2">You can view these settings but not change them.</p>}
 
+      {tab === "calculation" && <CalculationPanel data={ready} />}
+      {tab === "assets" && <AssetsPanel data={ready} />}
       {tab === "classes" && <ClassesPanel data={ready} />}
       {tab === "opening" && <OpeningPanel data={ready} />}
       {tab === "deferred" && <DeferredPanel data={ready} />}

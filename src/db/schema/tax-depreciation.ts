@@ -139,3 +139,50 @@ export const taxStatutoryAdditions = pgTable(
   },
   (t) => [index("tax_statutory_tenant_year").on(t.tenantId, t.taxYear)]
 );
+
+/**
+ * A tax year's finalised calculation. It keeps the rules it was calculated with (and which published version they were), so a later change to the
+ * law never alters it. Reopening marks it "reopened" instead of deleting it: earlier calculations are preserved.
+ */
+export const taxDepreciationYears = pgTable(
+  "tax_depreciation_years",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    taxYear: integer("tax_year").notNull(),
+    /** final | reopened */
+    status: text("status").notNull().default("final"),
+    rulesVersionId: uuid("rules_version_id").references(() => platformTaxDepreciationRuleVersions.id),
+    rules: jsonb("rules").notNull(),
+    rulesVerified: boolean("rules_verified").notNull().default(false),
+    legalReference: text("legal_reference").notNull(),
+    totalDeduction: numeric("total_deduction", { precision: 18, scale: 2 }).notNull(),
+    balancingCharge: numeric("balancing_charge", { precision: 18, scale: 2 }).notNull(),
+    terminalDeduction: numeric("terminal_deduction", { precision: 18, scale: 2 }).notNull(),
+    finalisedBy: uuid("finalised_by").references(() => users.id),
+    finalisedAt: timestamp("finalised_at", { withTimezone: true }).notNull().defaultNow(),
+    reopenedBy: uuid("reopened_by").references(() => users.id),
+    reopenedAt: timestamp("reopened_at", { withTimezone: true }),
+    reopenReason: text("reopen_reason"),
+  },
+  (t) => [uniqueIndex("tax_dep_years_tenant_year_final").on(t.tenantId, t.taxYear).where(sql`${t.status} = 'final'`), index("tax_dep_years_tenant").on(t.tenantId, t.taxYear)]
+);
+
+/** One class's result in a finalised year (or one intangible asset's), exactly as calculated. */
+export const taxDepreciationPools = pgTable(
+  "tax_depreciation_pools",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    yearId: uuid("year_id").notNull().references(() => taxDepreciationYears.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    poolKey: text("pool_key").notNull(),
+    assetId: uuid("asset_id").references(() => assets.id, { onDelete: "set null" }),
+    label: text("label").notNull(),
+    result: jsonb("result").notNull(),
+    closingWdv: numeric("closing_wdv", { precision: 18, scale: 2 }).notNull(),
+    totalDeduction: numeric("total_deduction", { precision: 18, scale: 2 }).notNull(),
+    balancingCharge: numeric("balancing_charge", { precision: 18, scale: 2 }).notNull(),
+    terminalDeduction: numeric("terminal_deduction", { precision: 18, scale: 2 }).notNull(),
+  },
+  (t) => [index("tax_dep_pools_year").on(t.yearId), index("tax_dep_pools_tenant").on(t.tenantId)]
+);

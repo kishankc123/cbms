@@ -855,6 +855,20 @@
       "when": 1793971309145,
       "tag": "0121_tax_depreciation",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793972173434,
+      "tag": "0122_tax_depreciation_years",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793972509174,
+      "tag": "0123_tax_depreciation_reopen_reason",
+      "breakpoints": true
     }
   ]
 }

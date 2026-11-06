@@ -1,0 +1,1 @@
+ALTER TABLE "tax_depreciation_years" ADD COLUMN "reopen_reason" text;
