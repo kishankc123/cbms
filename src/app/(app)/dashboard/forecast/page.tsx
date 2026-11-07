@@ -151,7 +151,7 @@ export default async function ForecastTab({ searchParams }: { searchParams: Prom
           </DataTable>
           {a.unpricedTaxes > 0 && (
             <p className="mt-1.5 text-xs text-ink-2">
-              {a.unpricedTaxes} tax {a.unpricedTaxes === 1 ? "deadline has" : "deadlines have"} no amount yet and {a.unpricedTaxes === 1 ? "is" : "are"} not counted. <Link href="/compliance" className="text-accent-text hover:underline">Open Compliance →</Link>
+              {a.unpricedTaxes} tax {a.unpricedTaxes === 1 ? "deadline has" : "deadlines have"} no amount yet and {a.unpricedTaxes === 1 ? "is" : "are"} not counted. <Link href="/dashboard/compliance" className="text-accent-text hover:underline">Open Compliance →</Link>
             </p>
           )}
           <p className="mt-1.5 text-xs text-ink-2">

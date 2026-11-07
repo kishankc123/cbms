@@ -109,8 +109,8 @@ export async function loadNotifications(tenantId: string, today: string, allowed
   if (allowed("compliance_overdue") || allowed("compliance_due")) {
     tasks.push(
       complianceSummary(tenantId, today).then((s) => {
-        if (s.overdue > 0 && allowed("compliance_overdue")) out.push({ key: "compliance_overdue", group: "alert", severity: "critical", title: `${plural(s.overdue, "compliance item is", "compliance items are")} overdue`, detail: "Past the due date and not filed or paid.", href: "/compliance", count: s.overdue, amount: null, sinceDays: null });
-        if (s.dueSoon > 0 && allowed("compliance_due")) out.push({ key: "compliance_due", group: "due", severity: "action", title: `${plural(s.dueSoon, "compliance item is", "compliance items are")} due in the next ${DUE_SOON_DAYS} days`, detail: "See the compliance calendar for which ones.", href: "/compliance", count: s.dueSoon, amount: null, sinceDays: null });
+        if (s.overdue > 0 && allowed("compliance_overdue")) out.push({ key: "compliance_overdue", group: "alert", severity: "critical", title: `${plural(s.overdue, "compliance item is", "compliance items are")} overdue`, detail: "Past the due date and not filed or paid.", href: "/dashboard/compliance", count: s.overdue, amount: null, sinceDays: null });
+        if (s.dueSoon > 0 && allowed("compliance_due")) out.push({ key: "compliance_due", group: "due", severity: "action", title: `${plural(s.dueSoon, "compliance item is", "compliance items are")} due in the next ${DUE_SOON_DAYS} days`, detail: "See the compliance calendar for which ones.", href: "/dashboard/compliance", count: s.dueSoon, amount: null, sinceDays: null });
       })
     );
   }

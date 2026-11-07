@@ -3,11 +3,16 @@ import { greetingFor } from "@/lib/greeting";
 import { isFiscalYearOpen, type getActiveFiscalYear } from "@/lib/fiscal";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { DateRange } from "@/lib/calendar";
+import { requireTenantSession, can } from "@/lib/session";
+import { todayIso } from "@/lib/calendar";
+import { complianceSummary } from "@/lib/dashboard/aggregates";
 import { DashboardTabs } from "./dashboard-tabs";
 import { DashboardPeriod } from "./dashboard-period";
 
 // The top of every dashboard tab: the greeting, which financial year is open, and the tabs.
-export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { name: string; activeFiscalYear: Awaited<ReturnType<typeof getActiveFiscalYear>>; from?: string; to?: string; fiscal?: DateRange | null }) {
+export async function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { name: string; activeFiscalYear: Awaited<ReturnType<typeof getActiveFiscalYear>>; from?: string; to?: string; fiscal?: DateRange | null }) {
+  const session = await requireTenantSession();
+  const compliance = can(session, "compliance", "view") ? { overdue: (await complianceSummary(session.tenantId, todayIso())).overdue } : null;
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -32,7 +37,7 @@ export function DashboardHeader({ name, activeFiscalYear, from, to, fiscal }: { 
         )}
       </div>
       <div className="mb-4 flex flex-col gap-2 border-b border-line sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <DashboardTabs />
+        <DashboardTabs compliance={compliance} />
         {from && to && (
           <div className="order-first sm:order-none sm:pb-1">
             <DashboardPeriod from={from} to={to} fiscal={fiscal ?? null} />

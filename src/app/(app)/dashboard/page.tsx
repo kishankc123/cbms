@@ -2,9 +2,8 @@ import Link from "next/link";
 import { requireTenantSession, requireUserSession, can } from "@/lib/session";
 import { validateADDate, todayIso } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange, fiscalYearDefaultAsOf } from "@/lib/fiscal";
-import { D } from "@/components/calendar/date-text";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
-import { needsAttention, complianceSummary, upcomingComplianceDeadlines } from "@/lib/dashboard/aggregates";
+import { needsAttention, complianceSummary } from "@/lib/dashboard/aggregates";
 import { loadPerformance } from "@/lib/dashboard/performance";
 import { DashboardHeader } from "./dashboard-header";
 import { PerformanceSection } from "./performance-section";
@@ -31,13 +30,6 @@ const NEEDS_ATTENTION_TONE: Record<"critical" | "action", { tone: StatusTone; la
   action: { tone: "action", label: "Action required" },
 };
 
-const COMPLIANCE_TONE: Record<string, { tone: StatusTone; label: string }> = {
-  overdue: { tone: "critical", label: "Overdue" },
-  pending: { tone: "pending", label: "Pending" },
-  in_progress: { tone: "pending", label: "In progress" },
-  partially_paid: { tone: "action", label: "Partially paid" },
-};
-
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await requireTenantSession();
   const user = await requireUserSession();
@@ -58,11 +50,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const canViewCompliance = can(session, "compliance", "view");
 
   // Revenue, cost of goods sold, expenses and profit with their comparisons and expectation. (Cash has its own tabs: Cash flow, Forecast and Planning.)
-  const [perf, attention, compliance, deadlines] = await Promise.all([
+  const [perf, attention, compliance] = await Promise.all([
     canViewLedger ? loadPerformance(session.tenantId, { from, to }, session.calendar, today) : Promise.resolve(null),
     canViewLedger ? needsAttention(session.tenantId, asOf) : Promise.resolve(null),
     canViewCompliance ? complianceSummary(session.tenantId, today) : Promise.resolve(null),
-    canViewCompliance ? upcomingComplianceDeadlines(session.tenantId, today) : Promise.resolve(null),
   ]);
   const qs = rangeQs(from, to);
 
@@ -72,68 +63,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {perf && <PerformanceSection perf={perf} qs={qs} />}
 
-      {((attention && attention.length > 0) || deadlines) && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {attention && attention.length > 0 && (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-ink">Needs attention</h2>
-              <ul className="divide-y divide-[var(--border)] border-y border-line">
-                {attention.map((item) => {
-                  const { tone, label } = NEEDS_ATTENTION_TONE[item.severity];
-                  const href = NEEDS_ATTENTION_HREF[item.id];
-                  return (
-                    <li key={item.id} className="flex items-center justify-between gap-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] text-ink">{href ? <Link href={href} className="hover:underline">{item.label}</Link> : item.label}</p>
-                        <p className="truncate text-xs text-ink-2">{item.detail}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="tnum text-[13px] font-medium text-ink">{item.amount !== undefined ? money(item.amount) : item.count !== undefined ? `${item.count} items` : ""}</span>
-                        <StatusPill tone={tone}>{label}</StatusPill>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+      {attention && attention.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-ink">Needs attention</h2>
+          <ul className="divide-y divide-[var(--border)] border-y border-line">
+            {attention.map((item) => {
+              const { tone, label } = NEEDS_ATTENTION_TONE[item.severity];
+              const href = NEEDS_ATTENTION_HREF[item.id];
+              return (
+                <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] text-ink">{href ? <Link href={href} className="hover:underline">{item.label}</Link> : item.label}</p>
+                    <p className="truncate text-xs text-ink-2">{item.detail}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="tnum text-[13px] font-medium text-ink">{item.amount !== undefined ? money(item.amount) : item.count !== undefined ? `${item.count} items` : ""}</span>
+                    <StatusPill tone={tone}>{label}</StatusPill>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
-          {deadlines && (
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-ink">Compliance deadlines</h2>
-                <div className="flex items-center gap-2">
-                  {compliance && compliance.overdue > 0 && <StatusPill tone="critical">{compliance.overdue} overdue</StatusPill>}
-                  <Link href="/compliance" className="text-xs font-medium text-accent-text hover:underline">
-                    View all →
-                  </Link>
-                </div>
-              </div>
-              {deadlines.length === 0 ? (
-                <p className="text-[13px] text-ink-2">Nothing due soon.</p>
-              ) : (
-                <ul className="divide-y divide-[var(--border)] border-y border-line">
-                  {deadlines.map((d) => {
-                    const { tone, label } = COMPLIANCE_TONE[d.status] ?? { tone: "pending" as StatusTone, label: d.status };
-                    return (
-                      <li key={d.id} className="flex items-center justify-between gap-3 py-2">
-                        <div className="min-w-0">
-                          <Link href="/compliance" className="truncate text-[13px] text-ink hover:underline">
-                            {d.name}
-                          </Link>
-                          <p className="text-xs text-ink-2">
-                            <D value={d.dueDate} style="short" />
-                          </p>
-                        </div>
-                        <StatusPill tone={tone}>{label}</StatusPill>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          )}
-        </div>
+      {compliance && (compliance.overdue > 0 || compliance.dueSoon > 0) && (
+        <p className="text-[13px] text-ink-2">
+          Compliance: {[compliance.overdue > 0 ? `${compliance.overdue} overdue` : null, compliance.dueSoon > 0 ? `${compliance.dueSoon} due this week` : null].filter(Boolean).join(", ")}.{" "}
+          <Link href="/dashboard/compliance" className="font-medium text-accent-text hover:underline">
+            Open the Compliance tab →
+          </Link>
+        </p>
       )}
     </div>
   );
