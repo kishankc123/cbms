@@ -142,13 +142,37 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
  * every correction to posted data must happen — see spec section 5, "No silent
  * deletion of posted transactions."
  */
+/** True when posting to these accounts on this date is allowed: the month and fiscal year are open and no bank account is reconciled over it. */
+export async function isDateOpenForPosting(tenantId: string, date: string, accountIds: string[]): Promise<boolean> {
+  try {
+    await assertPeriodOpen(tenantId, date);
+    await assertFiscalYearOpen(tenantId, date);
+    await assertBankPeriodOpen(tenantId, date, accountIds);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The date the undo of an entry carries. The entry's OWN date when that date is still open, so a sale and its undo net out in the same month (an old
+ * invoice that is edited or voided today must not take revenue away from today's month). When that month, fiscal year or bank reconciliation is closed,
+ * the undo is dated today, as before.
+ */
+export async function reversalDateFor(tenantId: string, originalDate: string, accountIds: string[]): Promise<string> {
+  return (await isDateOpenForPosting(tenantId, originalDate, accountIds)) ? originalDate : todayIso();
+}
+
 export async function reverseJournalEntry(
   tenantId: string,
   journalEntryId: string,
   reversedBy: string,
   memo?: string
 ) {
-  const reversalDate = todayIso();
+  const [before] = await db.select({ entryDate: journalEntries.entryDate }).from(journalEntries).where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.tenantId, tenantId))).limit(1);
+  if (!before) throw new Error("Journal entry not found");
+  const beforeLines = await db.select({ accountId: journalLines.accountId }).from(journalLines).where(eq(journalLines.journalEntryId, journalEntryId));
+  const reversalDate = await reversalDateFor(tenantId, before.entryDate, beforeLines.map((l) => l.accountId));
   await assertPeriodOpen(tenantId, reversalDate);
   await assertFiscalYearOpen(tenantId, reversalDate);
   const fiscalYearId = await resolveFiscalYearId(tenantId, reversalDate);

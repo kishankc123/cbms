@@ -1,0 +1,88 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { accountingPeriods, accounts, auditLog, journalEntries, journalLines } from "@/db/schema";
+import { createTempOrg } from "@/test/temp-org";
+import { todayIso, addDays } from "@/lib/calendar";
+import { postJournalEntry, reverseJournalEntry } from "./post";
+import { redateReversals } from "./redate-reversals";
+
+let org: Awaited<ReturnType<typeof createTempOrg>>;
+let receivable: string;
+let revenue: string;
+const earlier = addDays(todayIso(), -75); // well inside an earlier month
+const sale = async (date: string, amount = 1000) => postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "manual", createdBy: org.userId, lines: [{ accountId: receivable, debitAmount: amount }, { accountId: revenue, creditAmount: amount }] });
+const revenueOn = async (from: string, to: string) => {
+  const [r] = await db.select({ net: sql<string>`coalesce(sum(${journalLines.creditAmount} - ${journalLines.debitAmount}), 0)` }).from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId)).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalLines.accountId, revenue), sql`${journalEntries.entryDate} between ${from} and ${to}`));
+  return Number(r.net);
+};
+
+beforeAll(async () => {
+  org = await createTempOrg("ZZ Reversal date");
+  const rows = await db.select().from(accounts).where(eq(accounts.tenantId, org.tenantId));
+  revenue = rows.find((a) => a.code === "4000")!.id;
+  receivable = rows.find((a) => a.category === "asset" && a.isActive)!.id;
+});
+afterAll(async () => {
+  await org.remove();
+});
+
+describe("the date of an undo entry", () => {
+  it("is the date of the entry it undoes, so an old sale and its undo net out in the same month and today's month is untouched", async () => {
+    const original = await sale(earlier);
+    const reversal = await reverseJournalEntry(org.tenantId, original.id, org.userId, "Edit of invoice X");
+    expect(reversal.entryDate).toBe(earlier);
+    expect(await revenueOn(earlier, earlier)).toBe(0);
+    expect(await revenueOn(addDays(todayIso(), -3), todayIso())).toBe(0); // nothing taken from this month
+  });
+
+  it("is today when the original's month is closed", async () => {
+    const date = addDays(todayIso(), -200);
+    const original = await sale(date);
+    await db.insert(accountingPeriods).values({ tenantId: org.tenantId, periodStart: date.slice(0, 8) + "01", periodEnd: addDays(date, 15), label: "Closed test month", status: "closed" }); // stays closed for the rest of this file
+    const reversal = await reverseJournalEntry(org.tenantId, original.id, org.userId, "Void");
+    expect(reversal.entryDate).toBe(todayIso());
+  });
+
+  it("is still today for an entry made today", async () => {
+    const original = await sale(todayIso());
+    expect((await reverseJournalEntry(org.tenantId, original.id, org.userId)).entryDate).toBe(todayIso());
+  });
+});
+
+describe("bringing earlier undo entries in line", () => {
+  it("moves an undo dated the day of the edit to the original's date, records it, and leaves a closed month alone", async () => {
+    const date = addDays(todayIso(), -120);
+    const thisMonthBefore = await revenueOn(addDays(todayIso(), -3), todayIso());
+    const original = await sale(date, 700);
+    const reversal = await reverseJournalEntry(org.tenantId, original.id, org.userId, "Edit");
+    // make it look the old way: the undo dated today
+    await db.update(journalEntries).set({ entryDate: todayIso() }).where(eq(journalEntries.id, reversal.id));
+    expect(await revenueOn(addDays(todayIso(), -3), todayIso())).toBe(thisMonthBefore - 700);
+
+    const preview = await redateReversals({ tenantId: org.tenantId, apply: false });
+    expect(preview.moved.map((m) => m.entryId)).toContain(reversal.id);
+    expect((await db.select().from(journalEntries).where(eq(journalEntries.id, reversal.id)))[0].entryDate).toBe(todayIso()); // preview changes nothing
+
+    const applied = await redateReversals({ tenantId: org.tenantId, apply: true, userId: org.userId });
+    expect(applied.moved.map((m) => m.entryId)).toContain(reversal.id);
+    expect((await db.select().from(journalEntries).where(eq(journalEntries.id, reversal.id)))[0].entryDate).toBe(date);
+    expect(await revenueOn(addDays(todayIso(), -3), todayIso())).toBe(thisMonthBefore);
+    const audit = await db.select().from(auditLog).where(and(eq(auditLog.tenantId, org.tenantId), eq(auditLog.action, "reversal_redated"), inArray(auditLog.entityId, [reversal.id])));
+    expect(audit).toHaveLength(1);
+    // run again: nothing left to move
+    expect((await redateReversals({ tenantId: org.tenantId, apply: true })).moved.map((m) => m.entryId)).not.toContain(reversal.id);
+  });
+
+  it("leaves one alone when the month it would move to is closed", async () => {
+    const date = addDays(todayIso(), -300);
+    const original = await sale(date, 300);
+    const reversal = await reverseJournalEntry(org.tenantId, original.id, org.userId, "Edit");
+    await db.update(journalEntries).set({ entryDate: todayIso() }).where(eq(journalEntries.id, reversal.id));
+    const [period] = await db.insert(accountingPeriods).values({ tenantId: org.tenantId, periodStart: addDays(date, -5), periodEnd: addDays(date, 5), label: "Closed", status: "closed" }).returning({ id: accountingPeriods.id });
+    const r = await redateReversals({ tenantId: org.tenantId, apply: true });
+    expect(r.skipped.find((s) => s.entryId === reversal.id)?.reason).toMatch(/closed or reconciled/);
+    expect((await db.select().from(journalEntries).where(eq(journalEntries.id, reversal.id)))[0].entryDate).toBe(todayIso());
+    await db.delete(accountingPeriods).where(eq(accountingPeriods.id, period.id));
+  });
+});

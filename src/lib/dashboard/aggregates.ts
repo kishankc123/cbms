@@ -2,6 +2,7 @@ import { and, eq, ne, gte, lte, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, salesInvoices, purchaseBills, items, inventorySettings, complianceObligations } from "@/db/schema";
 import { effectiveStatus, summarize as summarizeCompliance, type EffectiveStatus } from "@/lib/compliance/engine/status";
+import { onlyStillObligated } from "@/lib/compliance/obligated";
 import { cashAccountRows } from "./cash-flow";
 import { pendingCheques, pendingReceivedCheques } from "@/lib/cheques/pending";
 
@@ -260,19 +261,21 @@ export async function needsAttention(tenantId: string, asOfIso: string): Promise
 // --------------------------------------------------------- Compliance
 
 export async function complianceSummary(tenantId: string, todayIso: string) {
-  const rows = await db.select({ status: complianceObligations.status, dueDate: complianceObligations.dueDate }).from(complianceObligations).where(eq(complianceObligations.tenantId, tenantId));
+  const all = await db.select({ id: complianceObligations.id, templateId: complianceObligations.templateId, source: complianceObligations.source, taxTypeKey: complianceObligations.taxTypeKey, status: complianceObligations.status, dueDate: complianceObligations.dueDate }).from(complianceObligations).where(eq(complianceObligations.tenantId, tenantId));
+  // Only what the platform still publishes and the organization is still obliged to (see compliance/obligated.ts).
+  const rows = await onlyStillObligated(tenantId, all, todayIso);
   return summarizeCompliance(rows, todayIso);
 }
 
 export type ComplianceDeadlineRow = { id: string; name: string; dueDate: string; status: EffectiveStatus };
 
 export async function upcomingComplianceDeadlines(tenantId: string, todayIso: string, limit = 6): Promise<ComplianceDeadlineRow[]> {
-  const rows = await db
-    .select({ id: complianceObligations.id, name: complianceObligations.name, dueDate: complianceObligations.dueDate, status: complianceObligations.status })
+  const open = await db
+    .select({ id: complianceObligations.id, name: complianceObligations.name, dueDate: complianceObligations.dueDate, status: complianceObligations.status, templateId: complianceObligations.templateId, source: complianceObligations.source, taxTypeKey: complianceObligations.taxTypeKey })
     .from(complianceObligations)
     .where(and(eq(complianceObligations.tenantId, tenantId), notInArray(complianceObligations.status, ["filed", "paid", "not_applicable"])))
-    .orderBy(complianceObligations.dueDate)
-    .limit(limit);
+    .orderBy(complianceObligations.dueDate);
+  const rows = (await onlyStillObligated(tenantId, open, todayIso)).slice(0, limit);
 
   return rows.map((r) => ({ id: r.id, name: r.name, dueDate: r.dueDate, status: effectiveStatus({ status: r.status, dueDate: r.dueDate }, todayIso) }));
 }

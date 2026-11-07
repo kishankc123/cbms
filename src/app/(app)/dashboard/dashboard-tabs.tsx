@@ -13,8 +13,10 @@ const TABS = [
   { href: "/dashboard/planning", label: "Planning" },
   { href: "/dashboard/cash-cycle", label: "Cash cycle" },
 ] as const;
+const COMPLIANCE_TAB = { href: "/dashboard/compliance", label: "Compliance" } as const;
 
-export function DashboardTabs() {
+/** `compliance` is null for someone who may not see compliance (no tab), else the number of overdue items (shown on the tab when above zero). */
+export function DashboardTabs({ compliance = null }: { compliance?: { overdue: number } | null }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const period = new URLSearchParams();
@@ -26,7 +28,7 @@ export function DashboardTabs() {
 
   return (
     <nav className="flex min-w-0 gap-1 overflow-x-auto">
-      {TABS.map((t) => {
+      {[...TABS, ...(compliance ? [COMPLIANCE_TAB] : [])].map((t) => {
         const active = pathname === t.href;
         return (
           <Link
@@ -36,6 +38,9 @@ export function DashboardTabs() {
             className={`relative inline-flex h-9 items-center whitespace-nowrap border-b-2 px-3 text-[13px] transition-colors ${active ? "border-accent font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
           >
             {t.label}
+            {t.href === COMPLIANCE_TAB.href && compliance && compliance.overdue > 0 && (
+              <span className="ml-1.5 rounded-full bg-[var(--status-critical-bg)] px-1.5 text-[11px] font-medium text-[var(--status-critical-text)]">{compliance.overdue}</span>
+            )}
           </Link>
         );
       })}

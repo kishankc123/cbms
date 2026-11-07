@@ -28,9 +28,9 @@ const SECTIONS = [
 ] as const;
 type Section = (typeof SECTIONS)[number]["key"];
 
-export function TaxComplianceTabs({ data }: { data: Data }) {
+export function TaxComplianceTabs({ data, initialTab }: { data: Data; initialTab?: string }) {
   const present = new Set(data.taxTypes.map((t) => t.key));
-  const [tab, setTab] = useState<string>(TAX_TABS[0].key);
+  const [tab, setTab] = useState<string>(TAX_TABS.some((t) => t.key === initialTab) ? (initialTab as string) : TAX_TABS[0].key);
   const [section, setSection] = useState<Section>("overview");
   const active = TAX_TABS.find((t) => t.key === tab) ?? TAX_TABS[0];
   const registered = present.has(active.key);

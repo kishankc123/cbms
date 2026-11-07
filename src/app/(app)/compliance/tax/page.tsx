@@ -6,9 +6,10 @@ import { ExcisePermitAlert } from "../excise-permit-alert";
 import { ComplianceProfileNotice } from "../profile-notice";
 import { PageHeader } from "@/components/ui/page-header";
 
-export default async function TaxCompliancePage() {
+export default async function TaxCompliancePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const denied = await guardView("compliance");
   if (denied) return denied;
+  const { tab } = await searchParams;
   const data = await listTaxCompliance();
   return (
     <div className="space-y-6">
@@ -16,7 +17,7 @@ export default async function TaxCompliancePage() {
       <ComplianceProfileNotice />
       <ExcisePermitAlert />
       <CatchupPrompt />
-      <TaxComplianceTabs data={data} />
+      <TaxComplianceTabs data={data} initialTab={tab} />
     </div>
   );
 }
