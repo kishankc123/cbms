@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Copy, FileSpreadsheet, FileText, Image as ImageIcon, Printer } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink, FileSpreadsheet, FileText, Image as ImageIcon, Printer } from "lucide-react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -12,7 +12,9 @@ import { ON_CREDIT, type Daybook, type DocSection } from "@/lib/ledger/daybook-r
 import type { DaybookPage } from "@/lib/ledger/daybook";
 import { chequeStatusLabel } from "@/lib/ledger/daybook-cheques";
 import { CashCount, type CountAccount } from "./cash-count";
-import { canvasToBlob, drawDaybookImage, saveBlob } from "./daybook-image";
+import { saveBlob } from "./daybook-image";
+import { ImagePreview } from "./image-preview";
+import { resolveSourceLink } from "@/lib/ledger/source-link";
 
 const th = "border-b border-line bg-app px-2.5 py-1.5 text-xs font-medium text-ink-2";
 const td = "border-b border-line px-2.5 py-1.5";
@@ -70,29 +72,13 @@ export function Figure({ label, value, tone }: { label: string; value: number; t
 
 export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCount, info, day, today, prevDay, nextDay }: { page: DaybookPage; countAccounts: CountAccount[]; canCount: boolean; monthLabel: string; cashCount: { counted: number; books: number } | null; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
   const data = page.book;
-  const extras: DayExtras = { monthLabel, month: page.month, flows: page.flows, credit: page.credit, cashCount, cheques: page.cheques };
+  const extras: DayExtras = useMemo(() => ({ monthLabel, month: page.month, flows: page.flows, credit: page.credit, cashCount, cheques: page.cheques }), [monthLabel, page, cashCount]);
+  const [preview, setPreview] = useState(false);
+  const [refreshing, startRefresh] = useTransition();
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const go = (iso: string) => router.push(`/reports/daybook?date=${iso}`);
-
-  async function image(copy: boolean) {
-    setBusy(copy ? "copy" : "image");
-    try {
-      const blob = await canvasToBlob(drawDaybookImage(data, info, extras));
-      if (copy) {
-        if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("copy-unsupported");
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        toast.success("Picture copied. Paste it into your chat.");
-      } else {
-        saveBlob(blob, exportFileName(info.company, day, "png"));
-      }
-    } catch (e) {
-      toast.error(e instanceof Error && e.message === "copy-unsupported" ? "This browser can't copy pictures. Download it instead." : "Couldn't make the picture. Try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function excel() {
     setBusy("excel");
@@ -146,11 +132,8 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
           </Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" icon={<ImageIcon size={15} />} loading={busy === "image"} onClick={() => image(false)}>
-            Download image
-          </Button>
-          <Button size="sm" icon={<Copy size={15} />} loading={busy === "copy"} onClick={() => image(true)}>
-            Copy image
+          <Button size="sm" variant="primary" icon={<ImageIcon size={15} />} onClick={() => setPreview(true)}>
+            View image
           </Button>
           <Button size="sm" icon={<FileSpreadsheet size={15} />} loading={busy === "excel"} onClick={excel}>
             Excel
@@ -232,7 +215,12 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
         </div>
 
         <section className={card}>
-          <h2 className="mb-2 text-sm font-semibold text-ink">Cash and bank</h2>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-ink">Cash and bank</h2>
+            <Link href="/bank-reconciliation" className="text-xs text-accent-text hover:underline print:hidden">
+              Reconcile bank
+            </Link>
+          </div>
           {data.accounts.length === 0 ? (
             <p className="text-[13px] text-ink-2">No cash or bank accounts have a balance or any activity.</p>
           ) : (
@@ -332,8 +320,9 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
           </section>
         )}
 
-        <section className={card}>
-          <h2 className="mb-2 text-sm font-semibold text-ink">Entries of the day</h2>
+        <section id="daybook-entries" className={`${card} scroll-mt-4`}>
+          <h2 className="mb-1 text-sm font-semibold text-ink">Entries of the day</h2>
+          <p className="mb-2 text-xs text-ink-2 print:hidden">Open an entry to correct it. When you come back, the figures and the picture show the change.</p>
           {page.list.length === 0 ? (
             <p className="text-[13px] text-ink-2">Nothing was entered on this day.</p>
           ) : (
@@ -346,6 +335,7 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
                     <th className={th}>Reference</th>
                     <th className={th}>Note</th>
                     <th className={`${th} text-right`}>Amount</th>
+                    <th className={`${th} print:hidden`}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -361,6 +351,16 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
                       <td className={td}>{r.reference}</td>
                       <td className={`${td} max-w-[280px] truncate`}>{r.note}</td>
                       <td className={`${td} tnum text-right`}>{formatMoney(r.amount)}</td>
+                      <td className={`${td} whitespace-nowrap text-right print:hidden`}>
+                        {(() => {
+                          const link = resolveSourceLink(r.sourceType);
+                          return link ? (
+                            <Link href={link.href} className="inline-flex items-center gap-1 text-xs text-accent-text hover:underline" title={link.label}>
+                              Open <ExternalLink size={12} />
+                            </Link>
+                          ) : null;
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -370,6 +370,21 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
           {page.listHidden > 0 && <p className="mt-2 text-xs text-ink-2">{page.listHidden} more entries are not listed here. Use Excel or CSV from a narrower report if you need them.</p>}
         </section>
       </div>
+      {preview && (
+        <ImagePreview
+          data={data}
+          info={info}
+          extras={extras}
+          day={day}
+          refreshing={refreshing}
+          onRefresh={() => startRefresh(() => router.refresh())}
+          onCheck={() => {
+            setPreview(false);
+            setTimeout(() => document.getElementById("daybook-entries")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+          }}
+          onClose={() => setPreview(false)}
+        />
+      )}
       <style>{`@media print { body * { visibility: hidden; } #daybook, #daybook * { visibility: visible; } #daybook { position: absolute; left: 0; top: 0; width: 100%; } }`}</style>
     </div>
   );
