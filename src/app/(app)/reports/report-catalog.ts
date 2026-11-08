@@ -13,6 +13,10 @@ export type ReportCategory = { name: string; reports: ReportEntry[] };
 
 export const REPORT_CATALOG: ReportCategory[] = [
   {
+    name: "Daily",
+    reports: [{ title: "Daybook", href: "/reports/daybook", built: true }],
+  },
+  {
     name: "Financial Statements",
     reports: [
       { title: "Profit & Loss", href: "/reports/profit-and-loss", built: true },

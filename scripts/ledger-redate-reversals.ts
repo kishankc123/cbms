@@ -1,15 +1,28 @@
 // Moves the undo entries made the old way (dated the day of the edit or void) to the date of the entry they undo.
-// Prints what it would do and changes nothing, unless run with --apply. Optional: --tenant <id> to limit it to one organization.
+// Prints what it would do and changes nothing, unless run with --apply. Optional: --company "part of the name" (or --tenant <id>) to limit it to one organization.
 //   node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/ledger-redate-reversals.ts            (preview)
 //   node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/ledger-redate-reversals.ts --apply    (do it)
 import { db } from "../src/db";
 import { tenants } from "../src/db/schema";
+import { ilike } from "drizzle-orm";
 import { redateReversals } from "../src/lib/ledger/redate-reversals";
 
 async function main() {
   const apply = process.argv.includes("--apply");
   const at = process.argv.indexOf("--tenant");
-  const tenantId = at >= 0 ? process.argv[at + 1] : undefined;
+  let tenantId = at >= 0 ? process.argv[at + 1] : undefined;
+  // --company "part of the name" picks one organization by name instead of by id
+  const cn = process.argv.indexOf("--company");
+  if (cn >= 0) {
+    const found = await db.select({ id: tenants.id, name: tenants.companyName }).from(tenants).where(ilike(tenants.companyName, `%${process.argv[cn + 1]}%`));
+    if (found.length !== 1) {
+      console.log(found.length === 0 ? "No organization has that in its name." : "More than one organization matches. Use more of the name:");
+      found.forEach((f) => console.log("  " + f.name));
+      process.exit(1);
+    }
+    console.log("Organization: " + found[0].name);
+    tenantId = found[0].id;
+  }
   const report = await redateReversals({ tenantId, apply });
   const names = new Map((await db.select({ id: tenants.id, name: tenants.companyName }).from(tenants)).map((t) => [t.id, t.name]));
   const line = (i: { tenantId: string; from: string; to: string; reference: string | null; memo: string | null }) => `${names.get(i.tenantId) ?? i.tenantId} | ${i.reference ?? "-"} | ${i.from} -> ${i.to} | ${(i.memo ?? "").slice(0, 50)}`;

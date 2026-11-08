@@ -6,6 +6,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { todayIso, addDays } from "@/lib/calendar";
 import { postJournalEntry, reverseJournalEntry } from "./post";
 import { redateReversals } from "./redate-reversals";
+import { undoRedatedReversals } from "./undo-redate";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let receivable: string;
@@ -84,5 +85,45 @@ describe("bringing earlier undo entries in line", () => {
     expect(r.skipped.find((s) => s.entryId === reversal.id)?.reason).toMatch(/closed or reconciled/);
     expect((await db.select().from(journalEntries).where(eq(journalEntries.id, reversal.id)))[0].entryDate).toBe(todayIso());
     await db.delete(accountingPeriods).where(eq(accountingPeriods.id, period.id));
+  });
+});
+
+describe("undoing the re-dating", () => {
+  const dateOf = async (id: string) => (await db.select().from(journalEntries).where(eq(journalEntries.id, id)))[0].entryDate;
+  const oldStyle = async (daysBack: number) => {
+    const date = addDays(todayIso(), -daysBack);
+    const original = await sale(date, 100);
+    const reversal = await reverseJournalEntry(org.tenantId, original.id, org.userId, "Edit");
+    await db.update(journalEntries).set({ entryDate: todayIso() }).where(eq(journalEntries.id, reversal.id)); // dated the day of the edit, the old way
+    return { date, reversal };
+  };
+
+  it("puts an entry back to the date it had before, from the audit log, and says so in the audit log", async () => {
+    const { date, reversal } = await oldStyle(100);
+    await redateReversals({ tenantId: org.tenantId, apply: true, userId: org.userId });
+    expect(await dateOf(reversal.id)).toBe(date);
+
+    const preview = await undoRedatedReversals({ tenantId: org.tenantId, apply: false });
+    expect(preview.restored.find((r) => r.entryId === reversal.id)).toMatchObject({ from: date, to: todayIso() });
+    expect(await dateOf(reversal.id)).toBe(date); // preview changes nothing
+
+    await undoRedatedReversals({ tenantId: org.tenantId, apply: true, userId: org.userId });
+    expect(await dateOf(reversal.id)).toBe(todayIso());
+    const logged = await db.select().from(auditLog).where(and(eq(auditLog.tenantId, org.tenantId), eq(auditLog.action, "reversal_redate_undone"), eq(auditLog.entityId, reversal.id)));
+    expect(logged).toHaveLength(1);
+    // run again: nothing left to restore for it
+    const again = await undoRedatedReversals({ tenantId: org.tenantId, apply: false });
+    expect(again.restored.some((r) => r.entryId === reversal.id)).toBe(false);
+  });
+
+  it("leaves an entry alone when its date was changed after the re-dating", async () => {
+    const { reversal } = await oldStyle(110);
+    await redateReversals({ tenantId: org.tenantId, apply: true, userId: org.userId });
+    const changed = addDays(todayIso(), -50);
+    await db.update(journalEntries).set({ entryDate: changed }).where(eq(journalEntries.id, reversal.id));
+    const r = await undoRedatedReversals({ tenantId: org.tenantId, apply: true });
+    expect(r.restored.some((x) => x.entryId === reversal.id)).toBe(false);
+    expect(r.skipped.find((x) => x.entryId === reversal.id)?.reason).toMatch(/changed since/);
+    expect(await dateOf(reversal.id)).toBe(changed);
   });
 });
