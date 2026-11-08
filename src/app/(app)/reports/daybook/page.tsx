@@ -6,7 +6,7 @@ import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireTenantSession } from "@/lib/session";
 import { addDays, formatDate, todayIso, validateADDate, weekdayOf } from "@/lib/calendar";
-import { loadDaybook } from "@/lib/ledger/daybook";
+import { loadDaybookPage } from "@/lib/ledger/daybook";
 import { DaybookView } from "./daybook-view";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -22,7 +22,7 @@ export default async function DaybookPage({ searchParams }: { searchParams: Prom
   const asked = typeof sp.date === "string" && validateADDate(sp.date) ? sp.date : today;
   const day = asked > today ? today : asked; // there is nothing to report on a day that hasn't happened
 
-  const [data, [tenant]] = await Promise.all([loadDaybook(session.tenantId, day), db.select({ name: tenants.companyName }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1)]);
+  const [page, [tenant]] = await Promise.all([loadDaybookPage(session.tenantId, day), db.select({ name: tenants.companyName }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1)]);
   const other = session.calendar === "BS" ? "AD" : "BS";
   const info = {
     company: tenant?.name ?? "",
@@ -37,7 +37,7 @@ export default async function DaybookPage({ searchParams }: { searchParams: Prom
         <BackButton href="/reports" label="Back to Reports" />
         <PageHeader title="Daybook" description="One day of your business: sales, purchases and expenses by how they were paid, and your cash and bank balances." className="!mb-0" />
       </div>
-      <DaybookView data={data} info={info} day={day} today={today} prevDay={addDays(day, -1)} nextDay={day < today ? addDays(day, 1) : null} />
+      <DaybookView page={page} compareLabel={`${WEEKDAYS[weekdayOf(day)]} ${formatDate(addDays(day, -7), session.calendar, "long")}`} info={info} day={day} today={today} prevDay={addDays(day, -1)} nextDay={day < today ? addDays(day, 1) : null} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { accounts } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { listModeOptions, seedPaymentModes } from "@/lib/payment-modes";
 import { postJournalEntry, reverseJournalEntry } from "./post";
-import { loadDaybook } from "./daybook";
+import { loadDaybook, loadDaybookPage } from "./daybook";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let acct: Record<string, string>;
@@ -63,6 +63,16 @@ describe("the daybook of a day, from the real ledger", () => {
     const later = await loadDaybook(org.tenantId, "2026-11-05");
     expect(later).toMatchObject({ moneyIn: 0, moneyOut: 0, totals: { opening: 25650, closing: 25650 } });
     expect(later.totals.opening).toBe(later.totals.closing);
+  });
+
+  it("the page also gives the comparison with a week earlier, the credit given and the day's entries", async () => {
+    const p = await loadDaybookPage(org.tenantId, DAY);
+    expect(p.book.sales.total).toBe(1000);
+    expect(p.compareDay).toBe(new Date(Date.parse(DAY + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10));
+    expect(p.compare.find((r) => r.key === "sales")).toMatchObject({ now: 1000 });
+    expect(p.credit.given).toBe(200);
+    expect(p.list.length).toBeGreaterThan(0);
+    expect(p.list.some((r) => r.kind === "Sale" && r.amount === 1000)).toBe(true);
   });
 
   it("an invoice edited and reversed on the same day is not shown as money in and out", async () => {

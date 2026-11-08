@@ -1,4 +1,5 @@
 import type { Daybook, DocSection } from "./daybook-rules";
+import type { ListRow } from "./daybook-extras";
 
 // What the Daybook looks like when it leaves the screen: the rows of the shareable image and of the spreadsheet. Pure (no browser, no database), so the
 // layout can be tested; the drawing and the file writing are in the page's client code.
@@ -41,7 +42,7 @@ export function imageRows(d: Daybook): ImageRow[] {
 
 export type Sheet = { name: string; rows: (string | number)[][] };
 
-export function daybookSheets(d: Daybook, ctx: ExportContext): Sheet[] {
+export function daybookSheets(d: Daybook, ctx: ExportContext, list: ListRow[] = []): Sheet[] {
   const head: (string | number)[][] = [[ctx.company], ["Daybook"], [`${ctx.dateLabel} (${ctx.otherDateLabel})`], []];
   const doc = (title: string, s: DocSection): (string | number)[][] => [[title, "Amount"], ...s.byMode.map((m) => [`  ${m.mode}`, m.amount]), ...(s.returns > 0 ? [["  Returns", -s.returns]] : []), [`Total ${title.toLowerCase()}`, s.total], []];
   const summary: (string | number)[][] = [
@@ -64,7 +65,14 @@ export function daybookSheets(d: Daybook, ctx: ExportContext): Sheet[] {
     ...d.groups.flatMap((g) => [[g.label, g.opening, g.in, g.out, g.transfers, g.closing], ...d.accounts.filter((a) => a.group === g.group).map((a) => [`  ${a.code} ${a.name}`, a.opening, a.in, a.out, a.transfers, a.closing])]),
     ["Total", d.totals.opening, d.totals.in, d.totals.out, d.totals.transfers, d.totals.closing],
   ];
-  return [{ name: "Daybook", rows: summary }, { name: "Cash and bank", rows: cash }];
+  const sheets: Sheet[] = [{ name: "Daybook", rows: summary }, { name: "Cash and bank", rows: cash }];
+  if (list.length > 0) {
+    sheets.push({
+      name: "Entries",
+      rows: [[ctx.company, "Daybook", ctx.dateLabel], [], ["What", "Reference", "Note", "Amount"], ...list.map((r) => [r.correction ? `${r.kind} (correction)` : r.kind, r.reference, r.note, r.amount])],
+    });
+  }
+  return sheets;
 }
 
 /** A sheet as comma-separated text. */

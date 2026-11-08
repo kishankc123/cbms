@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { daybookSheets, exportFileName, formatMoney, sheetCsv, type ExportContext } from "@/lib/ledger/daybook-export";
 import { ON_CREDIT, type Daybook, type DocSection } from "@/lib/ledger/daybook-rules";
+import type { DaybookPage } from "@/lib/ledger/daybook";
 import { canvasToBlob, drawDaybookImage, saveBlob } from "./daybook-image";
 
 const th = "border-b border-line bg-app px-2.5 py-1.5 text-xs font-medium text-ink-2";
@@ -59,7 +60,8 @@ function Figure({ label, value, tone }: { label: string; value: number; tone?: "
   );
 }
 
-export function DaybookView({ data, info, day, today, prevDay, nextDay }: { data: Daybook; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
+export function DaybookView({ page, compareLabel, info, day, today, prevDay, nextDay }: { page: DaybookPage; compareLabel: string; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
+  const data = page.book;
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function DaybookView({ data, info, day, today, prevDay, nextDay }: { data
     try {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
-      for (const s of daybookSheets(data, info)) {
+      for (const s of daybookSheets(data, info, page.list)) {
         const ws = XLSX.utils.aoa_to_sheet(s.rows);
         ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 16 }];
         XLSX.utils.book_append_sheet(wb, ws, s.name);
@@ -102,7 +104,7 @@ export function DaybookView({ data, info, day, today, prevDay, nextDay }: { data
   }
 
   function csv() {
-    const text = daybookSheets(data, info).map((s) => sheetCsv(s.rows)).join("\n\n");
+    const text = daybookSheets(data, info, page.list).map((s) => sheetCsv(s.rows)).join("\n\n");
     saveBlob(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), exportFileName(info.company, day, "csv"));
   }
 
@@ -175,6 +177,55 @@ export function DaybookView({ data, info, day, today, prevDay, nextDay }: { data
           <ModeCard title="Expenses" section={data.expenses} />
         </div>
 
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <section className={`${card} lg:col-span-2`}>
+            <h2 className="text-sm font-semibold text-ink">Compared with last {compareLabel.split(" ")[0]}</h2>
+            <p className="mb-2 text-xs text-ink-2">{compareLabel}</p>
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="text-left">
+                  <th className={th}></th>
+                  <th className={`${th} text-right`}>This day</th>
+                  <th className={`${th} text-right`}>A week before</th>
+                  <th className={`${th} text-right`}>Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.compare.map((r) => {
+                  const up = r.change > 0;
+                  const tone = r.change === 0 || r.goodWhenUp === null ? "text-ink-2" : up === r.goodWhenUp ? "text-[var(--success-text)]" : "text-[var(--danger-text)]";
+                  return (
+                    <tr key={r.key}>
+                      <td className={td}>{r.label}</td>
+                      <td className={`${td} tnum text-right`}>{formatMoney(r.now)}</td>
+                      <td className={`${td} tnum text-right text-ink-2`}>{formatMoney(r.before)}</td>
+                      <td className={`${td} tnum text-right ${tone}`}>
+                        {r.change === 0 ? "No change" : `${up ? "+" : "-"}${formatMoney(Math.abs(r.change))}${r.percent === null ? "" : ` (${up ? "+" : "-"}${Math.abs(r.percent).toFixed(0)}%)`}`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+          <section className={card}>
+            <h2 className="mb-2 text-sm font-semibold text-ink">Credit today</h2>
+            <table className="w-full border-collapse text-[13px]">
+              <tbody>
+                <tr>
+                  <td className={td}>Given to customers</td>
+                  <td className={`${td} tnum text-right`}>{formatMoney(page.credit.given)}</td>
+                </tr>
+                <tr>
+                  <td className="px-2.5 py-1.5">Taken from suppliers</td>
+                  <td className="tnum px-2.5 py-1.5 text-right">{formatMoney(page.credit.taken)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-ink-2">Sold, bought or spent today and not paid yet. Money collected or paid later is on the days it moved.</p>
+          </section>
+        </div>
+
         <section className={card}>
           <h2 className="mb-2 text-sm font-semibold text-ink">Cash and bank</h2>
           {data.accounts.length === 0 ? (
@@ -234,6 +285,44 @@ export function DaybookView({ data, info, day, today, prevDay, nextDay }: { data
             </table>
           </section>
         )}
+
+        <section className={card}>
+          <h2 className="mb-2 text-sm font-semibold text-ink">Entries of the day</h2>
+          {page.list.length === 0 ? (
+            <p className="text-[13px] text-ink-2">Nothing was entered on this day.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="text-left">
+                    <th className={th}>Time</th>
+                    <th className={th}>What</th>
+                    <th className={th}>Reference</th>
+                    <th className={th}>Note</th>
+                    <th className={`${th} text-right`}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {page.list.map((r) => (
+                    <tr key={r.id} className={r.correction ? "text-ink-2" : ""}>
+                      <td className={`${td} whitespace-nowrap text-ink-2`}>
+                        <span suppressHydrationWarning>{new Date(r.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      </td>
+                      <td className={td}>
+                        {r.kind}
+                        {r.correction && <span className="ml-1.5 text-xs">(correction)</span>}
+                      </td>
+                      <td className={td}>{r.reference}</td>
+                      <td className={`${td} max-w-[280px] truncate`}>{r.note}</td>
+                      <td className={`${td} tnum text-right`}>{formatMoney(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {page.listHidden > 0 && <p className="mt-2 text-xs text-ink-2">{page.listHidden} more entries are not listed here. Use Excel or CSV from a narrower report if you need them.</p>}
+        </section>
       </div>
       <style>{`@media print { body * { visibility: hidden; } #daybook, #daybook * { visibility: visible; } #daybook { position: absolute; left: 0; top: 0; width: 100%; } }`}</style>
     </div>
