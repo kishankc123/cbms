@@ -9,6 +9,8 @@ import {
   pgEnum,
   AnyPgColumn,
   index,
+  jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { tenants } from "./tenancy";
 import { paymentModes } from "./payment-modes";
@@ -89,3 +91,21 @@ export const journalLines = pgTable("journal_lines", {
   index("journal_lines_account").on(t.accountId),
   index("journal_lines_entry").on(t.journalEntryId),
 ]);
+
+/** A cash count from the Daybook: the notes someone counted in a cash account at the end of a day, against what the books say. It posts nothing; the books are not changed by it. */
+export const daybookCashCounts = pgTable("daybook_cash_counts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  countDate: date("count_date").notNull(),
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  /** Note value -> how many notes, e.g. {"1000": 12, "500": 3}. */
+  notes: jsonb("notes").notNull().default({}),
+  /** Coins and anything else counted that is not a listed note. */
+  otherAmount: numeric("other_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  countedTotal: numeric("counted_total", { precision: 18, scale: 2 }).notNull(),
+  /** What the books said the account held at the end of that day when the count was saved. */
+  bookBalance: numeric("book_balance", { precision: 18, scale: 2 }).notNull(),
+  remark: text("remark"),
+  countedBy: uuid("counted_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("daybook_cash_counts_day_account").on(t.tenantId, t.countDate, t.accountId)]);

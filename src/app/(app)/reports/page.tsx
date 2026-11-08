@@ -13,6 +13,7 @@ const REPORT_MODULE: Record<string, string> = {
   "cash-book": "bank_reconciliation",
   "cash-flow": "chart_of_accounts",
   "customer-statement": "sales",
+  daybook: "bank_reconciliation",
   "journal-report": "chart_of_accounts",
   ledger: "chart_of_accounts",
   "payable-ageing": "purchases",
