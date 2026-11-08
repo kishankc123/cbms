@@ -17,7 +17,7 @@ const th = "border-b border-line bg-app px-2.5 py-1.5 text-xs font-medium text-i
 const td = "border-b border-line px-2.5 py-1.5";
 const card = "rounded-lg border border-line bg-surface p-4";
 
-function ModeCard({ title, section }: { title: string; section: DocSection }) {
+export function ModeCard({ title, section }: { title: string; section: DocSection }) {
   return (
     <section className={card}>
       <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -52,7 +52,7 @@ function ModeCard({ title, section }: { title: string; section: DocSection }) {
   );
 }
 
-function Figure({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) {
+export function Figure({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) {
   return (
     <div className="border-l border-line px-4 py-2.5 first:border-l-0 first:pl-0">
       <p className="text-xs text-ink-2">{label}</p>
@@ -133,6 +133,9 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
               Today
             </Link>
           )}
+          <Link href="/reports/daybook/range" className={buttonClass({ size: "sm" })}>
+            Several days
+          </Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" icon={<ImageIcon size={15} />} loading={busy === "image"} onClick={() => image(false)}>

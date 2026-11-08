@@ -86,3 +86,20 @@ export function exportFileName(company: string, day: string, ext: string): strin
   const safe = company.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "Business";
   return `Daybook-${safe}-${day}.${ext}`;
 }
+
+// ---- A range of days ----
+
+import type { DaybookRange } from "./daybook-range";
+
+/** The spreadsheet of a range: a row for every day, then the whole stretch laid out like a single day. `dayLabel` writes a date the way the organization reads it. */
+export function rangeSheets(r: DaybookRange, ctx: ExportContext, dayLabel: (iso: string) => string): Sheet[] {
+  const t = r.total;
+  const days: (string | number)[][] = [
+    [ctx.company, "Daybook", ctx.dateLabel],
+    [],
+    ["Date", "Sales", "Purchases", "Expenses", "Money in", "Money out", "Cash and bank at close"],
+    ...r.days.map((d) => [dayLabel(d.day), d.sales, d.purchases, d.expenses, d.moneyIn, d.moneyOut, d.closing]),
+    ["Total", t.sales.total, t.purchases.total, t.expenses.total, t.moneyIn, t.moneyOut, t.totals.closing],
+  ];
+  return [{ name: "Days", rows: days }, ...daybookSheets(t, ctx).map((s) => ({ ...s, name: s.name === "Daybook" ? "Whole period" : s.name }))];
+}

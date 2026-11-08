@@ -6,7 +6,7 @@ import { accounts } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { listModeOptions, seedPaymentModes } from "@/lib/payment-modes";
 import { postJournalEntry, reverseJournalEntry } from "./post";
-import { loadDaybook, loadDaybookPage } from "./daybook";
+import { loadDaybook, loadDaybookPage, loadDaybookRange } from "./daybook";
 import { loadCashCounts, saveCashCount } from "./cash-count";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -74,6 +74,17 @@ describe("the daybook of a day, from the real ledger", () => {
     expect(p.credit.given).toBe(200);
     expect(p.list.length).toBeGreaterThan(0);
     expect(p.list.some((r) => r.kind === "Sale" && r.amount === 1000)).toBe(true);
+  });
+
+  it("a range agrees with the single days it is made of", async () => {
+    const r = await loadDaybookRange(org.tenantId, BEFORE, "2026-11-04");
+    expect(r.days.map((d) => d.day)).toEqual(["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"]);
+    const day = await loadDaybook(org.tenantId, DAY);
+    const row = r.days.find((d) => d.day === DAY)!;
+    expect(row).toMatchObject({ sales: day.sales.total, expenses: day.expenses.total, moneyIn: day.moneyIn, moneyOut: day.moneyOut, closing: day.totals.closing });
+    expect(r.total.totals.opening).toBe(0);
+    expect(r.total.reconciles).toBe(true);
+    expect(r.days[r.days.length - 1].closing).toBe(r.total.totals.closing);
   });
 
   it("a cash count is saved against the books of that day, replaced when counted again, and never changes the books", async () => {

@@ -1,13 +1,15 @@
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { journalEntries, journalLines } from "@/db/schema";
 import { addDays } from "@/lib/calendar";
 import { cashAccountRows } from "@/lib/dashboard/cash-flow";
 import { buildDaybook, type DayEntry, type Daybook } from "./daybook-rules";
+import { buildRange, type DaybookRange, type RangeEntry } from "./daybook-range";
 import { buildDayList, compareDays, creditOfDay, type CompareRow, type ListEntry, type ListRow } from "./daybook-extras";
 
 export * from "./daybook-rules";
 export * from "./daybook-extras";
+export * from "./daybook-range";
 
 type CashAccounts = { id: string; code: string; name: string }[];
 
@@ -91,4 +93,38 @@ export async function loadDaybookPage(tenantId: string, day: string): Promise<Da
   const [now, then] = await Promise.all([readDay(tenantId, day, cashAccounts), readDay(tenantId, compareDay, cashAccounts)]);
   const { rows, hidden } = buildDayList(now.entries, new Set(cashAccounts.map((a) => a.id)));
   return { book: now.book, compare: compareDays(now.book, then.book), compareDay, credit: creditOfDay(now.book), list: rows, listHidden: hidden };
+}
+
+/** The Daybook for a stretch of days (see daybook-range.ts): three queries however long the stretch is. */
+export async function loadDaybookRange(tenantId: string, from: string, to: string): Promise<DaybookRange> {
+  const accountRows = await cashAccountRows(tenantId);
+  const cashAccounts = accountRows.map((a) => ({ id: a.id, code: a.code, name: a.name }));
+  const ids = cashAccounts.map((a) => a.id);
+  const inRange = and(eq(journalEntries.tenantId, tenantId), gte(journalEntries.entryDate, from), lte(journalEntries.entryDate, to));
+
+  const [entryRows, lineRows, balances] = await Promise.all([
+    db.select({ id: journalEntries.id, date: journalEntries.entryDate, sourceType: journalEntries.sourceType, sourceId: journalEntries.sourceId, isReversed: journalEntries.isReversed, reversalOfId: journalEntries.reversalOfId }).from(journalEntries).where(inRange),
+    db
+      .select({ entryId: journalLines.journalEntryId, accountId: journalLines.accountId, debit: journalLines.debitAmount, credit: journalLines.creditAmount, modeName: journalLines.paymentModeName })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+      .where(inRange),
+    ids.length === 0
+      ? Promise.resolve([] as { accountId: string; balance: string }[])
+      : db
+          .select({ accountId: journalLines.accountId, balance: sql<string>`coalesce(sum(${journalLines.debitAmount} - ${journalLines.creditAmount}), 0)` })
+          .from(journalLines)
+          .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+          .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, ids), lt(journalEntries.entryDate, from)))
+          .groupBy(journalLines.accountId),
+  ]);
+
+  const linesByEntry = new Map<string, DayEntry["lines"]>();
+  for (const r of lineRows) {
+    const list = linesByEntry.get(r.entryId) ?? [];
+    list.push({ accountId: r.accountId, debit: Number(r.debit), credit: Number(r.credit), modeName: r.modeName });
+    linesByEntry.set(r.entryId, list);
+  }
+  const entries: RangeEntry[] = entryRows.map((e) => ({ ...e, lines: linesByEntry.get(e.id) ?? [] }));
+  return buildRange({ from, to, entries, cashAccounts, openingBefore: Object.fromEntries(balances.map((b) => [b.accountId, Number(b.balance)])) });
 }
