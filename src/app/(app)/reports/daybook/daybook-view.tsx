@@ -11,6 +11,7 @@ import { daybookSheets, exportFileName, formatMoney, sheetCsv, type DayExtras, t
 import { ON_CREDIT, type Daybook, type DocSection } from "@/lib/ledger/daybook-rules";
 import type { DaybookPage } from "@/lib/ledger/daybook";
 import { chequeStatusLabel } from "@/lib/ledger/daybook-cheques";
+import { groupedFlows } from "@/lib/ledger/daybook-extras";
 import { CashCount, type CountAccount } from "./cash-count";
 import { saveBlob } from "./daybook-image";
 import { ImagePreview } from "./image-preview";
@@ -185,9 +186,9 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
                 </tr>
               </thead>
               <tbody>
-                {page.flows.map((r) => (
-                  <tr key={r.key}>
-                    <td className={td}>{r.label}</td>
+                {groupedFlows(page.flows).map((r) => (
+                  <tr key={r.key} className={r.sub ? "text-ink-2" : ""}>
+                    <td className={`${td} ${r.sub ? "pl-6" : ""}`}>{r.label}</td>
                     <td className={`${td} tnum text-right ${r.today > 0 ? "" : "text-ink-2"}`}>{r.today > 0 ? formatMoney(r.today) : "-"}</td>
                     <td className={`${td} tnum text-right`}>{formatMoney(r.month)}</td>
                   </tr>

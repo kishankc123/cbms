@@ -1,7 +1,7 @@
 import type { Daybook, DocSection } from "./daybook-rules";
 import type { ListRow } from "./daybook-extras";
 import { chequeChip, type DayCheques } from "./daybook-cheques";
-import type { FlowRow, MonthTotals } from "./daybook-extras";
+import { groupedFlows, type FlowRow, type MonthTotals } from "./daybook-extras";
 
 // What the Daybook looks like when it leaves the screen: the rows of the shareable image and of the spreadsheet. Pure (no browser, no database), so the
 // layout can be tested; the drawing and the file writing are in the page's client code.
@@ -27,11 +27,11 @@ export type DayExtras = {
 // ---- The image ----
 
 export type ImageCard = { title: string; total: string; month: string; modes: { label: string; amount: string; share: number }[]; returns: string | null };
-export type ImageTable = { columns: string[]; rows: { label: string; values: string[]; strong?: boolean }[] };
+export type ImageTable = { columns: string[]; rows: { label: string; values: string[]; strong?: boolean; /** colours the figures: green for money in, red for money out */ tone?: "in" | "out" }[] };
 export type ImageModel = {
   cards: ImageCard[];
   note: string;
-  flows: { label: string; today: string; month: string; quiet: boolean }[];
+  flows: { label: string; today: string; month: string; quiet: boolean; sub: boolean }[];
   cash: ImageTable;
   monthCash: string;
   chips: string[];
@@ -68,8 +68,8 @@ export function imageModel(d: Daybook, x: DayExtras): ImageModel {
   const money = (n: number, sign: string) => (Math.abs(n) < 0.005 ? dash : `${n < 0 ? "-" : sign}${formatMoney(Math.abs(n))}`);
   const rows: ImageTable["rows"] = [
     { label: "Opening", values: [...cols.map((c) => formatMoney(c.opening)), formatMoney(tot("opening"))] },
-    { label: "Money in", values: [...cols.map((c) => money(c.in, "+")), money(tot("in"), "+")] },
-    { label: "Money out", values: [...cols.map((c) => money(-c.out, "-")), money(-tot("out"), "-")] },
+    { label: "Money in", values: [...cols.map((c) => money(c.in, "+")), money(tot("in"), "+")], tone: "in" },
+    { label: "Money out", values: [...cols.map((c) => money(-c.out, "-")), money(-tot("out"), "-")], tone: "out" },
   ];
   if (d.accounts.some((a) => Math.abs(a.transfers) >= 0.005)) rows.push({ label: "Moved", values: [...cols.map((c) => money(c.transfers, "+")), money(tot("transfers"), "+")] });
   rows.push({ label: "Closing", values: [...cols.map((c) => formatMoney(c.closing)), formatMoney(tot("closing"))], strong: true });
@@ -85,7 +85,7 @@ export function imageModel(d: Daybook, x: DayExtras): ImageModel {
   return {
     cards: [card("Sales", d.sales, x.month.sales), card("Purchases", d.purchases, x.month.purchases), card("Expenses", d.expenses, x.month.expenses)],
     note: notes.join(" · ").replace(/^./, (c) => c.toUpperCase()),
-    flows: x.flows.map((r) => ({ label: r.label, today: r.today > 0 ? formatMoney(r.today) : dash, month: formatMoney(r.month), quiet: r.today <= 0 })),
+    flows: groupedFlows(x.flows).map((r) => ({ label: r.label, today: r.today > 0 ? formatMoney(r.today) : dash, month: formatMoney(r.month), quiet: r.today <= 0, sub: Boolean(r.sub) })),
     cash: { columns: [...cols.map((c) => c.name), "Total"], rows },
     monthCash: `This month: money in ${formatMoney(x.month.moneyIn)} · money out ${formatMoney(x.month.moneyOut)}`,
     chips,
@@ -118,7 +118,7 @@ export function daybookSheets(d: Daybook, ctx: ExportContext, list: ListRow[] = 
     ...(extras
       ? [
           ["Collections and payments", "Today", "This month"],
-          ...extras.flows.map((r) => [r.label, r.today, r.month]),
+          ...groupedFlows(extras.flows).map((r) => [r.sub ? `  ${r.label}` : r.label, r.today, r.month]),
           [],
           ["Credit given today", extras.credit.given],
           ["Credit taken today", extras.credit.taken],

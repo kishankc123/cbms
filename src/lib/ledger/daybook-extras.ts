@@ -29,6 +29,18 @@ export function flowRows(sums: { type: string; today: number; month: number }[])
   });
 }
 
+/** A row of collections and payments as it is shown: `sub` rows sit under the row above them. */
+export type FlowLine = FlowRow & { sub?: boolean };
+
+/** Salary and staff advances are shown together under "Staff payments", each still on its own line, because an advance is lent and comes back through later salaries, so the two must not be added into one unlabelled figure. */
+export function groupedFlows(rows: FlowRow[]): FlowLine[] {
+  const staff = rows.filter((r) => r.key === "salary" || r.key === "advances");
+  const rest = rows.filter((r) => r.key !== "salary" && r.key !== "advances");
+  if (staff.length === 0) return rest;
+  const total: FlowLine = { key: "staff", label: "Staff payments", today: round2(staff.reduce((s, r) => s + r.today, 0)), month: round2(staff.reduce((s, r) => s + r.month, 0)) };
+  return [...rest, total, ...staff.map((r): FlowLine => ({ ...r, sub: true }))];
+}
+
 // ---- Credit given and taken ----
 
 const onCredit = (s: DocSection) => s.byMode.find((m) => m.mode === ON_CREDIT)?.amount ?? 0;

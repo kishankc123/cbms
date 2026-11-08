@@ -30,8 +30,8 @@ describe("the shareable image", () => {
   });
   it("lists collections and payments, quiet when nothing happened today", () => {
     expect(m.flows).toEqual([
-      { label: "Customer credit recovered", today: "400.00", month: "1,400.00", quiet: false },
-      { label: "Supplier payments", today: "\u2014", month: "500.00", quiet: true },
+      { label: "Customer credit recovered", today: "400.00", month: "1,400.00", quiet: false, sub: false },
+      { label: "Supplier payments", today: "\u2014", month: "500.00", quiet: true, sub: false },
     ]);
   });
   it("shows the cash position with a column for each account and a total that adds up", () => {

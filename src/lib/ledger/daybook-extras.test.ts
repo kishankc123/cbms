@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDaybook, ON_CREDIT, type DayEntry } from "./daybook-rules";
-import { buildDayList, creditOfDay, flowRows, type ListEntry } from "./daybook-extras";
+import { buildDayList, creditOfDay, flowRows, groupedFlows, type ListEntry } from "./daybook-extras";
 
 const accts = [{ id: "cash", code: "1000", name: "Cash" }];
 const line = (accountId: string, debit: number, credit: number, modeName: string | null = null) => ({ accountId, debit, credit, modeName });
@@ -12,6 +12,19 @@ describe("flowRows", () => {
     const rows = flowRows([{ type: "salary_payment", today: 0, month: 310000 }, { type: "customer_payment", today: 5000, month: 142000.456 }]);
     expect(rows.map((r) => [r.key, r.today, r.month])).toEqual([["recovered", 5000, 142000.46], ["suppliers", 0, 0], ["salary", 0, 310000], ["advances", 0, 0]]);
     expect(rows.map((r) => r.label)).toEqual(["Customer credit recovered", "Supplier payments", "Salary paid", "Staff advances given"]);
+  });
+});
+
+describe("groupedFlows", () => {
+  it("shows salary and staff advances under one Staff payments row that adds them, each still on its own line", () => {
+    const rows = groupedFlows(flowRows([{ type: "salary_payment", today: 0, month: 310000 }, { type: "staff_advance", today: 2000, month: 18000 }, { type: "customer_payment", today: 5000, month: 142000 }]));
+    expect(rows.map((r) => [r.label, r.today, r.month, Boolean(r.sub)])).toEqual([
+      ["Customer credit recovered", 5000, 142000, false],
+      ["Supplier payments", 0, 0, false],
+      ["Staff payments", 2000, 328000, false],
+      ["Salary paid", 0, 310000, true],
+      ["Staff advances given", 2000, 18000, true],
+    ]);
   });
 });
 
