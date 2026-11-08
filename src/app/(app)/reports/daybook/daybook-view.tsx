@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { daybookSheets, exportFileName, formatMoney, sheetCsv, type ExportContext } from "@/lib/ledger/daybook-export";
 import { ON_CREDIT, type Daybook, type DocSection } from "@/lib/ledger/daybook-rules";
 import type { DaybookPage } from "@/lib/ledger/daybook";
+import { CashCount, type CountAccount } from "./cash-count";
 import { canvasToBlob, drawDaybookImage, saveBlob } from "./daybook-image";
 
 const th = "border-b border-line bg-app px-2.5 py-1.5 text-xs font-medium text-ink-2";
@@ -60,7 +61,7 @@ function Figure({ label, value, tone }: { label: string; value: number; tone?: "
   );
 }
 
-export function DaybookView({ page, compareLabel, info, day, today, prevDay, nextDay }: { page: DaybookPage; compareLabel: string; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
+export function DaybookView({ page, countAccounts, canCount, compareLabel, info, day, today, prevDay, nextDay }: { page: DaybookPage; countAccounts: CountAccount[]; canCount: boolean; compareLabel: string; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
   const data = page.book;
   const router = useRouter();
   const toast = useToast();
@@ -261,6 +262,10 @@ export function DaybookView({ page, compareLabel, info, day, today, prevDay, nex
           )}
           {data.transfersMoved > 0 && <p className="mt-2 text-xs text-ink-2">{formatMoney(data.transfersMoved)} was moved between your own accounts. It is not money in or out.</p>}
         </section>
+
+        <div className="print:hidden">
+          <CashCount day={day} accounts={countAccounts} canEdit={canCount} />
+        </div>
 
         {data.other.length > 0 && (
           <section className={card}>

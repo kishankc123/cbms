@@ -7,6 +7,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { listModeOptions, seedPaymentModes } from "@/lib/payment-modes";
 import { postJournalEntry, reverseJournalEntry } from "./post";
 import { loadDaybook, loadDaybookPage } from "./daybook";
+import { loadCashCounts, saveCashCount } from "./cash-count";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let acct: Record<string, string>;
@@ -73,6 +74,27 @@ describe("the daybook of a day, from the real ledger", () => {
     expect(p.credit.given).toBe(200);
     expect(p.list.length).toBeGreaterThan(0);
     expect(p.list.some((r) => r.kind === "Sale" && r.amount === 1000)).toBe(true);
+  });
+
+  it("a cash count is saved against the books of that day, replaced when counted again, and never changes the books", async () => {
+    const before = await loadDaybook(org.tenantId, DAY);
+    const first = await saveCashCount(org.tenantId, org.userId, { day: DAY, accountId: acct["1000"], notes: { "1000": 5, "500": 1 }, other: 200, remark: "evening" });
+    expect(first).toEqual({ ok: true });
+    let counts = await loadCashCounts(org.tenantId, DAY);
+    expect(counts).toHaveLength(1);
+    expect(counts[0]).toMatchObject({ counted: 5700, book: 5750, remark: "evening", notes: { "1000": 5, "500": 1 } });
+
+    await saveCashCount(org.tenantId, org.userId, { day: DAY, accountId: acct["1000"], notes: { "1000": 5, "500": 1, "50": 1 }, other: 200, remark: "" });
+    counts = await loadCashCounts(org.tenantId, DAY);
+    expect(counts).toHaveLength(1);
+    expect(counts[0].counted).toBe(5750);
+    expect(await loadDaybook(org.tenantId, DAY)).toEqual(before);
+  });
+
+  it("refuses a count of a bank account, a bad note count, and another day's data", async () => {
+    expect(await saveCashCount(org.tenantId, org.userId, { day: DAY, accountId: acct["1010"], notes: {}, other: 0, remark: "" })).toMatchObject({ ok: false });
+    expect(await saveCashCount(org.tenantId, org.userId, { day: DAY, accountId: acct["1000"], notes: { "1000": 1.5 }, other: 0, remark: "" })).toMatchObject({ ok: false });
+    expect(await loadCashCounts(org.tenantId, "2026-11-05")).toEqual([]);
   });
 
   it("an invoice edited and reversed on the same day is not shown as money in and out", async () => {
