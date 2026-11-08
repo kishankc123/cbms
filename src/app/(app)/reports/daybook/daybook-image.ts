@@ -10,17 +10,22 @@ const SCALE = 2; // twice the pixels, so text stays sharp on a phone
 const PAD = 28;
 const FONT = '"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif';
 
-// Workdela's indigo (the app's accent) and ink; the footer band is the dark of the sidebar.
+// The header band and the footer carry Workdela's colours (the app's indigo, the sidebar's dark). The body is deliberately plain, so the report reads as
+// the owner's figures and not as the app: grey structure, and colour only where it means something (the ways of paying, money in and money out).
 const ACCENT = "#5e6ad2";
-const ACCENT_TEXT = "#4f5bc0";
-const SOFT = "#eef0fb";
-const LINE = "#dfe2f5";
-const INK = "#1a1a1f";
-const MUTED = "#6b6f8f";
+const TITLE = "#1f2937";
+const NUM = "#374151";
+const SOFT = "#f3f4f6";
+const LINE = "#e6e8ec";
+const RULE = "#d5d8de";
+const INK = "#1f2937";
+const MUTED = "#6b7280";
+const MONEY_IN = "#15803d";
+const MONEY_OUT = "#b91c1c";
 const DARK = "#121316";
-const SHARE = ["#5e6ad2", "#8f99f0", "#bfc5f5", "#e1e4fa"];
+const SHARE = ["#0f766e", "#b45309", "#475569", "#cbd5e1"];
 
-const HEADER_H = 98;
+const HEADER_H = 88;
 const SECTION_H = 40;
 const CARD_GAP = 10;
 const CARD_ROW = 20;
@@ -54,12 +59,12 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, o:
 }
 
 function sectionHeader(ctx: CanvasRenderingContext2D, n: number, title: string, y: number) {
-  ctx.fillStyle = ACCENT;
+  ctx.fillStyle = NUM;
   ctx.beginPath();
   ctx.arc(PAD + 12, y + 14, 12, 0, Math.PI * 2);
   ctx.fill();
   text(ctx, String(n), PAD + 12, y + 19, { size: 14, weight: 600, color: "#fff", align: "center" });
-  text(ctx, title, PAD + 34, y + 20, { size: 18, weight: 600, color: ACCENT_TEXT });
+  text(ctx, title, PAD + 34, y + 20, { size: 18, weight: 600, color: TITLE });
   const w = (() => { ctx.font = `600 18px ${FONT}`; return ctx.measureText(title).width; })();
   ctx.strokeStyle = LINE;
   ctx.lineWidth = 1;
@@ -70,8 +75,8 @@ function sectionHeader(ctx: CanvasRenderingContext2D, n: number, title: string, 
 }
 
 function divider(ctx: CanvasRenderingContext2D, y: number) {
-  ctx.strokeStyle = ACCENT;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = RULE;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(PAD, y);
   ctx.lineTo(W - PAD, y);
@@ -116,7 +121,7 @@ function drawCard(ctx: CanvasRenderingContext2D, c: ImageCard, x: number, y: num
     ctx.font = `400 13px ${FONT}`;
     const amountW = ctx.measureText(m.amount).width;
     text(ctx, m.amount, x + w - inner, ry, { size: 13, color: INK, align: "right" });
-    text(ctx, fit(ctx, m.label, w - inner * 2 - 15 - amountW - 6), x + inner + 15, ry, { size: 13, color: "#44465e" });
+    text(ctx, fit(ctx, m.label, w - inner * 2 - 15 - amountW - 6), x + inner + 15, ry, { size: 13, color: "#4b5563" });
     ry += CARD_ROW;
   });
   if (c.returns) text(ctx, `Returns  -${c.returns}`, x + inner, ry, { size: 12, color: MUTED });
@@ -155,14 +160,16 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
   ctx.fillRect(0, 0, W, H);
   ctx.textBaseline = "alphabetic";
 
-  // Header band: the business, the word Daybook, and the day.
+  // Header band: the business with the word Daybook under it on the left, and the day on the right (the long date in the organization's calendar, the other calendar small under it).
   ctx.fillStyle = ACCENT;
   ctx.fillRect(0, 0, W, HEADER_H);
+  ctx.font = `500 18px ${FONT}`;
+  const dateW = ctx.measureText(info.dateLabel).width;
   ctx.font = `600 26px ${FONT}`;
-  text(ctx, fit(ctx, info.company, W - PAD * 2 - 110), PAD, 42, { size: 26, weight: 600, color: "#fff" });
-  text(ctx, "Daybook", W - PAD, 42, { size: 17, weight: 500, color: "#dfe2fb", align: "right" });
-  text(ctx, info.dateLabel, PAD, 70, { size: 18, weight: 500, color: "#fff" });
-  text(ctx, info.otherDateLabel, PAD, 88, { size: 13, color: "#dfe2fb" });
+  text(ctx, fit(ctx, info.company, W - PAD * 2 - dateW - 24), PAD, 40, { size: 26, weight: 600, color: "#fff" });
+  text(ctx, "Daybook", PAD, 66, { size: 16, weight: 500, color: "#dfe2fb" });
+  text(ctx, info.dateLabel, W - PAD, 38, { size: 18, weight: 500, color: "#fff", align: "right" });
+  text(ctx, info.otherDateLabel, W - PAD, 58, { size: 13, color: "#dfe2fb", align: "right" });
 
   let y = HEADER_H + 18;
   // 1. Business performance
@@ -191,9 +198,10 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
     ctx.moveTo(PAD, y);
     ctx.lineTo(W - PAD, y);
     ctx.stroke();
-    text(ctx, r.label, PAD, y + 20, { size: 14, color: INK });
-    text(ctx, r.today, W - PAD - 150, y + 20, { size: 14, weight: r.quiet ? 400 : 600, color: r.quiet ? "#a3a6bd" : INK, align: "right" });
-    text(ctx, r.month, W - PAD, y + 20, { size: 14, color: INK, align: "right" });
+    const size = r.sub ? 13 : 14;
+    text(ctx, r.label, PAD + (r.sub ? 18 : 0), y + 20, { size, color: r.sub ? "#4b5563" : INK });
+    text(ctx, r.today, W - PAD - 150, y + 20, { size, weight: r.quiet || r.sub ? 400 : 600, color: r.quiet ? "#9ca3af" : r.sub ? "#4b5563" : INK, align: "right" });
+    text(ctx, r.month, W - PAD, y + 20, { size, color: r.sub ? "#4b5563" : INK, align: "right" });
     y += FLOW_ROW;
   });
   y += 6;
@@ -227,7 +235,8 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
     r.values.forEach((v, i) => {
       const last = i === colCount - 1;
       ctx.font = `${r.strong || last ? 600 : 400} 13px ${FONT}`;
-      text(ctx, fit(ctx, v, colW - 6), PAD + labelW + colW * (i + 1) - 4, y + 20, { size: 13, weight: r.strong || last ? 600 : 400, color: INK, align: "right" });
+      const color = r.tone === "in" && v !== "\u2014" ? MONEY_IN : r.tone === "out" && v !== "\u2014" ? MONEY_OUT : INK;
+      text(ctx, fit(ctx, v, colW - 6), PAD + labelW + colW * (i + 1) - 4, y + 20, { size: 13, weight: r.strong || last ? 600 : 400, color, align: "right" });
     });
     y += CASH_ROW;
   });
@@ -239,7 +248,7 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
     roundRect(ctx, PAD, y, W - PAD * 2, CHIP_H, 8);
     ctx.fill();
     ctx.font = `400 13px ${FONT}`;
-    text(ctx, fit(ctx, c, W - PAD * 2 - 24), PAD + 12, y + 21, { size: 13, color: "#33365a" });
+    text(ctx, fit(ctx, c, W - PAD * 2 - 24), PAD + 12, y + 21, { size: 13, color: "#374151" });
     y += CHIP_H + 8;
   });
 
