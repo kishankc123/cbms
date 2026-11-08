@@ -41,7 +41,7 @@ export function creditOfDay(d: Daybook): { given: number; taken: number } {
 // ---- Everything entered that day ----
 
 export type ListEntry = DayEntry & { reference: string | null; memo: string | null; createdAt: string };
-export type ListRow = { id: string; time: string; kind: string; reference: string; note: string; amount: number; /** an older entry corrected or undone on this day, or the undo itself */ correction: boolean };
+export type ListRow = { id: string; time: string; /** what kind of entry posted it, so the screen can link to where it was made */ sourceType: string; kind: string; reference: string; note: string; amount: number; /** an older entry corrected or undone on this day, or the undo itself */ correction: boolean };
 
 const KIND: Record<string, string> = {
   sale: "Sale",
@@ -80,6 +80,7 @@ export function buildDayList(entries: ListEntry[], cashIds: Set<string>, limit =
       return {
         id: e.id,
         time: e.createdAt,
+        sourceType: e.sourceType,
         kind: KIND[e.sourceType] ?? "Entry",
         reference: e.reference ?? "",
         note: e.memo ?? "",
