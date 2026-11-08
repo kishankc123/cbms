@@ -1,25 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { buildDaybook, ON_CREDIT, type DayEntry } from "./daybook-rules";
-import { buildDayList, compareDays, creditOfDay, type ListEntry } from "./daybook-extras";
+import { buildDayList, creditOfDay, flowRows, type ListEntry } from "./daybook-extras";
 
 const accts = [{ id: "cash", code: "1000", name: "Cash" }];
 const line = (accountId: string, debit: number, credit: number, modeName: string | null = null) => ({ accountId, debit, credit, modeName });
 const entry = (id: string, sourceType: string, sourceId: string | null, lines: DayEntry["lines"], extra: Partial<DayEntry> = {}): DayEntry => ({ id, sourceType, sourceId, isReversed: false, reversalOfId: null, lines, ...extra });
 const book = (entries: DayEntry[]) => buildDaybook({ day: "2026-11-08", entries, cashAccounts: accts, opening: {}, closing: {} });
 
-describe("compareDays", () => {
-  const now = book([entry("s", "sale", "i1", [line("ar", 1000, 0)])]);
-  const before = book([entry("s2", "sale", "i2", [line("ar", 800, 0)]), entry("x", "expense", "x1", [line("rent", 100, 0), line("cash", 0, 100, "Cash")])]);
-
-  it("gives the change and the percentage against the earlier day", () => {
-    const sales = compareDays(now, before).find((r) => r.key === "sales")!;
-    expect(sales).toMatchObject({ now: 1000, before: 800, change: 200, percent: 25 });
-  });
-  it("has no percentage when the earlier day had nothing", () => {
-    const expenses = compareDays(now, before).find((r) => r.key === "expenses")!;
-    expect(expenses).toMatchObject({ now: 0, before: 100, change: -100, percent: -100 });
-    const empty = compareDays(now, book([])).find((r) => r.key === "sales")!;
-    expect(empty.percent).toBeNull();
+describe("flowRows", () => {
+  it("puts collections and payments in a fixed order, with zeros for what did not happen", () => {
+    const rows = flowRows([{ type: "salary_payment", today: 0, month: 310000 }, { type: "customer_payment", today: 5000, month: 142000.456 }]);
+    expect(rows.map((r) => [r.key, r.today, r.month])).toEqual([["recovered", 5000, 142000.46], ["suppliers", 0, 0], ["salary", 0, 310000], ["advances", 0, 0]]);
+    expect(rows.map((r) => r.label)).toEqual(["Customer credit recovered", "Supplier payments", "Salary paid", "Staff advances given"]);
   });
 });
 

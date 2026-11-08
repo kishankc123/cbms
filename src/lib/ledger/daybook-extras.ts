@@ -1,31 +1,32 @@
 import { ON_CREDIT, type DayEntry, type Daybook, type DocSection } from "./daybook-rules";
 
-// Daybook phase 2, the parts that read the day rather than add it up: how the day compares with the same weekday a week ago, the credit given and taken
+// Daybook phase 2, the parts that read the day rather than add it up: the month so far, collections and payments, the credit given and taken
 // that day, and the list of everything entered that day. Pure, like daybook-rules.ts.
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-// ---- Compared with the same weekday last week ----
+// ---- This month so far ----
 
-export type CompareRow = { key: string; label: string; now: number; before: number; change: number; /** null when there was nothing to compare with */ percent: number | null; /** whether a rise is good news, bad news, or neither */ goodWhenUp: boolean | null };
+/** The month's totals up to and including the day being looked at, in the organization's own calendar month. */
+export type MonthTotals = { /** first day of the month */ from: string; sales: number; purchases: number; expenses: number; moneyIn: number; moneyOut: number };
 
-export function compareDays(now: Daybook, before: Daybook): CompareRow[] {
-  const row = (key: string, label: string, a: number, b: number, goodWhenUp: boolean | null): CompareRow => ({
-    key,
-    label,
-    now: a,
-    before: b,
-    change: round2(a - b),
-    percent: Math.abs(b) < 0.005 ? null : round2(((a - b) / Math.abs(b)) * 100),
-    goodWhenUp,
+// ---- Collections and payments ----
+
+/** The standalone payments a business watches: customers paying what they owed, suppliers being paid, salaries and staff advances. Payments made with a sale or bill on the same day are already in that sale or bill. */
+export const FLOW_TYPES = [
+  { type: "customer_payment", key: "recovered", label: "Customer credit recovered" },
+  { type: "supplier_payment", key: "suppliers", label: "Supplier payments" },
+  { type: "salary_payment", key: "salary", label: "Salary paid" },
+  { type: "staff_advance", key: "advances", label: "Staff advances given" },
+] as const;
+export type FlowRow = { key: string; label: string; today: number; month: number };
+
+/** Puts the sums read from the payments in the fixed order, with zeros where there were none. */
+export function flowRows(sums: { type: string; today: number; month: number }[]): FlowRow[] {
+  return FLOW_TYPES.map((f) => {
+    const s = sums.find((x) => x.type === f.type);
+    return { key: f.key, label: f.label, today: round2(s?.today ?? 0), month: round2(s?.month ?? 0) };
   });
-  return [
-    row("sales", "Sales", now.sales.total, before.sales.total, true),
-    row("purchases", "Purchases", now.purchases.total, before.purchases.total, null),
-    row("expenses", "Expenses", now.expenses.total, before.expenses.total, false),
-    row("in", "Money in", now.moneyIn, before.moneyIn, true),
-    row("out", "Money out", now.moneyOut, before.moneyOut, null),
-  ];
 }
 
 // ---- Credit given and taken ----

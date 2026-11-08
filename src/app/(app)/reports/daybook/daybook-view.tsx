@@ -7,9 +7,10 @@ import { ChevronLeft, ChevronRight, Copy, FileSpreadsheet, FileText, Image as Im
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/calendar/date-picker";
-import { daybookSheets, exportFileName, formatMoney, sheetCsv, type ExportContext } from "@/lib/ledger/daybook-export";
+import { daybookSheets, exportFileName, formatMoney, sheetCsv, type DayExtras, type ExportContext } from "@/lib/ledger/daybook-export";
 import { ON_CREDIT, type Daybook, type DocSection } from "@/lib/ledger/daybook-rules";
 import type { DaybookPage } from "@/lib/ledger/daybook";
+import { chequeStatusLabel } from "@/lib/ledger/daybook-cheques";
 import { CashCount, type CountAccount } from "./cash-count";
 import { canvasToBlob, drawDaybookImage, saveBlob } from "./daybook-image";
 
@@ -17,7 +18,7 @@ const th = "border-b border-line bg-app px-2.5 py-1.5 text-xs font-medium text-i
 const td = "border-b border-line px-2.5 py-1.5";
 const card = "rounded-lg border border-line bg-surface p-4";
 
-export function ModeCard({ title, section }: { title: string; section: DocSection }) {
+export function ModeCard({ title, section, month }: { title: string; section: DocSection; month?: number }) {
   return (
     <section className={card}>
       <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -42,9 +43,15 @@ export function ModeCard({ title, section }: { title: string; section: DocSectio
               </tr>
             )}
             <tr className="font-semibold">
-              <td className="px-2.5 py-1.5">Total</td>
-              <td className="tnum px-2.5 py-1.5 text-right">{formatMoney(section.total)}</td>
+              <td className={month === undefined ? "px-2.5 py-1.5" : td}>Total</td>
+              <td className={`tnum text-right ${month === undefined ? "px-2.5 py-1.5" : td}`}>{formatMoney(section.total)}</td>
             </tr>
+            {month !== undefined && (
+              <tr className="text-ink-2">
+                <td className="px-2.5 py-1.5">This month</td>
+                <td className="tnum px-2.5 py-1.5 text-right">{formatMoney(month)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       )}
@@ -61,8 +68,9 @@ export function Figure({ label, value, tone }: { label: string; value: number; t
   );
 }
 
-export function DaybookView({ page, countAccounts, canCount, compareLabel, info, day, today, prevDay, nextDay }: { page: DaybookPage; countAccounts: CountAccount[]; canCount: boolean; compareLabel: string; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
+export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCount, info, day, today, prevDay, nextDay }: { page: DaybookPage; countAccounts: CountAccount[]; canCount: boolean; monthLabel: string; cashCount: { counted: number; books: number } | null; info: ExportContext; day: string; today: string; prevDay: string; nextDay: string | null }) {
   const data = page.book;
+  const extras: DayExtras = { monthLabel, month: page.month, flows: page.flows, credit: page.credit, cashCount, cheques: page.cheques };
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,7 +79,7 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
   async function image(copy: boolean) {
     setBusy(copy ? "copy" : "image");
     try {
-      const blob = await canvasToBlob(drawDaybookImage(data, info));
+      const blob = await canvasToBlob(drawDaybookImage(data, info, extras));
       if (copy) {
         if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("copy-unsupported");
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -91,7 +99,7 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
     try {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
-      for (const s of daybookSheets(data, info, page.list)) {
+      for (const s of daybookSheets(data, info, page.list, page.cheques, extras)) {
         const ws = XLSX.utils.aoa_to_sheet(s.rows);
         ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 16 }];
         XLSX.utils.book_append_sheet(wb, ws, s.name);
@@ -105,7 +113,7 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
   }
 
   function csv() {
-    const text = daybookSheets(data, info, page.list).map((s) => sheetCsv(s.rows)).join("\n\n");
+    const text = daybookSheets(data, info, page.list, page.cheques, extras).map((s) => sheetCsv(s.rows)).join("\n\n");
     saveBlob(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), exportFileName(info.company, day, "csv"));
   }
 
@@ -176,41 +184,34 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <ModeCard title="Sales" section={data.sales} />
-          <ModeCard title="Purchases" section={data.purchases} />
-          <ModeCard title="Expenses" section={data.expenses} />
+          <ModeCard title="Sales" section={data.sales} month={page.month.sales} />
+          <ModeCard title="Purchases" section={data.purchases} month={page.month.purchases} />
+          <ModeCard title="Expenses" section={data.expenses} month={page.month.expenses} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <section className={`${card} lg:col-span-2`}>
-            <h2 className="text-sm font-semibold text-ink">Compared with last {compareLabel.split(" ")[0]}</h2>
-            <p className="mb-2 text-xs text-ink-2">{compareLabel}</p>
+            <h2 className="text-sm font-semibold text-ink">Collections and payments</h2>
+            <p className="mb-2 text-xs text-ink-2">Month so far is from {monthLabel}.</p>
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr className="text-left">
                   <th className={th}></th>
-                  <th className={`${th} text-right`}>This day</th>
-                  <th className={`${th} text-right`}>A week before</th>
-                  <th className={`${th} text-right`}>Change</th>
+                  <th className={`${th} text-right`}>Today</th>
+                  <th className={`${th} text-right`}>This month</th>
                 </tr>
               </thead>
               <tbody>
-                {page.compare.map((r) => {
-                  const up = r.change > 0;
-                  const tone = r.change === 0 || r.goodWhenUp === null ? "text-ink-2" : up === r.goodWhenUp ? "text-[var(--success-text)]" : "text-[var(--danger-text)]";
-                  return (
-                    <tr key={r.key}>
-                      <td className={td}>{r.label}</td>
-                      <td className={`${td} tnum text-right`}>{formatMoney(r.now)}</td>
-                      <td className={`${td} tnum text-right text-ink-2`}>{formatMoney(r.before)}</td>
-                      <td className={`${td} tnum text-right ${tone}`}>
-                        {r.change === 0 ? "No change" : `${up ? "+" : "-"}${formatMoney(Math.abs(r.change))}${r.percent === null ? "" : ` (${up ? "+" : "-"}${Math.abs(r.percent).toFixed(0)}%)`}`}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {page.flows.map((r) => (
+                  <tr key={r.key}>
+                    <td className={td}>{r.label}</td>
+                    <td className={`${td} tnum text-right ${r.today > 0 ? "" : "text-ink-2"}`}>{r.today > 0 ? formatMoney(r.today) : "-"}</td>
+                    <td className={`${td} tnum text-right`}>{formatMoney(r.month)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-ink-2">Money collected or paid together with a sale or bill on the same day is in that sale or bill, not here.</p>
           </section>
           <section className={card}>
             <h2 className="mb-2 text-sm font-semibold text-ink">Credit today</h2>
@@ -263,6 +264,7 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
               </table>
             </div>
           )}
+          <p className="mt-2 text-xs text-ink-2">This month: money in {formatMoney(page.month.moneyIn)} · money out {formatMoney(page.month.moneyOut)}</p>
           {data.transfersMoved > 0 && <p className="mt-2 text-xs text-ink-2">{formatMoney(data.transfersMoved)} was moved between your own accounts. It is not money in or out.</p>}
         </section>
 
@@ -291,6 +293,42 @@ export function DaybookView({ page, countAccounts, canCount, compareLabel, info,
                 ))}
               </tbody>
             </table>
+          </section>
+        )}
+
+        {page.cheques.any && (
+          <section className={card}>
+            <h2 className="mb-1 text-sm font-semibold text-ink">Cheques</h2>
+            <p className="mb-2 text-xs text-ink-2">Cheques are not in the figures above until the bank pays them.</p>
+            <div className="space-y-4">
+              {page.cheques.groups.map((g) => (
+                <div key={g.key}>
+                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-[13px] font-medium text-ink">{g.label}</h3>
+                    <span className="text-xs text-ink-2">
+                      {g.issued > 0 && `We give ${formatMoney(g.issued)}`}
+                      {g.issued > 0 && g.received > 0 && " · "}
+                      {g.received > 0 && `We get ${formatMoney(g.received)}`}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-[13px]">
+                      <tbody>
+                        {g.rows.map((r) => (
+                          <tr key={r.kind + r.id}>
+                            <td className={`${td} whitespace-nowrap text-ink-2`}>{r.kind === "issued" ? "We give" : "We get"}</td>
+                            <td className={td}>{r.number}</td>
+                            <td className={td}>{r.party}</td>
+                            <td className={`${td} whitespace-nowrap text-ink-2`}>{chequeStatusLabel(r, today)}</td>
+                            <td className={`${td} tnum text-right`}>{formatMoney(r.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
           </section>
         )}
 
