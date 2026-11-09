@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, lte, gte, inArray, or, like } from "drizzle-orm";
+import { and, desc, eq, lt, lte, gte, inArray, or, like, not } from "drizzle-orm";
 import { getAccountByRole } from "@/lib/compliance/tax-accounts";
 import { db } from "@/db";
 import { accounts, journalEntries, journalLines, users } from "@/db/schema";
@@ -16,6 +16,16 @@ import { recordedDescriptions } from "@/lib/ledger/recorded-description";
 // so callers pass JS Date objects for convenience but we compare as date strings —
 // this is what avoids the UTC/local off-by-one-day bug.
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+// An opening balance is entered as of a date, usually the first day of the books, which is also the first day of a report that starts there. It belongs on
+// the report's "Opening balance" line, not among the transactions of the period: so what the books already held on the first day counts as the balance
+// brought in, and an entry made as the opening balance on that day is not listed again as a line. (An opening entry dated after the report starts is a real
+// event inside the period and stays a line.)
+const isOpeningEntryOn = (day: string) => and(eq(journalEntries.entryDate, day), eq(journalEntries.sourceType, "opening_balance"))!;
+/** Entries that make up the balance brought in on `day`: everything before it, and the opening balance entries dated on it. */
+const broughtIn = (day: string) => or(lt(journalEntries.entryDate, day), isOpeningEntryOn(day));
+/** Entries that are transactions of a period: dated within it, except the opening balance entries dated on its first day. */
+const inPeriod = (from: string, to: string) => and(gte(journalEntries.entryDate, from), lte(journalEntries.entryDate, to), not(isOpeningEntryOn(from)));
 
 type AccountBalance = {
   accountId: string;
@@ -298,8 +308,7 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
       and(
         eq(journalEntries.tenantId, tenantId),
         eq(journalLines.accountId, accountId),
-        gte(journalEntries.entryDate, toDateStr(periodStart)),
-        lte(journalEntries.entryDate, toDateStr(periodEnd))
+        inPeriod(toDateStr(periodStart), toDateStr(periodEnd))
       )
     )
     .orderBy(journalEntries.entryDate, journalEntries.createdAt);
@@ -311,7 +320,7 @@ export async function generalLedger(tenantId: string, accountId: string, periodS
     .select({ debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalLines.accountId, accountId), lt(journalEntries.entryDate, toDateStr(periodStart))));
+    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalLines.accountId, accountId), broughtIn(toDateStr(periodStart))));
   let openingBalance = 0;
   for (const l of priorLines) {
     const d = Number(l.debitAmount) - Number(l.creditAmount);
@@ -556,8 +565,7 @@ export async function cashBook(tenantId: string, periodStart: Date, periodEnd: D
       and(
         eq(journalEntries.tenantId, tenantId),
         inArray(journalLines.accountId, accountIds),
-        gte(journalEntries.entryDate, toDateStr(periodStart)),
-        lte(journalEntries.entryDate, toDateStr(periodEnd))
+        inPeriod(toDateStr(periodStart), toDateStr(periodEnd))
       )
     )
     .orderBy(journalEntries.entryDate, journalEntries.createdAt);
@@ -566,7 +574,7 @@ export async function cashBook(tenantId: string, periodStart: Date, periodEnd: D
     .select({ debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-    .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), lt(journalEntries.entryDate, toDateStr(periodStart))));
+    .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), broughtIn(toDateStr(periodStart))));
   let openingBalance = 0;
   for (const l of priorLines) openingBalance += Number(l.debitAmount) - Number(l.creditAmount);
   openingBalance = Math.round(openingBalance * 100) / 100;
@@ -636,7 +644,7 @@ export async function cashBankMovement(tenantId: string, periodStart: Date, peri
       .select({ accountId: journalLines.accountId, debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount })
       .from(journalLines)
       .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-      .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), lt(journalEntries.entryDate, toDateStr(periodStart)))),
+      .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds), broughtIn(toDateStr(periodStart)))),
     db
       .select({ accountId: journalLines.accountId, debitAmount: journalLines.debitAmount, creditAmount: journalLines.creditAmount, sourceType: journalEntries.sourceType })
       .from(journalLines)
@@ -645,8 +653,7 @@ export async function cashBankMovement(tenantId: string, periodStart: Date, peri
         and(
           eq(journalEntries.tenantId, tenantId),
           inArray(journalLines.accountId, accountIds),
-          gte(journalEntries.entryDate, toDateStr(periodStart)),
-          lte(journalEntries.entryDate, toDateStr(periodEnd))
+          inPeriod(toDateStr(periodStart), toDateStr(periodEnd))
         )
       ),
   ]);
