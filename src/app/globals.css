@@ -128,7 +128,31 @@
 }
 
 /* Semantic Tailwind utilities for new components: bg-surface, text-ink-2, border-line, text-accent-text ... */
+/* shadcn/ui vocabulary, pointed at the tokens above so shadcn components follow this theme (and its dark mode). */
+:root {
+  --foreground: var(--text-1);
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--bg-surface-2);
+  --secondary-foreground: var(--text-1);
+  --muted: var(--bg-hover);
+  --muted-foreground: var(--text-2);
+  --destructive: var(--danger);
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+}
+
 @theme inline {
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --color-app: var(--bg-app);
   --color-surface: var(--bg-surface);
   --color-surface-2: var(--bg-surface-2);
