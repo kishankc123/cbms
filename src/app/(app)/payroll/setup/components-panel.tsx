@@ -11,6 +11,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/status-pill";
 import { addStarterComponents, createComponent, deleteComponent, updateComponent, type ComponentInput } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Component = { id: string; name: string; type: string; amount: string; taxable: boolean; calcType: string; countsForRetirement: boolean; recurrence: string; autoAssign: boolean };
 type Form = { name: string; type: "allowance" | "deduction"; amount: string; taxable: boolean; calcType: "fixed" | "percent"; countsForRetirement: boolean; recurrence: "recurring" | "one_time"; autoAssign: boolean };
 
@@ -171,7 +172,7 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
                 </Select>
               </Field>
               <Field label={f.calcType === "percent" ? "Percentage (default)" : "Amount (default)"} hint="Can be changed for one employee when assigning.">
-                <Input type="number" step="0.01" min="0" value={f.amount} onChange={(e) => set({ amount: e.target.value })} />
+                <AmountInput type="number" step="0.01" min="0" value={f.amount} onChange={(e) => set({ amount: e.target.value })} />
               </Field>
             </div>
             {f.type === "allowance" && (

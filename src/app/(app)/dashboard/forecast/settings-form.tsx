@@ -6,6 +6,7 @@ import { Field, Input } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { savePlanningSettings } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const toNumber = (v: string): number | null => (v.trim() === "" ? null : Number(v));
 
 // The three settings the forecast reads. Leaving the amount or the days empty means "work it out", which is the default.
@@ -33,7 +34,7 @@ export function PlanningSettingsForm({ reserveMonths, reserveOverride, defaultCo
           <Input type="number" min={0} max={24} step={1} value={months} onChange={(e) => setMonths(e.target.value)} disabled={!canEdit} />
         </Field>
         <Field label="Or a fixed reserve amount" hint="Leave empty to use the months.">
-          <Input type="number" min={0} step="0.01" value={override} onChange={(e) => setOverride(e.target.value)} disabled={!canEdit} placeholder="Worked out" />
+          <AmountInput type="number" min={0} step="0.01" value={override} onChange={(e) => setOverride(e.target.value)} disabled={!canEdit} placeholder="Worked out" />
         </Field>
         <Field label="Days customers take to pay" hint={`Used when an invoice has no due date. Empty: ${learnedDays} days${learned ? ", from your own history" : ", a standard until there is history"}.`}>
           <Input type="number" min={0} max={365} step={1} value={days} onChange={(e) => setDays(e.target.value)} disabled={!canEdit} placeholder={String(learnedDays)} />

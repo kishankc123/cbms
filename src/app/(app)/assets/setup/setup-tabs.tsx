@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useProblem } from "@/components/problem-dialog";
 import { saveAssetAccounts, saveAssetCategory, saveAssetLocation, saveAssetSettings, type AssetSetupData, type CategoryInput } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const TABS = [
   { id: "general", label: "General" },
   { id: "accounts", label: "Default accounts" },
@@ -251,7 +252,7 @@ function CategoriesPanel({ data }: { data: AssetSetupData }) {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Residual value (% of cost)</label>
-                  <input data-field="catResidual" type="number" min="0" max="100" step="0.01" className={input} value={editing.residualPercent} onChange={(e) => setEditing({ ...editing, residualPercent: Number(e.target.value) })} />
+                  <AmountInput bare data-field="catResidual" type="number" min="0" max="100" step="0.01" className={input} value={editing.residualPercent} onChange={(e) => setEditing({ ...editing, residualPercent: Number(e.target.value) })} />
                 </div>
               </div>
             )}

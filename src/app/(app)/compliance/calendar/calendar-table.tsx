@@ -10,6 +10,7 @@ import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { WEEKDAYS_SHORT, monthCells, todayIso, ymdOf } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { AmountInput } from "@/components/ui/amount-input";
 type Item = Awaited<ReturnType<typeof listCalendarItems>>[number];
 type UserOption = Awaited<ReturnType<typeof listAssignableUsers>>[number];
 
@@ -245,7 +246,7 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Amount</label>
-                <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                <AmountInput bare type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </div>
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Notes</label>

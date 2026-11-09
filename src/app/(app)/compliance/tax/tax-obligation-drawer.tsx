@@ -23,6 +23,7 @@ import { todayIso } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { HeadSplitFields, shareAcross, splitAmounts, splitHeadings, splitTotal, startingSplit, type Breakdown, type HeadSplit } from "./heading-split";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Detail = Awaited<ReturnType<typeof getTaxObligationDetail>>;
 type Options = Awaited<ReturnType<typeof getTaxActionOptions>>;
 
@@ -263,7 +264,7 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
                 {d.amounts.computedDue === null && (
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Amount due (entered)</label>
-                    <input type="number" step="0.01" min="0" className={input} value={form.enteredAmount ?? ""} onChange={(e) => set({ enteredAmount: e.target.value })} disabled={!d.canEdit} />
+                    <AmountInput bare type="number" step="0.01" min="0" className={input} value={form.enteredAmount ?? ""} onChange={(e) => set({ enteredAmount: e.target.value })} disabled={!d.canEdit} />
                   </div>
                 )}
                 <div>
@@ -417,7 +418,7 @@ function PaymentPanel({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">{byHeading ? "Total depositing" : "Amount"}</label>
-          <input type="number" step="0.01" min="0" className={input} value={byHeading ? String(headTotal) : amount} onChange={(e) => (byHeading ? setByHead(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} />
+          <AmountInput bare type="number" step="0.01" min="0" className={input} value={byHeading ? String(headTotal) : amount} onChange={(e) => (byHeading ? setByHead(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} />
           {balance > 0 && <p className="mt-1 text-xs text-gray-400">Balance {fmt(balance)}</p>}
         </div>
         <div>
@@ -503,7 +504,7 @@ function ChargePanel({
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Amount</label>
-          <input type="number" step="0.01" min="0" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <AmountInput bare type="number" step="0.01" min="0" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Date</label>

@@ -7,6 +7,7 @@ import { createRule, setRuleActive, deleteRule, type listRules, type RuleInput }
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { AmountInput } from "@/components/ui/amount-input";
 type Rule = Awaited<ReturnType<typeof listRules>>[number];
 
 const MODULES: { value: RuleInput["applicableModule"]; label: string }[] = [
@@ -198,7 +199,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               {selectedCheck.needsThreshold && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Threshold</label>
-                  <input type="number" step="0.01" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                  <AmountInput bare type="number" step="0.01" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                 </div>
               )}
               <div>

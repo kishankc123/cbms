@@ -17,6 +17,7 @@ import { methodForMode } from "@/lib/payment-mode-rules";
 import { todayIso } from "@/lib/calendar";
 import { RETIREMENT_ACCOUNTS } from "@/lib/payroll/retirement-pay";
 import type { RetirementAccountKey } from "@/lib/payroll/retirement-pay";
+import { AmountInput } from "@/components/ui/amount-input";
 const accountLabel = (k: RetirementAccountKey) => RETIREMENT_ACCOUNTS[k];
 import { payContributions, type ContributionsData } from "./actions";
 
@@ -166,7 +167,7 @@ export function ContributionsWorkspace({ data }: { data: ContributionsData }) {
             <div className="space-y-2 rounded border border-line p-3">
               {paying.accounts.map((a) => (
                 <Field key={a.key} label={`${accountLabel(a.key as RetirementAccountKey)} (owed ${money(a.owed)})`}>
-                  <Input type="number" step="0.01" min="0" max={a.owed > 0 ? a.owed : 0} disabled={a.owed <= 0} value={amounts[a.key] ?? ""} onChange={(e) => setAmounts({ ...amounts, [a.key]: e.target.value })} />
+                  <AmountInput type="number" step="0.01" min="0" max={a.owed > 0 ? a.owed : 0} disabled={a.owed <= 0} value={amounts[a.key] ?? ""} onChange={(e) => setAmounts({ ...amounts, [a.key]: e.target.value })} />
                 </Field>
               ))}
               <p className="text-sm text-ink">Total paying: <span className="font-semibold tabular-nums">{money(total)}</span></p>

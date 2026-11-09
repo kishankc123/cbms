@@ -15,6 +15,7 @@ import { SCHEME_NAMES } from "@/lib/payroll/employee-retirement";
 import type { EmployeeScheme } from "@/lib/payroll/retirement-rules";
 import { addRetirement, endRetirement } from "../actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Row = { id: string; scheme: string; registrationNumber: string | null; startDate: string; endDate: string | null; citMode: string | null; citValue: string | null; citEmployerValue: string | null; notes: string | null };
 
 const schemeName = (s: string) => SCHEME_NAMES[s as EmployeeScheme] ?? s;
@@ -184,11 +185,11 @@ export function RetirementPanel({ employeeId, rows, warnings, rulesInForce }: { 
                     </Select>
                   </Field>
                   <Field label={citMode === "percent" ? "Percentage" : "Amount"} required>
-                    <Input type="number" step="0.01" min="0" value={citValue} onChange={(e) => setCitValue(e.target.value)} />
+                    <AmountInput type="number" step="0.01" min="0" value={citValue} onChange={(e) => setCitValue(e.target.value)} />
                   </Field>
                 </div>
                 <Field label="Employer adds a month (if any)">
-                  <Input type="number" step="0.01" min="0" value={citEmployer} onChange={(e) => setCitEmployer(e.target.value)} />
+                  <AmountInput type="number" step="0.01" min="0" value={citEmployer} onChange={(e) => setCitEmployer(e.target.value)} />
                 </Field>
               </div>
             ) : (

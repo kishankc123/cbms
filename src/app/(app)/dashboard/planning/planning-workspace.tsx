@@ -18,6 +18,7 @@ import { addDays, type ForecastDay } from "@/lib/dashboard/forecast-rules";
 import { EVENT_CATEGORIES, PATTERNS, SALES_EFFECTS, URGENCIES, eventFlows, positionOf, rollForward, safestDate, salesNeeded, type EventCategory, type EventInput, type Flow, type PlannedEvent, type SalesEffect, type Urgency, type PaymentPattern } from "@/lib/dashboard/planning-rules";
 import { closePlannedEvent, savePlannedEvent } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const money = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const URGENCY_TONE: Record<Urgency, StatusTone> = { must_do: "critical", should_do_soon: "action", can_wait: "neutral" };
 const label = (list: readonly { key: string; label: string }[], key: string) => list.find((x) => x.key === key)?.label ?? key;
@@ -90,7 +91,7 @@ export function PlanningWorkspace(p: Props) {
       <div className="-mt-3 flex flex-wrap items-end gap-3 text-xs text-ink-2">
         <label className="flex items-center gap-2">
           What if the reserve were
-          <input type="number" min={0} value={reserveText} onChange={(e) => setReserveText(e.target.value)} className={`${controlClass} w-36`} aria-label="Reserve to test" />
+          <AmountInput bare type="number" min={0} value={reserveText} onChange={(e) => setReserveText(e.target.value)} className={`${controlClass} w-36`} aria-label="Reserve to test" />
         </label>
         {reserve !== p.reserve && (
           <button type="button" className="text-accent-text hover:underline" onClick={() => setReserveText(String(p.reserve))}>
@@ -181,12 +182,12 @@ export function PlanningWorkspace(p: Props) {
         <div className="flex flex-wrap items-end gap-3 text-xs text-ink-2">
           <Field label="Share of sales collected">
             <span className="flex items-center gap-1.5">
-              <Input type="number" min={0} max={100} value={collected} onChange={(e) => setCollected(e.target.value)} className="w-20" /> %
+              <AmountInput type="number" min={0} max={100} value={collected} onChange={(e) => setCollected(e.target.value)} className="w-20" /> %
             </span>
           </Field>
           <Field label="Share that goes on the cost of what is sold">
             <span className="flex items-center gap-1.5">
-              <Input type="number" min={0} max={100} value={variable} onChange={(e) => setVariable(e.target.value)} className="w-20" /> %
+              <AmountInput type="number" min={0} max={100} value={variable} onChange={(e) => setVariable(e.target.value)} className="w-20" /> %
             </span>
           </Field>
         </div>
@@ -377,14 +378,14 @@ function EventModal({ event, others, vendors, openingCash, days, reserve, today,
               </Select>
             </Field>
             <Field label="Best estimate" required>
-              <Input type="number" min={0} step="0.01" value={d.estimate} onChange={(e) => set("estimate", e.target.value)} />
+              <AmountInput type="number" min={0} step="0.01" value={d.estimate} onChange={(e) => set("estimate", e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Low end">
-                <Input type="number" min={0} step="0.01" value={d.low} onChange={(e) => set("low", e.target.value)} />
+                <AmountInput type="number" min={0} step="0.01" value={d.low} onChange={(e) => set("low", e.target.value)} />
               </Field>
               <Field label="High end">
-                <Input type="number" min={0} step="0.01" value={d.high} onChange={(e) => set("high", e.target.value)} />
+                <AmountInput type="number" min={0} step="0.01" value={d.high} onChange={(e) => set("high", e.target.value)} />
               </Field>
             </div>
             <Field label="Earliest it can happen">
@@ -417,7 +418,7 @@ function EventModal({ event, others, vendors, openingCash, days, reserve, today,
             {d.pattern === "advance_balance" && (
               <>
                 <Field label="Advance, as % of the total">
-                  <Input type="number" min={0} max={100} value={d.advancePct} onChange={(e) => set("advancePct", e.target.value)} />
+                  <AmountInput type="number" min={0} max={100} value={d.advancePct} onChange={(e) => set("advancePct", e.target.value)} />
                 </Field>
                 <Field label="Balance paid after (days)">
                   <Input type="number" min={0} value={d.balanceDays} onChange={(e) => set("balanceDays", e.target.value)} />
@@ -451,7 +452,7 @@ function EventModal({ event, others, vendors, openingCash, days, reserve, today,
             {d.salesEffect !== "none" && (
               <>
                 <Field label={d.salesEffect === "raise" ? "Sales gained a month" : "Sales lost a month"}>
-                  <Input type="number" min={0} step="0.01" value={d.salesEffectMonthly} onChange={(e) => set("salesEffectMonthly", e.target.value)} />
+                  <AmountInput type="number" min={0} step="0.01" value={d.salesEffectMonthly} onChange={(e) => set("salesEffectMonthly", e.target.value)} />
                 </Field>
                 <Field label="For how many days">
                   <Input type="number" min={1} max={365} value={d.salesEffectDays} onChange={(e) => set("salesEffectDays", e.target.value)} />

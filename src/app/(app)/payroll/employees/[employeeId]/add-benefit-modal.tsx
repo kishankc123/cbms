@@ -7,6 +7,7 @@ import { addBenefit } from "../actions";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 const FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
   { value: "yearly", label: "Yearly" },
@@ -79,7 +80,7 @@ export function AddBenefitModal({ employeeId, onClose }: { employeeId: string; o
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Amount</label>
-            <input
+            <AmountInput bare
               type="number"
               step="0.01"
               min="0"

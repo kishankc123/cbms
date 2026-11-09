@@ -9,6 +9,7 @@ import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialo
 import { todayIso } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Data = Awaited<ReturnType<typeof actions.getOwnership>>;
 type Holder = Data["holders"][number];
 
@@ -116,10 +117,10 @@ export function SetupCapitalForm({ currency, ...c }: Common & { currency: string
   return (
     <Form title="Set up capital" submitLabel="Save" {...c} disabled={!(num(face) > 0) || !(num(shares) >= 0)} run={() => actions.setupCapital({ ...meta, authorisedCapital: num(authorised) || 0, faceValue: num(face), issuedShares: num(shares), currency })}>
       <Field label={`Authorised capital (${currency})`}>
-        <input type="number" min="0" className={input} value={authorised} onChange={(e) => setAuthorised(e.target.value)} />
+        <AmountInput bare type="number" min="0" className={input} value={authorised} onChange={(e) => setAuthorised(e.target.value)} />
       </Field>
       <Field label="Face value per share">
-        <input type="number" min="0" step="0.01" className={input} value={face} onChange={(e) => setFace(e.target.value)} />
+        <AmountInput bare type="number" min="0" step="0.01" className={input} value={face} onChange={(e) => setFace(e.target.value)} />
       </Field>
       <Field label="Total shares issued" hint={Number.isFinite(issued) && issued > 0 ? `Issued capital: ${money(issued, currency)}` : undefined}>
         <input type="number" min="0" step="1" className={input} value={shares} onChange={(e) => setShares(e.target.value)} />
@@ -138,7 +139,7 @@ export function AuthorisedForm({ current, currency, ...c }: Common & { current: 
         <input className={input} disabled value={money(current, currency)} readOnly />
       </Field>
       <Field label="New authorised capital">
-        <input type="number" min="0" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <AmountInput bare type="number" min="0" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       <MetaFields meta={meta} set={setMeta} />
     </Form>
@@ -154,7 +155,7 @@ export function FaceValueForm({ current, currency, ...c }: Common & { current: n
         <input className={input} disabled value={money(current, currency)} readOnly />
       </Field>
       <Field label="New face value">
-        <input type="number" min="0" step="0.01" className={input} value={value} onChange={(e) => setValue(e.target.value)} />
+        <AmountInput bare type="number" min="0" step="0.01" className={input} value={value} onChange={(e) => setValue(e.target.value)} />
       </Field>
       <MetaFields meta={meta} set={setMeta} />
     </Form>
@@ -308,7 +309,7 @@ export function TransferForm({ holders, currency, presetId, ...c }: Common & { h
         <input type="number" min="1" step="1" className={input} value={shares} onChange={(e) => { setShares(e.target.value); suggest(fromId, e.target.value); }} />
       </Field>
       <Field label={`Paid capital moving with them (${currency})`} hint={from ? `${from.name} has ${money(from.paid)} recorded. Moves between their capital accounts in your books.` : undefined}>
-        <input type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} />
+        <AmountInput bare type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(true); }} />
       </Field>
       <MetaFields meta={meta} set={setMeta} />
     </Form>
@@ -338,7 +339,7 @@ export function PaidUpForm({ holders, cashBank, currency, presetId, ...c }: Comm
     <Form wide title="Record paid-up capital" submitLabel="Record" {...c} disabled={!holderId || !(num(amount) > 0) || !accountId} run={run}>
       <HolderSelect holders={holders} value={holderId} onChange={setHolderId} label="Received from" />
       <Field label={`Amount (${currency})`} hint={holder ? `Unpaid on their shares: ${money(holder.unpaid)}` : undefined}>
-        <input type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <AmountInput bare type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       <Field label="Received into (mode and account)">
         <PaymentModeSelect
@@ -366,7 +367,7 @@ export function AssignForm({ holders, unassigned, currency, ...c }: Common & { h
       <p className="col-span-2 text-xs text-gray-500">{money(unassigned, currency)} of paid-up capital is in your books but not assigned to a shareholder. Assigning it posts a reclassification entry.</p>
       <HolderSelect holders={holders} value={holderId} onChange={setHolderId} label="Assign to" />
       <Field label="Amount">
-        <input type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <AmountInput bare type="number" min="0" step="0.01" className={input} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       <MetaFields meta={meta} set={setMeta} />
     </Form>
