@@ -1,3 +1,4 @@
+import { AmountInput } from "@/components/ui/amount-input";
 // The "deposit by heading" part of a TDS deposit, shared by the Compliance drawer and the Money out form: what is left to deposit for
 // each heading, and how much of it is paid now. Pure helpers plus the small block of inputs; the owner keeps the state.
 
@@ -40,7 +41,7 @@ export function HeadSplitFields({ headings, split, onChange, inputClass }: { hea
           <span className="text-gray-700">
             {r.name} <span className="text-xs text-gray-400">· {fmt(r.remaining)} left</span>
           </span>
-          <input type="number" step="0.01" min="0" className={`${inputClass} w-32 text-right`} value={split[headKey(r.key)] ?? ""} onChange={(e) => onChange({ ...split, [headKey(r.key)]: e.target.value })} />
+          <AmountInput bare type="number" step="0.01" min="0" className={`${inputClass} w-32 text-right`} value={split[headKey(r.key)] ?? ""} onChange={(e) => onChange({ ...split, [headKey(r.key)]: e.target.value })} />
         </div>
       ))}
     </div>

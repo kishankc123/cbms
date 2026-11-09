@@ -12,6 +12,7 @@ import { AssetsPanel, CalculationPanel } from "./calculation-panels";
 import { ReportsPanel, ReviewPanel } from "./report-panels";
 import { addTaxOpeningDeferred, addTaxStatutoryAddition, cancelTaxDeferred, saveTaxOpeningPool, setTaxCategoryClass, type TaxDepreciationSetupData } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const TABS = [
   { id: "calculation", label: "Calculation" },
   { id: "assets", label: "Asset tax details" },
@@ -160,7 +161,7 @@ function OpeningPanel({ data }: { data: Ready }) {
       {edit && (
         <Modal title="Balance brought forward" description={edit.label} onClose={() => setEdit(null)} dismissible={!busy} footer={<><Button onClick={() => setEdit(null)}>Cancel</Button><Button variant="primary" loading={busy} disabled={edit.value === ""} onClick={save}>Save</Button></>}>
           <div className="space-y-3">
-            <Field label="Written-down value at the start of the tax year"><Input type="number" min="0" step="0.01" value={edit.value} onChange={(e) => setEdit({ ...edit, value: e.target.value })} /></Field>
+            <Field label="Written-down value at the start of the tax year"><AmountInput type="number" min="0" step="0.01" value={edit.value} onChange={(e) => setEdit({ ...edit, value: e.target.value })} /></Field>
             <Field label="Note" hint="Where the figure comes from, for example last year's return."><Input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
             <p className="text-xs text-ink-2">You can correct this later. Every change is recorded in the audit log.</p>
           </div>
@@ -238,10 +239,10 @@ function DeferredPanel({ data }: { data: Ready }) {
             <Field label="Date acquired" required><Input type="date" value={form.originalDate} onChange={(e) => setForm({ ...form, originalDate: e.target.value })} /></Field>
             <Field label="Original tax year (starting year)" required><Input type="number" value={form.originalTaxYear} onChange={(e) => setForm({ ...form, originalTaxYear: e.target.value })} /></Field>
             <Field label="Due for inclusion in (starting year)" required><Input type="number" value={form.dueTaxYear} onChange={(e) => setForm({ ...form, dueTaxYear: e.target.value })} /></Field>
-            <Field label="Original cost" required><Input type="number" min="0" step="0.01" value={form.originalCost} onChange={(e) => setForm({ ...form, originalCost: e.target.value })} /></Field>
+            <Field label="Original cost" required><AmountInput type="number" min="0" step="0.01" value={form.originalCost} onChange={(e) => setForm({ ...form, originalCost: e.target.value })} /></Field>
             <Field label="Thirds counted in the original year"><Select value={form.originalThirds} onChange={(e) => setForm({ ...form, originalThirds: e.target.value })}><option value="3">3/3</option><option value="2">2/3</option><option value="1">1/3</option></Select></Field>
-            <Field label="Already included in that year's pool"><Input type="number" min="0" step="0.01" value={form.includedInOriginalYear} onChange={(e) => setForm({ ...form, includedInOriginalYear: e.target.value })} /></Field>
-            <Field label="Deferred amount still to include" required><Input type="number" min="0" step="0.01" value={form.remainingDeferred} onChange={(e) => setForm({ ...form, remainingDeferred: e.target.value })} /></Field>
+            <Field label="Already included in that year's pool"><AmountInput type="number" min="0" step="0.01" value={form.includedInOriginalYear} onChange={(e) => setForm({ ...form, includedInOriginalYear: e.target.value })} /></Field>
+            <Field label="Deferred amount still to include" required><AmountInput type="number" min="0" step="0.01" value={form.remainingDeferred} onChange={(e) => setForm({ ...form, remainingDeferred: e.target.value })} /></Field>
             <Field label="Note" className="sm:col-span-2"><Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
           </div>
         </Modal>
@@ -300,7 +301,7 @@ function StatutoryPanel({ data }: { data: Ready }) {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Kind" required className="sm:col-span-2"><Select value={form.typeKey} onChange={(e) => setForm({ ...form, typeKey: e.target.value })}>{data.rules.statutoryAdditions.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</Select></Field>
             <Field label="Tax class" required><Select value={form.poolKey} onChange={(e) => setForm({ ...form, poolKey: e.target.value })}>{data.rules.pools.filter((p) => p.kind === "pooled").map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</Select></Field>
-            <Field label="Amount" required><Input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field>
+            <Field label="Amount" required><AmountInput type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field>
             <Field label="What it is for" required className="sm:col-span-2"><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Section of the law" hint={type(form.typeKey)?.legalReference ? `Leave empty to use: ${type(form.typeKey)?.legalReference}` : "Required for this kind."} className="sm:col-span-2"><Input value={form.legalReference} onChange={(e) => setForm({ ...form, legalReference: e.target.value })} /></Field>
             <Field label="Supporting evidence" required hint="A document, ledger account or report that backs the amount." className="sm:col-span-2"><Textarea rows={2} value={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.value })} /></Field>

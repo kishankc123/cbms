@@ -7,6 +7,7 @@ import { addSalaryChange, updateEmployee } from "../actions";
 import { todayIso } from "@/lib/calendar";
 
 import { DatePicker } from "@/components/calendar/date-picker";
+import { AmountInput } from "@/components/ui/amount-input";
 const EMPLOYMENT_TYPES = [
   { value: "full_time", label: "Full-time" },
   { value: "part_time", label: "Part-time" },
@@ -227,18 +228,18 @@ export function EditEmployeeModal({ employee, currentSalary, salaryDates, onClos
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Income from earlier employer this fiscal year</label>
-            <input type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+            <AmountInput bare type="number" min="0" step="0.01" value={priorIncome} onChange={(e) => setPriorIncome(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">TDS already withheld by earlier employer</label>
-            <input type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+            <AmountInput bare type="number" min="0" step="0.01" value={priorTds} onChange={(e) => setPriorTds(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
           </div>
           {currentSalary !== null && (
             <div className="col-span-2 space-y-3 rounded border border-gray-200 p-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Basic Salary</label>
-                  <input type="number" min="0" step="0.01" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                  <AmountInput bare type="number" min="0" step="0.01" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
                 </div>
                 {salaryChanged && (
                   <div>

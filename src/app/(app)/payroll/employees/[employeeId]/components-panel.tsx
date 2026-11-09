@@ -13,6 +13,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { assignComponent, endComponentAssignment } from "../actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Catalog = { id: string; name: string; type: string; amount: string; calcType: string; recurrence: string; taxable: boolean; countsForRetirement: boolean };
 type Assignment = { id: string; componentId: string; amount: string | null; effectiveFrom: string; effectiveTo: string | null; notes: string | null };
 
@@ -156,7 +157,7 @@ export function SalaryComponentsPanel({ employeeId, catalog, assignments }: { em
             </Field>
             {chosen && (
               <Field label={chosen.calcType === "percent" ? "Percentage for this employee" : "Amount for this employee"} hint={`Leave empty to use the standard ${figure(chosen, null)}.`}>
-                <Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <AmountInput type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </Field>
             )}
             <Field label={chosen?.recurrence === "one_time" ? "Paid in the month of" : "Starts from"} hint={chosen?.recurrence === "one_time" ? "It is added to the payroll run whose period holds this date." : "A change to a component already assigned ends the old one the day before."}>

@@ -13,6 +13,7 @@ import type { ChequeListRow } from "@/lib/cheques/cheques";
 import type { ChequeInput, PayeeKind } from "@/lib/cheques/cheque-rules";
 import { getChequeFormData, getFundingOutlook, getNextChequeNumber, getSupplierPreview, issueChequeAction } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const money = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type FormData = Awaited<ReturnType<typeof getChequeFormData>>;
@@ -211,7 +212,7 @@ export function IssueChequeModal({ replacing, today, onClose, onSaved }: { repla
                 <DatePicker value={chequeDate} onChange={setChequeDate} min={issueDate} className={`${controlClass} w-full`} />
               </Field>
               <Field label="Amount" required hint={expense ? `Up to ${money(expense.open)}, what is still open on this expense.` : undefined}>
-                <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-right" />
+                <AmountInput type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-right" />
               </Field>
               <Field label="Note">
                 <Input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Optional" />

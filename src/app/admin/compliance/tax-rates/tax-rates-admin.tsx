@@ -8,6 +8,7 @@ import type { FiscalYear, RateVersion } from "@/lib/compliance/platform-tax-rate
 import { adminCard, adminField } from "../../ui";
 import { confirmDraft, editPublishedRate, publishRate, type TaxRateAdminData } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const pct = (n: number) => `${n.toFixed(2)}%`;
 // Dates are stored as real (AD) dates; in Nepal the Bikram Sambat date is what people recognize, so show both.
 export function bothDates(iso: string | null) {
@@ -143,7 +144,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <div className="grid grid-cols-2 gap-3">
                     <label className="text-xs text-[var(--text-secondary)]">
                       New rate (%)
-                      <input type="number" step="0.01" min="0" max="100" value={draft.rate} onChange={(e) => setDraft({ ...draft, rate: e.target.value })} className={`${adminField} mt-1 w-full`} />
+                      <AmountInput bare type="number" step="0.01" min="0" max="100" value={draft.rate} onChange={(e) => setDraft({ ...draft, rate: e.target.value })} className={`${adminField} mt-1 w-full`} />
                     </label>
                     <label className="text-xs text-[var(--text-secondary)]">
                       Starts on
@@ -182,7 +183,7 @@ export function TaxRatesAdmin({ data, only, organizations = true, fiscalYear }: 
                   <div className="grid grid-cols-2 gap-3">
                     <label className="text-xs text-[var(--text-secondary)]">
                       Rate (%)
-                      <input type="number" step="0.01" min="0" max="100" value={edited.rate} onChange={(e) => setConfirming({ ...confirming, [t.key]: { ...edited, rate: e.target.value } })} className={`${adminField} mt-1 w-full`} />
+                      <AmountInput bare type="number" step="0.01" min="0" max="100" value={edited.rate} onChange={(e) => setConfirming({ ...confirming, [t.key]: { ...edited, rate: e.target.value } })} className={`${adminField} mt-1 w-full`} />
                     </label>
                     <label className="text-xs text-[var(--text-secondary)]">
                       Starts on

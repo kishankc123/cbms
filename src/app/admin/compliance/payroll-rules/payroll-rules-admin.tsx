@@ -8,6 +8,7 @@ import { adminCard, adminField } from "../../ui";
 import { bothDates } from "../tax-rates/tax-rates-admin";
 import { editPayrollRuleNotes, publishPayrollRules, type PayrollRulesAdminData } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const TYPES = [
   { key: "full_time", label: "Full time" },
   { key: "part_time", label: "Part time" },
@@ -99,8 +100,8 @@ function SchemeEditor({ name, value, onChange }: { name: string; value: SchemeFo
           {value.lines.map((l, i) => (
             <tr key={l.key} className="border-t border-[var(--card-border)]">
               <td className="py-1 pr-2"><input value={l.label} onChange={(e) => setLine(i, { label: e.target.value })} placeholder="e.g. Gratuity" className={`${adminField} w-full`} /></td>
-              <td className="py-1 pr-2"><input type="number" min="0" max="100" step="0.01" value={l.employeePct} onChange={(e) => setLine(i, { employeePct: e.target.value })} className={num} /></td>
-              <td className="py-1 pr-2"><input type="number" min="0" max="100" step="0.01" value={l.employerPct} onChange={(e) => setLine(i, { employerPct: e.target.value })} className={num} /></td>
+              <td className="py-1 pr-2"><AmountInput bare type="number" min="0" max="100" step="0.01" value={l.employeePct} onChange={(e) => setLine(i, { employeePct: e.target.value })} className={num} /></td>
+              <td className="py-1 pr-2"><AmountInput bare type="number" min="0" max="100" step="0.01" value={l.employerPct} onChange={(e) => setLine(i, { employerPct: e.target.value })} className={num} /></td>
               <td className="py-1 text-right">{value.lines.length > 1 && <button type="button" onClick={() => onChange({ ...value, lines: value.lines.filter((_, idx) => idx !== i) })} className="text-xs text-red-600 hover:underline">Remove</button>}</td>
             </tr>
           ))}
@@ -109,7 +110,7 @@ function SchemeEditor({ name, value, onChange }: { name: string; value: SchemeFo
       <button type="button" onClick={() => { add(); }} className="text-xs text-[var(--accent-text)] hover:underline">+ Add contribution</button>
       <label className="block text-xs text-[var(--text-secondary)]">
         Most basic salary counted in a month (leave empty for no limit)
-        <input type="number" min="0" value={value.cap} onChange={(e) => onChange({ ...value, cap: e.target.value })} className={`${adminField} mt-1 block w-40`} />
+        <AmountInput bare type="number" min="0" value={value.cap} onChange={(e) => onChange({ ...value, cap: e.target.value })} className={`${adminField} mt-1 block w-40`} />
       </label>
       <fieldset className="text-xs text-[var(--text-secondary)]">
         <legend className="mb-1">Employment types that qualify (others get a warning, not a block)</legend>
@@ -223,7 +224,7 @@ export function PayrollRulesAdmin({ data }: { data: PayrollRulesAdminData }) {
               </div>
               <label className="block text-xs text-[var(--text-secondary)]">
                 Yearly cap
-                <input type="number" min="0" value={form.dedCap} onChange={(e) => setForm({ ...form, dedCap: e.target.value })} className={`${adminField} mt-1 block w-40`} />
+                <AmountInput bare type="number" min="0" value={form.dedCap} onChange={(e) => setForm({ ...form, dedCap: e.target.value })} className={`${adminField} mt-1 block w-40`} />
               </label>
             </div>
             <div className="space-y-2 rounded border border-[var(--card-border)] p-3">
@@ -234,7 +235,7 @@ export function PayrollRulesAdmin({ data }: { data: PayrollRulesAdminData }) {
               </label>
               <label className="block text-xs text-[var(--text-secondary)]">
                 Monthly ceiling (empty for none)
-                <input type="number" min="0" value={form.citCeiling} onChange={(e) => setForm({ ...form, citCeiling: e.target.value })} className={`${adminField} mt-1 block w-40`} />
+                <AmountInput bare type="number" min="0" value={form.citCeiling} onChange={(e) => setForm({ ...form, citCeiling: e.target.value })} className={`${adminField} mt-1 block w-40`} />
               </label>
             </div>
             <div className="space-y-2 rounded border border-[var(--card-border)] p-3">

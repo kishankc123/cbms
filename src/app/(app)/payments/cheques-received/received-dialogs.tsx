@@ -10,6 +10,7 @@ import type { ReceivedListRow } from "@/lib/cheques/received";
 import type { ReceivedInput } from "@/lib/cheques/received-rules";
 import { clearReceivedAction, closeReceivedAction, depositChequeAction, getCustomerPreview, getReceivedFormData, receiveChequeAction } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const money = (n: number) => `Rs ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type FormData = Awaited<ReturnType<typeof getReceivedFormData>>;
@@ -117,7 +118,7 @@ export function ReceiveChequeModal({ today, onClose, onSaved }: { today: string;
                 <DatePicker value={chequeDate} onChange={setChequeDate} className={`${controlClass} w-full`} />
               </Field>
               <Field label="Amount" required>
-                <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-right" />
+                <AmountInput type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-right" />
               </Field>
               <Field label="Note">
                 <Input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Optional" />

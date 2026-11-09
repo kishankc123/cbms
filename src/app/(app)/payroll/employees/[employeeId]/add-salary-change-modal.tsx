@@ -8,6 +8,7 @@ import { computeNewSalary } from "@/lib/payroll/salary-change";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 const CHANGE_TYPES = [
   { value: "percentage_increase", label: "Percentage Increase" },
   { value: "percentage_decrease", label: "Percentage Decrease" },
@@ -110,7 +111,7 @@ export function AddSalaryChangeModal({
           {changeType === "new_fixed" ? (
             <div>
               <label className="block text-xs text-gray-500 mb-1">New Fixed Salary</label>
-              <input
+              <AmountInput bare
                 type="number"
                 step="0.01"
                 min="0"
@@ -124,7 +125,7 @@ export function AddSalaryChangeModal({
               <label className="block text-xs text-gray-500 mb-1">
                 {changeType.startsWith("percentage") ? "Change Amount (%)" : "Change Amount (NPR)"}
               </label>
-              <input
+              <AmountInput bare
                 type="number"
                 step="0.01"
                 min="0"

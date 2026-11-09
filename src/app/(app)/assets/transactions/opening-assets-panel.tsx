@@ -13,6 +13,7 @@ import { ConfirmDialog } from "../../sales/confirm-dialog";
 import { createOpeningAsset, updateOpeningAssetAction, voidOpeningAssetAction, type OpeningAssetsData } from "../actions";
 import { METHOD_LABEL, STATUS_LABEL, STATUS_TONE, money } from "../shared";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Method = "straight_line" | "declining_balance" | "none";
 type Row = OpeningAssetsData["assets"][number];
 
@@ -277,11 +278,11 @@ function OpeningAssetModal({ data, row, onClose, onSaved }: { data: OpeningAsset
           </div>
           <div>
             <label className={label}>Original cost *</label>
-            <input data-field="cost" type="number" min="0" step="0.01" className={input} value={cost} onChange={(e) => setCost(e.target.value)} />
+            <AmountInput bare data-field="cost" type="number" min="0" step="0.01" className={input} value={cost} onChange={(e) => setCost(e.target.value)} />
           </div>
           <div>
             <label className={label}>Accumulated depreciation at opening</label>
-            <input data-field="accumulated" type="number" min="0" step="0.01" className={input} value={accumulated} onChange={(e) => setAccumulated(e.target.value)} />
+            <AmountInput bare data-field="accumulated" type="number" min="0" step="0.01" className={input} value={accumulated} onChange={(e) => setAccumulated(e.target.value)} />
           </div>
           <div>
             <label className={label}>Net book value (calculated)</label>
@@ -309,7 +310,7 @@ function OpeningAssetModal({ data, row, onClose, onSaved }: { data: OpeningAsset
               </div>
               <div>
                 <label className={label}>Residual value</label>
-                <input data-field="residual" type="number" min="0" step="0.01" className={input} value={residual} onChange={(e) => setResidual(e.target.value)} />
+                <AmountInput bare data-field="residual" type="number" min="0" step="0.01" className={input} value={residual} onChange={(e) => setResidual(e.target.value)} />
               </div>
               <div>
                 <label className={label}>Depreciation continues from</label>

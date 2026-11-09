@@ -10,6 +10,7 @@ import { createSalesReturn } from "./actions";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 
@@ -262,7 +263,7 @@ export function SalesReturnForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         data-field={i === 0 ? "firstRate" : undefined}
                         type="number"
                         step="0.01"
@@ -273,7 +274,7 @@ export function SalesReturnForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"
@@ -286,7 +287,7 @@ export function SalesReturnForm({
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"

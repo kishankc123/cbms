@@ -24,6 +24,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { D } from "@/components/calendar/date-text";
+import { AmountInput } from "@/components/ui/amount-input";
 type FormOptions = Awaited<ReturnType<typeof getPaymentFormOptions>>;
 /** A payment being edited: the detail the drawer shows, which carries everything the form needs. */
 export type EditingPayment = Awaited<ReturnType<typeof getPaymentDetail>>;
@@ -532,7 +533,7 @@ export function NewPaymentModal({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount</label>
-              <input data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
+              <AmountInput bare data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
             </div>
             {headings.length > 0 && <HeadSplitFields headings={headings} split={headSplit} onChange={changeSplit} inputClass={inputCls} />}
           </div>
@@ -583,7 +584,7 @@ export function NewPaymentModal({
                           <td className="px-2 py-1 text-gray-500"><D value={row.date} /></td>
                           <td className="px-2 py-1 text-right">{fmt(row.outstanding)}</td>
                           <td className="px-2 py-1">
-                            <input
+                            <AmountInput bare
                               type="number"
                               step="0.01"
                               min="0"

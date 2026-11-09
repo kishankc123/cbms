@@ -10,6 +10,7 @@ import { adminCard, adminField } from "../../ui";
 import { confirmSlabs, editSlabNotes, publishSlabs, type TaxRateAdminData } from "./actions";
 import { bothDates } from "./tax-rates-admin";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Row = { upTo: string; rate: string };
 type Editor = { draftId: string | null; effectiveFrom: string; source: string; isVerified: boolean; rows: Record<TaxpayerClass, Row[]> };
 
@@ -70,9 +71,9 @@ function SlabEditor({ label, rows, base, onChange }: { label: string; rows: Row[
             return (
               <tr key={i} className={`border-t border-[var(--card-border)] ${changed[i] ? "bg-amber-50" : ""}`}>
                 <td className="py-1 pr-2 tabular-nums text-[var(--text-secondary)]">{money(i === 0 ? 0 : Number(rows[i - 1].upTo) || 0)}</td>
-                <td className="py-1 pr-2">{last ? <span className="text-[var(--text-secondary)]">and above</span> : <input type="number" min="0" value={r.upTo} onChange={(e) => set(i, { upTo: e.target.value })} className={`${adminField} w-28`} />}</td>
+                <td className="py-1 pr-2">{last ? <span className="text-[var(--text-secondary)]">and above</span> : <AmountInput bare type="number" min="0" value={r.upTo} onChange={(e) => set(i, { upTo: e.target.value })} className={`${adminField} w-28`} />}</td>
                 <td className="py-1 pr-2">
-                  <input type="number" min="0" max="100" step="0.01" value={r.rate} onChange={(e) => set(i, { rate: e.target.value })} className={`${adminField} w-20`} />
+                  <AmountInput bare type="number" min="0" max="100" step="0.01" value={r.rate} onChange={(e) => set(i, { rate: e.target.value })} className={`${adminField} w-20`} />
                 </td>
                 <td className="py-1 text-right">
                   {rows.length > 1 && (

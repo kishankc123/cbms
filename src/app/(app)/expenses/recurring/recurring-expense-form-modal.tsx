@@ -13,6 +13,7 @@ import { todayIso } from "@/lib/calendar";
 import { previewNextOccurrence, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "@/lib/recurring-expenses/schedule";
 import { createRecurringExpense, updateRecurringExpense } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Vendor = { id: string; name: string };
 type CategoryAccount = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -210,7 +211,7 @@ export function RecurringExpenseFormModal({
             </div>
             <div>
               <label className={labelClass}>Amount</label>
-              <input data-field="amount" required type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
+              <AmountInput bare data-field="amount" required type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Payable To (supplier)</label>

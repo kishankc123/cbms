@@ -17,6 +17,7 @@ import { InfoDialog } from "../../inventory/info-dialog";
 import { createAssetDisposal, reverseAssetDisposalAction, type DisposalFormData } from "../actions";
 import { money } from "../shared";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const input = "w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 const label = "mb-1 block text-xs text-gray-500";
 const card = "rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]";
@@ -137,7 +138,7 @@ export function DisposalPanel({ data }: { data: DisposalFormData }) {
               </div>
               <div>
                 <label className={label}>Sale price (before VAT) *</label>
-                <input data-field="price" type="number" min="0" step="0.01" className={input} value={price} onChange={(e) => setPrice(e.target.value)} />
+                <AmountInput bare data-field="price" type="number" min="0" step="0.01" className={input} value={price} onChange={(e) => setPrice(e.target.value)} />
               </div>
               {data.vatRate > 0 && (
                 <div>

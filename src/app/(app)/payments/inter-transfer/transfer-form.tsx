@@ -9,6 +9,7 @@ import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { D } from "@/components/calendar/date-text";
+import { AmountInput } from "@/components/ui/amount-input";
 type Option = { id: string; label: string; kind: "Cash" | "Bank" };
 export type TransferInitial = {
   id: string;
@@ -170,7 +171,7 @@ export function TransferForm({ options, initial }: { options: Option[]; initial?
 
         <div className="max-w-xs">
           <label className="block text-xs text-gray-500 mb-1">Amount</label>
-          <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className={`${errors.amount ? errCls : inputCls} text-lg font-semibold`} />
+          <AmountInput bare type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className={`${errors.amount ? errCls : inputCls} text-lg font-semibold`} />
           {errors.amount && <p className="mt-1 text-xs text-red-600">{errors.amount}</p>}
         </div>
 

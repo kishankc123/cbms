@@ -16,6 +16,7 @@ import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 type Customer = { id: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type InvoiceNumbering = { prefix: string; suffix: string; format: string; nextSequence: number };
@@ -319,7 +320,7 @@ export function InvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         data-field={`gross${i}`}
                         type="number"
                         step="0.01"
@@ -358,7 +359,7 @@ export function InvoiceForm({
 
         <div className="mt-2 flex items-center gap-2">
           <span className="text-sm text-gray-500">Rows:</span>
-          <input
+          <AmountInput bare
             type="number"
             min="1"
             max="100"

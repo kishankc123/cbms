@@ -7,6 +7,7 @@ import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Account = { id: string; code: string; name: string };
 
 const EMPTY_ROW = { accountId: "", debitAmount: "", creditAmount: "" };
@@ -97,10 +98,10 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
                 </select>
               </td>
               <td className="py-1 pr-2">
-                <input aria-label={`Line ${i + 1} debit`} data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                <AmountInput bare aria-label={`Line ${i + 1} debit`} data-field={`debit${i}`} type="number" step="0.01" min="0" value={row.debitAmount} onChange={(e) => updateRow(i, "debitAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
               <td className="py-1">
-                <input aria-label={`Line ${i + 1} credit`} type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
+                <AmountInput bare aria-label={`Line ${i + 1} credit`} type="number" step="0.01" min="0" value={row.creditAmount} onChange={(e) => updateRow(i, "creditAmount", e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
               </td>
             </tr>
           ))}
