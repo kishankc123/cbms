@@ -13,7 +13,7 @@ import { payrollRulesOn } from "@/lib/payroll/platform-rules";
 import { payrollTaxContext } from "@/lib/payroll/salary-tax";
 
 const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const STATUS: Record<string, { label: string; tone: StatusTone }> = { draft: { label: "Draft", tone: "neutral" }, review: { label: "In review", tone: "pending" }, approved: { label: "Approved", tone: "action" }, finalized: { label: "Finalized", tone: "success" } };
+const STATUS: Record<string, { label: string; tone: StatusTone }> = { draft: { label: "Draft", tone: "neutral" }, approved: { label: "Approved", tone: "action" }, finalized: { label: "Finalized", tone: "success" } };
 
 // The Payroll home: the latest run's figures, what is owed, recent runs, and anything worth a look before the next run.
 export default async function PayrollOverviewPage() {

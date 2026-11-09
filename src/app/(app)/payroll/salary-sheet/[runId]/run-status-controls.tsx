@@ -6,15 +6,16 @@ import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalize
 import { useProblem } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
+// Draft, then Approved, then Finalized: finalizing is what posts the salary to the books. (A run still marked "review" from before is shown as a draft.)
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  review: "Review",
+  review: "Draft",
   approved: "Approved",
   finalized: "Finalized",
 };
 
 const NEXT_ACTION: Record<string, string> = {
-  draft: "Send for review",
+  draft: "Approve",
   review: "Approve",
   approved: "Finalize",
 };

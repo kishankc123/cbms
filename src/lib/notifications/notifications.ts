@@ -67,7 +67,7 @@ export async function loadNotifications(tenantId: string, today: string, allowed
       db
         .select()
         .from(payrollRuns)
-        .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.status, ["review", "approved"])))
+        .where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.status, "approved")))
         .orderBy(desc(payrollRuns.periodStart))
         .then((runs) => {
           if (runs.length === 0) return;
@@ -77,7 +77,7 @@ export async function loadNotifications(tenantId: string, today: string, allowed
             key: "payroll_runs",
             group: "verify",
             severity: "action",
-            title: one ? `Payroll for ${payrollPeriodLabel(one)} is ${one.status === "review" ? "in review" : "approved, not finalized"}` : `${runs.length} payroll runs are not finalized`,
+            title: one ? `Payroll for ${payrollPeriodLabel(one)} is approved, not finalized` : `${runs.length} payroll runs are approved, not finalized`,
             detail: "Finalize it to post the salary and the contributions.",
             href: one ? `/payroll/salary-sheet/${one.id}` : "/payroll/salary-sheet",
             count: runs.length,
