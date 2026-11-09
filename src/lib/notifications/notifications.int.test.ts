@@ -16,8 +16,8 @@ beforeAll(async () => {
   org = await createTempOrg("ZZ Notifications");
   // a purchase waiting for item details
   await db.insert(purchaseBills).values({ tenantId: org.tenantId, billNumber: "N-1", billDate: "2026-10-20", subtotal: "1000", total: "1000", status: "open", purchaseType: "credit", detailsPending: true });
-  // a payroll run that was made but not finalized
-  await db.insert(payrollRuns).values({ tenantId: org.tenantId, calendarSystem: "AD", month: 9, year: 2026, periodStart: "2026-09-01", periodEnd: "2026-09-30", status: "review", createdBy: org.userId });
+  // a payroll run that was approved but not finalized
+  await db.insert(payrollRuns).values({ tenantId: org.tenantId, calendarSystem: "AD", month: 9, year: 2026, periodStart: "2026-09-01", periodEnd: "2026-09-30", status: "approved", createdBy: org.userId });
   // a compliance item past its date
   await db.insert(complianceObligations).values({ tenantId: org.tenantId, name: "VAT return", categoryKey: "tax", taxTypeKey: "vat", periodLabel: "Ashwin", periodStart: "2026-09-01", periodEnd: "2026-09-30", dueDate: "2026-10-25" });
   // retirement contributions owed: payroll credited the employee SSF account
@@ -36,7 +36,7 @@ describe("what the bell is built from", () => {
     const by = Object.fromEntries(list.map((n) => [n.key, n]));
     expect(by.details_pending).toMatchObject({ group: "verify", count: 1, amount: 1000, href: "/purchases/stockable" });
     expect(by.payroll_runs).toMatchObject({ group: "verify", count: 1, sinceDays: 37 });
-    expect(by.payroll_runs.title).toMatch(/in review/);
+    expect(by.payroll_runs.title).toMatch(/approved, not finalized/);
     expect(by.payroll_runs.href).toMatch(/^\/payroll\/salary-sheet\//);
     expect(by.contributions_owed).toMatchObject({ group: "due", amount: 3300, href: "/payroll/contributions" });
     expect(by.compliance_overdue).toMatchObject({ group: "alert", severity: "critical", count: 1 });

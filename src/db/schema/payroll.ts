@@ -145,6 +145,7 @@ export const payrollSettings = pgTable("payroll_settings", {
   roundingRule: text("rounding_rule").notNull().default("none"),
 });
 
+// "review" is no longer used: the Review stage was removed (draft, approved, finalized). The value stays in the type because Postgres cannot drop a value from an enum; migration 0125 moved any run still in review back to draft.
 export const payrollRunStatusEnum = pgEnum("payroll_run_status", ["draft", "review", "approved", "finalized"]);
 
 export const payrollRuns = pgTable("payroll_runs", {

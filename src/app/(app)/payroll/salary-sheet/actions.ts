@@ -269,7 +269,9 @@ export async function generatePayrollRun(input: GenerateRunInput) {
   return run.id;
 }
 
-const STATUS_FLOW = ["draft", "review", "approved", "finalized"] as const;
+// A run is drafted, approved, then finalized (finalizing is what posts the salary). There used to be a Review stage between draft and approved; it changed
+// nothing but the label and was removed. A run still marked "review" (from before) is treated as a draft.
+const STATUS_FLOW = ["draft", "approved", "finalized"] as const;
 
 export async function advanceRunStatus(input: { runId: string }) {
   const session = await requireTenantSession();
@@ -283,7 +285,7 @@ export async function advanceRunStatus(input: { runId: string }) {
     .limit(1);
   if (!run) throw new Error("Payroll run not found");
 
-  const currentIdx = STATUS_FLOW.indexOf(run.status);
+  const currentIdx = STATUS_FLOW.indexOf(run.status === "review" ? "draft" : run.status);
   if (currentIdx === STATUS_FLOW.length - 1) throw new Error("This payroll run is already finalized");
   const nextStatus = STATUS_FLOW[currentIdx + 1];
 
