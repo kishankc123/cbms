@@ -11,6 +11,7 @@ import { ConfirmDialog } from "../../sales/confirm-dialog";
 import { updateAsset, voidAssetPurchaseAction, voidOpeningAssetAction, type AssetDetailData } from "../actions";
 import { METHOD_LABEL, money } from "../shared";
 
+import { AmountInput } from "@/components/ui/amount-input";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "purchase", label: "Purchase" },
@@ -399,7 +400,7 @@ function EditModal({ data, onClose }: { data: AssetDetailData; onClose: () => vo
                     </div>
                     <div>
                       <label className="mb-1 block text-xs text-gray-500">Residual value</label>
-                      <input data-field="aResidual" type="number" min="0" step="0.01" className={input} value={residual} onChange={(e) => setResidual(e.target.value)} />
+                      <AmountInput bare data-field="aResidual" type="number" min="0" step="0.01" className={input} value={residual} onChange={(e) => setResidual(e.target.value)} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs text-gray-500">Start date</label>

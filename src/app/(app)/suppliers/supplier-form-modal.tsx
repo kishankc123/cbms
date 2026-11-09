@@ -5,6 +5,7 @@ import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { optionalPanError } from "@/lib/pan";
 import { PAYEE_TYPES } from "@/lib/compliance/platform-tax-rate-types";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Initial = {
   name: string;
   panNumber: string;
@@ -154,7 +155,7 @@ export function SupplierFormModal({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Opening balance</label>
                 <div className="flex gap-2">
-                  <input
+                  <AmountInput bare
                     name="openingBalance"
                     type="number"
                     step="0.01"

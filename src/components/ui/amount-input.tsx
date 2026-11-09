@@ -37,7 +37,7 @@ function setNativeValue(el: HTMLInputElement, value: string) {
 const showMoney = (n: number, decimals: number) => n.toLocaleString("en-IN", { minimumFractionDigits: Math.min(decimals, 2), maximumFractionDigits: decimals });
 
 export const AmountInput = forwardRef<HTMLInputElement, Props>(function AmountInput(
-  { invalid, bare, decimals = 2, onChange, onBlur, onKeyDown, value, className, title, ...others },
+  { invalid, bare, decimals = 2, onChange, onBlur, onKeyDown, value, defaultValue, className, title, ...others },
   ref,
 ) {
   // A text field has no use for these, so they are dropped here and screens that still pass them need no edit.
@@ -45,6 +45,9 @@ export const AmountInput = forwardRef<HTMLInputElement, Props>(function AmountIn
   for (const k of ["step", "min", "max", "type"]) delete rest[k];
   const el = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => el.current as HTMLInputElement);
+  // A field that starts from defaultValue (and is read when the form is sent) keeps its own text here, so it can be shown as a sum without switching between controlled and uncontrolled.
+  const controlled = value !== undefined;
+  const [inner, setInner] = useState(defaultValue === undefined || defaultValue === null ? "" : String(defaultValue));
   const [draft, setDraft] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [box, setBox] = useState<{ top: number; left: number } | null>(null);
@@ -78,6 +81,7 @@ export const AmountInput = forwardRef<HTMLInputElement, Props>(function AmountIn
     if (draft !== null) setDraft(null);
     const clean = raw.replace(PLAIN_ONLY, "");
     if (clean !== raw) e.target.value = clean;
+    if (!controlled) setInner(clean);
     onChange?.(e);
   }
 
@@ -133,7 +137,7 @@ export const AmountInput = forwardRef<HTMLInputElement, Props>(function AmountIn
     onBlur?.(e);
   }
 
-  const shown = draft ?? value;
+  const shown = draft ?? (controlled ? value : inner);
   const live = draft !== null ? evaluateFormula(draft, decimals) : null;
   const hint = problem
     ? { text: problem, bad: true }

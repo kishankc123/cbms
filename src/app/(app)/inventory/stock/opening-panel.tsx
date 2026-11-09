@@ -10,6 +10,7 @@ import { todayIso } from "@/lib/calendar";
 import { InfoDialog } from "../info-dialog";
 import type { HistoryRow, OpeningDatePreview, OpeningPreview, OpeningRow } from "@/lib/inventory/opening";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Unit = { id: string; name: string };
 type ItemOption = { id: string; name: string; unitId: string | null; quantity: number; averageCost: number };
 
@@ -258,8 +259,8 @@ function SavedRows({ rows, unitName, disabled }: { rows: OpeningRow[]; unitName:
                 <td className="px-2.5 py-1.5 text-gray-500">{unitName.get(r.unitId ?? "") ?? "—"}</td>
                 {editing ? (
                   <>
-                    <td className="px-4 py-1 text-right"><input type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
-                    <td className="px-4 py-1 text-right"><input type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
+                    <td className="px-4 py-1 text-right"><AmountInput bare decimals={3} type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
+                    <td className="px-4 py-1 text-right"><AmountInput bare type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right" /></td>
                     <td className="px-2.5 py-1.5 text-right">{fmt(q * c)}</td>
                     <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
                       <button type="button" onClick={() => reviewEdit(r)} className="text-xs text-gray-700 hover:underline">Review &amp; save</button>
@@ -457,11 +458,11 @@ function AddProducts({ items, units, disabled }: { items: ItemOption[]; units: U
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Quantity</label>
-          <input data-field="quantity" type="number" step="0.001" min="0" value={quantity} disabled={disabled} onChange={(e) => setQuantity(e.target.value)} className={inputCls} />
+          <AmountInput bare decimals={3} data-field="quantity" type="number" step="0.001" min="0" value={quantity} disabled={disabled} onChange={(e) => setQuantity(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Unit cost</label>
-          <input data-field="cost" type="number" step="0.01" min="0" value={unitCost} disabled={disabled} onChange={(e) => setUnitCost(e.target.value)} className={inputCls} />
+          <AmountInput bare data-field="cost" type="number" step="0.01" min="0" value={unitCost} disabled={disabled} onChange={(e) => setUnitCost(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Total value</label>

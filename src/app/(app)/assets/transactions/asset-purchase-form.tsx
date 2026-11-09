@@ -13,6 +13,7 @@ import { todayIso } from "@/lib/calendar";
 import { createAssetPurchase, type AssetPurchaseFormData } from "../actions";
 import { METHOD_LABEL, money } from "../shared";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 type Method = "straight_line" | "declining_balance" | "none";
 
@@ -292,19 +293,19 @@ export function AssetPurchaseForm({ data }: { data: AssetPurchaseFormData }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={label}>Purchase price *</label>
-              <input data-field="price" type="number" min="0" step="0.01" className={input} value={price} onChange={(e) => setPrice(e.target.value)} />
+              <AmountInput bare data-field="price" type="number" min="0" step="0.01" className={input} value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
             <div>
               <label className={label}>Freight</label>
-              <input data-field="freight" type="number" min="0" step="0.01" className={input} value={freight} onChange={(e) => setFreight(e.target.value)} />
+              <AmountInput bare data-field="freight" type="number" min="0" step="0.01" className={input} value={freight} onChange={(e) => setFreight(e.target.value)} />
             </div>
             <div>
               <label className={label}>Installation</label>
-              <input data-field="installation" type="number" min="0" step="0.01" className={input} value={installation} onChange={(e) => setInstallation(e.target.value)} />
+              <AmountInput bare data-field="installation" type="number" min="0" step="0.01" className={input} value={installation} onChange={(e) => setInstallation(e.target.value)} />
             </div>
             <div>
               <label className={label}>Other directly attributable cost</label>
-              <input data-field="other" type="number" min="0" step="0.01" className={input} value={other} onChange={(e) => setOther(e.target.value)} />
+              <AmountInput bare data-field="other" type="number" min="0" step="0.01" className={input} value={other} onChange={(e) => setOther(e.target.value)} />
             </div>
           </div>
           <dl className="mt-4 space-y-1 text-sm">
@@ -358,7 +359,7 @@ export function AssetPurchaseForm({ data }: { data: AssetPurchaseFormData }) {
                 </div>
                 <div>
                   <label className={label}>Residual value</label>
-                  <input
+                  <AmountInput bare
                     data-field="residual"
                     type="number"
                     min="0"

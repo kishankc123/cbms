@@ -5,6 +5,7 @@ import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createBankAccount, updateBankAccount, type BankAccountInput } from "../actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type LedgerOption = { id: string; code: string; name: string };
 
 export type InitialBankAccount = BankAccountInput & { bankAccountId: string; ledgerLabel: string };
@@ -98,7 +99,7 @@ export function BankAccountFormModal({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Opening balance</label>
-            <input
+            <AmountInput bare
               type="number"
               step="0.01"
               value={openingBalance}

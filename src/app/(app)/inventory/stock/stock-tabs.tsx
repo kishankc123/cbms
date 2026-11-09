@@ -11,6 +11,7 @@ import { InfoDialog } from "../info-dialog";
 import { OpeningPanel } from "./opening-panel";
 import type { HistoryRow, OpeningRow } from "@/lib/inventory/opening";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Unit = { id: string; name: string };
 type ItemOption = { id: string; name: string; unitId: string | null; quantity: number; averageCost: number };
 
@@ -167,12 +168,12 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Quantity{unitName ? ` (${unitName})` : ""}</label>
-          <input data-field="quantity" type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputCls} />
+          <AmountInput bare decimals={3} data-field="quantity" type="number" step="0.001" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputCls} />
         </div>
         {direction === "in" && (
           <div>
             <label className="mb-1 block text-xs text-gray-500">Cost per unit (optional)</label>
-            <input type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder={item ? `Average ${item.averageCost.toFixed(2)}` : ""} className={inputCls} />
+            <AmountInput bare type="number" step="0.01" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder={item ? `Average ${item.averageCost.toFixed(2)}` : ""} className={inputCls} />
           </div>
         )}
       </div>

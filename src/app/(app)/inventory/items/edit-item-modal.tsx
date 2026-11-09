@@ -5,6 +5,7 @@ import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { updateItem, type BillingType, type ItemType } from "./actions";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
@@ -226,7 +227,7 @@ export function EditItemModal({
                 {tracked && (
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
-                    <input
+                    <AmountInput bare
                       type="number"
                       step="0.01"
                       min="0"
@@ -240,7 +241,7 @@ export function EditItemModal({
             )}
             <div className={isProduct ? "" : "col-span-2"}>
               <label className="block text-xs text-gray-500 mb-1">{rateLabel}</label>
-              <input
+              <AmountInput bare
                 type="number"
                 step="0.01"
                 min="0"

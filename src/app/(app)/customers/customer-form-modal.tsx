@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { optionalPanError } from "@/lib/pan";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Initial = {
   name: string;
   panNumber: string;
@@ -140,7 +141,7 @@ export function CustomerFormModal({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Opening balance</label>
                 <div className="flex gap-2">
-                  <input
+                  <AmountInput bare
                     name="openingBalance"
                     type="number"
                     step="0.01"

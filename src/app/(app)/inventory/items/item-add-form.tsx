@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createItem, type BillingType, type CreatedItem, type ItemType } from "./actions";
 import { InfoDialog } from "../info-dialog";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Unit = { id: string; name: string };
 type Group = { id: string; name: string };
 type Category = { id: string; name: string; groupId: string };
@@ -201,7 +202,7 @@ export function ItemAddForm({
             {tracked && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Standard purchase price (excl. tax)</label>
-                <input
+                <AmountInput bare
                   type="number"
                   step="0.01"
                   min="0"
@@ -215,7 +216,7 @@ export function ItemAddForm({
         )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">{rateLabel}</label>
-          <input
+          <AmountInput bare
             type="number"
             step="0.01"
             min="0"
