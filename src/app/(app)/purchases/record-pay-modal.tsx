@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type Vendor = { id: string; name: string };
 type PaymentLine = { modeId: string; accountId: string; amount: string };
@@ -99,7 +100,7 @@ export function RecordPayModal({
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
                 className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
               />
-              <input
+              <AmountInput bare
                 type="number"
                 step="0.01"
                 min="0"

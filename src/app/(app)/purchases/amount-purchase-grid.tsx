@@ -13,6 +13,7 @@ import { todayIso } from "@/lib/calendar";
 import { recordAmountPurchases, recordPendingPurchases, type AmountPurchaseRow, type CashBillType } from "./actions";
 import { RecordPayModal } from "./record-pay-modal";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -165,7 +166,7 @@ export function AmountPurchaseGrid({ vendors: vendorsProp, categories, cashBankA
                     <Input value={r.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="optional" className={`${small} w-40`} />
                   </td>
                   <td className={cell}>
-                    <Input type="number" step="0.01" min="0" value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} className={`${small} w-28 text-right`} />
+                    <AmountInput type="number" step="0.01" min="0" value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} className={`${small} w-28 text-right`} />
                   </td>
                   <td className={`${cell} pt-2 text-right tabular-nums text-ink-2`}>{f.vat > 0 ? money(f.vat) : "—"}</td>
                   <td className={`${cell} pt-2 text-right tabular-nums`}>{f.total > 0 ? money(f.total) : "—"}</td>

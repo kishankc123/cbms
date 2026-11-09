@@ -14,6 +14,7 @@ import { InvoicePaymentModal } from "./invoice-payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 type Vendor = { id: string; name: string };
 type Item = { id: string; name: string; purchasePrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -408,7 +409,7 @@ export function PurchaseInvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"
@@ -419,7 +420,7 @@ export function PurchaseInvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"
@@ -433,7 +434,7 @@ export function PurchaseInvoiceForm({
                     </td>
                     {showDiscount && (
                       <td className="px-1 py-1 text-center">
-                        <input
+                        <AmountInput bare
                           type="number"
                           step="0.01"
                           min="0"

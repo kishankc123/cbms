@@ -4,9 +4,10 @@ import { useState } from "react";
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { controlClass, Input } from "@/components/ui/field";
+import { controlClass } from "@/components/ui/field";
 import { Amount } from "@/components/ui/data-table";
 
+import { AmountInput } from "@/components/ui/amount-input";
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { modeId: string; accountId: string; amount: string };
 
@@ -92,7 +93,7 @@ export function InvoicePaymentModal({
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
                 className={`${controlClass} flex-1`}
               />
-              <Input type="number" step="0.01" min="0" value={line.amount} onChange={(e) => updateLine(i, "amount", e.target.value)} placeholder="Amount" className="w-28 text-right" />
+              <AmountInput type="number" step="0.01" min="0" value={line.amount} onChange={(e) => updateLine(i, "amount", e.target.value)} placeholder="Amount" className="w-28 text-right" />
             </div>
           ))}
         </div>

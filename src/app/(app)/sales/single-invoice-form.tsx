@@ -14,6 +14,7 @@ import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
+import { AmountInput } from "@/components/ui/amount-input";
 type Customer = { id: string; name: string };
 type Item = { id: string; name: string; sellingPrice: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -405,7 +406,7 @@ export function SingleInvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         data-field={i === 0 ? "firstRate" : undefined}
                         type="number"
                         step="0.01"
@@ -416,7 +417,7 @@ export function SingleInvoiceForm({
                       />
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"
@@ -429,7 +430,7 @@ export function SingleInvoiceForm({
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.gross)}</div>
                     </td>
                     <td className="px-1 py-1 text-center">
-                      <input
+                      <AmountInput bare
                         type="number"
                         step="0.01"
                         min="0"

@@ -18,6 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { controlClass, Field, Input, Select } from "@/components/ui/field";
 import { Amount } from "@/components/ui/data-table";
+import { AmountInput } from "@/components/ui/amount-input";
 type Vendor = { id: string; name: string };
 // Only lowest-level accounts are offered; `group` is the account they sit under, if any.
 type CategoryAccount = { id: string; code: string; name: string; group?: string | null; tdsHeadKey?: string | null };
@@ -437,7 +438,7 @@ export function ExpenseFormModal({
                 <SectionTitle>Amount and tax</SectionTitle>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Taxable amount">
-                    <Input type="number" step="0.01" min="0" data-field="taxable" value={taxableAmount} onChange={(e) => setTaxableAmount(e.target.value)} className="text-right" />
+                    <AmountInput type="number" step="0.01" min="0" data-field="taxable" value={taxableAmount} onChange={(e) => setTaxableAmount(e.target.value)} className="text-right" />
                   </Field>
                   <Field label="Tax treatment">
                     <Select data-field="taxTreatment" value={taxTreatment} onChange={(e) => setTaxTreatment(e.target.value as ExpenseTaxTreatment)}>
@@ -449,7 +450,7 @@ export function ExpenseFormModal({
                     </Select>
                   </Field>
                   <Field label={`VAT (${vatRate}% default)${billType !== "vat" ? " — VAT bill only" : ""}`}>
-                    <Input
+                    <AmountInput
                       type="number"
                       step="0.01"
                       min="0"
@@ -464,10 +465,10 @@ export function ExpenseFormModal({
                     />
                   </Field>
                   <Field label="Other applicable tax">
-                    <Input type="number" step="0.01" min="0" value={otherTaxAmount} onChange={(e) => setOtherTaxAmount(e.target.value)} className="text-right" />
+                    <AmountInput type="number" step="0.01" min="0" value={otherTaxAmount} onChange={(e) => setOtherTaxAmount(e.target.value)} className="text-right" />
                   </Field>
                   <Field label={`TDS ${tdsHead ? `(${tdsRate}% on this category${fetched.basis ? ` — ${fetched.basis}` : ""})` : "(not on this category)"}`} className="sm:col-span-2">
-                    <Input
+                    <AmountInput
                       type="number"
                       step="0.01"
                       min="0"
