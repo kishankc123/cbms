@@ -165,7 +165,7 @@ describe("TDS headings on accounts", () => {
     expect(legal).toMatchObject({ parentAccountId: fees.id, tdsHeadKey: null });
     const headOf = await tdsHeadLookup(org.tenantId);
     expect(headOf(legal.id)).toBe("services"); // follows its group
-    expect(headOf((await byCode("5800.01")).id)).toBeNull(); // Telephone has none
+    expect(headOf((await byCode("5810")).id)).toBeNull(); // Telephone has none
     expect((await listTdsHeads(org.tenantId)).map((h) => h.key)).toEqual(["payroll", "rent", "services"]);
   });
 

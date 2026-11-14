@@ -26,7 +26,7 @@ beforeAll(async () => {
   saleEntry = e.id;
   // an entry between two expense accounts: touches no cash, customer or supplier account
   const rent = await acct("5100");
-  const util = await acct("5300");
+  const util = await acct("5300.01");
   manualEntry = (await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-09-11", sourceType: "manual", createdBy: org.userId, lines: [{ accountId: rent.id, debitAmount: 50 }, { accountId: util.id, creditAmount: 50 }] })).id;
   // an entry on a supplier payable account
   const [{ id: vendorId }] = await db.insert(vendors).values({ tenantId: org.tenantId, name: "Supplier", openingBalance: "0" }).returning({ id: vendors.id });

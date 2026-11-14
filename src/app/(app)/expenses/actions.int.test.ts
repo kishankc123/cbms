@@ -182,12 +182,12 @@ describe("editing an expense", () => {
 
 describe("expense categories", () => {
   it("offers only the lowest level: a category with sub-categories can't be chosen, its sub-categories can", async () => {
-    const utilities = await acct("5300");
-    const child = await createSubAccount(org.tenantId, utilities, "Electricity");
+    const utilities = await acct("5400"); // Office Supplies: starts with nothing inside it
+    const child = await createSubAccount(org.tenantId, utilities, "Paper");
     const offered = await getExpenseCategoryAccounts(org.tenantId);
     expect(offered.some((a) => a.id === utilities.id)).toBe(false);
     const c = offered.find((a) => a.id === child.id);
-    expect(c?.group).toContain("Utilities");
+    expect(c?.group).toContain("Office Supplies");
 
     await expect(createExpense({ ...base(), categoryAccountId: utilities.id, invoiceNumber: "CAT-1" })).rejects.toThrow(/sub-categor/);
     await createExpense({ ...base(), categoryAccountId: child.id, invoiceNumber: "CAT-2" });

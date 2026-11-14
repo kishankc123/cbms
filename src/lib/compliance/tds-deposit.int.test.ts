@@ -79,7 +79,7 @@ describe("TDS withheld and deposited by heading", () => {
   it("expense TDS posts to its heading's own payable account, and untagged TDS to the common one", async () => {
     await createExpense(expense((await acct("5100")).id, 80000, 8000, cashId)); // Rent
     await createExpense(expense((await acct("5700.03")).id, 25000, 3750, cashId)); // Consultancy fees, in Professional & Service Fees: Services
-    await createExpense(expense((await acct("5300")).id, 5000, 500, cashId)); // Utilities: no heading
+    await createExpense(expense((await acct("5300.01")).id, 5000, 500, cashId)); // Electricity (in Utilities): no heading
     expect(await net((await byName(`TDS Payable — ${N.rent}`)).id)).toBe(8000);
     expect(await net((await byName(`TDS Payable — ${N.services}`)).id)).toBe(3750);
     expect(await net((await acct("2320")).id)).toBe(500);

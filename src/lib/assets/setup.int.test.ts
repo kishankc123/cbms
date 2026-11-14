@@ -78,6 +78,6 @@ describe("assets setup", () => {
 
     const expenseCategories = await getExpenseCategoryAccounts(org.tenantId);
     expect(expenseCategories.some((a) => a.code === "5500" || a.code === "5600")).toBe(false);
-    expect(expenseCategories.some((a) => a.code === "5300")).toBe(true);
+    expect(expenseCategories.some((a) => a.code === "5300.01")).toBe(true);
   });
 });
