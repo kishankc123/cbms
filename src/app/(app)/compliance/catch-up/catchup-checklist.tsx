@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProblem } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
-import type { StreamKey } from "@/lib/compliance/catchup-rules";
+import { unfiledPeriods, type StreamKey } from "@/lib/compliance/catchup-rules";
 import { saveCatchupAnswers, type CatchupData } from "../catchup-actions";
 
 const select = "w-full max-w-md rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none";
@@ -97,6 +97,22 @@ export function CatchupChecklist({ data }: { data: CatchupData }) {
                 </option>
               ))}
             </select>
+            {value !== undefined && (() => {
+              // The only thing said about periods left unfiled is what they cost: fines and interest. Nothing here asks for figures.
+              const owed = unfiledPeriods(s.options, value || null);
+              if (owed.count === 0) return null;
+              const range = owed.count === 1 ? owed.first : `${owed.first} to ${owed.last}`;
+              return (
+                <p className="rounded-md border border-[var(--status-action-border)] bg-[var(--status-action-bg)] px-3 py-2 text-sm text-[var(--status-action-text)]">
+                  {owed.count} {permit ? (owed.count === 1 ? "yearly renewal is" : "yearly renewals are") : owed.count === 1 ? "period has" : "periods have"} {permit ? "unpaid" : "ended without a filing"} ({range}).{" "}
+                  {permit ? "A late renewal attracts a fine that grows with every month it is late." : "A return filed after its due date attracts fines and interest, and they keep growing until it is filed and paid."} See{" "}
+                  <Link href="/compliance/penalties" className="underline">
+                    Fines &amp; Penalties
+                  </Link>{" "}
+                  for the rates.
+                </p>
+              );
+            })()}
             {suggested.has(s.key) && <p className="text-xs text-[var(--status-action-text)]">Pre-selected because income tax is filed through {latestLabel}. Please check it is right.</p>}
             {permit && <p className="text-xs text-gray-500">The fiscal year the permit was issued in counts as paid. The next renewal falls due in Shrawan.</p>}
             {!permit && s.options.length === 0 && <p className="text-xs text-gray-500">No period has finished yet since this started, so there is nothing to mark as filed. Choose None filed yet, and the first period will appear when it is due.</p>}
