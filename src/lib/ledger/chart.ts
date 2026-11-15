@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accountRoles, accounts, bankAccounts, journalEntries, journalLines } from "@/db/schema";
+import { accountRoles, accounts, bankAccounts, journalEntries, journalLines, paymentModeAccounts } from "@/db/schema";
 import { NORMAL_BALANCE } from "@/db/schema/accounts";
 import { logAuditEvent } from "@/lib/audit";
 import { ensureBankAccountFor } from "@/lib/banking/auto-link";
@@ -226,6 +226,7 @@ export async function deleteAccountEntry(tenantId: string, userId: string, id: s
   try {
     // The bank account linked to it automatically goes with it; one with statements or reconciliations is refused by the database.
     await db.transaction(async (tx) => {
+      await tx.delete(paymentModeAccounts).where(and(eq(paymentModeAccounts.accountId, account.id), eq(paymentModeAccounts.tenantId, tenantId)));
       await tx.delete(bankAccounts).where(and(eq(bankAccounts.chartOfAccountsLink, account.id), eq(bankAccounts.tenantId, tenantId)));
       await tx.delete(accounts).where(and(eq(accounts.id, account.id), eq(accounts.tenantId, tenantId)));
     });

@@ -399,3 +399,33 @@ describe("picking the bank or wallet from the list", () => {
     expect(typed).toMatchObject({ bankName: "Village Co-operative", institutionId: null });
   });
 });
+
+describe("deleting a bank account that has no history", () => {
+  const base = { bankName: "", accountNumber: "", branch: "", currency: "NPR", chartOfAccountsLink: "" };
+  const row = async (name: string) => (await A.listBankAccounts()).find((b) => b.accountName === name);
+
+  it("removes the bank account and its account in the chart, and its payment mode links", async () => {
+    await seedPaymentModes(org.tenantId);
+    const [transfer] = await db.select().from(paymentModes).where(and(eq(paymentModes.tenantId, org.tenantId), eq(paymentModes.name, "Bank transfer")));
+    await A.createBankAccount({ ...base, accountName: "ZZ Empty", openingBalance: 0, modeIds: [transfer.id] });
+    const made = (await row("ZZ Empty"))!;
+    expect(made.canDelete).toBe(true);
+
+    await A.deleteBankAccount({ bankAccountId: made.id });
+    expect(await row("ZZ Empty")).toBeUndefined();
+    expect(await db.select().from(accounts).where(eq(accounts.id, made.chartOfAccountsLink))).toEqual([]);
+    expect(await db.select().from(paymentModeAccounts).where(eq(paymentModeAccounts.accountId, made.chartOfAccountsLink))).toEqual([]);
+  });
+
+  it("is not offered, and is refused in plain words, for an account that has transactions or is a system account", async () => {
+    await A.createBankAccount({ ...base, accountName: "ZZ With opening", openingBalance: 500 });
+    const withOpening = (await row("ZZ With opening"))!;
+    expect(withOpening.canDelete).toBe(false);
+    await expect(A.deleteBankAccount({ bankAccountId: withOpening.id })).rejects.toThrow(/transaction history/);
+
+    const withStatements = (await A.listBankAccounts()).find((b) => b.id === bankId)!;
+    expect(withStatements.canDelete).toBe(false);
+    await expect(A.deleteBankAccount({ bankAccountId: bankId })).rejects.toThrow(/statements or reconciliations|transaction history/);
+    await expect(A.deleteBankAccount({ bankAccountId: "00000000-0000-0000-0000-000000000000" })).rejects.toThrow(/not found/);
+  });
+});
