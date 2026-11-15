@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, bankAccounts, customers, tenants, vendors } from "@/db/schema";
+import { accounts, bankAccounts, customers, journalEntries, tenants, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { loadOpeningSheet, saveOpeningSheet } from "./opening-ledger";
 import { listAccountsWithBalances, createSubGroupEntry } from "./chart";
@@ -82,10 +82,13 @@ describe("opening balances of ledger accounts", () => {
     expect(await row(supplierAcct.id)).toMatchObject({ net: -2500 });
   });
 
-  it("keeps the opening balance date, and refuses to move it past openings other screens dated", async () => {
+  it("keeps the books start date, and moves every opening balance with it when it is changed", async () => {
     const prepaid = await byCode("1300");
     await save({ [prepaid.id]: 100 }, DATE);
-    await expect(save({ [prepaid.id]: 100 }, "2025-08-01")).rejects.toThrow(/already have opening balances dated/);
+    const moved = await save({ [prepaid.id]: 100 }, "2025-08-01");
+    expect(moved).toMatchObject({ date: "2025-08-01" });
+    const dates = await db.select({ d: journalEntries.entryDate }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceType, "opening_balance")));
+    expect(new Set(dates.map((r) => r.d))).toEqual(new Set(["2025-08-01"]));
   });
 
   it("refuses an account that is not on the sheet or has its own screen", async () => {

@@ -7,6 +7,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertFiscalYearOpen, resolveFiscalYearId } from "@/lib/fiscal";
 import { assertBankPeriodOpen } from "./reconciliation-guards";
 import { modeNamesForLines } from "@/lib/payment-modes";
+import { assertNotBeforeBooksStart } from "./books-start";
 
 import { todayIso } from "@/lib/calendar";
 export class UnbalancedEntryError extends Error {
@@ -77,6 +78,8 @@ export async function assertAccountsUsable(tenantId: string, accountIds: string[
 export async function postJournalEntry(input: PostJournalEntryInput) {
   await assertPeriodOpen(input.tenantId, input.entryDate);
   await assertFiscalYearOpen(input.tenantId, input.entryDate);
+  // Nothing is dated before the books start. (The opening balances are the books' first entries, and an undo is dated by reverseJournalEntry, not here.)
+  if (input.sourceType !== "opening_balance") await assertNotBeforeBooksStart(input.tenantId, input.entryDate);
 
   if (input.lines.length < 2) {
     throw new Error("A journal entry needs at least two lines");

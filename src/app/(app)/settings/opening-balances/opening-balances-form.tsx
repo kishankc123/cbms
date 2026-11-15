@@ -62,7 +62,7 @@ export function OpeningBalancesForm({ sheet, canSave }: { sheet: Sheet; canSave:
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-6">
         <div className="w-48">
-          <label className={settingsLabel}>Opening balance date</label>
+          <label className={settingsLabel}>Books start date</label>
           <DatePicker value={date} onChange={(v) => { setDate(v); setSaved(false); }} disabled={!canSave} className={settingsInput} />
         </div>
         <div>
@@ -74,6 +74,9 @@ export function OpeningBalancesForm({ sheet, canSave }: { sheet: Sheet; canSave:
           <p className="py-1.5 text-sm">{fiscalYear ? formatDate(fiscalYear.from, calendar) : "—"}</p>
         </div>
       </div>
+      <p className="max-w-3xl text-xs text-gray-500">
+        Your books begin on this date. The opening balances below are posted on it, nothing can be dated before it, and reports start from it. Starting part-way through a year? Choose the day you start and enter each balance as it stood on that day. The date can be changed later: every opening balance moves with it, unless a transaction already sits before the new date or opening assets or opening stock have been entered.
+      </p>
 
       <div className="overflow-hidden rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
         {canSave && (

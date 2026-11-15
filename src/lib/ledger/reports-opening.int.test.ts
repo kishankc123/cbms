@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry } from "./post";
-import { cashBankMovement, cashBook, generalLedger } from "./reports";
+import { cashBankMovement, cashBook, cashFlowStatement, generalLedger } from "./reports";
 
 // The opening balance is entered as of the first day of the books. A report that starts on that day must show it on its "Opening balance" line, not
 // as the first transaction of the period.
@@ -52,6 +52,14 @@ describe("a report that starts on the opening balance date", () => {
     const g = await generalLedger(org.tenantId, acct["1000"], d(OPENING_DAY), d("2026-07-31"));
     expect(g.openingBalance).toBe(5000);
     expect(g.lines.map((l) => l.runningBalance)).toEqual([4850]);
+  });
+
+  it("the cash flow statement does not treat the opening cash as cash that moved during the period", async () => {
+    const r = await cashFlowStatement(org.tenantId, d(OPENING_DAY), d("2026-07-31"));
+    expect(r.actualCashMovement).toBe(-150);
+    expect(r.netChangeInCash).toBe(-150);
+    expect(r.isBalanced).toBe(true);
+    expect(r.financing).toEqual([]);
   });
 
   it("the cash and bank movement report counts the opening balance as the opening, not as money in", async () => {
