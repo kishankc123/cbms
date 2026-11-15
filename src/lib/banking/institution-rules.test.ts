@@ -33,6 +33,12 @@ describe("matching a logo file to its bank", () => {
     expect(institutionForFile("esewa.PNG", list)).toBe("5");
     expect(institutionForFile("nepalbank.png", list)).toBe("3");
   });
+  it("matches by the short code too", () => {
+    const withCodes = [{ id: "6", name: "Global IME Bank Limited", code: "GIBL" }, { id: "7", name: "Nabil Bank Limited", code: "NABIL" }, { id: "8", name: "Nepal Bank Limited", code: "NBL" }];
+    expect(institutionForFile("gibl.svg", withCodes)).toBe("6");
+    expect(institutionForFile("NBL.png", withCodes)).toBe("8");
+    expect(institutionForFile("nabil.png", withCodes)).toBe("7");
+  });
   it("matches nothing when the name fits none or several", () => {
     expect(institutionForFile("nepal.png", list)).toBeNull();
     expect(institutionForFile("unknown.png", list)).toBeNull();
@@ -41,9 +47,12 @@ describe("matching a logo file to its bank", () => {
 });
 
 describe("the starting list and the modes a bank is used for", () => {
-  it("has banks and wallets, each name once", () => {
+  it("has the 20 commercial banks and 3 wallets, each name and each code once", () => {
     const names = STARTING_INSTITUTIONS.map((i) => i.name.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
+    expect(new Set(STARTING_INSTITUTIONS.map((i) => i.code)).size).toBe(STARTING_INSTITUTIONS.length);
+    expect(STARTING_INSTITUTIONS.filter((i) => i.kind === "bank")).toHaveLength(20);
+    expect(STARTING_INSTITUTIONS.filter((i) => i.kind === "wallet").map((i) => i.code)).toEqual(["ESEWA", "KHALTI", "IMEPAY"]);
     expect(STARTING_INSTITUTIONS.some((i) => i.kind === "wallet")).toBe(true);
     expect(STARTING_INSTITUTIONS.some((i) => i.kind === "bank")).toBe(true);
   });

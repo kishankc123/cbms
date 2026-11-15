@@ -1,0 +1,1 @@
+ALTER TABLE "bank_institutions" ADD COLUMN "code" text;

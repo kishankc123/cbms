@@ -13,6 +13,8 @@ export const bankInstitutions = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     countryCode: text("country_code").notNull().references(() => complianceCountries.code),
     name: text("name").notNull(),
+    /** The short code, for example NABIL. Also how a logo file is matched to it (nabil.svg). */
+    code: text("code"),
     /** bank | wallet */
     kind: text("kind").notNull().default("bank"),
     isActive: boolean("is_active").notNull().default(true),

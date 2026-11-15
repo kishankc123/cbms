@@ -7,7 +7,7 @@ import { institutionForFile, logoProblem, STARTING_INSTITUTIONS, type Institutio
 
 export async function listInstitutions(countryCode: string, activeOnly = true): Promise<Institution[]> {
   const rows = await db
-    .select({ id: bankInstitutions.id, name: bankInstitutions.name, kind: bankInstitutions.kind, isActive: bankInstitutions.isActive, hasLogo: sql<boolean>`${bankInstitutions.logo} is not null`, updatedAt: bankInstitutions.updatedAt })
+    .select({ id: bankInstitutions.id, name: bankInstitutions.name, code: bankInstitutions.code, kind: bankInstitutions.kind, isActive: bankInstitutions.isActive, hasLogo: sql<boolean>`${bankInstitutions.logo} is not null`, updatedAt: bankInstitutions.updatedAt })
     .from(bankInstitutions)
     .where(and(eq(bankInstitutions.countryCode, countryCode), activeOnly ? eq(bankInstitutions.isActive, true) : undefined))
     .orderBy(asc(bankInstitutions.kind), asc(bankInstitutions.sortOrder), asc(bankInstitutions.name));
@@ -15,13 +15,14 @@ export async function listInstitutions(countryCode: string, activeOnly = true): 
 }
 
 /** Adds an institution, or changes one (name, kind, shown or hidden). */
-export async function saveInstitution(input: { id?: string; countryCode: string; name: string; kind: InstitutionKind; isActive: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function saveInstitution(input: { id?: string; countryCode: string; name: string; code?: string | null; kind: InstitutionKind; isActive: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = input.name.trim();
+  const code = input.code?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || null;
   if (!name || name.length > 80) return { ok: false, error: "Enter a name of up to 80 characters." };
   if (input.kind !== "bank" && input.kind !== "wallet") return { ok: false, error: "Choose bank or wallet." };
   try {
-    if (input.id) await db.update(bankInstitutions).set({ name, kind: input.kind, isActive: input.isActive, updatedAt: new Date() }).where(eq(bankInstitutions.id, input.id));
-    else await db.insert(bankInstitutions).values({ countryCode: input.countryCode, name, kind: input.kind, isActive: input.isActive });
+    if (input.id) await db.update(bankInstitutions).set({ name, code, kind: input.kind, isActive: input.isActive, updatedAt: new Date() }).where(eq(bankInstitutions.id, input.id));
+    else await db.insert(bankInstitutions).values({ countryCode: input.countryCode, name, code, kind: input.kind, isActive: input.isActive });
     return { ok: true };
   } catch {
     return { ok: false, error: `${name} is already in the list.` };

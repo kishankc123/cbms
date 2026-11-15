@@ -119,7 +119,7 @@ const NAV: NavEntry[] = [
     label: "Bank Reconciliation",
     children: [
       { href: "/bank-reconciliation", label: "Home" },
-      { href: "/bank-reconciliation/setup", label: "Link bank account" },
+      { href: "/bank-reconciliation/setup", label: "Bank accounts" },
       { href: "/reports/bank-reconciliation-report", label: "Reports" },
     ],
   },

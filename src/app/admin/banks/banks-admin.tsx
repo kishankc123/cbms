@@ -40,7 +40,7 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
       setBusy(false);
     }
   }
-  const save = (i: Institution, patch: Partial<Pick<Institution, "name" | "kind" | "isActive">>) => run(() => saveBank({ id: i.id, countryCode, name: i.name, kind: i.kind, isActive: i.isActive, ...patch }));
+  const save = (i: Institution, patch: Partial<Pick<Institution, "name" | "code" | "kind" | "isActive">>) => run(() => saveBank({ id: i.id, countryCode, name: i.name, code: i.code, kind: i.kind, isActive: i.isActive, ...patch }));
 
   async function bulkLogos(files: FileList | null) {
     if (!files?.length) return;
@@ -71,7 +71,7 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
         <Button size="sm" icon={<Upload size={15} />} disabled={busy || list.length === 0} onClick={() => bulk.current?.click()}>
           Upload logos
         </Button>
-        <span className="text-xs text-ink-2">Name each file after its bank, for example nabil.svg or esewa.png. PNG, JPEG, WebP or SVG, up to 40 KB.</span>
+        <span className="text-xs text-ink-2">Name each file after the bank's code, for example nabil.svg or esewa.png. PNG, JPEG, WebP or SVG, up to 40 KB.</span>
         <input ref={bulk} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple hidden onChange={(e) => bulkLogos(e.target.files).then(() => (e.target.value = ""))} />
         <input
           ref={one}
@@ -108,6 +108,7 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
         <thead className="text-left text-xs text-ink-2 [&_th]:border-b [&_th]:border-line [&_th]:bg-app [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:font-medium">
           <tr>
             <th>Name</th>
+            <th>Code</th>
             <th>Type</th>
             <th>Shown</th>
             <th>Logo</th>
@@ -121,6 +122,9 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
                   <BankLogo name={i.name} institution={i} />
                   <Input defaultValue={i.name} maxLength={80} className="!w-64" onBlur={(e) => e.target.value.trim() !== i.name && save(i, { name: e.target.value })} />
                 </div>
+              </td>
+              <td className="px-2.5 py-1.5">
+                <Input defaultValue={i.code ?? ""} maxLength={12} className="!w-28 uppercase" aria-label={`Code of ${i.name}`} onBlur={(e) => e.target.value.trim().toUpperCase() !== (i.code ?? "") && save(i, { code: e.target.value })} />
               </td>
               <td className="px-2.5 py-1.5">
                 <Select className="!w-28" value={i.kind} onChange={(e) => save(i, { kind: e.target.value as InstitutionKind })}>
@@ -146,7 +150,7 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
           ))}
           {list.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-2.5 py-6 text-center text-ink-2">
+              <td colSpan={5} className="px-2.5 py-6 text-center text-ink-2">
                 Nothing in the list yet.
               </td>
             </tr>

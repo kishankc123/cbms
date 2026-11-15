@@ -4,7 +4,7 @@
 export type InstitutionKind = "bank" | "wallet";
 export const KIND_LABEL: Record<InstitutionKind, string> = { bank: "Banks", wallet: "Wallets" };
 
-export type Institution = { id: string; name: string; kind: InstitutionKind; isActive: boolean; hasLogo: boolean; updatedAt: string };
+export type Institution = { id: string; name: string; code: string | null; kind: InstitutionKind; isActive: boolean; hasLogo: boolean; updatedAt: string };
 
 /** "Nabil Bank" -> "NB", "eSewa" -> "ES": the first letters of the first two words, or the first two letters of a single word. */
 export function initials(name: string): string {
@@ -31,11 +31,11 @@ export function logoProblem(type: string, bytes: number, text?: string): string 
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** The one entry a logo file belongs to, by its file name ("nabil.svg" -> Nabil Bank): the name starts with it. Null when none or several match. */
-export function institutionForFile(fileName: string, list: { id: string; name: string }[]): string | null {
+/** The one entry a logo file belongs to, by its file name ("nabil.svg" -> NABIL, or the start of the name). Null when none or several match. */
+export function institutionForFile(fileName: string, list: { id: string; name: string; code?: string | null }[]): string | null {
   const key = slug(fileName.replace(/\.[^.]+$/, ""));
   if (!key) return null;
-  const exact = list.filter((i) => slug(i.name) === key);
+  const exact = list.filter((i) => slug(i.name) === key || slug(i.code ?? "") === key);
   const found = exact.length ? exact : list.filter((i) => slug(i.name).startsWith(key));
   return found.length === 1 ? found[0].id : null;
 }
@@ -43,11 +43,31 @@ export function institutionForFile(fileName: string, list: { id: string; name: s
 /** What a bank or wallet is usually paid through, to tick the payment modes it can be used for. */
 export const defaultModeNames = (kind: InstitutionKind, name: string): string[] => (kind === "bank" ? ["Bank transfer", "Cheque"] : ["Wallet", name]);
 
-// The starting list for Nepal: unverified, to be checked and edited by the platform administrator (banks merge and change names).
+// The starting list for Nepal: the commercial banks and the main wallets with their short codes. Unverified, to be checked and edited by the platform administrator.
 const banks = [
-  "Nabil Bank", "Nepal Investment Mega Bank", "Standard Chartered Bank Nepal", "Himalayan Bank", "Nepal SBI Bank", "Everest Bank", "NIC Asia Bank", "Machhapuchchhre Bank",
-  "Kumari Bank", "Laxmi Sunrise Bank", "Siddhartha Bank", "Global IME Bank", "Citizens Bank International", "Prime Commercial Bank", "NMB Bank", "Prabhu Bank", "Sanima Bank",
-  "Agricultural Development Bank", "Nepal Bank", "Rastriya Banijya Bank",
+  ["Nepal Bank Limited", "NBL"],
+  ["Agriculture Development Bank Limited", "ADBL"],
+  ["Nabil Bank Limited", "NABIL"],
+  ["Nepal Investment Mega Bank Limited", "NIMB"],
+  ["Standard Chartered Bank Nepal Limited", "SCBNL"],
+  ["Himalayan Bank Limited", "HBL"],
+  ["Nepal SBI Bank Limited", "NSBI"],
+  ["Everest Bank Limited", "EBL"],
+  ["Kumari Bank Limited", "KBL"],
+  ["Laxmi Sunrise Bank Limited", "LSBL"],
+  ["Citizens Bank International Limited", "CBL"],
+  ["Prime Commercial Bank Limited", "PCBL"],
+  ["Sanima Bank Limited", "SANIMA"],
+  ["Machhapuchchhre Bank Limited", "MBL"],
+  ["NIC ASIA Bank Limited", "NICASIA"],
+  ["Global IME Bank Limited", "GIBL"],
+  ["NMB Bank Limited", "NMB"],
+  ["Prabhu Bank Limited", "PRABHU"],
+  ["Siddhartha Bank Limited", "SBL"],
+  ["Rastriya Banijya Bank Limited", "RBB"],
 ];
-const wallets = ["eSewa", "Khalti", "IME Pay", "Fonepay", "PrabhuPay", "CellPay"];
-export const STARTING_INSTITUTIONS: { name: string; kind: InstitutionKind }[] = [...banks.map((name) => ({ name, kind: "bank" as const })), ...wallets.map((name) => ({ name, kind: "wallet" as const }))];
+const wallets = [["eSewa", "ESEWA"], ["Khalti", "KHALTI"], ["IME Pay", "IMEPAY"]];
+export const STARTING_INSTITUTIONS: { name: string; code: string; kind: InstitutionKind }[] = [
+  ...banks.map(([name, code]) => ({ name, code, kind: "bank" as const })),
+  ...wallets.map(([name, code]) => ({ name, code, kind: "wallet" as const })),
+];

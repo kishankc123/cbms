@@ -12,7 +12,7 @@ const done = <T,>(result: T) => {
   return result;
 };
 
-export async function saveBank(input: { id?: string; countryCode: string; name: string; kind: InstitutionKind; isActive: boolean }) {
+export async function saveBank(input: { id?: string; countryCode: string; name: string; code?: string | null; kind: InstitutionKind; isActive: boolean }) {
   await requirePlatformAdmin();
   return done(await saveInstitution(input));
 }
