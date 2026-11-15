@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setBankAccountActive } from "../actions";
-import { BankAccountFormModal, type InitialBankAccount } from "./bank-account-form-modal";
+import { BankAccountFormModal, type FormOptions, type InitialBankAccount } from "./bank-account-form-modal";
+import { BankLogo } from "@/components/bank-logo";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type BankAccountRow = {
@@ -18,11 +19,14 @@ type BankAccountRow = {
   isActive: boolean;
   ledgerCode: string;
   ledgerName: string;
+  institutionId: string | null;
+  logo: { hasLogo: boolean; updatedAt: Date } | null;
+  modeIds: string[];
 };
 
 type LedgerOption = { id: string; code: string; name: string };
 
-export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccounts: BankAccountRow[]; ledgerOptions: LedgerOption[] }) {
+export function BankAccountsTable({ bankAccounts, ledgerOptions, options }: { bankAccounts: BankAccountRow[]; ledgerOptions: LedgerOption[]; options: FormOptions }) {
   const ask = useConfirm();
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
@@ -68,7 +72,12 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccount
         <tbody>
           {bankAccounts.map((b) => (
             <tr key={b.id} className="border-b border-line transition-colors hover:bg-hover">
-              <td className="px-2.5 py-1.5">{b.bankName ?? "—"}</td>
+              <td className="px-2.5 py-1.5">
+                <div className="flex items-center gap-2">
+                  <BankLogo name={b.bankName ?? b.accountName} institution={b.institutionId && b.logo ? { id: b.institutionId, hasLogo: b.logo.hasLogo, updatedAt: b.logo.updatedAt.toISOString() } : null} />
+                  {b.bankName ?? "—"}
+                </div>
+              </td>
               <td className="px-2.5 py-1.5">{b.accountName}</td>
               <td className="px-2.5 py-1.5">{b.accountNumber ?? "—"}</td>
               <td className="px-2.5 py-1.5">{b.branch ?? "—"}</td>
@@ -91,6 +100,8 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccount
                       currency: b.currency,
                       chartOfAccountsLink: b.chartOfAccountsLink,
                       openingBalance: Number(b.openingBalance),
+                      institutionId: b.institutionId,
+                      modeIds: b.modeIds,
                       ledgerLabel: `${b.ledgerCode} — ${b.ledgerName}`,
                     })
                   }
@@ -122,8 +133,8 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions }: { bankAccount
         </tbody>
       </table>
 
-      {showNew && <BankAccountFormModal ledgerOptions={ledgerOptions} onClose={() => setShowNew(false)} />}
-      {editing && <BankAccountFormModal ledgerOptions={ledgerOptions} initial={editing} onClose={() => setEditing(null)} />}
+      {showNew && <BankAccountFormModal ledgerOptions={ledgerOptions} options={options} onClose={() => setShowNew(false)} />}
+      {editing && <BankAccountFormModal ledgerOptions={ledgerOptions} options={options} initial={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

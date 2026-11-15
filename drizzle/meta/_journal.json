@@ -883,6 +883,13 @@
       "when": 1794218545048,
       "tag": "0125_payroll_review_step_removed",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1794753581406,
+      "tag": "0126_bank_directory",
+      "breakpoints": true
     }
   ]
 }

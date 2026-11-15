@@ -81,6 +81,7 @@ const PLATFORM: Record<string, string> = {
   compliance_module_taxes: "which taxes apply in which module of a country, set by platform administrators",
   platform_slab_versions: "salary-tax slabs published by platform administrators; payroll reads the version in force",
   platform_payroll_rule_versions: "retirement scheme rates and tax limits published by platform administrators; payroll reads the version in force",
+  bank_institutions: "the banks and wallets of a country, published by platform administrators; every organization of that country picks from the same list",
   platform_tax_depreciation_rule_versions: "tax depreciation classes, rates and timing published by platform administrators; organizations read the version in force",
   platform_slab_drafts: "carried-forward platform slabs waiting for an administrator to confirm them",
   platform_tax_rate_drafts: "carried-forward platform rates waiting for an administrator to confirm them",
