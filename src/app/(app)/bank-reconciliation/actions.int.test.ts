@@ -326,3 +326,37 @@ describe("flagging a bank line for review", () => {
     await expect(A.setLineFlag({ statementLineId: "00000000-0000-0000-0000-000000000000", flagged: true })).rejects.toThrow(/not found/);
   });
 });
+
+describe("adding a bank account puts it in the chart of accounts too", () => {
+  const base = { bankName: "Nabil Bank", accountName: "Nabil Savings", accountNumber: "0123", branch: "Thamel", currency: "NPR" };
+
+  it("with no ledger account chosen, makes a new account under Bank, links it once, and posts the opening balance to it", async () => {
+    await A.createBankAccount({ ...base, chartOfAccountsLink: "", openingBalance: 2500 });
+    const group = await acct(org.tenantId, "1010");
+    const [made] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.name, "Nabil Savings")));
+    expect(made).toMatchObject({ category: "asset", parentAccountId: group.id });
+    expect(made.code).toMatch(/^1010\.\d+$/);
+
+    const linked = await db.select().from(bankAccounts).where(and(eq(bankAccounts.tenantId, org.tenantId), eq(bankAccounts.chartOfAccountsLink, made.id)));
+    expect(linked).toHaveLength(1);
+    expect(linked[0]).toMatchObject({ accountName: "Nabil Savings", bankName: "Nabil Bank", accountNumber: "0123", branch: "Thamel", openingBalance: "2500.00" });
+
+    const lines = await db
+      .select({ d: journalLines.debitAmount, c: journalLines.creditAmount })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+      .where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalLines.accountId, made.id)));
+    expect(lines.reduce((sum, r) => sum + Number(r.d) - Number(r.c), 0)).toBe(2500);
+  });
+
+  it("offers only Cash and Bank accounts that can still be linked, never the Bank heading", async () => {
+    const options = await A.getBankAccountLedgerOptions();
+    expect(options.some((o) => o.code === "1010")).toBe(false);
+    expect(options.every((o) => o.code === "1000" || o.code.startsWith("1000.") || o.code.startsWith("1010."))).toBe(true);
+    expect(options.some((o) => o.name === "Nabil Savings")).toBe(false);
+  });
+
+  it("refuses to link the Bank heading itself, in plain words", async () => {
+    await expect(A.createBankAccount({ ...base, accountName: "Heading", chartOfAccountsLink: (await acct(org.tenantId, "1010")).id, openingBalance: 0 })).rejects.toThrow(/heading/);
+  });
+});

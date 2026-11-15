@@ -33,7 +33,6 @@ export function BankAccountFormModal({
 
   async function handleSubmit() {
     if (!accountName.trim()) return report("Enter the account name.", '[data-field="name"]');
-    if (!chartOfAccountsLink) return report("Select the ledger account this bank account is tied to.", '[data-field="ledger"]');
     setSaving(true);
     try {
       const payload: BankAccountInput = {
@@ -117,13 +116,18 @@ export function BankAccountFormModal({
                 onChange={(e) => setChartOfAccountsLink(e.target.value)}
                 className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full"
               >
-                <option value="">Select ledger account</option>
+                <option value="">Create a new account under Bank (recommended)</option>
                 {ledgerOptions.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.code} — {a.name}
                   </option>
                 ))}
               </select>
+            )}
+            {!initial && (
+              <p className="mt-1 text-xs text-gray-500">
+                {chartOfAccountsLink ? "This existing account is linked as it is." : "A new account is added to your Chart of Accounts under Bank (for example 1010.03) and linked here, so it appears in both places."}
+              </p>
             )}
           </div>
         </div>
