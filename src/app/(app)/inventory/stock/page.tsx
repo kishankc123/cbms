@@ -9,7 +9,7 @@ import { StockTabs } from "./stock-tabs";
 import { StockReport } from "./stock-report";
 import { StockMaintenance } from "./maintenance";
 import { getInventoryHistory, getOpeningRows } from "@/lib/inventory/opening";
-import { getOpeningDate } from "@/lib/inventory/stock";
+import { getInventorySettings } from "@/lib/inventory/stock";
 import { verifyStockBalances } from "@/lib/inventory/recalc";
 import { PageHeader } from "@/components/ui/page-header";
 
@@ -18,10 +18,10 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   if (denied) return denied;
   const { tab } = await searchParams;
   const session = await requireTenantSession();
-  const [valuation, units, openingDate, openingRows, history, mismatched] = await Promise.all([
+  const [valuation, units, inventorySettings, openingRows, history, mismatched] = await Promise.all([
     getInventoryValuation(session.tenantId),
     db.select().from(itemUnits).where(eq(itemUnits.tenantId, session.tenantId)),
-    getOpeningDate(session.tenantId),
+    getInventorySettings(session.tenantId),
     getOpeningRows(session.tenantId),
     getInventoryHistory(session.tenantId),
     verifyStockBalances(session.tenantId),
@@ -37,7 +37,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <StockTabs
         items={valuation.items.map((i) => ({ id: i.id, name: i.name, unitId: i.unitId, quantity: i.quantity, averageCost: i.averageCost }))}
         units={units.map((u) => ({ id: u.id, name: u.name }))}
-        openingDate={openingDate}
+        openingDate={inventorySettings.openingDate}
+        followsBooksStart={inventorySettings.followsBooksStart}
+        booksStartDate={inventorySettings.booksStartDate}
         openingRows={openingRows}
         history={history}
         initialTab={tab}

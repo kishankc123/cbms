@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, complianceObligations, notificationStates, payrollRuns, purchaseBills } from "@/db/schema";
+import { accounts, complianceObligations, notificationStates, payrollRuns, purchaseBills, tenants } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry } from "@/lib/ledger/post";
 import { getOrCreateRetirementPayable } from "@/lib/ledger/retirement-accounts";
@@ -75,5 +75,20 @@ describe("a person's own choices", () => {
     expect((await loadStates(org.tenantId, org.userId)).find((s) => s.key === "payroll_runs")).toMatchObject({ state: "snoozed", snoozedUntil: "2026-11-13", countAt: 2 });
     await saveState(org.tenantId, org.userId, "payroll_runs", "unseen", 2, today);
     expect((await loadStates(org.tenantId, org.userId)).some((s) => s.key === "payroll_runs")).toBe(false);
+  });
+});
+
+describe("the books start date reminder", () => {
+  it("is shown until a books start date is set, then goes away", async () => {
+    expect((await keysOf())).toContain("books_start_unset");
+    const [n] = (await loadNotifications(org.tenantId, today, all)).filter((x) => x.key === "books_start_unset");
+    expect(n).toMatchObject({ group: "alert", href: "/settings/opening-balances", title: "Set your books start date" });
+    await db.update(tenants).set({ openingBalanceDate: "2026-07-17" }).where(eq(tenants.id, org.tenantId));
+    expect(await keysOf()).not.toContain("books_start_unset");
+    await db.update(tenants).set({ openingBalanceDate: null }).where(eq(tenants.id, org.tenantId));
+  });
+
+  it("is only for people who can see the chart of accounts", async () => {
+    expect(await keysOf((k) => k !== "books_start_unset")).not.toContain("books_start_unset");
   });
 });

@@ -32,6 +32,8 @@ export function StockTabs({
   units,
   report,
   openingDate,
+  followsBooksStart,
+  booksStartDate,
   openingRows,
   history,
   initialTab,
@@ -40,6 +42,10 @@ export function StockTabs({
   units: Unit[];
   report: React.ReactNode;
   openingDate: string | null;
+  /** The Inventory Opening Date is the books start date (so it is changed there, not here). */
+  followsBooksStart: boolean;
+  /** The books start date, to point out when the inventory date differs from it. */
+  booksStartDate: string | null;
   openingRows: OpeningRow[];
   history: HistoryRow[];
   initialTab?: string;
@@ -62,7 +68,7 @@ export function StockTabs({
       </div>
 
       {tab === "stock" && report}
-      {tab === "opening" && <OpeningPanel openingDate={openingDate} rows={openingRows} items={items} units={units} history={history} />}
+      {tab === "opening" && <OpeningPanel openingDate={openingDate} followsBooksStart={followsBooksStart} booksStartDate={booksStartDate} rows={openingRows} items={items} units={units} history={history} />}
       {tab === "adjust" && <AdjustForm items={items} units={units} />}
     </div>
   );

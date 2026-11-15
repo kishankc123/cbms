@@ -44,9 +44,28 @@ async function trackedItemIds(tenantId: string, ids: (string | null | undefined)
 
 // ---------------------------------------------------------------------------------------------------------------- settings
 
+/**
+ * Inventory settings. The Inventory Opening Date follows the organization's books start date (Settings > Opening balances) once that is set, so there is one date
+ * to keep. It keeps its own date only when it was set separately to a different day before (stock was entered against it), so nothing already entered is
+ * moved without being asked; `followsBooksStart` says which it is.
+ */
 export async function getInventorySettings(tenantId: string) {
-  const [s] = await db.select().from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1);
-  return { allowNegativeStock: s?.allowNegativeStock ?? false, openingDate: s?.openingDate ?? null, trackInventory: s?.trackInventory ?? true, overviewStockLossesInCogs: s?.overviewStockLossesInCogs ?? false };
+  const [[s], [t]] = await Promise.all([
+    db.select().from(inventorySettings).where(eq(inventorySettings.tenantId, tenantId)).limit(1),
+    db.select({ booksStart: tenants.openingBalanceDate }).from(tenants).where(eq(tenants.id, tenantId)).limit(1),
+  ]);
+  const booksStart = t?.booksStart ?? null;
+  const own = s?.openingDate ?? null;
+  const followsBooksStart = booksStart !== null && (own === null || own === booksStart);
+  return {
+    allowNegativeStock: s?.allowNegativeStock ?? false,
+    openingDate: followsBooksStart ? booksStart : own,
+    followsBooksStart,
+    /** The books start date, shown when the inventory date was set to a different day. */
+    booksStartDate: booksStart,
+    trackInventory: s?.trackInventory ?? true,
+    overviewStockLossesInCogs: s?.overviewStockLossesInCogs ?? false,
+  };
 }
 
 /** Whether the organization keeps stock and works out COGS (the default). Off means purchases are recorded by amount only. */

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accountRoles, bankStatementLines, journalEntries, journalLines, notificationStates, payrollRuns } from "@/db/schema";
+import { accountRoles, bankStatementLines, journalEntries, journalLines, notificationStates, payrollRuns, tenants } from "@/db/schema";
 import { addDays } from "@/lib/calendar";
 import { DUE_SOON_DAYS } from "@/lib/compliance/engine/status";
 import { complianceSummary, needsAttention, type NeedsAttentionItem } from "@/lib/dashboard/aggregates";
@@ -44,6 +44,31 @@ export async function loadNotifications(tenantId: string, today: string, allowed
           out.push({ key: it.id, group: meta.group, severity: it.severity === "critical" ? "critical" : "action", title: it.label, detail: it.detail, href: meta.href, count: it.count ?? 1, amount: it.amount ?? null, sinceDays: null });
         }
       })
+    );
+  }
+
+  // The books start date is set once, with the opening balances: until it is, reports and posting have no date to start from.
+  if (allowed("books_start_unset")) {
+    tasks.push(
+      db
+        .select({ date: tenants.openingBalanceDate })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1)
+        .then(([t]) => {
+          if (!t || t.date) return;
+          out.push({
+            key: "books_start_unset",
+            group: "alert",
+            severity: "action",
+            title: "Set your books start date",
+            detail: "It is the day your books begin. Opening balances are posted on it, nothing can be dated before it, and reports start from it.",
+            href: "/settings/opening-balances",
+            count: 1,
+            amount: null,
+            sinceDays: null,
+          });
+        })
     );
   }
 

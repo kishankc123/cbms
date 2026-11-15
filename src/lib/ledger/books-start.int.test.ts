@@ -2,9 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, journalEntries, tenants } from "@/db/schema";
+import { accounts, inventorySettings, journalEntries, tenants } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry, reverseJournalEntry } from "./post";
+import { getInventorySettings } from "@/lib/inventory/stock";
+import { setOpeningDate as setInventoryOpeningDate } from "@/lib/inventory/opening";
 import { assertNotBeforeBooksStart, changeBooksStartDate, clampToBooksStart, getBooksStart } from "./books-start";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -87,5 +89,26 @@ describe("reports start at the books start date", () => {
     expect(clampToBooksStart({ from: "2026-11-01", to: "2027-07-16" }, "2026-10-02")).toEqual({ from: "2026-11-01", to: "2027-07-16", clamped: false, beforeBooks: false });
     expect(clampToBooksStart({ from: "2026-07-17", to: "2026-09-30" }, "2026-10-02")).toEqual({ from: "2026-07-17", to: "2026-09-30", clamped: false, beforeBooks: true });
     expect(clampToBooksStart({ from: "2026-07-17", to: "2027-07-16" }, null)).toEqual({ from: "2026-07-17", to: "2027-07-16", clamped: false, beforeBooks: false });
+  });
+});
+
+describe("the Inventory Opening Date follows the books start date", () => {
+  it("is the books start date when the inventory has no date of its own, and cannot be changed on its own", async () => {
+    await db.delete(inventorySettings).where(eq(inventorySettings.tenantId, org.tenantId));
+    await setStart("2026-08-01");
+    expect(await getInventorySettings(org.tenantId)).toMatchObject({ openingDate: "2026-08-01", followsBooksStart: true });
+    await expect(setInventoryOpeningDate(org.tenantId, org.userId, { date: "2026-08-05", confirmed: true })).rejects.toThrow(/follows your books start date/);
+  });
+
+  it("keeps a date of its own that was set to a different day before, and says the books start elsewhere", async () => {
+    await db.insert(inventorySettings).values({ tenantId: org.tenantId, openingDate: "2026-07-01" }).onConflictDoUpdate({ target: inventorySettings.tenantId, set: { openingDate: "2026-07-01" } });
+    expect(await getInventorySettings(org.tenantId)).toMatchObject({ openingDate: "2026-07-01", followsBooksStart: false, booksStartDate: "2026-08-01" });
+  });
+
+  it("follows again once the two dates are the same, and is its own date while no books start date is set", async () => {
+    await db.update(inventorySettings).set({ openingDate: "2026-08-01" }).where(eq(inventorySettings.tenantId, org.tenantId));
+    expect((await getInventorySettings(org.tenantId)).followsBooksStart).toBe(true);
+    await setStart(null);
+    expect(await getInventorySettings(org.tenantId)).toMatchObject({ openingDate: "2026-08-01", followsBooksStart: false });
   });
 });
