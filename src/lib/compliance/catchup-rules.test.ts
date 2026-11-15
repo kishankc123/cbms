@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerValid, filedBefore, latestFinishedYearEnd, periodOptions, prefillFrom } from "./catchup-rules";
+import { answerValid, filedBefore, latestFinishedYearEnd, periodOptions, prefillFrom, unfiledPeriods } from "./catchup-rules";
 
 const TODAY = "2026-10-08"; // 22 Ashwin 2083, in FY 2083/84
 
@@ -58,5 +58,21 @@ describe("answers and what they mark", () => {
     expect(filedBefore("2026-07-16", "2026-07-16")).toBe(true);
     expect(filedBefore("2026-08-16", "2026-07-16")).toBe(false);
     expect(filedBefore("2026-08-16", null)).toBe(false);
+  });
+});
+
+describe("the periods left unfiled", () => {
+  const options = [
+    { value: "2082-07-16", label: "FY 2081/82" },
+    { value: "2083-07-16", label: "FY 2082/83" },
+    { value: "2084-07-15", label: "FY 2083/84" },
+  ];
+  it("counts every period after the one filed through, with the first and the last", () => {
+    expect(unfiledPeriods(options, "2082-07-16")).toEqual({ count: 2, first: "FY 2082/83", last: "FY 2083/84" });
+  });
+  it("counts all of them when nothing was filed, and none when everything was", () => {
+    expect(unfiledPeriods(options, null).count).toBe(3);
+    expect(unfiledPeriods(options, "2084-07-15")).toEqual({ count: 0, first: null, last: null });
+    expect(unfiledPeriods([], null)).toEqual({ count: 0, first: null, last: null });
   });
 });

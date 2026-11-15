@@ -1,4 +1,6 @@
 import { and, asc, eq, or, like } from "drizzle-orm";
+import { clampToBooksStart, getBooksStart } from "@/lib/ledger/books-start";
+import { BooksStartNote } from "../books-start-note";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
@@ -20,6 +22,10 @@ export default async function BankBookPage({ searchParams }: { searchParams: Pro
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
+  // The books begin on the books start date: a report cannot start before it, and the opening balances are then its opening line.
+  const booksStart = (await getBooksStart(session.tenantId)).date;
+  const span = clampToBooksStart({ from, to }, booksStart);
+  from = span.from;
 
   const list = await db
     .select({ id: accounts.id, code: accounts.code, name: accounts.name })
@@ -38,6 +44,7 @@ export default async function BankBookPage({ searchParams }: { searchParams: Pro
         <BackButton href="/reports" label="Back to Reports" />
         <PageHeader title="Bank Book" className="!mb-0" />
       </div>
+      <BooksStartNote date={booksStart} calendar={session.calendar} clamped={span.clamped} beforeBooks={span.beforeBooks} />
       <BankBookView
         accounts={list}
         accountId={accountId}

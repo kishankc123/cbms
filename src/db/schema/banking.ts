@@ -1,12 +1,38 @@
-import { pgTable, uuid, text, timestamp, date, numeric, boolean, jsonb, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, numeric, boolean, jsonb, integer, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { complianceCountries } from "./compliance-framework";
 import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 import { journalLines } from "./ledger";
+
+// The banks and wallets a country's organizations can pick from when they add an account, kept by the platform administrator. The logo is a small
+// image stored here (see lib/banking/institutions.ts); without one the screens show the initials.
+export const bankInstitutions = pgTable(
+  "bank_institutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    countryCode: text("country_code").notNull().references(() => complianceCountries.code),
+    name: text("name").notNull(),
+    /** The short code, for example NABIL. Also how a logo file is matched to it (nabil.svg). */
+    code: text("code"),
+    /** bank | wallet */
+    kind: text("kind").notNull().default("bank"),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** The image as base64, and its type; both null when there is no logo. */
+    logo: text("logo"),
+    logoType: text("logo_type"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("bank_institutions_country_name").on(t.countryCode, sql`lower(${t.name})`)]
+);
 
 export const bankAccounts = pgTable("bank_accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   bankName: text("bank_name"),
+  /** The directory entry this account was picked from; null for an institution typed in by hand. */
+  institutionId: uuid("institution_id").references(() => bankInstitutions.id),
   accountName: text("account_name").notNull(),
   accountNumberMasked: text("account_number_masked"),
   accountNumber: text("account_number"),

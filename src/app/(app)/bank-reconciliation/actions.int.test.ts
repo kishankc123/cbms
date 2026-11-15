@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, auditLog, bankAccounts, bankReconciliations, bankStatementLines, journalEntries, journalLines } from "@/db/schema";
+import { accounts, auditLog, bankAccounts, bankInstitutions, bankReconciliations, bankStatementLines, journalEntries, journalLines, paymentModeAccounts, paymentModes } from "@/db/schema";
+import { seedPaymentModes } from "@/lib/payment-modes";
+import { saveInstitution } from "@/lib/banking/institutions";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
 import { postJournalEntry } from "@/lib/ledger/post";
@@ -324,5 +326,76 @@ describe("flagging a bank line for review", () => {
     const line = (await stmtLines()).find((l) => l.description === "Looks odd")!;
     await expect(A.setLineFlag({ statementLineId: line.id, flagged: true, note: "x".repeat(301) })).rejects.toThrow(/under 300 characters/);
     await expect(A.setLineFlag({ statementLineId: "00000000-0000-0000-0000-000000000000", flagged: true })).rejects.toThrow(/not found/);
+  });
+});
+
+describe("adding a bank account puts it in the chart of accounts too", () => {
+  const base = { bankName: "Nabil Bank", accountName: "Nabil Savings", accountNumber: "0123", branch: "Thamel", currency: "NPR" };
+
+  it("with no ledger account chosen, makes a new account under Bank, links it once, and posts the opening balance to it", async () => {
+    await A.createBankAccount({ ...base, chartOfAccountsLink: "", openingBalance: 2500 });
+    const group = await acct(org.tenantId, "1010");
+    const [made] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.name, "Nabil Savings")));
+    expect(made).toMatchObject({ category: "asset", parentAccountId: group.id });
+    expect(made.code).toMatch(/^1010\.\d+$/);
+
+    const linked = await db.select().from(bankAccounts).where(and(eq(bankAccounts.tenantId, org.tenantId), eq(bankAccounts.chartOfAccountsLink, made.id)));
+    expect(linked).toHaveLength(1);
+    expect(linked[0]).toMatchObject({ accountName: "Nabil Savings", bankName: "Nabil Bank", accountNumber: "0123", branch: "Thamel", openingBalance: "2500.00" });
+
+    const lines = await db
+      .select({ d: journalLines.debitAmount, c: journalLines.creditAmount })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+      .where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalLines.accountId, made.id)));
+    expect(lines.reduce((sum, r) => sum + Number(r.d) - Number(r.c), 0)).toBe(2500);
+  });
+
+  it("offers only Cash and Bank accounts that can still be linked, never the Bank heading", async () => {
+    const options = await A.getBankAccountLedgerOptions();
+    expect(options.some((o) => o.code === "1010")).toBe(false);
+    expect(options.every((o) => o.code === "1000" || o.code.startsWith("1000.") || o.code.startsWith("1010."))).toBe(true);
+    expect(options.some((o) => o.name === "Nabil Savings")).toBe(false);
+  });
+
+  it("refuses to link the Bank heading itself, in plain words", async () => {
+    await expect(A.createBankAccount({ ...base, accountName: "Heading", chartOfAccountsLink: (await acct(org.tenantId, "1010")).id, openingBalance: 0 })).rejects.toThrow(/heading/);
+  });
+});
+
+describe("picking the bank or wallet from the list", () => {
+  const base = { bankName: "", accountName: "Savings", accountNumber: "9", branch: "", currency: "NPR", chartOfAccountsLink: "", openingBalance: 0 };
+  const modeIdsOf = async (ledgerId: string) => (await db.select({ id: paymentModeAccounts.modeId }).from(paymentModeAccounts).where(eq(paymentModeAccounts.accountId, ledgerId))).map((r) => r.id).sort();
+  let institutionId: string;
+  let transfer: string;
+  let cheque: string;
+
+  afterAll(async () => {
+    await db.delete(bankAccounts).where(eq(bankAccounts.institutionId, institutionId));
+    await db.delete(bankInstitutions).where(eq(bankInstitutions.id, institutionId));
+  });
+
+  it("saves the bank or wallet with the account, using its name, and the payment modes ticked", async () => {
+    await saveInstitution({ countryCode: "NP", name: "ZZ Pick Bank", kind: "bank", isActive: true });
+    [{ id: institutionId }] = await db.select({ id: bankInstitutions.id }).from(bankInstitutions).where(eq(bankInstitutions.name, "ZZ Pick Bank"));
+    await seedPaymentModes(org.tenantId);
+    const modes = await db.select().from(paymentModes).where(eq(paymentModes.tenantId, org.tenantId));
+    transfer = modes.find((m) => m.name === "Bank transfer")!.id;
+    cheque = modes.find((m) => m.name === "Cheque")!.id;
+
+    await A.createBankAccount({ ...base, bankName: "ignored", institutionId, modeIds: [transfer] });
+    const [made] = await db.select().from(bankAccounts).where(eq(bankAccounts.institutionId, institutionId));
+    expect(made).toMatchObject({ bankName: "ZZ Pick Bank", accountName: "Savings" });
+    expect(await modeIdsOf(made.chartOfAccountsLink)).toEqual([transfer]);
+
+    await A.updateBankAccount({ ...base, bankAccountId: made.id, institutionId, chartOfAccountsLink: made.chartOfAccountsLink, modeIds: [cheque] });
+    expect(await modeIdsOf(made.chartOfAccountsLink)).toEqual([cheque]);
+  });
+
+  it("refuses a bank or wallet that is not in the list, and keeps an unlisted one typed by hand", async () => {
+    await expect(A.createBankAccount({ ...base, accountName: "Nowhere", institutionId: "00000000-0000-0000-0000-000000000000" })).rejects.toThrow(/from the list/);
+    await A.createBankAccount({ ...base, accountName: "By hand", bankName: "Village Co-operative" });
+    const [typed] = await db.select().from(bankAccounts).where(eq(bankAccounts.accountName, "By hand"));
+    expect(typed).toMatchObject({ bankName: "Village Co-operative", institutionId: null });
   });
 });

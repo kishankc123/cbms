@@ -16,12 +16,12 @@ const load = () => loadPerformance(org.tenantId, { from: "2026-03-01", to: "2026
 
 beforeAll(async () => {
   org = await createTempOrg("ZZ Overview performance");
-  for (const code of ["1000", "1200", "4000", "5000", "5300"]) id[code] = (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0].id;
+  for (const code of ["1000", "1200", "4000", "5000", "5300.01"]) id[code] = (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0].id;
   id["5920"] = (await db.insert(accounts).values({ tenantId: org.tenantId, code: "5920", name: "Inventory Adjustments", category: "expense", subCategory: "Indirect expenses" }).returning())[0].id;
 
   await post("2026-03-10", "1000", "4000", 1000); // March revenue
   await post("2026-03-10", "5000", "1200", 400); // March cost of goods sold
-  await post("2026-03-12", "5300", "1000", 100); // March utilities
+  await post("2026-03-12", "5300.01", "1000", 100); // March utilities
   await post("2026-03-20", "5920", "1200", 50); // a stock write-off
   await post("2026-02-10", "1000", "4000", 800); // the month before
   await post("2025-03-10", "1000", "4000", 500); // the same month a year ago

@@ -80,6 +80,26 @@ export type PaymentModeRow = {
   accounts: { id: string; code: string; name: string; /** False when the account has since got sub-groups: those need linking instead. */ usable: boolean }[];
 };
 
+/** The active payment modes, and for each account the modes it is linked to. */
+export async function modesWithLinks(tenantId: string) {
+  const [modes, links] = await Promise.all([
+    db.select({ id: paymentModes.id, name: paymentModes.name }).from(paymentModes).where(and(eq(paymentModes.tenantId, tenantId), eq(paymentModes.isActive, true))).orderBy(asc(paymentModes.sortOrder), asc(paymentModes.name)),
+    db.select({ accountId: paymentModeAccounts.accountId, modeId: paymentModeAccounts.modeId }).from(paymentModeAccounts).where(eq(paymentModeAccounts.tenantId, tenantId)),
+  ]);
+  return { modes, linked: (accountId: string) => links.filter((l) => l.accountId === accountId).map((l) => l.modeId) };
+}
+
+/** Makes an account usable for exactly these modes (the organization's own, active ones); other modes' links to it are left alone. */
+export async function setAccountModes(tenantId: string, accountId: string, wanted: string[]): Promise<void> {
+  const { modes, linked } = await modesWithLinks(tenantId);
+  const own = new Set(modes.map((m) => m.id));
+  const have = new Set(linked(accountId));
+  const add = wanted.filter((id) => own.has(id) && !have.has(id));
+  const drop = [...have].filter((id) => own.has(id) && !wanted.includes(id));
+  if (add.length) await db.insert(paymentModeAccounts).values(add.map((modeId) => ({ tenantId, modeId, accountId }))).onConflictDoNothing();
+  if (drop.length) await db.delete(paymentModeAccounts).where(and(eq(paymentModeAccounts.tenantId, tenantId), eq(paymentModeAccounts.accountId, accountId), inArray(paymentModeAccounts.modeId, drop)));
+}
+
 export async function listPaymentModes(tenantId: string): Promise<PaymentModeRow[]> {
   const child = alias(accounts, "child");
   const modes = await db.select().from(paymentModes).where(eq(paymentModes.tenantId, tenantId)).orderBy(asc(paymentModes.sortOrder), asc(paymentModes.name));

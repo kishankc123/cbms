@@ -16,6 +16,7 @@ const NAV: { href: string; label: string; icon: NavIconKey }[] = [
   { href: "/admin/organizations", label: "Organizations", icon: "organizations" },
   { href: "/admin/compliance", label: "Compliance Configuration", icon: "compliance" },
   { href: "/admin/setup", label: "Setup", icon: "settings" },
+  { href: "/admin/banks", label: "Banks and wallets", icon: "bank" },
   { href: "/admin/users", label: "Users", icon: "customers" },
   { href: "/admin/email-log", label: "Sent mail", icon: "mail" },
   { href: "/admin/billing", label: "Billing", icon: "expenses" },

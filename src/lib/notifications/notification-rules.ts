@@ -46,6 +46,7 @@ export const NOTIF_MODULE: Record<string, { module: string; salary?: boolean }> 
   compliance_overdue: { module: "compliance" },
   compliance_due: { module: "compliance" },
   tax_depreciation_review: { module: "assets" },
+  books_start_unset: { module: "chart_of_accounts" },
 };
 export const NOTIF_KEYS = Object.keys(NOTIF_MODULE);
 

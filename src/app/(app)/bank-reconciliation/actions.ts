@@ -16,6 +16,8 @@ import {
   journalEntries,
   journalLines,
   accounts,
+  bankInstitutions,
+  tenants,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
@@ -23,6 +25,9 @@ import { logAuditEvent } from "@/lib/audit";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { syncBankOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
 import { SYSTEM_ACCOUNT_CODES } from "@/lib/ledger/chart-rules";
+import { listInstitutions } from "@/lib/banking/institutions";
+import { modesWithLinks, setAccountModes } from "@/lib/payment-modes";
+import { createSubGroupEntry } from "@/lib/ledger/chart";
 import { assessReconciliation } from "@/lib/banking/assess";
 import { todayIso } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
@@ -54,18 +59,27 @@ export async function getBankAccountLedgerOptions() {
   const linkedIds = new Set(linked.map((r) => r.id));
 
   const rows = await db
-    .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name, parentAccountId: accounts.parentAccountId })
     .from(accounts)
     .where(and(eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true), eq(accounts.category, "asset")))
     .orderBy(accounts.code);
 
-  return rows.filter((a) => !linkedIds.has(a.id));
+  // What can be linked: a Cash or Bank account at the lowest level that no bank account uses yet. (The Bank heading itself is not an account.)
+  const parents = new Set(rows.map((r) => r.parentAccountId).filter((id): id is string => Boolean(id)));
+  return rows
+    .filter((a) => (a.code === "1000" || a.code.startsWith("1000.") || (a.code.startsWith("1010") && a.code !== "1010")) && !parents.has(a.id) && !linkedIds.has(a.id))
+    .map((a) => ({ id: a.id, code: a.code, name: a.name }));
 }
 
 export async function listBankAccounts() {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
-  return db
+  const [{ linked }, rows] = await Promise.all([modesWithLinks(session.tenantId), listBankAccountRows(session.tenantId)]);
+  return rows.map((r) => ({ ...r, modeIds: linked(r.chartOfAccountsLink) }));
+}
+
+const listBankAccountRows = (tenantId: string) =>
+  db
     .select({
       id: bankAccounts.id,
       bankName: bankAccounts.bankName,
@@ -76,13 +90,24 @@ export async function listBankAccounts() {
       chartOfAccountsLink: bankAccounts.chartOfAccountsLink,
       openingBalance: bankAccounts.openingBalance,
       isActive: bankAccounts.isActive,
+      institutionId: bankAccounts.institutionId,
+      logo: { id: bankInstitutions.id, hasLogo: sql<boolean>`${bankInstitutions.logo} is not null`, updatedAt: bankInstitutions.updatedAt },
       ledgerCode: accounts.code,
       ledgerName: accounts.name,
     })
     .from(bankAccounts)
     .innerJoin(accounts, eq(accounts.id, bankAccounts.chartOfAccountsLink))
-    .where(eq(bankAccounts.tenantId, session.tenantId))
+    .leftJoin(bankInstitutions, eq(bankInstitutions.id, bankAccounts.institutionId))
+    .where(eq(bankAccounts.tenantId, tenantId))
     .orderBy(asc(bankAccounts.accountName));
+
+/** What the Add and Edit window offers: the banks and wallets of this country, and the payment modes (changed only by an Owner or Administrator). */
+export async function getBankFormOptions() {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
+  const [t] = await db.select({ country: tenants.countryCode }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
+  const [institutions, { modes }] = await Promise.all([listInstitutions(t?.country ?? ""), modesWithLinks(session.tenantId)]);
+  return { institutions, modes, canSetModes: isOrgAdmin(session.role) };
 }
 
 export type AccountOverview = {
@@ -161,7 +186,20 @@ export type BankAccountInput = {
   currency: string;
   chartOfAccountsLink: string;
   openingBalance: number;
+  /** The bank or wallet picked from the directory; null or missing for one typed by hand (bankName then holds its name). */
+  institutionId?: string | null;
+  /** The payment modes the account can be used for. Only an Owner or Administrator changes these; for anyone else it is ignored. */
+  modeIds?: string[];
 };
+
+/** The directory entry for a picked id, which must be one of this organization's country's; its name becomes the bank name. */
+async function pickedInstitution(tenantId: string, id: string | null | undefined) {
+  if (!id) return null;
+  const [t] = await db.select({ country: tenants.countryCode }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  const found = (await listInstitutions(t?.country ?? "")).find((i) => i.id === id);
+  if (!found) throw new Error("Choose a bank or wallet from the list.");
+  return found;
+}
 
 // The ledger account a bank account is tied to must be one of this organization's Cash / Bank asset accounts, a lowest-
 // level one (not a group that has sub-accounts), and not already used by another bank account.
@@ -171,6 +209,7 @@ async function validateBankLedgerAccount(tenantId: string, accountId: string, ex
   if (!acc.isActive) throw new Error(`Ledger account ${acc.code} ${acc.name} is inactive`);
   const cashOrBank = acc.code === "1000" || acc.code.startsWith("1000.") || acc.code.startsWith("1010");
   if (acc.category !== "asset" || !cashOrBank) throw new Error("Link a Cash or Bank account — an asset account under Cash or Bank in the Chart of Accounts");
+  if (acc.code === "1010") throw new Error("Bank is the heading that holds your bank accounts, not an account itself. Choose Create a new account to add one under it, or link one of its sub-accounts.");
   const [child] = await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, acc.id), eq(accounts.isActive, true))).limit(1);
   if (child) throw new Error(`${acc.name} has sub-accounts — link one of its sub-accounts instead`);
   const linked = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(and(eq(bankAccounts.tenantId, tenantId), eq(bankAccounts.chartOfAccountsLink, acc.id)));
@@ -178,35 +217,53 @@ async function validateBankLedgerAccount(tenantId: string, accountId: string, ex
   return acc;
 }
 
+/**
+ * Adds a bank account. With no ledger account chosen (`chartOfAccountsLink` empty) a new account is created in the Chart of Accounts under Bank (1010.01,
+ * 1010.02...) and linked, so the account is in both places; otherwise an existing Cash or Bank account is linked.
+ */
 export async function createBankAccount(input: BankAccountInput) {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "create")) throw new Error("Not permitted");
   if (!input.accountName.trim()) throw new Error("Account name is required");
-  if (!input.chartOfAccountsLink) throw new Error("Select a ledger account");
-  const ledger = await validateBankLedgerAccount(session.tenantId, input.chartOfAccountsLink);
   const opening = round2(input.openingBalance);
+  const institution = await pickedInstitution(session.tenantId, input.institutionId);
+  const details = {
+    institutionId: institution?.id ?? null,
+    bankName: institution?.name ?? (input.bankName.trim() || null),
+    accountName: input.accountName.trim(),
+    accountNumber: input.accountNumber.trim() || null,
+    branch: input.branch.trim() || null,
+    currency: input.currency.trim() || "NPR",
+    openingBalance: opening.toFixed(2),
+  };
 
-  const [created] = await db
-    .insert(bankAccounts)
-    .values({
-      tenantId: session.tenantId,
-      bankName: input.bankName.trim() || null,
-      accountName: input.accountName.trim(),
-      accountNumber: input.accountNumber.trim() || null,
-      branch: input.branch.trim() || null,
-      currency: input.currency.trim() || "NPR",
-      chartOfAccountsLink: ledger.id,
-      openingBalance: opening.toFixed(2),
-    })
-    .returning();
+  let ledgerId: string;
+  let createdLedger = false;
+  let created: typeof bankAccounts.$inferSelect;
+  if (input.chartOfAccountsLink) {
+    const ledger = await validateBankLedgerAccount(session.tenantId, input.chartOfAccountsLink);
+    ledgerId = ledger.id;
+    [created] = await db.insert(bankAccounts).values({ tenantId: session.tenantId, ...details, chartOfAccountsLink: ledger.id }).returning();
+  } else {
+    const [group] = await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, session.tenantId), eq(accounts.code, "1010"))).limit(1);
+    if (!group) throw new Error("Your Chart of Accounts has no Bank group to put it under. Link an existing account instead.");
+    // An account made under Bank gets its bank account record straight away; fill that one in rather than adding a second.
+    const ledger = await createSubGroupEntry(session.tenantId, session.userId, { parentAccountId: group.id, name: details.accountName });
+    ledgerId = ledger.id;
+    createdLedger = true;
+    [created] = await db.update(bankAccounts).set(details).where(and(eq(bankAccounts.tenantId, session.tenantId), eq(bankAccounts.chartOfAccountsLink, ledger.id))).returning();
+    if (!created) [created] = await db.insert(bankAccounts).values({ tenantId: session.tenantId, ...details, chartOfAccountsLink: ledger.id }).returning();
+  }
 
   // The opening balance is real money in the account: it goes into the ledger too (against Brought forward).
   try {
-    await syncBankOpeningBalanceEntry(session.tenantId, created.id, created.accountName, ledger.id, opening, session.userId);
+    await syncBankOpeningBalanceEntry(session.tenantId, created.id, created.accountName, ledgerId, opening, session.userId);
   } catch (e) {
     await db.delete(bankAccounts).where(eq(bankAccounts.id, created.id));
+    if (createdLedger) await db.delete(accounts).where(and(eq(accounts.id, ledgerId), eq(accounts.tenantId, session.tenantId))).catch(() => {});
     throw e;
   }
+  if (isOrgAdmin(session.role) && input.modeIds) await setAccountModes(session.tenantId, ledgerId, input.modeIds);
 
   revalidatePath("/bank-reconciliation");
   revalidatePath("/bank-reconciliation/setup");
@@ -226,6 +283,7 @@ export async function updateBankAccount(input: BankAccountInput & { bankAccountI
     .limit(1);
   if (!existing) throw new Error("Bank account not found");
   const opening = round2(input.openingBalance);
+  const institution = await pickedInstitution(session.tenantId, input.institutionId);
 
   // A changed opening balance is re-posted first, so a refusal (a closed period, say) leaves everything as it was.
   if (Math.abs(opening - Number(existing.openingBalance)) > 0.004) {
@@ -235,7 +293,8 @@ export async function updateBankAccount(input: BankAccountInput & { bankAccountI
   await db
     .update(bankAccounts)
     .set({
-      bankName: input.bankName.trim() || null,
+      institutionId: institution?.id ?? null,
+      bankName: institution?.name ?? (input.bankName.trim() || null),
       accountName: input.accountName.trim(),
       accountNumber: input.accountNumber.trim() || null,
       branch: input.branch.trim() || null,
@@ -243,6 +302,7 @@ export async function updateBankAccount(input: BankAccountInput & { bankAccountI
       openingBalance: opening.toFixed(2),
     })
     .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.tenantId, session.tenantId)));
+  if (isOrgAdmin(session.role) && input.modeIds) await setAccountModes(session.tenantId, existing.chartOfAccountsLink, input.modeIds);
 
   revalidatePath("/bank-reconciliation");
   revalidatePath("/bank-reconciliation/setup");

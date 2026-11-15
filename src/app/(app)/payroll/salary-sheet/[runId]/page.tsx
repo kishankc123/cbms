@@ -2,7 +2,9 @@ import { guardView, guardSalary } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { payrollRuns, payrollLines, employees } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { can, requireTenantSession } from "@/lib/session";
+import { listRunAdjustments } from "@/lib/payroll/run-adjustments";
+import { AdjustmentsPanel } from "./adjustments-panel";
 import { RunStatusControls } from "./run-status-controls";
 
 import { D } from "@/components/calendar/date-text";
@@ -68,6 +70,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
   const hasAdvances = lines.some((l) => Number(l.advanceRecovered) > 0);
   const recoveries = hasAdvances ? await getRunRecoveryBreakdown(session.tenantId, run) : [];
   const nameOf = new Map(lines.map((l) => [l.employeeId, l.fullName]));
+  const adjustments = await listRunAdjustments(session.tenantId, run);
+  const canAdjust = run.status !== "finalized" && can(session, "payroll", "edit") && can(session, "payroll", "create");
 
   return (
     <div className="space-y-6">
@@ -109,6 +113,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           { label: "Employer payroll cost", value: (totalGross + totalEmployerRetirement).toFixed(2) },
         ]}
       />
+
+      <AdjustmentsPanel runId={run.id} canAdjust={canAdjust} employees={lines.map((l) => ({ id: l.employeeId, name: l.fullName }))} adjustments={adjustments} />
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

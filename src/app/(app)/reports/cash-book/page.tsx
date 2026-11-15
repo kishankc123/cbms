@@ -1,4 +1,6 @@
 import { requireTenantSession, can } from "@/lib/session";
+import { clampToBooksStart, getBooksStart } from "@/lib/ledger/books-start";
+import { BooksStartNote } from "../books-start-note";
 import { cashBook } from "@/lib/ledger/reports";
 import { validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
@@ -17,6 +19,10 @@ export default async function CashBookPage({ searchParams }: { searchParams: Pro
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
+  // The books begin on the books start date: a report cannot start before it, and the opening balances are then its opening line.
+  const booksStart = (await getBooksStart(session.tenantId)).date;
+  const span = clampToBooksStart({ from, to }, booksStart);
+  from = span.from;
 
   const { accountLabels, openingBalance, lines } = await cashBook(session.tenantId, new Date(from + "T00:00:00Z"), new Date(to + "T00:00:00Z"));
 
@@ -26,6 +32,7 @@ export default async function CashBookPage({ searchParams }: { searchParams: Pro
         <BackButton href="/reports" label="Back to Reports" />
         <PageHeader title="Cash Book" className="!mb-0" />
       </div>
+      <BooksStartNote date={booksStart} calendar={session.calendar} clamped={span.clamped} beforeBooks={span.beforeBooks} />
       <CashBookView accountLabels={accountLabels} openingBalance={openingBalance} lines={lines} from={from} to={to} fiscal={fiscal} />
     </div>
   );

@@ -111,6 +111,15 @@ export function answerValid(options: PeriodOption[], value: IsoDate | null): boo
   return value === null || options.some((o) => o.value === value);
 }
 
+/**
+ * The periods that have ended without a filing, given the answer for a stream: every offered period after the one filed through
+ * (all of them for "none filed yet"). Used for the warning about fines under each question; it is only a count and the first and last period.
+ */
+export function unfiledPeriods(options: PeriodOption[], filedThrough: IsoDate | null): { count: number; first: string | null; last: string | null } {
+  const owed = options.filter((o) => !filedThrough || o.value > filedThrough);
+  return { count: owed.length, first: owed[0]?.label ?? null, last: owed.at(-1)?.label ?? null };
+}
+
 /** Whether a period (by its end date) was filed before the system, given the answer for its stream. */
 export function filedBefore(periodEnd: IsoDate | null, filedThrough: IsoDate | null): boolean {
   return Boolean(periodEnd && filedThrough && periodEnd <= filedThrough);

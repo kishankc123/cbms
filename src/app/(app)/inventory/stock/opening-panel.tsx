@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { changeInventoryOpeningDate, deleteOpeningStock, previewInventoryOpeningDate, previewOpeningStockChange, saveOpeningStock } from "./opening-actions";
 import { useProblem } from "@/components/problem-dialog";
@@ -41,7 +42,7 @@ function describeChange(row: HistoryRow, which: "before" | "after") {
 }
 
 // The stock a business already held when inventory tracking began. One balance per item, all on the Inventory Opening Date.
-export function OpeningPanel({ openingDate, rows, items, units, history }: { openingDate: string | null; rows: OpeningRow[]; items: ItemOption[]; units: Unit[]; history: HistoryRow[] }) {
+export function OpeningPanel({ openingDate, followsBooksStart, booksStartDate, rows, items, units, history }: { openingDate: string | null; followsBooksStart: boolean; booksStartDate: string | null; rows: OpeningRow[]; items: ItemOption[]; units: Unit[]; history: HistoryRow[] }) {
   const unitName = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
   const totalQuantity = rows.reduce((s, r) => s + r.quantity, 0);
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
@@ -50,7 +51,7 @@ export function OpeningPanel({ openingDate, rows, items, units, history }: { ope
     <div className="space-y-6">
       <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">Opening stock represents inventory held by the organisation at the beginning of inventory tracking.</div>
 
-      <OpeningDateCard openingDate={openingDate} />
+      <OpeningDateCard openingDate={openingDate} followsBooksStart={followsBooksStart} booksStartDate={booksStartDate} />
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -74,7 +75,7 @@ export function OpeningPanel({ openingDate, rows, items, units, history }: { ope
 
 // ------------------------------------------------------------------------------------------------------- opening date
 
-function OpeningDateCard({ openingDate }: { openingDate: string | null }) {
+function OpeningDateCard({ openingDate, followsBooksStart, booksStartDate }: { openingDate: string | null; followsBooksStart: boolean; booksStartDate: string | null }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
@@ -82,12 +83,27 @@ function OpeningDateCard({ openingDate }: { openingDate: string | null }) {
         <p className="text-xs text-gray-500">Inventory Opening Date</p>
         <p className="text-lg font-semibold text-gray-900">{openingDate ? <D value={openingDate} /> : "Not set"}</p>
         <p className="text-xs text-gray-500">
-          {openingDate ? "Inventory history begins on this date. Nothing that moves stock can be dated before it." : "Set the date inventory tracking begins before entering opening stock."}
+          {followsBooksStart
+            ? "This is your books start date. Inventory history begins with the books, and nothing that moves stock can be dated before it."
+            : openingDate
+              ? "Inventory history begins on this date. Nothing that moves stock can be dated before it."
+              : "Set the date inventory tracking begins before entering opening stock."}
         </p>
+        {!followsBooksStart && booksStartDate && openingDate && openingDate !== booksStartDate && (
+          <p className="mt-1 text-xs text-[var(--status-action-text)]">
+            Your books start on <D value={booksStartDate} />, which is a different day. Change the date here to match it, so there is one date to keep.
+          </p>
+        )}
       </div>
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
-        {openingDate ? "Change date" : "Set date"}
-      </button>
+      {followsBooksStart ? (
+        <Link href="/settings/opening-balances" className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover">
+          Change books start date
+        </Link>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
+          {openingDate ? "Change date" : "Set date"}
+        </button>
+      )}
       {open && <OpeningDateModal current={openingDate} onClose={() => setOpen(false)} />}
     </div>
   );

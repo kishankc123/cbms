@@ -39,7 +39,8 @@ type AccountBalance = {
   balance: number;
 };
 
-async function accountBalancesAsOf(tenantId: string, asOf: Date): Promise<AccountBalance[]> {
+/** `alsoOpeningOn`: the balance also counts the opening balance entries dated on that day (a report starting on the books start date carries them in as its opening). */
+async function accountBalancesAsOf(tenantId: string, asOf: Date, alsoOpeningOn?: string): Promise<AccountBalance[]> {
   const tenantAccounts = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId));
 
   const lines = await db
@@ -50,7 +51,7 @@ async function accountBalancesAsOf(tenantId: string, asOf: Date): Promise<Accoun
     })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-    .where(and(eq(journalEntries.tenantId, tenantId), lte(journalEntries.entryDate, toDateStr(asOf))));
+    .where(and(eq(journalEntries.tenantId, tenantId), alsoOpeningOn ? or(lte(journalEntries.entryDate, toDateStr(asOf)), isOpeningEntryOn(alsoOpeningOn)) : lte(journalEntries.entryDate, toDateStr(asOf))));
 
   const totals = new Map<string, { debit: number; credit: number }>();
   for (const line of lines) {
@@ -199,7 +200,7 @@ export type CashFlowLine = { accountId: string; code: string; name: string; amou
 export async function cashFlowStatement(tenantId: string, periodStart: Date, periodEnd: Date) {
   const periodStartExclusive = new Date(periodStart.getTime() - 24 * 60 * 60 * 1000);
   const [opening, closing, pnl] = await Promise.all([
-    accountBalancesAsOf(tenantId, periodStartExclusive),
+    accountBalancesAsOf(tenantId, periodStartExclusive, toDateStr(periodStart)),
     accountBalancesAsOf(tenantId, periodEnd),
     profitAndLoss(tenantId, periodStart, periodEnd),
   ]);

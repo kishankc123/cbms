@@ -124,28 +124,3 @@ export async function updateCalendarSystem(formData: FormData) {
   // Every page shows dates through the organization's calendar.
   revalidatePath("/", "layout");
 }
-
-export async function updateFiscalYearDates(formData: FormData) {
-  const session = await requireTenantSession();
-  if (!can(session, "settings", "edit")) throw new Error("Not permitted");
-
-  const fiscalYearLabel = String(formData.get("fiscalYearLabel") ?? "").trim();
-  if (!fiscalYearLabel) throw new Error("Fiscal year is required");
-  const fiscalYearStartDate = String(formData.get("fiscalYearStartDate") ?? "").trim();
-  const fiscalYearEndDate = String(formData.get("fiscalYearEndDate") ?? "").trim();
-  if (fiscalYearStartDate && fiscalYearEndDate && fiscalYearStartDate > fiscalYearEndDate) {
-    throw new Error("Fiscal year beginning date must be before the ending date");
-  }
-
-  await db
-    .update(tenants)
-    .set({
-      fiscalYearLabel,
-      fiscalYearStartDate: fiscalYearStartDate || null,
-      fiscalYearEndDate: fiscalYearEndDate || null,
-    })
-    .where(eq(tenants.id, session.tenantId));
-
-  revalidatePath("/settings", "layout");
-  revalidatePath("/dashboard");
-}

@@ -262,6 +262,7 @@ export async function previewOpeningDate(tenantId: string, newDate: string): Pro
 
 /** Sets (or changes) the Inventory Opening Date. Opening balances move to the new date, with their journal entries. */
 export async function setOpeningDate(tenantId: string, userId: string, input: { date: string; reason?: string; confirmed: boolean }) {
+  if ((await getInventorySettings(tenantId)).followsBooksStart) throw new Error("The Inventory Opening Date follows your books start date. Change the books start date in Settings > Opening balances.");
   const preview = await previewOpeningDate(tenantId, input.date);
   if (input.date > todayIso()) throw new Error("The Inventory Opening Date can't be in the future");
   if (preview.blockerCount > 0) throw new Error(`${preview.blockerCount} stock movement${preview.blockerCount === 1 ? " is" : "s are"} dated before ${await displayDate(tenantId, input.date)}, so they would fall outside the inventory history. Correct those first or choose an earlier date.`);

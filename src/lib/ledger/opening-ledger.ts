@@ -1,7 +1,8 @@
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, bankAccounts, customers, journalEntries, journalLines, tenants, vendors } from "@/db/schema";
 import { getOrCreateBroughtForwardAccount } from "./control-accounts";
+import { changeBooksStartDate, getBooksStart } from "./books-start";
 import { replaceOpeningEntry, syncBankOpeningBalanceEntry, syncCustomerOpeningBalanceEntry, syncSupplierOpeningBalanceEntry } from "./opening-balance";
 import { buildOpeningLines, otherScreenFor } from "./opening-ledger-rules";
 
@@ -75,15 +76,8 @@ export async function saveOpeningSheet(tenantId: string, userId: string, input: 
     if (!Number.isFinite(amount)) throw new Error(`The opening balance of ${row.name} is not a number`);
   }
 
-  if (date !== sheet.date) {
-    const [elsewhere] = await db
-      .select({ date: journalEntries.entryDate })
-      .from(journalEntries)
-      .where(and(liveOpenings(tenantId), ne(journalEntries.sourceId, tenantId), ne(journalEntries.entryDate, date)))
-      .limit(1);
-    if (elsewhere) throw new Error(`Customers, suppliers, banks or assets already have opening balances dated ${elsewhere.date}, so the date can't be changed here.`);
-    await db.update(tenants).set({ openingBalanceDate: date }).where(eq(tenants.id, tenantId));
-  }
+  // The books start date: recorded when it is first saved, and moved (with every opening balance on it) when it is changed. See books-start.ts.
+  if (date !== (await getBooksStart(tenantId)).date) await changeBooksStartDate(tenantId, userId, date);
 
   const owners = await recordOwners(tenantId);
   const generic: { accountId: string; name: string; netDebit: number }[] = [];

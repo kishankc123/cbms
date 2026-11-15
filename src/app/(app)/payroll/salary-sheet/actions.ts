@@ -10,6 +10,7 @@ import { retirementPay } from "@/lib/payroll/retirement-pay";
 import type { Enrolment } from "@/lib/payroll/employee-retirement";
 import type { EmployeeScheme } from "@/lib/payroll/retirement-rules";
 import { requireTenantSession, can } from "@/lib/session";
+import { addRunAdjustment, removeRunAdjustment } from "@/lib/payroll/run-adjustments";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { daysInMonth as calendarDaysInMonth, isoFromYmd, type CalendarSystem } from "@/lib/calendar";
@@ -394,4 +395,29 @@ export async function revertRunToDraft(input: { runId: string }) {
   await db.update(payrollRuns).set({ status: "draft" }).where(eq(payrollRuns.id, input.runId));
   revalidatePath("/payroll/salary-sheet");
   revalidatePath(`/payroll/salary-sheet/${input.runId}`);
+}
+
+/**
+ * Adds a one-off allowance or deduction to one employee's pay in a run that is not finalized, then rebuilds the run so every figure (salary tax, retirement
+ * contributions, net pay) takes it into account. Taxable unless said otherwise; see lib/payroll/run-adjustments.ts.
+ */
+export async function addRunAdjustmentAction(input: { runId: string; employeeId: string; kind: string; amount: number; reason: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit") || !can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [run] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.id, input.runId), eq(payrollRuns.tenantId, session.tenantId))).limit(1);
+  if (!run) throw new Error("Payroll run not found");
+  await addRunAdjustment(session.tenantId, session.userId, run, input);
+  await generatePayrollRun({ month: run.month, year: run.year, calendar: run.calendarSystem === "BS" ? "BS" : "AD", employeeIds: [] });
+}
+
+/** Takes a one-off adjustment off a run that is not finalized and rebuilds the run. */
+export async function removeRunAdjustmentAction(input: { runId: string; adjustmentId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit") || !can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [run] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.id, input.runId), eq(payrollRuns.tenantId, session.tenantId))).limit(1);
+  if (!run) throw new Error("Payroll run not found");
+  await removeRunAdjustment(session.tenantId, session.userId, run, input.adjustmentId);
+  await generatePayrollRun({ month: run.month, year: run.year, calendar: run.calendarSystem === "BS" ? "BS" : "AD", employeeIds: [] });
 }
