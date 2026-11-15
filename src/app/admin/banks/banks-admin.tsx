@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { useProblem } from "@/components/problem-dialog";
 import { BankLogo } from "@/components/bank-logo";
-import { KIND_LABEL, type Institution, type InstitutionKind } from "@/lib/banking/institution-rules";
+import { KIND_NAME, missingStarting, type Institution, type InstitutionKind } from "@/lib/banking/institution-rules";
 import { loadStartingBanks, saveBank, setBankLogo, setBankLogos } from "./actions";
 
 const toBase64 = (file: File) =>
@@ -16,6 +16,11 @@ const toBase64 = (file: File) =>
     reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
     reader.readAsDataURL(file);
   });
+const kindOptions = (Object.keys(KIND_NAME) as InstitutionKind[]).map((k) => (
+  <option key={k} value={k}>
+    {KIND_NAME[k]}
+  </option>
+));
 const asFile = async (f: File) => ({ name: f.name, type: f.type, base64: await toBase64(f) });
 
 export function BanksAdmin({ countryCode, countries, list }: { countryCode: string; countries: { code: string; name: string }[]; list: Institution[] }) {
@@ -63,15 +68,15 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
             ))}
           </Select>
         )}
-        {list.length === 0 && (
+        {countryCode === "NP" && missingStarting(list).length > 0 && (
           <Button size="sm" loading={busy} onClick={() => run(async () => ({ ok: (await loadStartingBanks(countryCode)) > 0 }))}>
-            Load the starting list
+            {list.length === 0 ? "Load the starting list" : `Add the ${missingStarting(list).length} missing from the starting list`}
           </Button>
         )}
         <Button size="sm" icon={<Upload size={15} />} disabled={busy || list.length === 0} onClick={() => bulk.current?.click()}>
           Upload logos
         </Button>
-        <span className="text-xs text-ink-2">Name each file after the bank's code, for example nabil.svg or esewa.png. PNG, JPEG, WebP or SVG, up to 40 KB.</span>
+        <span className="text-xs text-ink-2">Name each file after its short code, for example nabil.svg or esewa.png. PNG, JPEG, WebP or SVG, up to 40 KB.</span>
         <input ref={bulk} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple hidden onChange={(e) => bulkLogos(e.target.files).then(() => (e.target.value = ""))} />
         <input
           ref={one}
@@ -95,9 +100,8 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
         }}
       >
         <Input className="!w-64" value={name} onChange={(e) => setName(e.target.value)} placeholder="Add a bank or wallet" maxLength={80} />
-        <Select className="!w-32" value={kind} onChange={(e) => setKind(e.target.value as InstitutionKind)}>
-          <option value="bank">Bank</option>
-          <option value="wallet">Wallet</option>
+        <Select className="!w-44" value={kind} onChange={(e) => setKind(e.target.value as InstitutionKind)}>
+          {kindOptions}
         </Select>
         <Button size="sm" type="submit" loading={busy} disabled={!name.trim()}>
           Add
@@ -127,12 +131,8 @@ export function BanksAdmin({ countryCode, countries, list }: { countryCode: stri
                 <Input defaultValue={i.code ?? ""} maxLength={12} className="!w-28 uppercase" aria-label={`Code of ${i.name}`} onBlur={(e) => e.target.value.trim().toUpperCase() !== (i.code ?? "") && save(i, { code: e.target.value })} />
               </td>
               <td className="px-2.5 py-1.5">
-                <Select className="!w-28" value={i.kind} onChange={(e) => save(i, { kind: e.target.value as InstitutionKind })}>
-                  {(Object.keys(KIND_LABEL) as InstitutionKind[]).map((k) => (
-                    <option key={k} value={k}>
-                      {KIND_LABEL[k].replace(/s$/, "")}
-                    </option>
-                  ))}
+                <Select className="!w-44" value={i.kind} onChange={(e) => save(i, { kind: e.target.value as InstitutionKind })}>
+                  {kindOptions}
                 </Select>
               </td>
               <td className="px-2.5 py-1.5">

@@ -65,28 +65,33 @@ export function BankAccountFormModal({ ledgerOptions, options, initial, onClose 
   }
 
   if (step === 1) {
-    const shown = options.institutions.filter((i) => i.name.toLowerCase().includes(search.trim().toLowerCase()));
+    const q = search.trim().toLowerCase();
+    const shown = options.institutions.filter((i) => i.name.toLowerCase().includes(q) || (i.code ?? "").toLowerCase().includes(q));
     return (
-      <Modal title="Choose your bank or wallet" description="Pick where the money is held." size="lg" onClose={onClose}>
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search, for example nabil or esewa" className="mb-3" />
+      <Modal title="Choose your bank or wallet" description="Pick where the money is held." size="md" onClose={onClose}>
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or code, for example nabil or esewa" className="mb-3" autoFocus />
         {(Object.keys(KIND_LABEL) as InstitutionKind[]).map((k) => {
           const group = shown.filter((i) => i.kind === k);
           return group.length === 0 ? null : (
             <div key={k} className="mb-3">
-              <p className="mb-1.5 text-xs text-ink-2">{KIND_LABEL[k]}</p>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2">
+              <p className="mb-1 text-xs font-medium text-ink-2">{KIND_LABEL[k]}</p>
+              <ul className="divide-y divide-line rounded-lg border border-line">
                 {group.map((i) => (
-                  <button key={i.id} type="button" onClick={() => choose(i)} className="flex flex-col items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-2.5 text-center text-xs text-ink hover:border-accent hover:bg-hover">
-                    <BankLogo name={i.name} institution={i} size={34} />
-                    {i.name}
-                  </button>
+                  <li key={i.id}>
+                    <button type="button" onClick={() => choose(i)} className="flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] text-ink hover:bg-hover">
+                      <BankLogo name={i.name} institution={i} />
+                      <span className="flex-1">{i.name}</span>
+                      {i.code && <span className="text-xs text-ink-2">{i.code}</span>}
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           );
         })}
-        <button type="button" onClick={() => choose(null)} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-line-strong px-3 py-2 text-left text-[13px] text-ink-2 hover:bg-hover">
-          <BankLogo name="+" size={28} /> Other bank or wallet (not in the list)
+        {shown.length === 0 && <p className="mb-3 text-[13px] text-ink-2">Nothing in the list matches. Choose Other below.</p>}
+        <button type="button" onClick={() => choose(null)} className="flex w-full items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2 text-left text-[13px] text-ink-2 hover:bg-hover">
+          <BankLogo name="+" /> Other bank or wallet (not in the list)
         </button>
         {dialog}
       </Modal>

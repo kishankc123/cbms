@@ -45,8 +45,7 @@ describe("the directory of banks and wallets", () => {
     expect((await mine()).filter((i) => i.hasLogo).map((i) => i.name)).toEqual(["ZZ Second Bank"]);
   });
 
-  it("loads the starting list only for Nepal, and only while the country has none", async () => {
+  it("loads the starting list for Nepal only (it adds what is missing, so it is not run here against real data)", async () => {
     expect(await seedBankInstitutions("IN")).toBe(0);
-    expect(await seedBankInstitutions(NP)).toBe(0); // there are entries already (the test ones, or a real list)
   });
 });

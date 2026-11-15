@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { colourOf, defaultModeNames, initials, institutionForFile, logoProblem, STARTING_INSTITUTIONS } from "./institution-rules";
+import { colourOf, defaultModeNames, initials, institutionForFile, logoProblem, missingStarting, STARTING_INSTITUTIONS } from "./institution-rules";
 
 describe("initials and colour", () => {
   it("takes the first letters of two words, or the first two letters of one", () => {
@@ -47,16 +47,23 @@ describe("matching a logo file to its bank", () => {
 });
 
 describe("the starting list and the modes a bank is used for", () => {
-  it("has the 20 commercial banks and 3 wallets, each name and each code once", () => {
+  it("has the 20 commercial banks, 17 development banks and 3 wallets, each name and each code once", () => {
     const names = STARTING_INSTITUTIONS.map((i) => i.name.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
     expect(new Set(STARTING_INSTITUTIONS.map((i) => i.code)).size).toBe(STARTING_INSTITUTIONS.length);
     expect(STARTING_INSTITUTIONS.filter((i) => i.kind === "bank")).toHaveLength(20);
+    expect(STARTING_INSTITUTIONS.filter((i) => i.kind === "development_bank")).toHaveLength(17);
     expect(STARTING_INSTITUTIONS.filter((i) => i.kind === "wallet").map((i) => i.code)).toEqual(["ESEWA", "KHALTI", "IMEPAY"]);
     expect(STARTING_INSTITUTIONS.some((i) => i.kind === "wallet")).toBe(true);
     expect(STARTING_INSTITUTIONS.some((i) => i.kind === "bank")).toBe(true);
   });
+  it("finds the starting entries a list does not have yet", () => {
+    expect(missingStarting([])).toHaveLength(STARTING_INSTITUTIONS.length);
+    expect(missingStarting(STARTING_INSTITUTIONS)).toEqual([]);
+    expect(missingStarting([{ name: "NABIL BANK LIMITED" }]).some((i) => i.code === "NABIL")).toBe(false);
+  });
   it("suggests bank transfer and cheque for a bank, and wallet and its own name for a wallet", () => {
+    expect(defaultModeNames("development_bank", "Garima Bikas Bank Limited")).toEqual(["Bank transfer", "Cheque"]);
     expect(defaultModeNames("bank", "Nabil Bank")).toEqual(["Bank transfer", "Cheque"]);
     expect(defaultModeNames("wallet", "Fonepay")).toEqual(["Wallet", "Fonepay"]);
   });

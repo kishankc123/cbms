@@ -1,8 +1,11 @@
 // Banks and wallets as a person sees them: their initials and colour when there is no logo, what a logo file may be, and the starting list.
 // Pure (no database), so the screens and the tests use the same rules.
 
-export type InstitutionKind = "bank" | "wallet";
-export const KIND_LABEL: Record<InstitutionKind, string> = { bank: "Banks", wallet: "Wallets" };
+export type InstitutionKind = "bank" | "development_bank" | "wallet";
+/** The group headings in the picker, and one entry's type. The order here is the order shown. */
+export const KIND_LABEL: Record<InstitutionKind, string> = { bank: "Commercial banks", development_bank: "Development banks", wallet: "Wallets" };
+export const KIND_NAME: Record<InstitutionKind, string> = { bank: "Commercial bank", development_bank: "Development bank", wallet: "Wallet" };
+export const isKind = (k: string): k is InstitutionKind => k in KIND_LABEL;
 
 export type Institution = { id: string; name: string; code: string | null; kind: InstitutionKind; isActive: boolean; hasLogo: boolean; updatedAt: string };
 
@@ -41,7 +44,7 @@ export function institutionForFile(fileName: string, list: { id: string; name: s
 }
 
 /** What a bank or wallet is usually paid through, to tick the payment modes it can be used for. */
-export const defaultModeNames = (kind: InstitutionKind, name: string): string[] => (kind === "bank" ? ["Bank transfer", "Cheque"] : ["Wallet", name]);
+export const defaultModeNames = (kind: InstitutionKind, name: string): string[] => (kind === "wallet" ? ["Wallet", name] : ["Bank transfer", "Cheque"]);
 
 // The starting list for Nepal: the commercial banks and the main wallets with their short codes. Unverified, to be checked and edited by the platform administrator.
 const banks = [
@@ -66,8 +69,31 @@ const banks = [
   ["Siddhartha Bank Limited", "SBL"],
   ["Rastriya Banijya Bank Limited", "RBB"],
 ];
+const developmentBanks = [
+  ["Mahalaxmi Bikas Bank Limited", "MBLDB"],
+  ["Narayani Development Bank Limited", "NDBL"],
+  ["Karnali Development Bank Limited", "KDBL"],
+  ["Shangrila Development Bank Limited", "SDBL"],
+  ["Excel Development Bank Limited", "EDBL"],
+  ["Miteri Development Bank Limited", "MITERI"],
+  ["Muktinath Bikas Bank Limited", "MUKTI"],
+  ["Garima Bikas Bank Limited", "GARIMA"],
+  ["Kamana Sewa Bikas Bank Limited", "KSBBL"],
+  ["Corporate Development Bank Limited", "CDBL"],
+  ["Jyoti Bikas Bank Limited", "JBBL"],
+  ["Shine Resunga Development Bank Limited", "SRDBL"],
+  ["Lumbini Bikas Bank Limited", "LBBL"],
+  ["Sindhu Bikas Bank Limited", "SINDHU"],
+  ["Salapa Bikas Bank Limited", "SALAPA"],
+  ["Saptakoshi Development Bank Limited", "SAPTAKOSHI"],
+  ["Green Development Bank Limited", "GDBL"],
+];
 const wallets = [["eSewa", "ESEWA"], ["Khalti", "KHALTI"], ["IME Pay", "IMEPAY"]];
 export const STARTING_INSTITUTIONS: { name: string; code: string; kind: InstitutionKind }[] = [
   ...banks.map(([name, code]) => ({ name, code, kind: "bank" as const })),
+  ...developmentBanks.map(([name, code]) => ({ name, code, kind: "development_bank" as const })),
   ...wallets.map(([name, code]) => ({ name, code, kind: "wallet" as const })),
 ];
+
+/** The starting entries a country's list does not have yet (by name), so the starting list can be loaded again to add what is new. */
+export const missingStarting = (have: { name: string }[]) => STARTING_INSTITUTIONS.filter((s) => !have.some((h) => h.name.toLowerCase() === s.name.toLowerCase()));

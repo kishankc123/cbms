@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bankInstitutions } from "@/db/schema";
-import { institutionForFile, logoProblem, STARTING_INSTITUTIONS, type Institution, type InstitutionKind } from "./institution-rules";
+import { institutionForFile, isKind, logoProblem, missingStarting, type Institution, type InstitutionKind } from "./institution-rules";
 
 // The directory of banks and wallets a country's organizations pick from. Kept by the platform administrator; the screens read it through listInstitutions.
 
@@ -11,7 +11,7 @@ export async function listInstitutions(countryCode: string, activeOnly = true): 
     .from(bankInstitutions)
     .where(and(eq(bankInstitutions.countryCode, countryCode), activeOnly ? eq(bankInstitutions.isActive, true) : undefined))
     .orderBy(asc(bankInstitutions.kind), asc(bankInstitutions.sortOrder), asc(bankInstitutions.name));
-  return rows.map((r) => ({ ...r, kind: r.kind === "wallet" ? "wallet" : "bank", updatedAt: r.updatedAt.toISOString() }));
+  return rows.map((r) => ({ ...r, kind: isKind(r.kind) ? r.kind : "bank", updatedAt: r.updatedAt.toISOString() }));
 }
 
 /** Adds an institution, or changes one (name, kind, shown or hidden). */
@@ -19,7 +19,7 @@ export async function saveInstitution(input: { id?: string; countryCode: string;
   const name = input.name.trim();
   const code = input.code?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || null;
   if (!name || name.length > 80) return { ok: false, error: "Enter a name of up to 80 characters." };
-  if (input.kind !== "bank" && input.kind !== "wallet") return { ok: false, error: "Choose bank or wallet." };
+  if (!isKind(input.kind)) return { ok: false, error: "Choose a type." };
   try {
     if (input.id) await db.update(bankInstitutions).set({ name, code, kind: input.kind, isActive: input.isActive, updatedAt: new Date() }).where(eq(bankInstitutions.id, input.id));
     else await db.insert(bankInstitutions).values({ countryCode: input.countryCode, name, code, kind: input.kind, isActive: input.isActive });
@@ -57,9 +57,11 @@ export async function getLogo(id: string): Promise<{ logo: string; logoType: str
   return r?.logo && r.logoType ? { logo: r.logo, logoType: r.logoType } : null;
 }
 
-/** Loads the starting list for a country that has none yet (Nepal only). Returns how many were added. */
+/** Adds the starting entries a country's list does not have yet (Nepal only): the first load, or later additions. Returns how many were added. */
 export async function seedBankInstitutions(countryCode: string): Promise<number> {
-  if (countryCode !== "NP" || (await listInstitutions(countryCode, false)).length > 0) return 0;
-  const added = await db.insert(bankInstitutions).values(STARTING_INSTITUTIONS.map((i, n) => ({ countryCode, ...i, sortOrder: n }))).onConflictDoNothing().returning({ id: bankInstitutions.id });
+  if (countryCode !== "NP") return 0;
+  const todo = missingStarting(await listInstitutions(countryCode, false));
+  if (todo.length === 0) return 0;
+  const added = await db.insert(bankInstitutions).values(todo.map((i, n) => ({ countryCode, ...i, sortOrder: n }))).onConflictDoNothing().returning({ id: bankInstitutions.id });
   return added.length;
 }
