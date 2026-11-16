@@ -24,7 +24,7 @@ import {
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
 import { logAuditEvent } from "@/lib/audit";
 import { findControlAccount } from "./control-accounts";
-import { assertCashBankAccounts } from "./account-guards";
+import { assertCashBankAccounts, assertSettlementAccounts } from "./account-guards";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import { getCustomerBalances } from "./customer-balances";
 import { resettleParty } from "./party-settlement";
@@ -415,7 +415,9 @@ async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
     const [e] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, tenantId))).limit(1);
     if (!e) throw new Error("Employee not found");
   }
-  await assertCashBankAccounts(tenantId, [input.accountId, ...(input.transferToAccountId ? [input.transferToAccountId] : [])]);
+  // A transfer moves money between own cash and bank accounts; any other payment may also be settled through a ledger account.
+  if (input.transferToAccountId) await assertCashBankAccounts(tenantId, [input.accountId, input.transferToAccountId]);
+  else await assertSettlementAccounts(tenantId, [input.accountId]);
   if (input.categoryAccountId) {
     const [a] = await db.select({ code: accounts.code }).from(accounts).where(and(eq(accounts.id, input.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
     if (!a) throw new Error("Classification account not found");

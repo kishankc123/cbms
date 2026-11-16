@@ -1,5 +1,6 @@
 import { buildPaymentResolver, resolvePaymentMode } from "@/lib/payment-modes";
 import * as XLSX from "xlsx";
+import { ledgerSheet } from "@/lib/ledger/settlement-rules";
 import { expenseColumnGuide, guideSheet } from "@/lib/sales/import/column-guide";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -527,8 +528,10 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Expense categories"], ...categoryList.map((c) => [c.name])]), "Categories");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
-  const payModes = (await buildPaymentResolver(tenantId)).modes;
+  const payResolver = await buildPaymentResolver(tenantId);
+  const payModes = payResolver.modes;
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ledgerSheet(payResolver.ledger)), "Ledger accounts");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(expenseColumnGuide()));
   guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, guideData, "Columns");

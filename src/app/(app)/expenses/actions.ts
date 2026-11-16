@@ -9,7 +9,7 @@ import { tdsRateOn } from "@/lib/compliance/tds-rate";
 import { suggestForDescription } from "@/lib/expenses/suggestions";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
-import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
@@ -245,7 +245,7 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
   if (paidNow <= 0) throw new Error("Enter at least one payment amount");
   if (paidNow > remaining + 0.004) throw new Error("Payment exceeds the outstanding balance");
 
-  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   await assertPeriodOpen(session.tenantId, paymentDate);
 
   const expensePayable = await getOrCreateExpensePayableAccount(session.tenantId);

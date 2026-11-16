@@ -19,7 +19,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
-import { assertCashBankAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
 import {
   PartialBatchError,
@@ -330,7 +330,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertPeriodOpen(session.tenantId, todayIso());
   await assertNoLaterPayments(session.tenantId, "sales_invoice", input.invoiceId, "invoice");
-  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
   const billType: SalesBillType = input.billType ?? "taxable";
   // The rate that applied on the invoice's OWN date, not today's — zero for a Zero-rated bill regardless.
@@ -525,7 +525,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   await assertInvoiceNumberFree(session.tenantId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
-  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
   const billType: SalesBillType = input.billType ?? "taxable";
   // The rate that applied on the invoice's OWN date, not today's — zero for a Zero-rated bill regardless.

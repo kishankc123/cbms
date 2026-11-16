@@ -11,7 +11,7 @@ import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-acco
 import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertCashBankAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { todayIso } from "@/lib/calendar";
@@ -372,7 +372,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
 
   // Everything is checked before anything is saved.
   if (vendorId) await assertSupplierOwned(session.tenantId, vendorId);
-  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   await assertBillNumberFree(session.tenantId, vendorId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
 
@@ -540,7 +540,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   // Everything is checked before the old entry is reversed, so a refusal leaves the invoice untouched.
   await assertNoLaterPayments(session.tenantId, "purchase_bill", input.billId, "bill");
   if (vendorId) await assertSupplierOwned(session.tenantId, vendorId);
-  await assertCashBankAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   await assertBillNumberFree(session.tenantId, vendorId, invoiceNumber, input.billId);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
   await assertPeriodOpen(session.tenantId, todayIso());

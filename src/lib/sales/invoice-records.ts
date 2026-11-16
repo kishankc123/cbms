@@ -13,7 +13,7 @@ import { resettleParty } from "@/lib/ledger/party-settlement";
 import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount } from "@/lib/sales/revenue-accounts";
 import { resolvePaymentMode } from "@/lib/payment-modes";
-import { assertCashBankAccounts } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts } from "@/lib/ledger/account-guards";
 
 // The records every way of creating a sales invoice shares (the Single and Multi-Invoice forms, and Import Sales): the
 // invoice-number rules, the embedded payment row, the clean-up of an invoice that failed to save, and the batch writer
@@ -176,7 +176,7 @@ export async function postSalesBatch(ctx: { tenantId: string; userId: string }, 
 
   // Refuse up front if any invoice date sits in a locked period, before anything is saved.
   for (const date of new Set(indexed.map(({ r }) => r.invoiceDate))) await assertPeriodOpen(tenantId, date);
-  await assertCashBankAccounts(tenantId, indexed.flatMap(({ r }) => r.payments.filter((p) => p.amount > 0).map((p) => p.accountId)));
+  await assertSettlementAccounts(tenantId, indexed.flatMap(({ r }) => r.payments.filter((p) => p.amount > 0).map((p) => p.accountId)));
 
   const chosen = new Set(indexed.map(({ r }) => r.revenueAccountId).filter((id): id is string => Boolean(id)));
   for (const id of chosen) await assertRevenueAccount(tenantId, id);

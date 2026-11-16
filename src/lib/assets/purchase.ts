@@ -6,7 +6,7 @@ import { validateADDate, todayIso } from "@/lib/calendar";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
-import { assertCashBankAccounts, assertNoLaterPayments, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertNoLaterPayments, assertSupplierOwned } from "@/lib/ledger/account-guards";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
@@ -103,7 +103,7 @@ async function recordAssetPurchaseUnchecked(tenantId: string, userId: string, in
   if (paid > total + 0.004) return fail(`The payments (${paid.toFixed(2)}) can't exceed the invoice total (${total.toFixed(2)}).`);
   const remaining = round2(Math.max(total - paid, 0));
   await assertSupplierOwned(tenantId, input.vendorId);
-  await assertCashBankAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   await assertPeriodOpen(tenantId, input.purchaseDate);
 
   // The supplier's bill number is unique per supplier; a missing one is numbered AUTO-n like other bills.
