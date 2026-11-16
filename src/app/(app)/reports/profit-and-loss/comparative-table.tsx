@@ -2,31 +2,32 @@ import type { DateRange } from "@/lib/calendar";
 import { change, changePercent, margin, money, percentText, type Comparison, type Pair, type Section } from "@/lib/ledger/pnl-compare-rules";
 import { AccountLink } from "../account-link";
 
-const tone = (n: number) => (n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
-const NUM = "px-2.5 py-1 text-right tabular-nums";
+// Green is better for profit, red worse. A balance sheet has no better or worse direction, so it passes `neutral`.
+const tone = (n: number, neutral?: boolean) => (neutral ? "" : n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
+export const NUM = "px-2.5 py-1 text-right tabular-nums";
 
 // The columns after the current amount. With one period there is nothing to compare, so they are left out.
 // With two: the earlier amount, the change and the change as a percent. Positive is better for profit, so it is green.
-function Others({ p, single }: { p: Pair; single: boolean }) {
+function Others({ p, single, neutral }: { p: Pair; single: boolean; neutral?: boolean }) {
   if (single) return null;
   const c = change(p);
   return (
     <>
       <td className={NUM}>{money(p.prev)}</td>
-      <td className={`${NUM} ${tone(c)}`}>{money(c)}</td>
-      <td className={`${NUM} ${tone(c)}`}>{percentText(changePercent(p))}</td>
+      <td className={`${NUM} ${tone(c, neutral)}`}>{money(c)}</td>
+      <td className={`${NUM} ${tone(c, neutral)}`}>{percentText(changePercent(p))}</td>
     </>
   );
 }
 
-function Total({ label, p, single, strong }: { label: string; p: Pair; single: boolean; strong?: boolean }) {
+export function Total({ label, p, single, strong, neutral }: { label: string; p: Pair; single: boolean; strong?: boolean; neutral?: boolean }) {
   return (
     <tr className={`border-t border-line-strong font-medium ${strong ? "bg-surface-2 text-[13.5px]" : ""}`}>
       <td className="px-2.5 py-1.5" colSpan={2}>
         {label}
       </td>
       <td className={NUM}>{money(p.cur)}</td>
-      <Others p={p} single={single} />
+      <Others p={p} single={single} neutral={neutral} />
     </tr>
   );
 }
@@ -50,18 +51,22 @@ function Percent({ label, cur, prev, single }: { label: string; cur: number | nu
   );
 }
 
-function Rows({ section, range, single }: { section: Section; range: DateRange; single: boolean }) {
+export function Rows({ section, range, single, neutral }: { section: Section; range: DateRange; single: boolean; neutral?: boolean }) {
   return section.headings.map((h) =>
     h.rows.map((r, i) => (
       <tr key={r.accountId} className={`transition-colors hover:bg-hover ${i === 0 ? "border-t border-line" : ""}`}>
         <td className="px-2.5 py-1 font-medium">{i === 0 ? h.name : ""}</td>
         <td className="px-2.5 py-1">
-          <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
-            {r.sub || h.name}
-          </AccountLink>
+          {r.accountId ? (
+            <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
+              {r.sub || h.name}
+            </AccountLink>
+          ) : (
+            r.sub
+          )}
         </td>
         <td className={NUM}>{money(r.cur)}</td>
-        <Others p={r} single={single} />
+        <Others p={r} single={single} neutral={neutral} />
       </tr>
     )),
   );

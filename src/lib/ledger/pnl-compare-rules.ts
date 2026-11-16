@@ -74,7 +74,7 @@ export function periodLabel(kind: PeriodKind, calendar: CalendarSystem, r: DateR
 }
 
 /** "Monthly comparative Profit & Loss" */
-export const reportTitle = (kind: PeriodKind) => `${ADJECTIVE[kind]} comparative Profit & Loss`;
+export const reportTitle = (kind: PeriodKind, report = "Profit & Loss") => `${ADJECTIVE[kind]} comparative ${report}`;
 
 /** The periods to choose from, newest first. The one in the address is added if it is older than the list. */
 export function periodOptions(kind: PeriodKind, calendar: CalendarSystem, today: IsoDate, selected: IsoDate): { value: IsoDate; label: string }[] {
@@ -101,9 +101,9 @@ export type Heading = { key: string; name: string; rows: Row[] };
 export type Section = Pair & { headings: Heading[] };
 export type Comparison = { income: Section; cost: Section; expenses: Section; grossProfit: Pair; netProfit: Pair };
 
-const COST_OF_SALES = "Cost of goods sold";
+export const COST_OF_SALES = "Cost of goods sold";
 
-function section(infos: Map<string, AccountInfo>, cur: Amount[], prev: Amount[], sign: 1 | -1, only: (group: AccountInfo) => boolean): Section {
+export function section(infos: Map<string, AccountInfo>, cur: Amount[], prev: Amount[], sign: 1 | -1, only: (group: AccountInfo) => boolean): Section {
   const rows = new Map<string, Row>();
   for (const [period, list] of [["cur", cur], ["prev", prev]] as const) {
     for (const { accountId, amount } of list) {
@@ -146,7 +146,8 @@ export const change = (p: Pair) => round2(p.cur - p.prev);
 
 /** Change as a percent of the earlier amount. "new" when there was nothing before, null when there is nothing to say. */
 export function changePercent(p: Pair): number | "new" | null {
-  if (p.prev === 0) return p.cur === 0 ? null : "new";
+  if (p.cur === p.prev) return null;
+  if (p.prev === 0) return "new";
   return round2(((p.cur - p.prev) / Math.abs(p.prev)) * 100);
 }
 
@@ -167,4 +168,25 @@ export function percentText(v: number | "new" | null): string {
   if (v === null) return "-";
   if (v === "new") return "new";
   return v < 0 ? `(${Math.abs(v).toFixed(1)}%)` : `${v.toFixed(1)}%`;
+}
+
+// ---------------------------------------------------------------- the balance sheet
+
+export type BalanceSide = { assets: Amount[]; liabilities: Amount[]; equity: Amount[]; retainedEarnings: number };
+export type BalanceComparison = { assets: Section; liabilities: Section; equity: Section; liabilitiesAndEquity: Pair; difference: Pair };
+
+/** Assets, liabilities and equity (with the profit not yet closed to equity as its own line), each grouped under the Chart of Accounts groups. All amounts are as at a date. */
+export function buildBalanceComparison(infos: Map<string, AccountInfo>, cur: BalanceSide, prev: BalanceSide): BalanceComparison {
+  const all = () => true;
+  const assets = section(infos, cur.assets, prev.assets, 1, all);
+  const liabilities = section(infos, cur.liabilities, prev.liabilities, 1, all);
+  const accountsEquity = section(infos, cur.equity, prev.equity, 1, all);
+  const retained: Heading = { key: "retained", name: "Retained earnings (current)", rows: [{ accountId: "", sub: "", cur: cur.retainedEarnings, prev: prev.retainedEarnings }] };
+  const equity: Section = {
+    headings: cur.retainedEarnings === 0 && prev.retainedEarnings === 0 ? accountsEquity.headings : [...accountsEquity.headings, retained],
+    cur: round2(accountsEquity.cur + cur.retainedEarnings),
+    prev: round2(accountsEquity.prev + prev.retainedEarnings),
+  };
+  const liabilitiesAndEquity = { cur: round2(liabilities.cur + equity.cur), prev: round2(liabilities.prev + equity.prev) };
+  return { assets, liabilities, equity, liabilitiesAndEquity, difference: { cur: round2(assets.cur - liabilitiesAndEquity.cur), prev: round2(assets.prev - liabilitiesAndEquity.prev) } };
 }

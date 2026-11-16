@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { convertBStoAD } from "@/lib/calendar";
-import { buildComparison, change, changePercent, comparisonOf, margin, money, periodLabel, periodOf, periodOptions, type AccountInfo } from "./pnl-compare-rules";
+import { buildBalanceComparison, buildComparison, change, changePercent, comparisonOf, margin, money, periodLabel, periodOf, periodOptions, type AccountInfo } from "./pnl-compare-rules";
 
 const bs = (year: number, month: number, day = 1) => convertBStoAD({ year, month, day })!;
 
@@ -81,8 +81,31 @@ describe("the comparison table", () => {
     expect(changePercent({ cur: 1000, prev: 600 })).toBe(66.67);
     expect(changePercent({ cur: -50, prev: 0 })).toBe("new");
     expect(changePercent({ cur: 0, prev: 0 })).toBeNull();
+    expect(changePercent({ cur: 40, prev: 40 })).toBeNull();
     expect(margin(cmp.grossProfit, cmp.income)).toEqual({ cur: 80, prev: 58 });
     expect(margin({ cur: 5, prev: 5 }, { cur: 0, prev: 0 })).toEqual({ cur: null, prev: null });
     expect([money(0), money(1234.5), money(-1234.5)]).toEqual(["-", "1,234.50", "(1,234.50)"]);
+  });
+});
+
+describe("the balance sheet comparison", () => {
+  const a = (id: string, code: string, name: string, parentId: string | null = null): AccountInfo => ({ id, code, name, subCategory: null, parentId });
+  const infos = new Map([a("cash", "1000", "Cash"), a("bank", "1010", "Bank"), a("nabil", "1010.01", "Nabil", "bank"), a("loan", "2200", "Loans Payable"), a("cap", "3000", "Capital")].map((x) => [x.id, x] as const));
+  const cmp = buildBalanceComparison(
+    infos,
+    { assets: [{ accountId: "cash", amount: 500 }, { accountId: "nabil", amount: 700 }], liabilities: [{ accountId: "loan", amount: 400 }], equity: [{ accountId: "cap", amount: 600 }], retainedEarnings: 200 },
+    { assets: [{ accountId: "cash", amount: 300 }], liabilities: [{ accountId: "loan", amount: 400 }], equity: [{ accountId: "cap", amount: 600 }], retainedEarnings: -700 },
+  );
+
+  it("totals each side and checks that assets equal liabilities plus equity, for both dates", () => {
+    expect(cmp.assets).toMatchObject({ cur: 1200, prev: 300 });
+    expect(cmp.equity).toMatchObject({ cur: 800, prev: -100 });
+    expect(cmp.liabilitiesAndEquity).toEqual({ cur: 1200, prev: 300 });
+    expect(cmp.difference).toEqual({ cur: 0, prev: 0 });
+  });
+
+  it("puts accounts under their group and shows the profit not yet closed to equity as its own line", () => {
+    expect(cmp.assets.headings.map((h) => [h.name, h.rows.map((r) => r.sub)])).toEqual([["Cash", [""]], ["Bank", ["Nabil"]]]);
+    expect(cmp.equity.headings.at(-1)).toMatchObject({ name: "Retained earnings (current)", rows: [{ accountId: "", cur: 200, prev: -700 }] });
   });
 });
