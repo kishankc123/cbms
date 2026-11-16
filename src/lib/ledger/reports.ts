@@ -40,7 +40,7 @@ type AccountBalance = {
 };
 
 /** `alsoOpeningOn`: the balance also counts the opening balance entries dated on that day (a report starting on the books start date carries them in as its opening). */
-async function accountBalancesAsOf(tenantId: string, asOf: Date, alsoOpeningOn?: string): Promise<AccountBalance[]> {
+export async function accountBalancesAsOf(tenantId: string, asOf: Date, alsoOpeningOn?: string): Promise<AccountBalance[]> {
   const tenantAccounts = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId));
 
   const lines = await db

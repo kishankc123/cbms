@@ -94,7 +94,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Amounts are shown the way they affect profit: income positive, costs and expenses negative. So a positive change is always better. */
 export type Pair = { cur: number; prev: number };
-export type AccountInfo = { id: string; code: string; name: string; subCategory: string | null; parentId: string | null };
+export type AccountInfo = { id: string; code: string; name: string; subCategory: string | null; parentId: string | null; category?: string };
 export type Amount = { accountId: string; amount: number };
 export type Row = Pair & { accountId: string; sub: string };
 export type Heading = { key: string; name: string; rows: Row[] };

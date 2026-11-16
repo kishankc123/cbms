@@ -20,20 +20,20 @@ function useSetParams() {
   };
 }
 
-export function ViewSelect({ view }: { view: "standard" | "comparative" }) {
+export function ViewSelect({ view, otherLabel = "Comparative" }: { view: "standard" | "comparative"; otherLabel?: string }) {
   const set = useSetParams();
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-ink-2">View</span>
       <Select value={view} onChange={(e) => set({ view: e.target.value === "standard" ? null : e.target.value })} className="w-44">
         <option value="standard">Standard</option>
-        <option value="comparative">Comparative</option>
+        <option value="comparative">{otherLabel}</option>
       </Select>
     </label>
   );
 }
 
-export function ComparePicker({ kind, at, compare, options }: { kind: PeriodKind; at: string; compare: CompareWith; options: { value: string; label: string }[] }) {
+export function ComparePicker({ kind, at, compare, options, noCompare }: { kind: PeriodKind; at: string; compare: CompareWith; options: { value: string; label: string }[]; /** A report of one period has nothing to compare with. */ noCompare?: boolean }) {
   const set = useSetParams();
   return (
     <>
@@ -57,6 +57,7 @@ export function ComparePicker({ kind, at, compare, options }: { kind: PeriodKind
           ))}
         </Select>
       </label>
+      {!noCompare && (
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-ink-2">Compare with</span>
         <Select value={compare} onChange={(e) => set({ compare: e.target.value })} className="w-52">
@@ -64,6 +65,7 @@ export function ComparePicker({ kind, at, compare, options }: { kind: PeriodKind
           <option value="last_year">Same {KIND_LABEL[kind].toLowerCase()} last year</option>
         </Select>
       </label>
+      )}
     </>
   );
 }
