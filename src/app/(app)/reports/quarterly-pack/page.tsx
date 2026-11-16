@@ -10,7 +10,7 @@ import { comparisonOf, periodLabel, periodOf, periodOptions, quarterMonthLabel, 
 import { loadReportHeader } from "@/lib/report-header";
 import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
-import { PrintButton } from "@/components/print-button";
+import { ExportButtons } from "@/components/export-buttons";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -63,7 +63,7 @@ export default async function QuarterlyPackPage({ searchParams }: { searchParams
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 print:hidden">
         <QuarterSelect at={quarter.from} options={options} />
         <div className="ml-auto">
-          <PrintButton />
+          <ExportButtons />
         </div>
       </div>
 

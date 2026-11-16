@@ -8,7 +8,7 @@ import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
-import { PrintButton } from "@/components/print-button";
+import { ExportButtons } from "@/components/export-buttons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -49,7 +49,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
           <ViewSelect view="comparative" />
           <ComparePicker kind={kind} at={chosen.from} compare={compare} options={periodOptions(kind, session.calendar, today, chosen.from)} />
           <div className="ml-auto">
-            <PrintButton />
+            <ExportButtons />
           </div>
         </div>
         <ReportSheet>
@@ -84,7 +84,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
         </ReportFilter>
       </div>
       <div className="flex justify-end print:hidden">
-        <PrintButton />
+        <ExportButtons />
       </div>
       <ReportSheet>
         <ReportHeader {...header} title="Cash Flow Statement" period={`${formatDate(from, session.calendar, "long")} – ${formatDate(to, session.calendar, "long")}`} />

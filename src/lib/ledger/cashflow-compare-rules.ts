@@ -57,3 +57,15 @@ export function buildCashFlowComparison(cur: CashFlowPeriod, prev: CashFlowPerio
 }
 
 export const EMPTY_PERIOD: CashFlowPeriod = { netProfit: 0, operating: [], investing: [], financing: [], netCashFromOperating: 0, netCashFromInvesting: 0, netCashFromFinancing: 0, openingCash: 0, closingCash: 0, actualCashMovement: 0 };
+
+/** The group a sub-account belongs to (Accounts Receivable for one customer), or null for an account that is not in one. */
+export type GroupOf = (accountId: string) => { id: string; name: string } | null;
+
+/** Replaces each sub-account's line with its group's, so the statement shows Accounts Receivable once, not one line per customer. Lines of the same group add up. */
+export function rollUpToGroups(period: CashFlowPeriod, groupOf: GroupOf): CashFlowPeriod {
+  const up = (l: CashLine): CashLine => {
+    const g = groupOf(l.accountId);
+    return g ? { accountId: g.id, name: g.name, amount: l.amount } : l;
+  };
+  return { ...period, operating: period.operating.map(up), investing: period.investing.map(up), financing: period.financing.map(up) };
+}

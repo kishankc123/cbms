@@ -14,7 +14,7 @@ export function ReportSheet({ children }: { children: React.ReactNode }) {
 /** Company name, address, report name and period, centred at the top of every report. */
 export function ReportHeader({ company, address, title, period }: { company: string; address?: string; title: string; period: string }) {
   return (
-    <div className="mb-4 text-center">
+    <div data-report-header className="mb-4 text-center">
       <h2 className="text-base font-semibold text-ink">{company}</h2>
       {address && <p className="text-xs text-ink-2">{address}</p>}
       <p className="mt-1 text-[13px] font-medium text-ink">{title}</p>
@@ -25,7 +25,7 @@ export function ReportHeader({ company, address, title, period }: { company: str
 
 export function ReportFooter({ note }: { note?: string }) {
   return (
-    <div className="mt-4 flex justify-between gap-4 text-[11px] text-ink-3">
+    <div data-report-footer className="mt-4 flex justify-between gap-4 text-[11px] text-ink-3">
       <span>
         Prepared on <D value={todayIso()} style="long" />
         {note ? `  ·  ${note}` : ""}

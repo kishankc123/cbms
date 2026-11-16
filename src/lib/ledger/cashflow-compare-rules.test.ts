@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCashFlowComparison, type CashFlowPeriod } from "./cashflow-compare-rules";
+import { buildCashFlowComparison, rollUpToGroups, type CashFlowPeriod } from "./cashflow-compare-rules";
 
 const period = (p: Partial<CashFlowPeriod>): CashFlowPeriod => ({ netProfit: 0, operating: [], investing: [], financing: [], netCashFromOperating: 0, netCashFromInvesting: 0, netCashFromFinancing: 0, openingCash: 0, closingCash: 0, actualCashMovement: 0, ...p });
 
@@ -22,5 +22,16 @@ describe("the cash flow comparison", () => {
 
   it("leaves out an activity that has nothing in either period", () => {
     expect(buildCashFlowComparison(period({}), period({})).investing.headings).toEqual([]);
+  });
+});
+
+describe("rolling sub-accounts up into their group", () => {
+  const groups: Record<string, { id: string; name: string }> = { himal: { id: "ar", name: "Accounts Receivable" }, modal: { id: "ar", name: "Accounts Receivable" } };
+  const p = period({ operating: [{ accountId: "himal", name: "Himal Enterprises", amount: -100 }, { accountId: "modal", name: "Modal Test Co", amount: -50 }, { accountId: "dep", name: "Depreciation (non-cash)", amount: 30 }] });
+  const rolled = rollUpToGroups(p, (id) => groups[id] ?? null);
+
+  it("shows one line for the group, adding its sub-accounts up, and leaves other lines alone", () => {
+    const rows = buildCashFlowComparison(rolled, period({})).operating.headings[0].rows;
+    expect(rows.map((r) => [r.sub, r.cur])).toEqual([["Net profit", 0], ["Accounts Receivable", -150], ["Depreciation (non-cash)", 30]]);
   });
 });
