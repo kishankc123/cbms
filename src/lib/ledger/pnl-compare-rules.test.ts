@@ -1,0 +1,88 @@
+import { describe, expect, it } from "vitest";
+import { convertBStoAD } from "@/lib/calendar";
+import { buildComparison, change, changePercent, comparisonOf, margin, money, periodLabel, periodOf, periodOptions, type AccountInfo } from "./pnl-compare-rules";
+
+const bs = (year: number, month: number, day = 1) => convertBStoAD({ year, month, day })!;
+
+describe("periods", () => {
+  it("a month, a fiscal quarter and a fiscal year follow the Nepali calendar", () => {
+    const month = periodOf("month", "BS", bs(2083, 5, 10));
+    expect(month).toEqual({ from: bs(2083, 5, 1), to: expect.any(String) });
+    expect(periodLabel("month", "BS", month)).toBe("Bhadra 2083");
+
+    const q = periodOf("quarter", "BS", bs(2083, 5, 10));
+    expect(q.from).toBe(bs(2083, 4, 1));
+    expect(periodLabel("quarter", "BS", q)).toBe("Shrawan – Ashwin 2083");
+    expect(periodOf("quarter", "BS", bs(2083, 10, 1)).from).toBe(bs(2083, 10, 1));
+
+    const year = periodOf("year", "BS", bs(2084, 2, 1));
+    expect(year.from).toBe(bs(2083, 4, 1));
+    expect(periodLabel("year", "BS", year)).toBe("FY 2083/84");
+  });
+
+  it("a week runs Sunday to Saturday", () => {
+    const w = periodOf("week", "AD", "2026-11-18");
+    expect(w).toEqual({ from: "2026-11-15", to: "2026-11-21" });
+  });
+
+  it("compares with the previous period or the same one a year earlier", () => {
+    const bhadra = periodOf("month", "BS", bs(2083, 5, 10));
+    expect(comparisonOf("month", "BS", bhadra, "previous").from).toBe(bs(2083, 4, 1));
+    expect(comparisonOf("month", "BS", bhadra, "last_year").from).toBe(bs(2082, 5, 1));
+    const q = periodOf("quarter", "BS", bs(2083, 5, 10));
+    expect(comparisonOf("quarter", "BS", q, "previous").from).toBe(bs(2083, 1, 1));
+    expect(comparisonOf("quarter", "BS", q, "last_year").from).toBe(bs(2082, 4, 1));
+    expect(comparisonOf("day", "AD", { from: "2026-11-18", to: "2026-11-18" }, "last_year").from).toBe("2025-11-18");
+  });
+
+  it("lists the periods newest first and keeps one that is older than the list", () => {
+    const list = periodOptions("month", "AD", "2026-11-18", "2020-01-01");
+    expect(list[0].value).toBe("2026-11-01");
+    expect(list.at(-1)!.value).toBe("2020-01-01");
+  });
+});
+
+describe("the comparison table", () => {
+  const info = (id: string, code: string, name: string, parentId: string | null = null, subCategory: string | null = null): AccountInfo => ({ id, code, name, subCategory, parentId });
+  const infos = new Map([
+    info("sales", "4000", "Sales Revenue"),
+    info("room", "4000.01", "Room sales", "sales"),
+    info("rest", "4000.02", "Restaurant", "sales"),
+    info("cogs", "5000", "Cost of Goods Sold", null, "Cost of goods sold"),
+    info("kitchen", "5000.01", "Kitchen items", "cogs"),
+    info("rent", "5100", "Rent"),
+    info("util", "5300", "Utilities"),
+    info("light", "5300.01", "Light bills", "util"),
+  ].map((a) => [a.id, a] as const));
+
+  const cmp = buildComparison(
+    infos,
+    { income: [{ accountId: "room", amount: 700 }, { accountId: "rest", amount: 300 }], expenses: [{ accountId: "kitchen", amount: 200 }, { accountId: "rent", amount: 100 }, { accountId: "light", amount: 50 }] },
+    { income: [{ accountId: "room", amount: 600 }], expenses: [{ accountId: "kitchen", amount: 250 }, { accountId: "rent", amount: 100 }] },
+  );
+
+  it("shows costs as negatives, so a positive change is always better", () => {
+    expect(cmp.income).toMatchObject({ cur: 1000, prev: 600 });
+    expect(cmp.cost).toMatchObject({ cur: -200, prev: -250 });
+    expect(change(cmp.cost)).toBe(50);
+    expect(cmp.grossProfit).toEqual({ cur: 800, prev: 350 });
+    expect(cmp.expenses).toMatchObject({ cur: -150, prev: -100 });
+    expect(cmp.netProfit).toEqual({ cur: 650, prev: 250 });
+  });
+
+  it("groups accounts under their group, in code order, with a row for an account that has no amount in one period", () => {
+    expect(cmp.income.headings.map((h) => [h.name, h.rows.map((r) => r.sub)])).toEqual([["Sales Revenue", ["Room sales", "Restaurant"]]]);
+    expect(cmp.expenses.headings.map((h) => h.name)).toEqual(["Rent", "Utilities"]);
+    expect(cmp.expenses.headings[0].rows[0].sub).toBe("");
+    expect(cmp.expenses.headings[1].rows[0]).toMatchObject({ sub: "Light bills", cur: -50, prev: 0 });
+  });
+
+  it("changes, margins and text", () => {
+    expect(changePercent({ cur: 1000, prev: 600 })).toBe(66.67);
+    expect(changePercent({ cur: -50, prev: 0 })).toBe("new");
+    expect(changePercent({ cur: 0, prev: 0 })).toBeNull();
+    expect(margin(cmp.grossProfit, cmp.income)).toEqual({ cur: 80, prev: 58 });
+    expect(margin({ cur: 5, prev: 5 }, { cur: 0, prev: 0 })).toEqual({ cur: null, prev: null });
+    expect([money(0), money(1234.5), money(-1234.5)]).toEqual(["-", "1,234.50", "(1,234.50)"]);
+  });
+});

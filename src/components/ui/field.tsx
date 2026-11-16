@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { HelpTip } from "./help-tip";
 
 // Form controls. Compact (32px), a quiet border, an indigo focus ring, and the same look in every module. A control is
 // marked invalid with `invalid`, which turns its border red; the reason is shown through Field's `error`.
@@ -31,10 +32,11 @@ export function Field({ label, hint, error, required, className, children }: { l
         <span className="mb-1 block text-xs font-medium text-ink-2">
           {label}
           {required && <span className="ml-0.5 text-[var(--danger)]">*</span>}
+          {hint && <span className="ml-1.5"><HelpTip>{hint}</HelpTip></span>}
         </span>
         {children}
       </label>
-      {error ? <p className="mt-1 text-xs text-[var(--danger-text)]">{error}</p> : hint ? <p className="mt-1 text-xs text-ink-2">{hint}</p> : null}
+      {error ? <p className="mt-1 text-xs text-[var(--danger-text)]">{error}</p> : null}
     </div>
   );
 }

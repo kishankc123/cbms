@@ -95,7 +95,7 @@ export function AccountEditModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => close()} />
 
-          <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
+          <div className="relative w-full max-w-sm text-left whitespace-normal rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Edit account</h2>
               <button type="button" onClick={() => close()} aria-label="Close" className="text-gray-400 hover:text-gray-600">

@@ -1,12 +1,16 @@
 import { requireTenantSession, can } from "@/lib/session";
-import { profitAndLoss } from "@/lib/ledger/reports";
-import { validateADDate } from "@/lib/calendar";
+import { comparativeProfitAndLoss } from "@/lib/ledger/pnl-compare";
+import { asCompare, asKind, comparisonOf, periodLabel, periodOf, periodOptions, reportTitle, KIND_LABEL } from "@/lib/ledger/pnl-compare-rules";
+import { loadReportHeader } from "@/lib/report-header";
+import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
-import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
-import { AccountLink } from "../account-link";
+import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
+import { PrintButton } from "@/components/print-button";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { ComparativeTable } from "./comparative-table";
+import { ComparePicker, ViewSelect } from "./pnl-controls";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -14,69 +18,67 @@ export default async function ProfitAndLossPage({ searchParams }: { searchParams
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
+  const comparative = sp.view === "comparative";
+  const header = await loadReportHeader(session.tenantId);
+
+  const top = (
+    <div className="flex items-center gap-3">
+      <BackButton href="/reports" label="Back to Reports" />
+      <PageHeader title="Profit &amp; Loss" className="!mb-0" />
+    </div>
+  );
+
+  if (comparative) {
+    const kind = asKind(sp.kind);
+    const compare = asCompare(sp.compare);
+    const today = todayIso();
+    const current = periodOf(kind, session.calendar, asIso(sp.at) ?? today);
+    const previous = comparisonOf(kind, session.calendar, current, compare);
+    const data = await comparativeProfitAndLoss(session.tenantId, current, previous);
+    return (
+      <div className="space-y-4">
+        {top}
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 print:hidden">
+          <ViewSelect view="comparative" />
+          <ComparePicker kind={kind} at={current.from} compare={compare} options={periodOptions(kind, session.calendar, today, current.from)} />
+          <div className="ml-auto">
+            <PrintButton />
+          </div>
+        </div>
+        <ReportSheet>
+          <ReportHeader {...header} title={reportTitle(kind)} period={`${KIND_LABEL[kind]}: ${periodLabel(kind, session.calendar, current)}`} />
+          <ComparativeTable data={data} range={current} currentLabel={periodLabel(kind, session.calendar, current)} previousLabel={periodLabel(kind, session.calendar, previous)} />
+          <ReportFooter />
+        </ReportSheet>
+      </div>
+    );
+  }
+
   const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
 
-  const pnl = await profitAndLoss(session.tenantId, new Date(from + "T00:00:00Z"), new Date(to + "T00:00:00Z"));
+  const data = await comparativeProfitAndLoss(session.tenantId, { from, to });
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <BackButton href="/reports" label="Back to Reports" />
-        <PageHeader title="Profit &amp; Loss" className="!mb-0" />
+      {top}
+      <div className="print:hidden">
+        <ReportFilter from={from} to={to} fiscal={fiscal}>
+          <ViewSelect view="standard" />
+        </ReportFilter>
       </div>
-      <ReportFilter from={from} to={to} fiscal={fiscal} />
+      <div className="flex justify-end print:hidden">
+        <PrintButton />
+      </div>
 
-      <div>
-        <p className="mb-2 text-sm text-gray-500">
-          <D value={from} /> – <D value={to} />
-        </p>
-        <table className="border-collapse text-[13px] w-full">
-          <tbody>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Income</td>
-            </tr>
-            {pnl.income.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} from={from} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Total Income</td>
-              <td className="px-2.5 py-1.5 text-right">{pnl.totalIncome.toFixed(2)}</td>
-            </tr>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Expenses</td>
-            </tr>
-            {pnl.expenses.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} from={from} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Total Expenses</td>
-              <td className="px-2.5 py-1.5 text-right">{pnl.totalExpenses.toFixed(2)}</td>
-            </tr>
-            <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="px-2.5 py-1.5">Net Profit</td>
-              <td className="px-2.5 py-1.5 text-right">{pnl.netProfit.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <ReportSheet>
+        <ReportHeader {...header} title="Profit & Loss" period={`${formatDate(from, session.calendar, "long")} – ${formatDate(to, session.calendar, "long")}`} />
+        <ComparativeTable data={data} range={{ from, to }} currentLabel="Amount" />
+        <ReportFooter />
+      </ReportSheet>
     </div>
   );
 }
