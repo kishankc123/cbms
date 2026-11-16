@@ -5,6 +5,9 @@ export type LedgerAccount = { id: string; code: string; name: string; category: 
 export type SettlementAccount = { id: string; code: string; name: string; /** the group it sits under, if any */ group: string | null; groupCode: string | null };
 
 // Accounts the app keeps up to date itself, so a payment must not move them: stock, fixed assets, VAT and other taxes, TDS and payroll. Their sub-accounts are out too.
+// Cash and bank are chosen through the payment modes, and retained earnings and brought forward are where the books close, so neither is offered here.
+const CASH_AND_BANK = (code: string) => code === "1000" || code.startsWith("1010");
+const CLOSING_EQUITY = new Set(["3100", "3200"]);
 const APP_MANAGED_GROUPS = new Set(["1200", "1210", "1300", "1500", "2090", "2100", "2300", "2310", "2320", "2340", "2350", "2360"]);
 
 /**
@@ -19,6 +22,7 @@ export function settlementAccounts(accounts: (LedgerAccount & { isActive: boolea
   for (const a of accounts) {
     if (!a.isActive || hasChildren.has(a.id) || roleAccountIds.has(a.id)) continue;
     if (a.category !== "asset" && a.category !== "liability" && a.category !== "equity") continue;
+    if (CASH_AND_BANK(a.code) || CLOSING_EQUITY.has(a.code)) continue;
     const group = a.parentId ? byId.get(a.parentId) ?? null : null;
     if (a.category !== "equity" && ((!group && systemCodes.has(a.code)) || APP_MANAGED_GROUPS.has(group?.code ?? a.code))) continue;
     out.push({ id: a.id, code: a.code, name: a.name, group: group?.name ?? null, groupCode: group?.code ?? null });

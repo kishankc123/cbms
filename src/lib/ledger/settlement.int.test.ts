@@ -43,6 +43,7 @@ describe("settling through a ledger account", () => {
     expect(ids.has(salesId)).toBe(false); // income
     expect(ids.has(rentId)).toBe(false); // an expense
     expect(list.some((a) => a.code === "2100" || a.code === "1300")).toBe(false); // VAT
+    expect(list.some((a) => a.code === "1010.01" || a.code === "3100")).toBe(false); // cash and bank are chosen through the payment modes
     expect(list.some((a) => a.code === "3000")).toBe(true); // the owner's capital may pay a bill
   });
 

@@ -89,6 +89,7 @@ export function InvoicePaymentModal({
           {lines.map((line, i) => (
             <div key={i} className="flex items-center gap-2">
               <PaymentModeSelect
+                ledger
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
                 className={`${controlClass} flex-1`}

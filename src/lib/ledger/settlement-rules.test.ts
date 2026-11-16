@@ -9,6 +9,7 @@ const chart = [
   a("dir", "2400", "Director", "liability"), a("sudip", "2400.01", "Sudip KC", "liability", "dir"), a("old", "2400.02", "Closed", "liability", "dir", false),
   a("cap", "3000", "Owner's Capital", "equity"), a("sales", "4000", "Sales", "income"), a("rent", "5100", "Rent", "expense"),
   a("stock", "1200", "Inventory", "asset"), a("a2", "2500", "Sudip KC", "liability"),
+  a("bank", "1010", "Bank", "asset"), a("nabil", "1010.01", "Nabil", "asset", "bank"), a("till", "1000", "Cash", "asset"), a("re", "3100", "Retained Earnings", "equity"),
 ];
 const list = settlementAccounts(chart, new Set(["a2"]), SYSTEM);
 
@@ -16,8 +17,8 @@ describe("which accounts a payment can be settled through", () => {
   it("takes the lowest-level asset, liability and equity accounts", () => {
     expect(list.map((x) => x.id)).toEqual(["himal", "sudip", "cap"]);
   });
-  it("leaves out groups, inactive accounts, income, expenses, role accounts, app-managed ones (VAT, stock) and the receivable and payable controls", () => {
-    for (const id of ["ar", "dir", "old", "sales", "rent", "vat", "vat1", "stock", "a2"]) expect(list.some((x) => x.id === id)).toBe(false);
+  it("leaves out cash and bank (offered through the payment modes), retained earnings, groups, inactive accounts, income, expenses, role accounts, app-managed ones (VAT, stock) and the receivable and payable controls", () => {
+    for (const id of ["ar", "dir", "old", "sales", "rent", "vat", "vat1", "stock", "a2", "nabil", "till", "re"]) expect(list.some((x) => x.id === id)).toBe(false);
   });
   it("keeps equity even as a main account, and customer accounts so a receivable can be netted off", () => {
     expect(list.find((x) => x.id === "cap")).toMatchObject({ group: null });
