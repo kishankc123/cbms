@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setBankAccountActive } from "../actions";
+import { deleteBankAccount, setBankAccountActive } from "../actions";
 import { BankAccountFormModal, type FormOptions, type InitialBankAccount } from "./bank-account-form-modal";
 import { BankLogo } from "@/components/bank-logo";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useProblem } from "@/components/problem-dialog";
 
 type BankAccountRow = {
   id: string;
@@ -22,6 +23,8 @@ type BankAccountRow = {
   institutionId: string | null;
   logo: { hasLogo: boolean; updatedAt: Date } | null;
   modeIds: string[];
+  /** No transactions, statements or reconciliations: it can be deleted rather than deactivated. */
+  canDelete: boolean;
 };
 
 type LedgerOption = { id: string; code: string; name: string };
@@ -32,12 +35,17 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions, options }: { ba
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<InitialBankAccount | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  // A refused change (the account still holds money, or it is a system account) is explained in a dialog, not swallowed.
+  const { report, dialog } = useProblem();
 
-  async function toggleActive(row: BankAccountRow) {
+  // Runs one change on an account and shows why when it is refused.
+  async function change(row: BankAccountRow, work: () => Promise<unknown>) {
     setToggling(row.id);
     try {
-      await setBankAccountActive({ bankAccountId: row.id, isActive: !row.isActive });
+      await work();
       router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "That did not work.", null);
     } finally {
       setToggling(null);
     }
@@ -114,12 +122,25 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions, options }: { ba
                   disabled={toggling === b.id}
                   onClick={async () => {
                     if (b.isActive && !(await ask(`Deactivate ${b.accountName}? It will no longer be usable for new transactions.`, { confirmLabel: "Deactivate", danger: true }))) return;
-                    toggleActive(b);
+                    change(b, () => setBankAccountActive({ bankAccountId: b.id, isActive: !b.isActive }));
                   }}
                   className="text-xs text-red-600 hover:underline disabled:opacity-40"
                 >
-                  {b.isActive ? "Deactivate" : "Activate"}
+                  {toggling === b.id ? "Working..." : b.isActive ? "Deactivate" : "Activate"}
                 </button>
+                {b.canDelete && (
+                  <button
+                    type="button"
+                    disabled={toggling === b.id}
+                    onClick={async () => {
+                      if (!(await ask(`Delete ${b.accountName}? It has no transactions, so it is removed from Bank Reconciliation and from your Chart of Accounts. This can't be undone.`, { confirmLabel: "Delete", danger: true }))) return;
+                      change(b, () => deleteBankAccount({ bankAccountId: b.id }));
+                    }}
+                    className="text-xs text-red-600 hover:underline disabled:opacity-40"
+                  >
+                    Delete
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -133,6 +154,7 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions, options }: { ba
         </tbody>
       </table>
 
+      {dialog}
       {showNew && <BankAccountFormModal ledgerOptions={ledgerOptions} options={options} onClose={() => setShowNew(false)} />}
       {editing && <BankAccountFormModal ledgerOptions={ledgerOptions} options={options} initial={editing} onClose={() => setEditing(null)} />}
     </div>

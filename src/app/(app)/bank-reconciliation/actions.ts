@@ -27,7 +27,7 @@ import { syncBankOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
 import { SYSTEM_ACCOUNT_CODES } from "@/lib/ledger/chart-rules";
 import { listInstitutions } from "@/lib/banking/institutions";
 import { modesWithLinks, setAccountModes } from "@/lib/payment-modes";
-import { createSubGroupEntry } from "@/lib/ledger/chart";
+import { createSubGroupEntry, deleteAccountEntry } from "@/lib/ledger/chart";
 import { assessReconciliation } from "@/lib/banking/assess";
 import { todayIso } from "@/lib/calendar";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
@@ -74,8 +74,18 @@ export async function getBankAccountLedgerOptions() {
 export async function listBankAccounts() {
   const session = await requireTenantSession();
   if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
-  const [{ linked }, rows] = await Promise.all([modesWithLinks(session.tenantId), listBankAccountRows(session.tenantId)]);
-  return rows.map((r) => ({ ...r, modeIds: linked(r.chartOfAccountsLink) }));
+  const [{ linked }, rows, used] = await Promise.all([modesWithLinks(session.tenantId), listBankAccountRows(session.tenantId), accountsWithHistory(session.tenantId)]);
+  return rows.map((r) => ({ ...r, modeIds: linked(r.chartOfAccountsLink), canDelete: !used.has(r.id) && !used.has(r.chartOfAccountsLink) && !SYSTEM_ACCOUNT_CODES.has(r.ledgerCode) }));
+}
+
+/** The bank accounts (by their own id) and ledger accounts (by chart id) that have any history: ledger lines, statements or reconciliations. Such an account is deactivated, not deleted. */
+async function accountsWithHistory(tenantId: string): Promise<Set<string>> {
+  const [lines, imports, reconciled] = await Promise.all([
+    db.selectDistinct({ id: journalLines.accountId }).from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId)).where(eq(journalEntries.tenantId, tenantId)),
+    db.selectDistinct({ id: bankStatementImports.bankAccountId }).from(bankStatementImports).where(eq(bankStatementImports.tenantId, tenantId)),
+    db.selectDistinct({ id: bankReconciliations.bankAccountId }).from(bankReconciliations).where(eq(bankReconciliations.tenantId, tenantId)),
+  ]);
+  return new Set([...lines, ...imports, ...reconciled].map((r) => r.id));
 }
 
 const listBankAccountRows = (tenantId: string) =>
@@ -342,6 +352,20 @@ export async function setBankAccountActive(input: { bankAccountId: string; isAct
   await db.update(bankAccounts).set({ isActive: input.isActive }).where(eq(bankAccounts.id, input.bankAccountId));
   await db.update(accounts).set({ isActive: input.isActive }).where(eq(accounts.id, bankAccount.chartOfAccountsLink));
 
+  revalidatePath("/bank-reconciliation");
+  revalidatePath("/bank-reconciliation/setup");
+  revalidatePath("/chart-of-accounts");
+}
+
+/** Deletes a bank account that has no history, together with its account in the Chart of Accounts. One with transactions, statements or reconciliations is deactivated instead. */
+export async function deleteBankAccount(input: { bankAccountId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit") || !can(session, "chart_of_accounts", "delete")) throw new Error("Not permitted");
+  const [bank] = await db.select().from(bankAccounts).where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.tenantId, session.tenantId))).limit(1);
+  if (!bank) throw new Error("Bank account not found");
+  if ((await accountsWithHistory(session.tenantId)).has(bank.id)) throw new Error("This account has bank statements or reconciliations, so it can't be deleted. Deactivate it instead.");
+  // The Chart of Accounts rules decide the rest: a system account, one with transactions (an opening balance counts) or one still in use is refused in plain words.
+  await deleteAccountEntry(session.tenantId, session.userId, bank.chartOfAccountsLink);
   revalidatePath("/bank-reconciliation");
   revalidatePath("/bank-reconciliation/setup");
   revalidatePath("/chart-of-accounts");
