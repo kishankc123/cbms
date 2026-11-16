@@ -49,7 +49,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => dismissible && onClose()} aria-hidden />
-      <div ref={panel} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={`relative flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-[var(--radius-modal)] border border-line bg-surface shadow-[var(--shadow-modal)] outline-none ${SIZES[size]}`}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={`relative flex text-left whitespace-normal max-h-[calc(100vh-2rem)] w-full flex-col rounded-[var(--radius-modal)] border border-line bg-surface shadow-[var(--shadow-modal)] outline-none ${SIZES[size]}`}>
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-ink">{title}</h2>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { TdsHead } from "@/lib/ledger/tds-links";
+import { HelpTip } from "@/components/ui/help-tip";
 
 // "Is this subject to TDS?" for an expense account or group. The value is what gets saved: null (follow the group above, if any), "none"
 // (exempt) or a heading key. The rate is only shown, never typed: the platform administrator sets it.
@@ -15,6 +16,7 @@ export function TdsLinkField({ heads, value, onChange, inherited }: { heads: Tds
       <label className="flex items-center gap-2 text-sm text-gray-800">
         <input type="checkbox" checked={subject} onChange={(e) => onChange(e.target.checked ? (inherited ? null : choices[0].key) : inherited ? "none" : null)} />
         Payments to this are subject to TDS
+        <HelpTip>The rate is set by the platform administrator. It is applied automatically when you record an expense.</HelpTip>
       </label>
       {subject && (
         <select data-field="tdsHead" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full">
@@ -26,7 +28,6 @@ export function TdsLinkField({ heads, value, onChange, inherited }: { heads: Tds
           ))}
         </select>
       )}
-      <p className="text-xs text-gray-500">The rate is set by the platform administrator. It is applied automatically when you record an expense.</p>
     </div>
   );
 }

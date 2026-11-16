@@ -51,7 +51,7 @@ function Dialog({ pending, onAnswer }: { pending: Pending; onAnswer: (yes: boole
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => onAnswer(false)} />
-      <div role="alertdialog" aria-modal="true" aria-label={title ?? "Please confirm"} className="relative w-full max-w-sm space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
+      <div role="alertdialog" aria-modal="true" aria-label={title ?? "Please confirm"} className="relative w-full max-w-sm text-left whitespace-normal space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
         {title && <h2 className="text-sm font-semibold text-ink">{title}</h2>}
         <p className="whitespace-pre-line text-[13px] text-ink">{pending.message}</p>
         <div className="flex justify-end gap-2">

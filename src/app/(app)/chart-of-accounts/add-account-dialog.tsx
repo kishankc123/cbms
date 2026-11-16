@@ -61,7 +61,7 @@ export function AddAccountDialog({ groups, label, startInside }: { groups: Group
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={close} />
-          <form onSubmit={save} className="relative w-full max-w-md space-y-4 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
+          <form onSubmit={save} className="relative w-full max-w-md space-y-4 text-left whitespace-normal rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Add account</h2>
               <button type="button" onClick={close} aria-label="Close" className="text-gray-400 hover:text-gray-600">
