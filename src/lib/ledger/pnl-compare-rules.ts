@@ -190,3 +190,21 @@ export function buildBalanceComparison(infos: Map<string, AccountInfo>, cur: Bal
   const liabilitiesAndEquity = { cur: round2(liabilities.cur + equity.cur), prev: round2(liabilities.prev + equity.prev) };
   return { assets, liabilities, equity, liabilitiesAndEquity, difference: { cur: round2(assets.cur - liabilitiesAndEquity.cur), prev: round2(assets.prev - liabilitiesAndEquity.prev) } };
 }
+
+// ---------------------------------------------------------------- quarters
+
+/** "Q1 · FY 2083/84": which quarter of its fiscal year a quarter is. */
+export function quarterTitle(r: DateRange): string {
+  const b = basis(r.from);
+  const n = Math.floor(((ymdOf(b.cal, r.from)!.month - b.start + 12) % 12) / 3) + 1;
+  return `Q${n} · FY ${fiscalYear(r.from).label}`;
+}
+
+/** The three months of a quarter, in the order they come. */
+export function quarterMonths(r: DateRange): DateRange[] {
+  const b = basis(r.from);
+  return [0, 1, 2].map((i) => monthRange(b.cal, addMonths(b.cal, r.from, i)));
+}
+
+/** "Shrawan 2083" for one of a quarter's months. */
+export const quarterMonthLabel = (m: DateRange) => monthLabel(basis(m.from).cal, m.from);

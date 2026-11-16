@@ -33,6 +33,23 @@ export function ViewSelect({ view, otherLabel = "Comparative" }: { view: "standa
   );
 }
 
+/** Choose one of the recent quarters. */
+export function QuarterSelect({ at, options }: { at: string; options: { value: string; label: string }[] }) {
+  const set = useSetParams();
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-ink-2">Quarter</span>
+      <Select value={at} onChange={(e) => set({ at: e.target.value })} className="w-80">
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+}
+
 export function ComparePicker({ kind, at, compare, options, noCompare }: { kind: PeriodKind; at: string; compare: CompareWith; options: { value: string; label: string }[]; /** A report of one period has nothing to compare with. */ noCompare?: boolean }) {
   const set = useSetParams();
   return (

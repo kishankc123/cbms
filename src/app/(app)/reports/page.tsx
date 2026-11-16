@@ -20,6 +20,7 @@ const REPORT_MODULE: Record<string, string> = {
   "payroll-summary": "payroll",
   "profit-and-loss": "chart_of_accounts",
   "purchase-by-item": "purchases",
+  "quarterly-pack": "chart_of_accounts",
   "purchase-by-supplier": "purchases",
   "purchase-summary": "purchases",
   "receipts-by-mode": "bank_reconciliation",

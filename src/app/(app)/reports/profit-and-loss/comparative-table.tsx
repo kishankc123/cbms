@@ -3,7 +3,7 @@ import { change, changePercent, margin, money, percentText, type Comparison, typ
 import { AccountLink } from "../account-link";
 
 // Green is better for profit, red worse. A balance sheet has no better or worse direction, so it passes `neutral`.
-const tone = (n: number, neutral?: boolean) => (neutral ? "" : n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
+export const tone = (n: number, neutral?: boolean) => (neutral ? "" : n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
 export const NUM = "px-2.5 py-1 text-right tabular-nums";
 
 // The columns after the current amount. With one period there is nothing to compare, so they are left out.
