@@ -2,7 +2,7 @@ import { and, eq, isNull, lte, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { recurringExpenses, recurringExpenseInstances, expenses } from "@/db/schema";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
-import { getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
+import { getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { logAuditEvent } from "@/lib/audit";
@@ -86,6 +86,7 @@ async function postRecurringOccurrence(
   const amount = round2(Number(instance.expectedAmount));
   if (!(amount > 0)) throw new Error("Recurring expense amount must be greater than zero");
 
+  const payableAccountId = await expenseSupplierAccountId(tenantId, template.vendorId);
   let expense: typeof expenses.$inferSelect | undefined;
   let expenseNumber = "";
   for (let attempt = 0; attempt < 5 && !expense; attempt++) {
@@ -101,6 +102,7 @@ async function postRecurringOccurrence(
           expenseDate: instance.expenseDate,
           categoryAccountId: template.expenseAccountId,
           vendorId: template.vendorId,
+          payableAccountId,
           payeeName: template.payeeName,
           description: `Recurring: ${template.expenseName} (${instance.periodLabel})`,
           dueDate: instance.dueDate,
@@ -124,10 +126,10 @@ async function postRecurringOccurrence(
   if (!expense) throw new Error("Could not allocate an expense number");
 
   try {
-    const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
+    const owedOn = payableAccountId ?? (await getOrCreateExpensePayableAccount(tenantId)).id;
     const lines: PostLineInput[] = [
       { accountId: template.expenseAccountId, debitAmount: amount, description: `Recurring expense ${expenseNumber} — ${template.expenseName}` },
-      { accountId: expensePayable.id, creditAmount: amount, description: `Recurring expense ${expenseNumber} — ${template.expenseName}` },
+      { accountId: owedOn, creditAmount: amount, description: `Recurring expense ${expenseNumber} — ${template.expenseName}` },
     ];
     await postJournalEntry({
       tenantId,

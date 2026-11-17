@@ -4,6 +4,7 @@ import { and, eq, inArray, ne, notLike, notExists } from "drizzle-orm";
 import { db } from "@/db";
 import { accountRoles, accounts } from "@/db/schema";
 import { findControlAccount } from "./control-accounts";
+import { getOrCreateSupplierPayableAccountId } from "./subledger-accounts";
 
 // The liability account TDS withheld from payees is credited to.
 export async function getOrCreateTdsPayableAccount(tenantId: string) {
@@ -29,6 +30,14 @@ export async function getOrCreateExpensePayableAccount(tenantId: string) {
     .values({ tenantId, code: "2340", name: "Expense Payable", category: "liability", subCategory: "Current liabilities" })
     .returning();
   return created;
+}
+
+/**
+ * The account an expense's unpaid part is owed on: the supplier's own payable account when the expense has a supplier (so it shows in their
+ * history, statement and ageing like a bill), otherwise the shared Expense Payable account. `null` means the shared account.
+ */
+export async function expenseSupplierAccountId(tenantId: string, vendorId: string | null | undefined): Promise<string | null> {
+  return vendorId ? getOrCreateSupplierPayableAccountId(tenantId, vendorId) : null;
 }
 
 // Accounts eligible as an expense's "category": Direct/Indirect expense accounts only, and only the LOWEST level —

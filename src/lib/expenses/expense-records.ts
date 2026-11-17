@@ -7,7 +7,7 @@ import { assertSettlementAccounts, assertSupplierOwned } from "@/lib/ledger/acco
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
-import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
+import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
 import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
 import { tdsHeadLookup } from "@/lib/ledger/tds-links";
 import { getOrCreateTdsHeadPayableAccount } from "@/lib/ledger/tds-payable-accounts";
@@ -106,7 +106,9 @@ export async function buildPostingLines(
   expenseNumber: string,
   categoryAccountId: string,
   totals: ReturnType<typeof computeExpenseTotals>,
-  payments: ExpensePaymentLine[]
+  payments: ExpensePaymentLine[],
+  /** the account the unpaid part is owed on (see expenseSupplierAccountId); the shared Expense Payable account when empty */
+  payableAccountId: string | null = null
 ): Promise<PostLineInput[]> {
   const claimVat = totals.vatAmount > 0 && (await inputVatClaimable(tenantId));
   const lines: PostLineInput[] = [
@@ -127,8 +129,8 @@ export async function buildPostingLines(
 
   const remaining = round2(totals.amountPayable - totals.paid);
   if (remaining > 0) {
-    const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
-    lines.push({ accountId: expensePayable.id, creditAmount: remaining, description: `Expense ${expenseNumber}` });
+    const owedOn = payableAccountId ?? (await getOrCreateExpensePayableAccount(tenantId)).id;
+    lines.push({ accountId: owedOn, creditAmount: remaining, description: `Expense ${expenseNumber}` });
   }
 
   for (const p of payments.filter((p) => p.accountId && p.amount > 0)) {
@@ -166,6 +168,8 @@ export async function createExpenseCore(
   await assertPeriodOpen(tenantId, input.expenseDate);
   const warnings = await evaluateAmountThresholdRules(tenantId, "expenses", totals.total);
 
+  const payableAccountId = await expenseSupplierAccountId(tenantId, input.vendorId);
+
   // The number is EXP-#### and unique per organization: pick the next free one, and if two people save at the
   // same instant the database's unique rule makes the loser pick again.
   let expense: typeof expenses.$inferSelect | undefined;
@@ -182,6 +186,7 @@ export async function createExpenseCore(
           expenseDate: input.expenseDate,
           categoryAccountId: input.categoryAccountId,
           vendorId: input.vendorId,
+          payableAccountId,
           description: input.description.trim() || null,
           invoiceNumber: input.invoiceNumber.trim() || null,
           invoiceDate: input.invoiceDate || null,
@@ -211,7 +216,7 @@ export async function createExpenseCore(
   opts.takenNumbers?.add(expenseNumber);
 
   try {
-    const lines = await buildPostingLines(tenantId, expenseNumber, input.categoryAccountId, totals, input.payments);
+    const lines = await buildPostingLines(tenantId, expenseNumber, input.categoryAccountId, totals, input.payments, payableAccountId);
     await postJournalEntry({
       tenantId,
       entryDate: input.expenseDate,

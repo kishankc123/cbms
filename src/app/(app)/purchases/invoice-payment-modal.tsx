@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { useCallback, useState } from "react";
+import { LedgerLinesField, PaymentModeSelect, useLedgerSplit } from "@/components/payment-mode-select";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { controlClass } from "@/components/ui/field";
@@ -47,11 +47,14 @@ export function InvoicePaymentModal({
       : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: total > 0 ? String(total) : "" }]
   );
 
+  const emptyLine = useCallback((): PaymentLine => ({ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }), [cashBankAccounts]);
+  const { options: ledgerOptions, ledgerLines, setLedgerLines } = useLedgerSplit(lines, setLines, emptyLine);
+
   function updateLine(i: number, field: "amount", value: string) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
   }
 
-  const totalEntered = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const totalEntered = [...lines, ...ledgerLines].reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const remaining = Math.max(total - totalEntered, 0);
   const overpaid = totalEntered - total > 0.004;
 
@@ -60,6 +63,7 @@ export function InvoicePaymentModal({
     const payments = lines
       .filter((l) => l.accountId && (parseFloat(l.amount) || 0) > 0)
       .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: l.modeId || null }));
+    for (const l of ledgerLines) if (l.accountId && (parseFloat(l.amount) || 0) > 0) payments.push({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: null });
     onConfirm(payments);
   }
 
@@ -89,12 +93,11 @@ export function InvoicePaymentModal({
           {lines.map((line, i) => (
             <div key={i} className="flex items-center gap-2">
               <PaymentModeSelect
-                ledger
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
-                className={`${controlClass} flex-1`}
+                className={`${controlClass} min-w-0 flex-1`}
               />
-              <AmountInput type="number" step="0.01" min="0" value={line.amount} onChange={(e) => updateLine(i, "amount", e.target.value)} placeholder="Amount" className="w-28 text-right" />
+              <AmountInput type="number" step="0.01" min="0" value={line.amount} onChange={(e) => updateLine(i, "amount", e.target.value)} placeholder="Amount" className="w-28 shrink-0 text-right" />
             </div>
           ))}
         </div>
@@ -102,6 +105,8 @@ export function InvoicePaymentModal({
         <Button variant="ghost" size="sm" onClick={() => setLines((prev) => [...prev, { modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }])}>
           + Add other payment option
         </Button>
+
+        <LedgerLinesField options={ledgerOptions} lines={ledgerLines} onChange={setLedgerLines} />
 
         <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px]">
           <div className="flex justify-between">

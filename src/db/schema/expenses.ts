@@ -69,6 +69,8 @@ export const expenses = pgTable("expenses", {
   amountPayable: numeric("amount_payable", { precision: 18, scale: 2 }).notNull(),
   amountPaid: numeric("amount_paid", { precision: 18, scale: 2 }).notNull().default("0"),
   status: expenseStatusEnum("status").notNull().default("unpaid"),
+  /** Where the unpaid part sits in the ledger: the supplier's own payable account when the expense has a supplier, so it shows in the supplier's history; empty means the shared Expense Payable account. */
+  payableAccountId: uuid("payable_account_id").references(() => accounts.id),
   /** Set when the expense came in through Import Expenses. */
   importId: uuid("import_id").references(() => expenseImports.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

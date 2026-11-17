@@ -230,8 +230,11 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [{ accountId: advanceId, debitAmount: amount, description: label }, primaryLine];
     }
     case "expense_payment": {
-      const expensePayable = await getOrCreateExpensePayableAccount(tenantId);
-      return [{ accountId: expensePayable.id, debitAmount: amount, description: label }, primaryLine];
+      // Settles where the expense is owed: the supplier's own account when it has a supplier, else the shared Expense Payable account.
+      const target = allocations.find((a) => a.targetType === "expense");
+      const [owed] = target ? await db.select({ account: expenses.payableAccountId }).from(expenses).where(and(eq(expenses.id, target.targetId), eq(expenses.tenantId, tenantId))).limit(1) : [];
+      const owedOn = owed?.account ?? (await getOrCreateExpensePayableAccount(tenantId)).id;
+      return [{ accountId: owedOn, debitAmount: amount, description: label }, primaryLine];
     }
     case "tax_payment": {
       const lines: PostLineInput[] = [];

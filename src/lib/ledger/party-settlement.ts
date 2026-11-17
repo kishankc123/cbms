@@ -60,6 +60,7 @@ async function settle(tenantId: string, side: PartySide, partyId: string, previe
       select coalesce(sum(${d.owed}), 0) as net
       from journal_lines l join journal_entries e on e.id = l.journal_entry_id
       where e.tenant_id = ${tenantId} and l.account_id = ${party.account}
+        ${side === "supplier" ? sql`and not (e.source_id in (select id from expenses where tenant_id = ${tenantId}) or e.source_id in (select p.id from payments_ledger p where p.tenant_id = ${tenantId} and p.payment_type = 'expense_payment'))` : sql``}
     ),
     cleared as (
       select greatest(coalesce((select sum(total) from docs), 0) - (select net from owed) - coalesce((select sum(own) from docs), 0), 0) as amount
