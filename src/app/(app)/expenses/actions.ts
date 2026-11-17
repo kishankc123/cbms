@@ -13,7 +13,7 @@ import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/ac
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
-import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount } from "@/lib/ledger/expense-accounts";
+import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import {
@@ -82,7 +82,7 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
   if (entry) {
     const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
     payments = lines
-      .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id)
+      .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id && l.accountId !== expense.payableAccountId)
       .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
   }
 
@@ -133,6 +133,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
   await assertPeriodOpen(session.tenantId, input.expenseDate);
   await assertPeriodOpen(session.tenantId, todayIso());
 
+  const payableAccountId = await expenseSupplierAccountId(session.tenantId, input.vendorId);
   await reverseAllActiveEntriesForSource(session.tenantId, input.expenseId, session.userId, `Edit of expense ${existing.expenseNumber}`);
 
   await db
@@ -141,6 +142,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
       expenseDate: input.expenseDate,
       categoryAccountId: input.categoryAccountId,
       vendorId: input.vendorId,
+      payableAccountId,
       description: input.description.trim() || null,
       invoiceNumber: input.invoiceNumber.trim() || null,
       invoiceDate: input.invoiceDate || null,
@@ -161,7 +163,7 @@ export async function updateExpense(input: UpdateExpenseInput) {
     })
     .where(eq(expenses.id, input.expenseId));
 
-  const lines = await buildPostingLines(session.tenantId, existing.expenseNumber, input.categoryAccountId, totals, input.payments);
+  const lines = await buildPostingLines(session.tenantId, existing.expenseNumber, input.categoryAccountId, totals, input.payments, payableAccountId);
   await postJournalEntry({
     tenantId: session.tenantId,
     entryDate: input.expenseDate,
@@ -248,9 +250,9 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
   await assertSettlementAccounts(session.tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   await assertPeriodOpen(session.tenantId, paymentDate);
 
-  const expensePayable = await getOrCreateExpensePayableAccount(session.tenantId);
+  const owedOn = expense.payableAccountId ?? (await getOrCreateExpensePayableAccount(session.tenantId)).id;
   const lines: PostLineInput[] = [
-    { accountId: expensePayable.id, debitAmount: paidNow, description: `Payment for expense ${expense.expenseNumber}` },
+    { accountId: owedOn, debitAmount: paidNow, description: `Payment for expense ${expense.expenseNumber}` },
   ];
   for (const p of input.payments.filter((p) => p.accountId && p.amount > 0)) {
     lines.push({ accountId: p.accountId, paymentModeId: p.modeId, creditAmount: round2(p.amount), description: `Payment for expense ${expense.expenseNumber}` });

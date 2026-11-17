@@ -897,6 +897,13 @@
       "when": 1794756100264,
       "tag": "0127_bank_institution_code",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1794903647837,
+      "tag": "0128_expense_payable_account",
+      "breakpoints": true
     }
   ]
 }

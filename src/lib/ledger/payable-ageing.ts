@@ -1,6 +1,6 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { vendors, purchaseBills } from "@/db/schema";
+import { vendors, purchaseBills, expenses } from "@/db/schema";
 import { getPartyLines, buildStatement } from "./party-ledger";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -46,7 +46,13 @@ export async function payableAgeing(tenantId: string, asOf: Date) {
   const byVendor = new Map<string, Buckets>();
   const empty = (): Buckets => ({ current: 0, d1to30: 0, d31to60: 0, d61to90: 0, d90plus: 0, billTotal: 0 });
 
-  for (const bill of billRows) {
+  // An expense with a supplier is owed on the supplier's own account, so it ages like a bill.
+  const expenseRows = await db
+    .select({ vendorId: expenses.vendorId, dueDate: expenses.dueDate, billDate: expenses.expenseDate, total: expenses.amountPayable, amountPaid: expenses.amountPaid })
+    .from(expenses)
+    .where(and(eq(expenses.tenantId, tenantId), ne(expenses.status, "void"), isNotNull(expenses.payableAccountId)));
+
+  for (const bill of [...billRows, ...expenseRows]) {
     if (!bill.vendorId) continue; // consumable purchase with no supplier chosen — nothing to age
     const outstanding = round2(Number(bill.total) - Number(bill.amountPaid));
     if (outstanding <= 0) continue;
