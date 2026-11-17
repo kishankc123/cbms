@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { useCallback, useEffect, useState } from "react";
+import { LedgerLinesField, PaymentModeSelect, useLedgerSplit } from "@/components/payment-mode-select";
 
 import { AmountInput } from "@/components/ui/amount-input";
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -49,6 +49,9 @@ export function RecordPayModal({
   );
   const [vendorId, setVendorId] = useState(initialVendorId);
 
+  const emptyLine = useCallback((): PaymentLine => ({ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }), [cashBankAccounts]);
+  const { options: ledgerOptions, ledgerLines, setLedgerLines } = useLedgerSplit(lines, setLines, emptyLine);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -61,7 +64,7 @@ export function RecordPayModal({
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
   }
 
-  const totalEntered = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const totalEntered = [...lines, ...ledgerLines].reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const difference = total - totalEntered;
   const overpaid = difference < -0.004;
   const partial = difference > 0.004;
@@ -73,6 +76,7 @@ export function RecordPayModal({
     const payments = lines
       .filter((l) => l.accountId && (parseFloat(l.amount) || 0) > 0)
       .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: l.modeId || null }));
+    for (const l of ledgerLines) if (l.accountId && (parseFloat(l.amount) || 0) > 0) payments.push({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: null });
     onConfirm(payments, vendorId);
   }
 
@@ -96,10 +100,9 @@ export function RecordPayModal({
           {lines.map((line, i) => (
             <div key={i} className="flex items-center gap-2">
               <PaymentModeSelect
-                ledger
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
-                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 min-w-0 flex-1"
               />
               <AmountInput bare
                 type="number"
@@ -108,7 +111,7 @@ export function RecordPayModal({
                 value={line.amount}
                 onChange={(e) => updateLine(i, "amount", e.target.value)}
                 placeholder="Amount"
-                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28 shrink-0"
               />
             </div>
           ))}
@@ -121,6 +124,8 @@ export function RecordPayModal({
         >
           + Add other payment option
         </button>
+
+        <LedgerLinesField options={ledgerOptions} lines={ledgerLines} onChange={setLedgerLines} />
 
         <div className="rounded border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
           <div className="flex justify-between">
