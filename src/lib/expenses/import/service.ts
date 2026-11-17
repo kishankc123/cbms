@@ -183,7 +183,7 @@ async function buildRows(
       category = "ok";
     }
 
-    const pays = readPaySlots((k) => cell(r, k), payResolver);
+    const pays = readPaySlots((k) => cell(r, k), payResolver, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId });
     const amount = parseAmountCell(cell(r, "amount"));
     const vat = parseAmountCell(cell(r, "vat"));
     const tds = parseAmountCell(cell(r, "tds"));
@@ -522,7 +522,7 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
       { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Taxi fare", amount: 450, billType: "No bill", vat: 0, tds: 0, paid: 300, account: accountList[0]?.name ?? "Cash", paid2: 150, account2: accountList[1]?.name ?? "Fonepay" },
     ])
   );
-  const wide: Partial<Record<(typeof EXPENSE_FIELDS)[number]["key"], number>> = { date: 14, category: 24, supplier: 26, description: 24, invoiceNumber: 14, dueDate: 14, account: 22, account2: 22, account3: 22 };
+  const wide: Partial<Record<(typeof EXPENSE_FIELDS)[number]["key"], number>> = { date: 14, category: 24, supplier: 26, description: 24, invoiceNumber: 14, dueDate: 14, account: 22, account2: 22, account3: 22, mode: 16, mode2: 16, mode3: 16 };
   sheet["!cols"] = EXPENSE_FIELDS.map((f) => ({ wch: wide[f.key] ?? 12 }));
   XLSX.utils.book_append_sheet(wb, sheet, "Expenses");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");
@@ -530,7 +530,7 @@ export async function buildExpenseTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cash and bank accounts"], ...accountList.map((a) => [a.name])]), "Accounts");
   const payResolver = await buildPaymentResolver(tenantId);
   const payModes = payResolver.modes;
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (a mode with several accounts needs the account too)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ledgerSheet(payResolver.ledger)), "Ledger accounts");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(expenseColumnGuide()));
   guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }];

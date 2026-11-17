@@ -2,20 +2,21 @@ import type { FieldDef } from "./import-columns";
 import type { PaymentResolver } from "./payment-modes";
 import { parseAmountCell } from "@/lib/sales/import/values";
 
-// The payment columns of an imported invoice, bill or expense: up to three (amount, account) pairs, so one document can be paid
+// The payment columns of an imported invoice, bill or expense: up to three (amount, account, payment mode) groups, so one document can be paid
 // in parts through different accounts (say part cash, part Fonepay). Shared by the three imports.
 
 export const PAY_SLOTS = 3;
-export type PayKey = "paid" | "account" | "paid2" | "account2" | "paid3" | "account3";
+export type PayKey = "paid" | "account" | "mode" | "paid2" | "account2" | "mode2" | "paid3" | "account3" | "mode3";
 export type PayMode = "file" | "unpaid" | "full";
 
-const slotKey = (kind: "paid" | "account", n: number) => (n === 1 ? kind : `${kind}${n}`) as PayKey;
+const slotKey = (kind: "paid" | "account" | "mode", n: number) => (n === 1 ? kind : `${kind}${n}`) as PayKey;
 const slotLabel = (label: string, n: number) => (n === 1 ? label : `${label} ${n}`);
 
 export function payFields(accountLabel: string, paidHelp: string, accountHelp: string): FieldDef<PayKey>[] {
   return Array.from({ length: PAY_SLOTS }, (_, i) => i + 1).flatMap((n) => [
     { key: slotKey("paid", n), label: slotLabel("Paid amount", n), required: false, help: n === 1 ? paidHelp : "A second part of the payment, if it was paid in more than one way." },
     { key: slotKey("account", n), label: slotLabel(accountLabel, n), required: false, help: accountHelp },
+    { key: slotKey("mode", n), label: slotLabel("Payment mode", n), required: false, help: "How it was paid (Cash, Cheque, Fonepay...). Blank takes the mode the account belongs to, or the default you choose." },
   ]);
 }
 
@@ -30,19 +31,47 @@ export type PaySlot = {
   modeId: string | null;
 };
 
+/** The account and mode a payment group of the file means. `defaults` is the account and mode chosen on the review screen. */
+function pickFor(accountText: string, modeText: string, resolver: PaymentResolver, defaults: PayDefaults): { accountId: string | null; modeId: string | null; note?: string } {
+  const pick = accountText ? resolver.resolve(accountText) : null;
+  const picked = pick && "accountId" in pick ? pick : null;
+  const wanted = modeText ? resolver.modes.find((m) => norm(m.name) === norm(modeText)) : null;
+  if (modeText && !wanted) return { accountId: null, modeId: null, note: `"${modeText}" isn't one of your payment modes. Check the Payment modes sheet of the template.` };
+
+  if (wanted && !accountText) {
+    if (wanted.accounts.length === 1) return { accountId: wanted.accounts[0].id, modeId: wanted.id };
+    const fallback = defaults.accountId && wanted.accounts.some((a) => a.id === defaults.accountId) ? defaults.accountId : null;
+    if (fallback) return { accountId: fallback, modeId: wanted.id };
+    return { accountId: null, modeId: null, note: `The mode "${wanted.name}" has more than one account (${wanted.accounts.map((a) => a.name).join(", ")}). Write the account too, or choose a default account that belongs to it.` };
+  }
+  if (!picked) return { accountId: null, modeId: null, note: pick && "ambiguous" in pick ? `"${accountText}" matches more than one account (${pick.ambiguous.join(", ")}). Write it as Group: Account name.` : undefined };
+  if (wanted) {
+    if (!wanted.accounts.some((a) => a.id === picked.accountId)) return { accountId: null, modeId: null, note: `"${accountText}" isn't one of the accounts the mode "${wanted.name}" can use (${wanted.accounts.map((a) => a.name).join(", ") || "none"}).` };
+    return { accountId: picked.accountId, modeId: wanted.id };
+  }
+  if (picked.modeId) return picked;
+  // The account belongs to several modes (a bank) or none: the mode chosen on the screen applies if it can use this account.
+  const dm = defaults.modeId ? resolver.modes.find((m) => m.id === defaults.modeId) : null;
+  return { accountId: picked.accountId, modeId: dm && dm.accounts.some((a) => a.id === picked.accountId) ? dm.id : null };
+}
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/s+/g, " ");
+export type PayDefaults = { accountId: string | null; modeId?: string | null };
+
 /** Reads the payment columns of one row. */
-export function readPaySlots(cell: (key: PayKey) => string, resolver: PaymentResolver): PaySlot[] {
+export function readPaySlots(cell: (key: PayKey) => string, resolver: PaymentResolver, defaults: PayDefaults = { accountId: null }): PaySlot[] {
   return Array.from({ length: PAY_SLOTS }, (_, i) => i + 1).map((n) => {
     const accountText = cell(slotKey("account", n));
-    const pick = accountText ? resolver.resolve(accountText) : null;
-    const picked = pick && "accountId" in pick ? pick : null;
+    const modeText = cell(slotKey("mode", n));
+    const hasPick = accountText !== "" || modeText !== "";
+    const got = hasPick ? pickFor(accountText, modeText, resolver, defaults) : null;
     return {
       amount: parseAmountCell(cell(slotKey("paid", n))),
-      account: accountText === "" ? "none" : picked ? "ok" : "unknown",
-      accountText,
-      accountNote: pick && "ambiguous" in pick ? `"${accountText}" matches more than one account (${pick.ambiguous.join(", ")}). Write it as Group: Account name.` : undefined,
-      accountId: picked?.accountId ?? null,
-      modeId: picked?.modeId ?? null,
+      account: !hasPick ? "none" : got?.accountId ? "ok" : "unknown",
+      accountText: accountText || modeText,
+      accountNote: got?.note,
+      accountId: got?.accountId ?? null,
+      modeId: got?.modeId ?? null,
     };
   });
 }

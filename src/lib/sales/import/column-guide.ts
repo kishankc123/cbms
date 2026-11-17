@@ -17,10 +17,13 @@ type Rule = { accepts: string; example: string };
 const payRules = (totalNote: string, verb: string, example: string): Record<PayKey, Rule> => ({
   paid: { accepts: `${MONEY} ${totalNote}`, example },
   account: { accepts: `The name or code of one of your cash, bank or wallet accounts, or a payment mode that has just one account (Cash). Needed only when money was ${verb}.`, example: "Cash" },
+  mode: { accepts: "How it was paid: one of your payment modes (Cash, Cheque, Bank transfer, Fonepay, Card, Wallet). Blank takes the mode the account belongs to, or the default you choose. With a mode and no account, the mode's account is used.", example: "Fonepay" },
   paid2: { accepts: "A second part of the payment, if it was paid in more than one way. The parts together can't be more than the total.", example: "825" },
   account2: { accepts: "The account the second part went through.", example: "Fonepay" },
+  mode2: { accepts: "The payment mode of the second part.", example: "Bank transfer" },
   paid3: { accepts: "A third part, if needed.", example: "300" },
   account3: { accepts: "The account the third part went through.", example: "Wallet" },
+  mode3: { accepts: "The payment mode of the third part.", example: "Cash" },
 });
 
 function build<K extends string>(fields: FieldDef<K>[], rules: Record<K, Rule>): ColumnGuideRow[] {
