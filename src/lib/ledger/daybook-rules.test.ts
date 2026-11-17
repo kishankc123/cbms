@@ -89,3 +89,34 @@ describe("a quiet day", () => {
     expect(unmoded.expenses.byMode).toEqual([{ mode: NO_MODE, amount: 50 }]);
   });
 });
+
+describe("payments settled through a ledger account", () => {
+  const ledger = new Map([
+    ["dir", { label: "Director: Sudip KC", category: "liability", groupCode: "2400" }],
+    ["himal", { label: "Accounts Receivable: Himal Enterprises", category: "asset", groupCode: "1100" }],
+    ["shyam", { label: "Accounts Payable: Shyam Traders", category: "liability", groupCode: "2000" }],
+  ]);
+  const day = (list: DayEntry[]) => buildDaybook({ day: "2026-11-17", entries: list, cashAccounts, opening: {}, closing: {}, ledger });
+
+  it("an expense paid by the director is not on credit and not cash: it is shown as settled through his account", () => {
+    const b = day([e("x", "expense", "exp1", [l("rent", 18000, 0), l("dir", 0, 18000)], { reference: "EXP-0007" })]);
+    expect(b.expenses.byMode).toEqual([{ mode: "Via Director: Sudip KC", amount: 18000 }]);
+    expect(b.settled).toMatchObject([{ label: "Director: Sudip KC", amount: 18000, forWhat: "EXP-0007", kind: "expenses", effect: "Business now owes this" }]);
+    expect(b.settledTotal).toBe(18000);
+    expect([b.moneyIn, b.moneyOut]).toEqual([0, 0]);
+  });
+  it("a sale netted against a payable, and a bill netted against a receivable, are settled; the party's own account is still credit", () => {
+    const b = day([
+      e("s", "sale", "inv1", [l("himal", 4000, 0), l("shyam", 6000, 0), l("rev", 0, 10000)]), // 4000 owed by the customer, 6000 netted off the supplier account
+      e("p", "purchase", "bill1", [l("purch", 5000, 0), l("shyam", 0, 2000), l("himal", 0, 3000)]), // 2000 owed to the supplier, 3000 netted off a receivable
+    ]);
+    expect(b.sales.byMode).toEqual([{ mode: "Via Accounts Payable: Shyam Traders", amount: 6000 }, { mode: ON_CREDIT, amount: 4000 }]);
+    expect(b.purchases.byMode).toEqual([{ mode: "Via Accounts Receivable: Himal Enterprises", amount: 3000 }, { mode: ON_CREDIT, amount: 2000 }]);
+    expect(b.settled.map((s) => s.effect)).toEqual(["Payable netted off", "Receivable netted off"]);
+  });
+  it("without a ledger map nothing changes", () => {
+    const b = buildDaybook({ day: "2026-11-17", entries: [e("x", "expense", "exp1", [l("rent", 18000, 0), l("dir", 0, 18000)])], cashAccounts, opening: {}, closing: {} });
+    expect(b.settled).toEqual([]);
+    expect(b.expenses.byMode).toEqual([{ mode: ON_CREDIT, amount: 18000 }]);
+  });
+});

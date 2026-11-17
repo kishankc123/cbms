@@ -1,5 +1,5 @@
 import { addDays } from "@/lib/calendar";
-import { buildDaybook, type CashAccount, type DayEntry, type Daybook } from "./daybook-rules";
+import { buildDaybook, type CashAccount, type DayEntry, type Daybook, type LedgerInfo } from "./daybook-rules";
 
 // The Daybook over a stretch of days: one row for every day, and the whole stretch added up the same way a single day is. Pure, like daybook-rules.ts.
 
@@ -24,7 +24,7 @@ export function clampRange(from: string, to: string): { from: string; to: string
   return { from: start, to, trimmed: false };
 }
 
-export function buildRange(input: { from: string; to: string; entries: RangeEntry[]; cashAccounts: CashAccount[]; /** each account's balance at the end of the day before `from` */ openingBefore: Record<string, number> }): DaybookRange {
+export function buildRange(input: { from: string; to: string; entries: RangeEntry[]; cashAccounts: CashAccount[]; /** each account's balance at the end of the day before `from` */ openingBefore: Record<string, number>; ledger?: Map<string, LedgerInfo> }): DaybookRange {
   const byDay = new Map<string, RangeEntry[]>();
   for (const e of input.entries) byDay.set(e.date, [...(byDay.get(e.date) ?? []), e]);
 
@@ -35,12 +35,12 @@ export function buildRange(input: { from: string; to: string; entries: RangeEntr
     const entries = byDay.get(day) ?? [];
     const opening = { ...running };
     for (const e of entries) for (const l of e.lines) running[l.accountId] = Math.round(((running[l.accountId] ?? 0) + l.debit - l.credit) * 100) / 100;
-    const d = buildDaybook({ day, entries, cashAccounts: input.cashAccounts, opening, closing: { ...running } });
+    const d = buildDaybook({ day, entries, cashAccounts: input.cashAccounts, opening, closing: { ...running }, ledger: input.ledger });
     days.push({ day, sales: d.sales.total, purchases: d.purchases.total, expenses: d.expenses.total, moneyIn: d.moneyIn, moneyOut: d.moneyOut, closing: d.totals.closing, quiet: entries.length === 0 });
   }
 
   // The whole stretch as one: an entry and its undo inside it cancel, even when they were made on different days.
-  const total = buildDaybook({ day: input.to, entries: input.entries, cashAccounts: input.cashAccounts, opening: input.openingBefore, closing: running });
+  const total = buildDaybook({ day: input.to, entries: input.entries, cashAccounts: input.cashAccounts, opening: input.openingBefore, closing: running, ledger: input.ledger });
   const best = days.reduce<RangeDay | null>((b, d) => (d.sales > 0 && (!b || d.sales > b.sales) ? d : b), null);
   return { from: input.from, to: input.to, days, total, busiest: best ? { day: best.day, sales: best.sales } : null };
 }

@@ -2,7 +2,7 @@
 // Which accounts may be used, and how an import cell such as "Director: Sudip KC" is read. Plain functions, no database, so they can be tested.
 
 export type LedgerAccount = { id: string; code: string; name: string; category: string; parentId: string | null };
-export type SettlementAccount = { id: string; code: string; name: string; /** the group it sits under, if any */ group: string | null; groupCode: string | null };
+export type SettlementAccount = { id: string; code: string; name: string; category: string; /** the group it sits under, if any */ group: string | null; groupCode: string | null };
 
 // Accounts the app keeps up to date itself, so a payment must not move them: stock, fixed assets, VAT and other taxes, TDS and payroll. Their sub-accounts are out too.
 // Cash and bank are chosen through the payment modes, and retained earnings and brought forward are where the books close, so neither is offered here.
@@ -25,7 +25,7 @@ export function settlementAccounts(accounts: (LedgerAccount & { isActive: boolea
     if (CASH_AND_BANK(a.code) || CLOSING_EQUITY.has(a.code)) continue;
     const group = a.parentId ? byId.get(a.parentId) ?? null : null;
     if (a.category !== "equity" && ((!group && systemCodes.has(a.code)) || APP_MANAGED_GROUPS.has(group?.code ?? a.code))) continue;
-    out.push({ id: a.id, code: a.code, name: a.name, group: group?.name ?? null, groupCode: group?.code ?? null });
+    out.push({ id: a.id, code: a.code, name: a.name, category: a.category, group: group?.name ?? null, groupCode: group?.code ?? null });
   }
   return out.sort((x, y) => x.code.localeCompare(y.code));
 }

@@ -37,7 +37,7 @@ describe("reading an import cell", () => {
     expect(matchLedgerAccount("Nobody", list)).toBeNull();
   });
   it("lists the choices as Group: Name when a name fits more than one account", () => {
-    const two = [...list, { id: "x", code: "2600.01", name: "Sudip KC", group: "Employee", groupCode: "2600" }];
+    const two = [...list, { id: "x", code: "2600.01", name: "Sudip KC", category: "liability", group: "Employee", groupCode: "2600" }];
     expect(matchLedgerAccount("Sudip KC", two)).toEqual({ ambiguous: ["Director: Sudip KC", "Employee: Sudip KC"] });
     expect(matchLedgerAccount("Employee: Sudip KC", two)).toMatchObject({ id: "x" });
     expect(ledgerLabel({ name: "Owner's Capital", group: null })).toBe("Owner's Capital");

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { accounts, expenses, journalEntries, journalLines } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { assertCashBankAccounts, assertSettlementAccounts } from "@/lib/ledger/account-guards";
+import { loadDaybook } from "@/lib/ledger/daybook";
 import { listSettlementAccounts } from "@/lib/ledger/settlement-accounts";
 import { buildPaymentResolver, resolvePaymentMode } from "@/lib/payment-modes";
 import { finishExpenseImport, importExpenseChunk, prepareExpenseImport, reviewExpenseFile } from "@/lib/expenses/import/service";
@@ -93,5 +94,11 @@ describe("settling through a ledger account", () => {
     expect(total(rentId, "debit")).toBe(18000);
     const [expense] = await db.select().from(expenses).where(eq(expenses.tenantId, org.tenantId));
     expect(Number(expense.amountPaid)).toBe(18000); // settled in full
+
+    // The Daybook shows it as settled through his account: not on credit, and no money in or out.
+    const book = await loadDaybook(org.tenantId, "2026-09-12");
+    expect(book.expenses.byMode).toEqual([{ mode: "Via Director: Sudip KC", amount: 18000 }]);
+    expect(book.settled).toMatchObject([{ label: "Director: Sudip KC", amount: 18000 }]);
+    expect([book.moneyIn, book.moneyOut]).toEqual([0, 0]);
   });
 });
