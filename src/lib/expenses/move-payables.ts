@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { expenses, journalEntries, journalLines, vendors } from "@/db/schema";
+import { expenses, journalEntries, journalLines, recurringExpenseInstances, recurringExpenses, vendors } from "@/db/schema";
+import { recurringOwedAccountId } from "@/lib/recurring-expenses/payable-account";
 import { assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
@@ -11,7 +12,8 @@ import { todayIso } from "@/lib/calendar";
 // Expenses entered before an expense with a supplier was posted to the supplier's own account still have their unpaid part on the shared Expense
 // Payable account, so the supplier's page shows nothing for them. This moves the unpaid part across the same way editing the expense would: the
 // expense's entry is reversed and posted again with the supplier's account in place of Expense Payable (nothing else on it changes), and the expense
-// is marked as owed on that account. Expenses that already have payments recorded against them, or sit in a closed period, are left and listed.
+// is marked as owed on that account. For an expense with no supplier that came from a recurring expense, the account is that recurring expense's own one
+// under Recurring Payable. Expenses that already have payments recorded against them, or sit in a closed period, are left and listed.
 
 export type MoveItem = { tenantId: string; expenseId: string; number: string; supplier: string; date: string; unpaid: number };
 export type MoveSkip = MoveItem & { reason: string };
@@ -19,17 +21,24 @@ export type MoveReport = { moved: MoveItem[]; skipped: MoveSkip[] };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+async function loadTemplate(tenantId: string, id: string) {
+  const [t] = await db.select().from(recurringExpenses).where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.tenantId, tenantId))).limit(1);
+  return t;
+}
+
 export async function moveExpensePayables(opts: { tenantId?: string; apply: boolean; userId?: string | null }): Promise<MoveReport> {
   const rows = await db
-    .select({ id: expenses.id, tenantId: expenses.tenantId, number: expenses.expenseNumber, date: expenses.expenseDate, vendorId: expenses.vendorId, supplier: vendors.name, payable: expenses.amountPayable, paid: expenses.amountPaid })
+    .select({ id: expenses.id, tenantId: expenses.tenantId, number: expenses.expenseNumber, date: expenses.expenseDate, vendorId: expenses.vendorId, supplier: vendors.name, recurringName: recurringExpenses.expenseName, recurringId: recurringExpenses.id, payable: expenses.amountPayable, paid: expenses.amountPaid })
     .from(expenses)
-    .innerJoin(vendors, eq(vendors.id, expenses.vendorId))
-    .where(and(isNull(expenses.payableAccountId), ne(expenses.status, "void"), sql`${expenses.amountPayable} - ${expenses.amountPaid} > 0.004`, opts.tenantId ? eq(expenses.tenantId, opts.tenantId) : undefined))
+    .leftJoin(vendors, eq(vendors.id, expenses.vendorId))
+    .leftJoin(recurringExpenseInstances, eq(recurringExpenseInstances.expenseId, expenses.id))
+    .leftJoin(recurringExpenses, eq(recurringExpenses.id, recurringExpenseInstances.recurringExpenseId))
+    .where(and(sql`(${expenses.vendorId} is not null or ${recurringExpenses.id} is not null)`, isNull(expenses.payableAccountId), ne(expenses.status, "void"), sql`${expenses.amountPayable} - ${expenses.amountPaid} > 0.004`, opts.tenantId ? eq(expenses.tenantId, opts.tenantId) : undefined))
     .orderBy(asc(expenses.tenantId), asc(expenses.expenseDate), asc(expenses.expenseNumber));
 
   const report: MoveReport = { moved: [], skipped: [] };
   for (const r of rows) {
-    const item: MoveItem = { tenantId: r.tenantId, expenseId: r.id, number: r.number, supplier: r.supplier, date: r.date, unpaid: round2(Number(r.payable) - Number(r.paid)) };
+    const item: MoveItem = { tenantId: r.tenantId, expenseId: r.id, number: r.number, supplier: r.supplier ?? `${r.recurringName} (recurring)`, date: r.date, unpaid: round2(Number(r.payable) - Number(r.paid)) };
     const skip = (reason: string) => report.skipped.push({ ...item, reason });
     try {
       await assertNoLaterPayments(r.tenantId, "expense", r.id, "expense");
@@ -63,7 +72,9 @@ export async function moveExpensePayables(opts: { tenantId?: string; apply: bool
       report.moved.push(item);
       continue;
     }
-    const supplierAccount = await getOrCreateSupplierPayableAccountId(r.tenantId, r.vendorId!);
+    const supplierAccount = r.vendorId
+      ? await getOrCreateSupplierPayableAccountId(r.tenantId, r.vendorId)
+      : await recurringOwedAccountId(r.tenantId, await loadTemplate(r.tenantId, r.recurringId!));
     const repost: PostLineInput[] = lines.map((l) => ({
       accountId: l.accountId === expensePayable.id ? supplierAccount : l.accountId,
       debitAmount: Number(l.debitAmount) > 0 ? Number(l.debitAmount) : undefined,

@@ -2,7 +2,7 @@ import { and, eq, isNull, lte, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { recurringExpenses, recurringExpenseInstances, expenses } from "@/db/schema";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
-import { getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
+import { recurringOwedAccountId } from "./payable-account";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { logAuditEvent } from "@/lib/audit";
@@ -70,8 +70,8 @@ export async function expandRecurringExpenseSchedule(tenantId: string, calendar:
 
 /**
  * Posts the real ledger expense for one occurrence: Dr the recurring expense's
- * category account, Cr Expense Payable — the same liability account and control-account
- * helper one-off expenses use (src/lib/ledger/expense-accounts.ts), never touching
+ * category account, Cr the account it is owed on (the supplier's own account, or the
+ * recurring expense's own account under Recurring Payable; see payable-account.ts), never touching
  * Cash/Bank (spec §12: recognition is not payment). Actual settlement later goes
  * through the *existing* recordExpensePayment()/Payments-module machinery on the
  * `expenses` row this creates — nothing new needed there.
@@ -86,7 +86,8 @@ async function postRecurringOccurrence(
   const amount = round2(Number(instance.expectedAmount));
   if (!(amount > 0)) throw new Error("Recurring expense amount must be greater than zero");
 
-  const payableAccountId = await expenseSupplierAccountId(tenantId, template.vendorId);
+  // Owed on the supplier's own account when it has a supplier, otherwise on the recurring expense's own account.
+  const payableAccountId = await recurringOwedAccountId(tenantId, template);
   let expense: typeof expenses.$inferSelect | undefined;
   let expenseNumber = "";
   for (let attempt = 0; attempt < 5 && !expense; attempt++) {
@@ -126,7 +127,7 @@ async function postRecurringOccurrence(
   if (!expense) throw new Error("Could not allocate an expense number");
 
   try {
-    const owedOn = payableAccountId ?? (await getOrCreateExpensePayableAccount(tenantId)).id;
+    const owedOn = payableAccountId;
     const lines: PostLineInput[] = [
       { accountId: template.expenseAccountId, debitAmount: amount, description: `Recurring expense ${expenseNumber} — ${template.expenseName}` },
       { accountId: owedOn, creditAmount: amount, description: `Recurring expense ${expenseNumber} — ${template.expenseName}` },

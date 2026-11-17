@@ -151,7 +151,7 @@ async function buildRows(tenantId: string, parsedIn: Parsed, settings: ImportSet
     }
     if (skipRows.has(rowNumber)) state = "skipped";
 
-    const pays = readPaySlots((k) => cell(r, k), payResolver);
+    const pays = readPaySlots((k) => cell(r, k), payResolver, { accountId: settings.defaultAccountId, modeId: settings.defaultModeId });
     const revenueText = cell(r, "revenue");
     const revenueId = revenueText ? revenueByText.get(normalizeName(revenueText)) ?? null : null;
     const amount = parseAmountCell(cell(r, "amount"));
@@ -438,7 +438,7 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
       { date: "16/04/2083", amount: 2825, billType: "Taxable", paid: 2000, account: accountList[0]?.name ?? "Cash", paid2: 825, account2: accountList[1]?.name ?? "Fonepay" },
     ])
   );
-  const wide: Partial<Record<(typeof IMPORT_FIELDS)[number]["key"], number>> = { date: 14, customer: 30, revenue: 24, account: 22, account2: 22, account3: 22 };
+  const wide: Partial<Record<(typeof IMPORT_FIELDS)[number]["key"], number>> = { date: 14, customer: 30, revenue: 24, account: 22, account2: 22, account3: 22, mode: 16, mode2: 16, mode3: 16 };
   sales["!cols"] = IMPORT_FIELDS.map((f) => ({ wch: wide[f.key] ?? 13 }));
   XLSX.utils.book_append_sheet(wb, sales, "Sales");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Customers (copy names from here)"], ...customerList.map((c) => [c.name])]), "Customers");
@@ -446,7 +446,7 @@ export async function buildSalesTemplate(tenantId: string): Promise<string> {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Revenue accounts"], ...revenueList.map((a) => [a.name])]), "Revenue accounts");
   const payResolver = await buildPaymentResolver(tenantId);
   const payModes = payResolver.modes;
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (write the mode only if it has one account)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Payment mode", "Accounts it can use (a mode with several accounts needs the account too)"], ...payModes.map((m) => [m.name, m.accounts.map((a) => a.name).join(", ")])]), "Payment modes");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ledgerSheet(payResolver.ledger)), "Ledger accounts");
   const guideData = XLSX.utils.aoa_to_sheet(guideSheet(salesColumnGuide()));
   guideData["!cols"] = [{ wch: 18 }, { wch: 11 }, { wch: 70 }, { wch: 16 }];
