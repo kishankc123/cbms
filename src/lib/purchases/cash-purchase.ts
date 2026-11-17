@@ -5,7 +5,7 @@ import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
-import { assertCashBankAccounts, assertPurchaseCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertPurchaseCategory, assertSupplierOwned } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -64,7 +64,7 @@ export async function prepareCashPurchase(tenantId: string, input: CashPurchaseI
   if (paid > total + 0.004) throw new Error(`The payments (${paid.toFixed(2)}) cannot exceed the bill total (${total.toFixed(2)}, VAT included)`);
   const remaining = round2(Math.max(total - paid, 0));
   if (remaining > 0.004 && !input.vendorId) throw new Error("Select a supplier — the unpaid balance is owed to them");
-  await assertCashBankAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
   if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
 
   const status = (total > 0 && remaining <= 0.004 ? "paid" : paid > 0 ? "partially_paid" : "open") as "paid" | "partially_paid" | "open";

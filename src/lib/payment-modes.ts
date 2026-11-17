@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { accounts, paymentModeAccounts, paymentModes } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
+import { listSettlementAccounts } from "@/lib/ledger/settlement-accounts";
+import { matchLedgerAccount } from "@/lib/ledger/settlement-rules";
 import { methodForMode, type PaymentMethod } from "@/lib/payment-mode-rules";
 
 export { methodForMode };
@@ -240,7 +242,12 @@ export type ResolvedMode = { paymentModeId: string | null; paymentModeName: stri
  * account used, otherwise the payment is refused: the browser is never trusted for this.
  */
 export async function resolvePaymentMode(tenantId: string, modeId: string | null | undefined, accountId: string): Promise<ResolvedMode> {
-  if (!modeId) return { paymentModeId: null, paymentModeName: null, paymentMethod: "cash" };
+  if (!modeId) {
+    // No mode keeps the record as it was (method "cash"), unless the money did not go through cash, bank or a wallet at all: that is settled through a ledger account.
+    const [a] = await db.select({ code: accounts.code }).from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.tenantId, tenantId))).limit(1);
+    const money = !a || a.code === "1000" || a.code.startsWith("1010") || (await modeAccountIds(tenantId)).has(accountId);
+    return { paymentModeId: null, paymentModeName: null, paymentMethod: money ? "cash" : "other" };
+  }
   const [row] = await db
     .select({ id: paymentModes.id, name: paymentModes.name })
     .from(paymentModes)
@@ -281,10 +288,11 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 /**
  * What an import file can mean by a payment cell: an account (by name or code), or a payment mode. An account that belongs to
  * exactly one mode is recorded under that mode; a mode with a single account resolves to that account; a mode with several
- * accounts is ambiguous (the file has to name the account). Every cash/bank/wallet account of the organization is covered.
+ * accounts is ambiguous (the file has to name the account). Every cash/bank/wallet account of the organization is covered, and so is any ledger account a
+ * payment can be settled through ("Director: Sudip KC").
  */
 export async function buildPaymentResolver(tenantId: string) {
-  const [groups, modes] = await Promise.all([getCashBankAccounts(tenantId), listModeOptions(tenantId)]);
+  const [groups, modes, ledger] = await Promise.all([getCashBankAccounts(tenantId), listModeOptions(tenantId), listSettlementAccounts(tenantId)]);
   const accountsById = new Map<string, PayAccount>();
   for (const g of groups) for (const a of g.children.length > 0 ? g.children : [{ id: g.id, code: g.code, name: g.name }]) accountsById.set(a.id, a);
   for (const m of modes) for (const a of m.accounts) accountsById.set(a.id, a);
@@ -300,6 +308,8 @@ export async function buildPaymentResolver(tenantId: string) {
 
   return {
     accounts: [...accountsById.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    /** The ledger accounts a payment can be settled through instead of cash or bank. */
+    ledger,
     modes,
     /** The account (and mode) a cell means; "ambiguous" with the mode's account names when a mode has several; null when unknown. */
     resolve(text: string): AccountPick | { ambiguous: string[] } | null {
@@ -311,7 +321,9 @@ export async function buildPaymentResolver(tenantId: string) {
       }
       const mode = modeByName.get(key);
       if (mode) return mode.accounts.length === 1 ? { accountId: mode.accounts[0].id, modeId: mode.id } : { ambiguous: mode.accounts.map((a) => a.name) };
-      return null;
+      // Then any ledger account the payment can be settled through: "Director: Sudip KC", a name, or a code.
+      const found = matchLedgerAccount(text, ledger);
+      return found && "id" in found ? { accountId: found.id, modeId: null } : found;
     },
   };
 }

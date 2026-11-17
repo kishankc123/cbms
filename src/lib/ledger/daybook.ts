@@ -1,9 +1,11 @@
-import { and, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { issuedCheques, journalEntries, journalLines, payments, receivedCheques } from "@/db/schema";
 import { addDays } from "@/lib/calendar";
 import { cashAccountRows } from "@/lib/dashboard/cash-flow";
-import { buildDaybook, type DayEntry, type Daybook } from "./daybook-rules";
+import { buildDaybook, type DayEntry, type Daybook, type LedgerInfo } from "./daybook-rules";
+import { listSettlementAccounts } from "./settlement-accounts";
+import { ledgerLabel } from "./settlement-rules";
 import { buildRange, type DaybookRange, type RangeEntry } from "./daybook-range";
 import { buildDayCheques, type DayChequeRow, type DayCheques } from "./daybook-cheques";
 import { buildDayList, creditOfDay, flowRows, FLOW_TYPES, type FlowRow, type ListEntry, type ListRow, type MonthTotals } from "./daybook-extras";
@@ -15,7 +17,13 @@ export * from "./daybook-cheques";
 
 type CashAccounts = { id: string; code: string; name: string }[];
 
-async function readDay(tenantId: string, day: string, cashAccounts: CashAccounts): Promise<{ book: Daybook; entries: ListEntry[] }> {
+/** The ledger accounts a payment can be settled through, keyed by id, so a line posted to one of them is known as a settlement and not a cash movement. */
+async function loadLedger(tenantId: string): Promise<Map<string, LedgerInfo>> {
+  const list = await listSettlementAccounts(tenantId);
+  return new Map(list.map((a) => [a.id, { label: ledgerLabel(a), category: a.category, groupCode: a.groupCode }]));
+}
+
+async function readDay(tenantId: string, day: string, cashAccounts: CashAccounts, ledger: Map<string, LedgerInfo>): Promise<{ book: Daybook; entries: ListEntry[] }> {
   const ids = cashAccounts.map((a) => a.id);
   const before = addDays(day, -1);
 
@@ -75,24 +83,25 @@ async function readDay(tenantId: string, day: string, cashAccounts: CashAccounts
     cashAccounts,
     opening: Object.fromEntries(balances.map((b) => [b.accountId, Number(b.opening)])),
     closing: Object.fromEntries(balances.map((b) => [b.accountId, Number(b.closing)])),
+    ledger,
   });
   return { book, entries };
 }
 
 /** One day of the business, from the ledger: see daybook-rules.ts for how the lines are sorted. */
 export async function loadDaybook(tenantId: string, day: string): Promise<Daybook> {
-  const accountRows = await cashAccountRows(tenantId);
-  return (await readDay(tenantId, day, accountRows.map((a) => ({ id: a.id, code: a.code, name: a.name })))).book;
+  const [accountRows, ledger] = await Promise.all([cashAccountRows(tenantId), loadLedger(tenantId)]);
+  return (await readDay(tenantId, day, accountRows.map((a) => ({ id: a.id, code: a.code, name: a.name })), ledger)).book;
 }
 
 export type DaybookPage = { book: Daybook; month: MonthTotals; flows: FlowRow[]; credit: { given: number; taken: number }; list: ListRow[]; listHidden: number; cheques: DayCheques };
 
 /** What the Daybook page shows: the day, the month so far, collections and payments, the credit given and taken, the cheques, and the day's entries. `monthFrom` is the first day of the month in the organization's calendar. */
 export async function loadDaybookPage(tenantId: string, day: string, today: string = day, monthFrom: string = day): Promise<DaybookPage> {
-  const accountRows = await cashAccountRows(tenantId);
+  const [accountRows, ledger] = await Promise.all([cashAccountRows(tenantId), loadLedger(tenantId)]);
   const cashAccounts = accountRows.map((a) => ({ id: a.id, code: a.code, name: a.name }));
-  const [now, cheques, month, flows] = await Promise.all([readDay(tenantId, day, cashAccounts), loadDayCheques(tenantId, day, today), loadDaybookRange(tenantId, monthFrom, day), loadFlows(tenantId, day, monthFrom)]);
-  const { rows, hidden } = buildDayList(now.entries, new Set(cashAccounts.map((a) => a.id)));
+  const [now, cheques, month, flows] = await Promise.all([readDay(tenantId, day, cashAccounts, ledger), loadDayCheques(tenantId, day, today), loadDaybookRange(tenantId, monthFrom, day), loadFlows(tenantId, day, monthFrom)]);
+  const { rows, hidden } = buildDayList(now.entries, new Set(cashAccounts.map((a) => a.id)), 300, ledger);
   const t = month.total;
   return {
     book: now.book,
@@ -107,6 +116,8 @@ export async function loadDaybookPage(tenantId: string, day: string, today: stri
 
 /** Customer credit recovered, supplier payments, salaries and staff advances: what was paid on the day and in the month so far, from the posted payments. */
 export async function loadFlows(tenantId: string, day: string, monthFrom: string): Promise<FlowRow[]> {
+  // Payments settled through a ledger account moved no cash, so they are shown under "Settled without cash" instead.
+  const ledgerIds = [...(await loadLedger(tenantId)).keys()];
   const rows = await db
     .select({
       type: payments.paymentType,
@@ -114,14 +125,14 @@ export async function loadFlows(tenantId: string, day: string, monthFrom: string
       month: sql<string>`coalesce(sum(${payments.amount}), 0)`,
     })
     .from(payments)
-    .where(and(eq(payments.tenantId, tenantId), eq(payments.status, "posted"), eq(payments.origin, "standalone"), gte(payments.paymentDate, monthFrom), lte(payments.paymentDate, day), inArray(payments.paymentType, FLOW_TYPES.map((f) => f.type))))
+    .where(and(eq(payments.tenantId, tenantId), eq(payments.status, "posted"), eq(payments.origin, "standalone"), gte(payments.paymentDate, monthFrom), lte(payments.paymentDate, day), inArray(payments.paymentType, FLOW_TYPES.map((f) => f.type)), ledgerIds.length > 0 ? notInArray(payments.accountId, ledgerIds) : undefined))
     .groupBy(payments.paymentType);
   return flowRows(rows.map((r) => ({ type: r.type, today: Number(r.today), month: Number(r.month) })));
 }
 
 /** The Daybook for a stretch of days (see daybook-range.ts): three queries however long the stretch is. */
 export async function loadDaybookRange(tenantId: string, from: string, to: string): Promise<DaybookRange> {
-  const accountRows = await cashAccountRows(tenantId);
+  const [accountRows, ledger] = await Promise.all([cashAccountRows(tenantId), loadLedger(tenantId)]);
   const cashAccounts = accountRows.map((a) => ({ id: a.id, code: a.code, name: a.name }));
   const ids = cashAccounts.map((a) => a.id);
   const inRange = and(eq(journalEntries.tenantId, tenantId), gte(journalEntries.entryDate, from), lte(journalEntries.entryDate, to));
@@ -150,7 +161,7 @@ export async function loadDaybookRange(tenantId: string, from: string, to: strin
     linesByEntry.set(r.entryId, list);
   }
   const entries: RangeEntry[] = entryRows.map((e) => ({ ...e, lines: linesByEntry.get(e.id) ?? [] }));
-  return buildRange({ from, to, entries, cashAccounts, openingBefore: Object.fromEntries(balances.map((b) => [b.accountId, Number(b.balance)])) });
+  return buildRange({ from, to, entries, cashAccounts, openingBefore: Object.fromEntries(balances.map((b) => [b.accountId, Number(b.balance)])), ledger });
 }
 
 const nepalDay = (col: unknown) => sql<string>`to_char(${col} at time zone 'Asia/Kathmandu', 'YYYY-MM-DD')`;

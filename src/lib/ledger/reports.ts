@@ -40,7 +40,7 @@ type AccountBalance = {
 };
 
 /** `alsoOpeningOn`: the balance also counts the opening balance entries dated on that day (a report starting on the books start date carries them in as its opening). */
-async function accountBalancesAsOf(tenantId: string, asOf: Date, alsoOpeningOn?: string): Promise<AccountBalance[]> {
+export async function accountBalancesAsOf(tenantId: string, asOf: Date, alsoOpeningOn?: string): Promise<AccountBalance[]> {
   const tenantAccounts = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId));
 
   const lines = await db
@@ -211,9 +211,15 @@ export async function cashFlowStatement(tenantId: string, periodStart: Date, per
   const investing: CashFlowLine[] = [];
   const financing: CashFlowLine[] = [];
   let cashDelta = 0;
+  let openingCash = 0;
+  let closingCash = 0;
 
   for (const c of closing) {
     if (c.category === "income" || c.category === "expense") continue; // already captured in netProfit
+    if (isCashOrBankCode(c.code)) {
+      closingCash += c.balance;
+      openingCash += openingByAccount.get(c.accountId) ?? 0;
+    }
     const delta = Math.round((c.balance - (openingByAccount.get(c.accountId) ?? 0)) * 100) / 100;
     if (delta === 0) continue;
 
@@ -277,6 +283,9 @@ export async function cashFlowStatement(tenantId: string, periodStart: Date, per
     netCashFromFinancing,
     netChangeInCash,
     actualCashMovement,
+    /** Cash and bank held at the start of the period and at its end. */
+    openingCash: round2(openingCash),
+    closingCash: round2(closingCash),
     isBalanced: netChangeInCash === actualCashMovement,
   };
 }

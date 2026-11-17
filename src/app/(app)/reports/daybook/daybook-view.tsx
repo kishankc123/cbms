@@ -35,7 +35,7 @@ export function ModeCard({ title, section, month }: { title: string; section: Do
           <tbody>
             {section.byMode.map((m) => (
               <tr key={m.mode}>
-                <td className={`${td} ${m.mode === ON_CREDIT ? "text-ink-2" : "text-ink"}`}>{m.mode}</td>
+                <td className={`${td} ${m.mode === ON_CREDIT ? "text-ink-2" : m.mode.startsWith("Via ") ? "text-accent-text" : "text-ink"}`}>{m.mode}</td>
                 <td className={`${td} tnum text-right ${m.mode === ON_CREDIT ? "text-ink-2" : ""}`}>{formatMoney(m.amount)}</td>
               </tr>
             ))}
@@ -257,6 +257,39 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
           {data.transfersMoved > 0 && <p className="mt-2 text-xs text-ink-2">{formatMoney(data.transfersMoved)} was moved between your own accounts. It is not money in or out.</p>}
         </section>
 
+        {data.settled.length > 0 && (
+          <section className={card}>
+            <h2 className="text-sm font-semibold text-ink">Settled without cash</h2>
+            <p className="mb-2 text-xs text-ink-2">Paid or received through a ledger account, not cash or bank. No money moved, so it is not in money in or out, or in the cash and bank balances.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="text-left">
+                    <th className={th}>Settled through</th>
+                    <th className={th}>For</th>
+                    <th className={th}>Effect</th>
+                    <th className={`${th} text-right`}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.settled.map((r, i) => (
+                    <tr key={r.entryId + r.accountId + i}>
+                      <td className={`${td} text-accent-text`}>{r.label}</td>
+                      <td className={td}>{r.forWhat}</td>
+                      <td className={`${td} text-ink-2`}>{r.effect}</td>
+                      <td className={`${td} tnum text-right`}>{formatMoney(r.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold">
+                    <td className="px-2.5 py-1.5" colSpan={3}>Total</td>
+                    <td className="tnum px-2.5 py-1.5 text-right">{formatMoney(data.settledTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         <div className="print:hidden">
           <CashCount day={day} accounts={countAccounts} canEdit={canCount} />
         </div>
@@ -348,6 +381,7 @@ export function DaybookView({ page, countAccounts, canCount, monthLabel, cashCou
                       <td className={td}>
                         {r.kind}
                         {r.correction && <span className="ml-1.5 text-xs">(correction)</span>}
+                        {r.via && <span className="ml-1.5 text-xs text-accent-text">{r.noCash ? "no cash · " : ""}via {r.via}</span>}
                       </td>
                       <td className={td}>{r.reference}</td>
                       <td className={`${td} max-w-[280px] truncate`}>{r.note}</td>

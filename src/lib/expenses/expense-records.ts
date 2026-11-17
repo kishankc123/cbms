@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
-import { assertCashBankAccounts, assertSupplierOwned } from "@/lib/ledger/account-guards";
+import { assertSettlementAccounts, assertSupplierOwned } from "@/lib/ledger/account-guards";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
@@ -61,7 +61,7 @@ export async function validateExpenseInput(tenantId: string, input: ExpenseInput
   if (!category) throw new Error("Select a valid expense category — it must be an active Direct/Indirect expense account, and a category that has sub-categories can't be used itself: choose one of its sub-categories");
 
   if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
-  await assertCashBankAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  await assertSettlementAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
 
   // The same supplier's invoice can't be recorded twice.
   const invoiceNumber = input.invoiceNumber.trim();

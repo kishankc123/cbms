@@ -8,7 +8,10 @@ export const NO_MODE = "No mode recorded";
 export const ON_CREDIT = "On credit";
 
 export type DayLine = { accountId: string; debit: number; credit: number; modeName: string | null };
-export type DayEntry = { id: string; sourceType: string; sourceId: string | null; isReversed: boolean; reversalOfId: string | null; lines: DayLine[] };
+export type DayEntry = { id: string; sourceType: string; sourceId: string | null; isReversed: boolean; reversalOfId: string | null; lines: DayLine[]; reference?: string | null; memo?: string | null };
+/** A ledger account a payment can be settled through, as the Daybook needs to know it: how it is named, what kind it is, and the group it sits under. */
+export type LedgerInfo = { label: string; category: string; groupCode: string | null };
+export type SettledRow = { entryId: string; accountId: string; label: string; /** what the settlement did to the books, in words */ effect: string; amount: number; /** the document it paid or was received for */ forWhat: string; kind: "sales" | "purchases" | "expenses" | "other"; direction: "in" | "out" };
 export type CashAccount = { id: string; code: string; name: string };
 
 export type ModeAmount = { mode: string; amount: number };
@@ -26,6 +29,9 @@ export type Daybook = {
   moneyOut: number;
   net: number;
   other: OtherMovement[];
+  /** Payments settled through a ledger account instead of cash or bank: no money moved, so they are not part of money in or out. */
+  settled: SettledRow[];
+  settledTotal: number;
   /** Moves between the business's own accounts: neither money in nor out. */
   transfersMoved: number;
   groups: GroupRow[];
@@ -56,7 +62,17 @@ const OTHER_LABEL: Record<string, string> = {
 };
 const OTHER_ORDER = ["receipt", "payment", "payroll", "asset_purchase", "asset_disposal", "asset_writeoff", "sales_return", "purchase_return", "bank_adjustment", "tax_assessment", "advance_application", "stock_adjustment", "manual", "opening_balance", "corrections"];
 
-export function buildDaybook(input: { day: string; entries: DayEntry[]; cashAccounts: CashAccount[]; opening: Record<string, number>; closing: Record<string, number> }): Daybook {
+const VIA = "Via ";
+
+/** What a settlement through this account did, in the words a business owner uses. "out" is a bill the business paid, "in" is money it was owed. */
+export function settlementEffect(info: LedgerInfo, direction: "in" | "out"): string {
+  if (info.category === "equity") return direction === "out" ? "Paid from owner's capital" : "Added to owner's capital";
+  if (info.category === "liability") return direction === "out" ? "Business now owes this" : "Payable netted off";
+  if (info.groupCode === "1100") return "Receivable netted off";
+  return direction === "out" ? "Asset used" : "Settled against an asset";
+}
+
+export function buildDaybook(input: { day: string; entries: DayEntry[]; cashAccounts: CashAccount[]; opening: Record<string, number>; closing: Record<string, number>; ledger?: Map<string, LedgerInfo> }): Daybook {
   const cashIds = new Set(input.cashAccounts.map((a) => a.id));
   const onDay = new Set(input.entries.map((e) => e.id));
 
@@ -94,10 +110,26 @@ export function buildDaybook(input: { day: string; entries: DayEntry[]; cashAcco
   let moneyIn = 0;
   let moneyOut = 0;
   let transfersMoved = 0;
+  const settled: SettledRow[] = [];
 
   for (const e of live) {
     const b = bucketOf(e);
     for (const l of e.lines) {
+      const info = input.ledger?.get(l.accountId);
+      if (info && !cashIds.has(l.accountId) && !isCorrection(e) && b.kind !== "transfer") {
+        // The party's own account is the part not paid yet (customers sit under 1100, suppliers under 2000), so only the other side counts as settled.
+        const incoming = e.sourceType === "sale" || e.sourceType === "receipt";
+        const outgoing = e.sourceType === "purchase" || e.sourceType === "expense" || e.sourceType === "payment";
+        const amount = incoming ? l.debit : outgoing ? l.credit : 0;
+        const own = incoming ? info.groupCode === "1100" : info.groupCode === "2000";
+        if (amount > 0.004 && !own) {
+          const kind = b.kind === "sales" || b.kind === "purchases" || b.kind === "expenses" ? b.kind : "other";
+          const direction = incoming ? "in" : "out";
+          settled.push({ entryId: e.id, accountId: l.accountId, label: info.label, effect: settlementEffect(info, direction), amount: round2(amount), forWhat: e.reference || e.memo || "", kind, direction });
+          if (kind !== "other") modes[kind].set(VIA + info.label, (modes[kind].get(VIA + info.label) ?? 0) + amount);
+        }
+        continue;
+      }
       if (!cashIds.has(l.accountId)) continue;
       const a = acct.get(l.accountId)!;
       if (b.kind === "transfer") {
@@ -157,6 +189,8 @@ export function buildDaybook(input: { day: string; entries: DayEntry[]; cashAcco
     moneyIn: round2(moneyIn),
     moneyOut: round2(moneyOut),
     net: round2(moneyIn - moneyOut),
+    settled,
+    settledTotal: round2(settled.reduce((t, r) => t + r.amount, 0)),
     other: OTHER_ORDER.filter((k) => other.has(k)).map((k) => ({ key: k, label: OTHER_LABEL[k], in: round2(other.get(k)!.in), out: round2(other.get(k)!.out) })).filter((o) => o.in > 0.004 || o.out > 0.004),
     transfersMoved: round2(transfersMoved),
     groups,

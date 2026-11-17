@@ -6,7 +6,7 @@ import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
 import { ReportFilter } from "@/components/calendar/report-filter";
 import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
-import { PrintButton } from "@/components/print-button";
+import { ExportButtons } from "@/components/export-buttons";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { ComparativeTable } from "./comparative-table";
@@ -42,7 +42,7 @@ export default async function ProfitAndLossPage({ searchParams }: { searchParams
           <ViewSelect view="comparative" />
           <ComparePicker kind={kind} at={current.from} compare={compare} options={periodOptions(kind, session.calendar, today, current.from)} />
           <div className="ml-auto">
-            <PrintButton />
+            <ExportButtons />
           </div>
         </div>
         <ReportSheet>
@@ -71,7 +71,7 @@ export default async function ProfitAndLossPage({ searchParams }: { searchParams
         </ReportFilter>
       </div>
       <div className="flex justify-end print:hidden">
-        <PrintButton />
+        <ExportButtons />
       </div>
 
       <ReportSheet>

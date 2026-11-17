@@ -21,7 +21,7 @@ export function payFields(accountLabel: string, paidHelp: string, accountHelp: s
 
 export type PaySlot = {
   amount: { value: number | null; invalid: boolean };
-  /** The account named in the file: none given, found, or named but not a cash, bank or wallet account. */
+  /** The account named in the file: none given, found, or named but not an account a payment can go through. */
   account: "none" | "ok" | "unknown";
   accountText: string;
   /** Replaces the usual "not one of your accounts" message, e.g. when a payment mode has several accounts. */
@@ -40,7 +40,7 @@ export function readPaySlots(cell: (key: PayKey) => string, resolver: PaymentRes
       amount: parseAmountCell(cell(slotKey("paid", n))),
       account: accountText === "" ? "none" : picked ? "ok" : "unknown",
       accountText,
-      accountNote: pick && "ambiguous" in pick ? `"${accountText}" has more than one account (${pick.ambiguous.join(", ")}). Write the account name instead.` : undefined,
+      accountNote: pick && "ambiguous" in pick ? `"${accountText}" matches more than one account (${pick.ambiguous.join(", ")}). Write it as Group: Account name.` : undefined,
       accountId: picked?.accountId ?? null,
       modeId: picked?.modeId ?? null,
     };
@@ -79,7 +79,7 @@ export function checkPayments(slots: PaySlot[], total: number, mode: PayMode, ha
   slots.forEach((s, i) => {
     const carries = mode === "file" ? (s.amount.value ?? 0) > 0 : mode === "full" && i === 0;
     if (!carries) return;
-    if (s.account === "unknown") problems.push({ issue: "account", message: s.accountNote ?? `"${s.accountText}" isn't one of your cash, bank or wallet accounts, or payment modes.` });
+    if (s.account === "unknown") problems.push({ issue: "account", message: s.accountNote ?? `"${s.accountText}" isn't one of your cash, bank or wallet accounts, payment modes or ledger accounts. To settle through a ledger account, write it as Group: Account name.` });
     else if (s.account === "none" && !hasDefaultAccount) problems.push({ issue: "account", message: `Choose the account the money was ${verb}.` });
   });
   return { paid, problems };

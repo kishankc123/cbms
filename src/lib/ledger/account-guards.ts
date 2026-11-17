@@ -6,17 +6,36 @@ import { modeAccountIds } from "@/lib/payment-modes";
 import { getCogsSubGroups } from "./control-accounts";
 import { getPurchaseCategories } from "./purchases-accounts";
 import { assertSourceNotReconciled } from "./reconciliation-guards";
+import { listSettlementAccounts } from "./settlement-accounts";
 
 /**
  * Every id must be an account money can move through in this organization: a Cash or Bank account, or an account linked to
  * an active payment mode (Fonepay and wallet accounts live there). What a payment can be received into / paid from.
  */
-export async function assertCashBankAccounts(tenantId: string, accountIds: string[]) {
-  if (accountIds.length === 0) return;
+async function moneyAccountIds(tenantId: string): Promise<Set<string>> {
   const groups = await getCashBankAccounts(tenantId);
   const allowed = new Set(groups.flatMap((g) => [g.id, ...g.children.map((c) => c.id)]));
   for (const id of await modeAccountIds(tenantId)) allowed.add(id);
+  return allowed;
+}
+
+export async function assertCashBankAccounts(tenantId: string, accountIds: string[]) {
+  if (accountIds.length === 0) return;
+  const allowed = await moneyAccountIds(tenantId);
   if (accountIds.some((id) => !allowed.has(id))) throw new Error("Choose a Cash or Bank account of this organization for the payment");
+}
+
+/**
+ * The account a payment is paid from or received into: any account money moves through, or a ledger account the payment is settled through instead
+ * (a director's account, the owner's capital, a receivable netted off). Transfers between own accounts still use assertCashBankAccounts.
+ */
+export async function assertSettlementAccounts(tenantId: string, accountIds: string[]) {
+  if (accountIds.length === 0) return;
+  const allowed = await moneyAccountIds(tenantId);
+  const rest = accountIds.filter((id) => !allowed.has(id));
+  if (rest.length === 0) return;
+  const ledger = new Set((await listSettlementAccounts(tenantId)).map((a) => a.id));
+  if (rest.some((id) => !ledger.has(id))) throw new Error("Choose a Cash or Bank account, or a ledger account you can settle through, of this organization for the payment");
 }
 
 /**

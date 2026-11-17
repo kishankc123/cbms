@@ -23,6 +23,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Balance Sheet", href: "/reports/balance-sheet", built: true },
       { title: "Cash Flow Statement", href: "/reports/cash-flow", built: true },
       { title: "Trial Balance", href: "/reports/trial-balance", built: true },
+      { title: "Quarterly pack", href: "/reports/quarterly-pack", built: true, note: "Profit & Loss, Balance Sheet, Trial Balance and Cash Flow for a quarter" },
     ],
   },
   {

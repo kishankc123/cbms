@@ -380,6 +380,7 @@ export function NewPaymentModal({
               <label className="block text-xs text-gray-500 mb-1">{config.showTransferTo ? "From Account" : "Mode and Account"}</label>
               <div data-field="account">
                 <PaymentModeSelect
+                  ledger={!config.showTransferTo}
                   value={{ modeId: paymentModeId, accountId, modeName: paymentModeName }}
                   onChange={(v) => {
                     setPaymentModeId(v.modeId);

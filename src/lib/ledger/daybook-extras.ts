@@ -1,4 +1,4 @@
-import { ON_CREDIT, type DayEntry, type Daybook, type DocSection } from "./daybook-rules";
+import { ON_CREDIT, type DayEntry, type Daybook, type DocSection, type LedgerInfo } from "./daybook-rules";
 
 // Daybook phase 2, the parts that read the day rather than add it up: the month so far, collections and payments, the credit given and taken
 // that day, and the list of everything entered that day. Pure, like daybook-rules.ts.
@@ -53,7 +53,7 @@ export function creditOfDay(d: Daybook): { given: number; taken: number } {
 // ---- Everything entered that day ----
 
 export type ListEntry = DayEntry & { reference: string | null; memo: string | null; createdAt: string };
-export type ListRow = { id: string; time: string; /** what kind of entry posted it, so the screen can link to where it was made */ sourceType: string; kind: string; reference: string; note: string; amount: number; /** an older entry corrected or undone on this day, or the undo itself */ correction: boolean };
+export type ListRow = { id: string; time: string; /** what kind of entry posted it, so the screen can link to where it was made */ sourceType: string; kind: string; reference: string; note: string; amount: number; /** an older entry corrected or undone on this day, or the undo itself */ correction: boolean; /** the ledger account it was settled through, when it was settled that way */ via: string | null; /** true when it was settled through a ledger account and no cash or bank moved */ noCash: boolean };
 
 const KIND: Record<string, string> = {
   sale: "Sale",
@@ -76,12 +76,19 @@ const KIND: Record<string, string> = {
   manual: "Manual entry",
 };
 const DOCUMENT = new Set(["sale", "purchase", "expense"]);
+const DOCUMENT_OR_PAYMENT = new Set(["sale", "purchase", "expense", "receipt", "payment"]);
 
 /** The day's entries, oldest first. An entry and its undo on the same day cancel and are left out, as in the totals. */
-export function buildDayList(entries: ListEntry[], cashIds: Set<string>, limit = 300): { rows: ListRow[]; hidden: number } {
+export function buildDayList(entries: ListEntry[], cashIds: Set<string>, limit = 300, ledger?: Map<string, LedgerInfo>): { rows: ListRow[]; hidden: number } {
   const onDay = new Set(entries.map((e) => e.id));
   const cancelled = new Set<string>();
   for (const e of entries) if (e.reversalOfId && onDay.has(e.reversalOfId)) { cancelled.add(e.id); cancelled.add(e.reversalOfId); }
+  const via = (e: ListEntry) => {
+    if (!ledger || !DOCUMENT_OR_PAYMENT.has(e.sourceType)) return null;
+    const incoming = e.sourceType === "sale" || e.sourceType === "receipt";
+    const hit = e.lines.find((l) => ledger.has(l.accountId) && (incoming ? l.debit : l.credit) > 0.004 && ledger.get(l.accountId)!.groupCode !== (incoming ? "1100" : "2000"));
+    return hit ? ledger.get(hit.accountId)!.label : null;
+  };
   const rows = entries
     .filter((e) => !cancelled.has(e.id))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -98,6 +105,8 @@ export function buildDayList(entries: ListEntry[], cashIds: Set<string>, limit =
         note: e.memo ?? "",
         amount: round2(amount),
         correction: e.isReversed || e.reversalOfId !== null,
+        via: via(e),
+        noCash: via(e) !== null && !e.lines.some((l) => cashIds.has(l.accountId)),
       };
     });
   return { rows: rows.slice(0, limit), hidden: Math.max(0, rows.length - limit) };

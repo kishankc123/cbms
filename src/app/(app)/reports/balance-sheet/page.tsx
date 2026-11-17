@@ -1,13 +1,17 @@
 import { requireTenantSession, can } from "@/lib/session";
-import { balanceSheet } from "@/lib/ledger/reports";
-import { validateADDate } from "@/lib/calendar";
+import { comparativeBalanceSheet } from "@/lib/ledger/balance-compare";
+import { asCompare, asKind, comparisonOf, periodOf, periodOptions, reportTitle, KIND_LABEL, periodLabel } from "@/lib/ledger/pnl-compare-rules";
+import { loadReportHeader } from "@/lib/report-header";
+import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getReportDefaultAsOf } from "@/lib/fiscal";
-import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
-import { StatusPill } from "@/components/ui/status-pill";
-import { AccountLink } from "../account-link";
+import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
+import { ExportButtons } from "@/components/export-buttons";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusPill } from "@/components/ui/status-pill";
+import { ComparePicker, ViewSelect } from "../profit-and-loss/pnl-controls";
+import { BalanceTable } from "./balance-table";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -15,89 +19,69 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
+  const comparative = sp.view === "comparative";
+  const header = await loadReportHeader(session.tenantId);
+  const asAt = (iso: string) => `As at ${formatDate(iso, session.calendar, "long")}`;
+  const check = (diff: number, label?: string) => <StatusPill tone={diff === 0 ? "success" : "critical"}>{diff === 0 ? `✓ Balanced${label ? ` ${label}` : ""}` : `⚠ Assets ≠ Liabilities + Equity${label ? ` ${label}` : ""}`}</StatusPill>;
+
+  const top = (
+    <div className="flex items-center gap-3">
+      <BackButton href="/reports" label="Back to Reports" />
+      <PageHeader title="Balance Sheet" className="!mb-0" />
+    </div>
+  );
+
+  if (comparative) {
+    const kind = asKind(sp.kind);
+    const compare = asCompare(sp.compare);
+    const today = todayIso();
+    const current = periodOf(kind, session.calendar, asIso(sp.at) ?? today);
+    const previous = comparisonOf(kind, session.calendar, current, compare);
+    const data = await comparativeBalanceSheet(session.tenantId, current.to, previous.to);
+    return (
+      <div className="space-y-4">
+        {top}
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 print:hidden">
+          <ViewSelect view="comparative" />
+          <ComparePicker kind={kind} at={current.from} compare={compare} options={periodOptions(kind, session.calendar, today, current.from)} />
+          <div className="ml-auto">
+            <ExportButtons />
+          </div>
+        </div>
+        <ReportSheet>
+          <ReportHeader {...header} title={reportTitle(kind, "Balance Sheet")} period={`${KIND_LABEL[kind]}: ${periodLabel(kind, session.calendar, current)}  ·  ${asAt(current.to)}`} />
+          <BalanceTable data={data} to={current.to} currentLabel={asAt(current.to)} previousLabel={asAt(previous.to)} />
+          <div className="mt-2 flex gap-2 print:hidden">
+            {check(data.difference.cur, asAt(current.to))}
+            {check(data.difference.prev, asAt(previous.to))}
+          </div>
+          <ReportFooter />
+        </ReportSheet>
+      </div>
+    );
+  }
+
   const fiscal = await getFiscalRange(session.tenantId);
   const to = asIso(sp.to) ?? (await getReportDefaultAsOf(session.tenantId));
-  const bs = await balanceSheet(session.tenantId, new Date(to + "T00:00:00Z"));
+  const data = await comparativeBalanceSheet(session.tenantId, to);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <BackButton href="/reports" label="Back to Reports" />
-        <PageHeader title="Balance Sheet" className="!mb-0" />
+      {top}
+      <div className="print:hidden">
+        <ReportFilter from={to} to={to} fiscal={fiscal} asOfOnly>
+          <ViewSelect view="standard" />
+        </ReportFilter>
       </div>
-      <ReportFilter from={to} to={to} fiscal={fiscal} asOfOnly />
-
-      <div>
-        <p className="mb-2 text-sm text-gray-500">
-          As of <D value={to} />
-        </p>
-        <table className="border-collapse text-[13px] w-full">
-          <tbody>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Assets</td>
-            </tr>
-            {bs.assets.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Total Assets</td>
-              <td className="px-2.5 py-1.5 text-right">{bs.totalAssets.toFixed(2)}</td>
-            </tr>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Liabilities</td>
-            </tr>
-            {bs.liabilities.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Total Liabilities</td>
-              <td className="px-2.5 py-1.5 text-right">{bs.totalLiabilities.toFixed(2)}</td>
-            </tr>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Equity</td>
-            </tr>
-            {bs.equity.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-b border-line transition-colors hover:bg-hover">
-              <td className="px-2.5 py-1.5 pl-8">Retained Earnings (current)</td>
-              <td className="px-2.5 py-1.5 text-right">{bs.retainedEarnings.toFixed(2)}</td>
-            </tr>
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Total Equity</td>
-              <td className="px-2.5 py-1.5 text-right">{bs.totalEquity.toFixed(2)}</td>
-            </tr>
-            <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="px-2.5 py-1.5">Total Liabilities + Equity</td>
-              <td className="px-2.5 py-1.5 text-right">{(bs.totalLiabilities + bs.totalEquity).toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div className="mt-2">
-          <StatusPill tone={bs.isBalanced ? "success" : "critical"}>{bs.isBalanced ? "✓ Balance Check: Balanced" : "⚠ Balance Difference — Assets ≠ Liabilities + Equity"}</StatusPill>
-        </div>
+      <div className="flex justify-end print:hidden">
+        <ExportButtons />
       </div>
+      <ReportSheet>
+        <ReportHeader {...header} title="Balance Sheet" period={asAt(to)} />
+        <BalanceTable data={data} to={to} currentLabel="Amount" />
+        <div className="mt-2 print:hidden">{check(data.difference.cur)}</div>
+        <ReportFooter />
+      </ReportSheet>
     </div>
   );
 }

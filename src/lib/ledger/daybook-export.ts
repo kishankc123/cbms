@@ -26,7 +26,7 @@ export type DayExtras = {
 
 // ---- The image ----
 
-export type ImageCard = { title: string; total: string; month: string; modes: { label: string; amount: string; share: number }[]; returns: string | null };
+export type ImageCard = { title: string; total: string; month: string; modes: { label: string; amount: string; share: number; /** settled through a ledger account, drawn in its own colour */ via: boolean }[]; returns: string | null };
 export type ImageTable = { columns: string[]; rows: { label: string; values: string[]; strong?: boolean; /** colours the figures: green for money in, red for money out */ tone?: "in" | "out" }[] };
 export type ImageModel = {
   cards: ImageCard[];
@@ -34,6 +34,8 @@ export type ImageModel = {
   flows: { label: string; today: string; month: string; quiet: boolean; sub: boolean }[];
   cash: ImageTable;
   monthCash: string;
+  /** payments settled through a ledger account, drawn as their own table after the cash position; empty when there were none */
+  settled: { table: ImageTable; note: string } | null;
   chips: string[];
 };
 
@@ -57,7 +59,7 @@ export function imageModel(d: Daybook, x: DayExtras): ImageModel {
       title,
       total: formatMoney(s.total),
       month: formatMoney(month),
-      modes: s.byMode.map((m) => ({ label: m.mode, amount: formatMoney(m.amount), share: modeTotal > 0 ? Math.max(0, m.amount) / modeTotal : 0 })),
+      modes: s.byMode.map((m) => ({ label: m.mode, amount: formatMoney(m.amount), share: modeTotal > 0 ? Math.max(0, m.amount) / modeTotal : 0, via: m.mode.startsWith("Via ") })),
       returns: s.returns > 0 ? formatMoney(s.returns) : null,
     };
   };
@@ -82,12 +84,20 @@ export function imageModel(d: Daybook, x: DayExtras): ImageModel {
   const cq = chequeChip(x.cheques, formatMoney);
   if (cq) chips.push(`Cheques: ${cq}`);
 
+  const settled = d.settled.length === 0 ? null : {
+    table: {
+      columns: ["Settled through", "Effect", "Amount"],
+      rows: [...d.settled.map((r) => ({ label: r.forWhat ? `${r.label} · ${r.forWhat}` : r.label, values: [r.effect, formatMoney(r.amount)] })), { label: "Total", values: ["", formatMoney(d.settledTotal)], strong: true }],
+    },
+    note: "No money moved, so these are not in money in or out.",
+  };
   return {
     cards: [card("Sales", d.sales, x.month.sales), card("Purchases", d.purchases, x.month.purchases), card("Expenses", d.expenses, x.month.expenses)],
     note: notes.join(" · ").replace(/^./, (c) => c.toUpperCase()),
     flows: groupedFlows(x.flows).map((r) => ({ label: r.label, today: r.today > 0 ? formatMoney(r.today) : dash, month: formatMoney(r.month), quiet: r.today <= 0, sub: Boolean(r.sub) })),
     cash: { columns: [...cols.map((c) => c.name), "Total"], rows },
     monthCash: `This month: money in ${formatMoney(x.month.moneyIn)} · money out ${formatMoney(x.month.moneyOut)}`,
+    settled,
     chips,
   };
 }
@@ -130,6 +140,7 @@ export function daybookSheets(d: Daybook, ctx: ExportContext, list: ListRow[] = 
     ["Other money movements", "In", "Out"],
     ...d.other.map((o) => [o.label, o.in, o.out]),
     ["Moved between your own accounts", d.transfersMoved],
+    ...(d.settled.length > 0 ? [[], ["Settled without cash (no money moved)", "Effect", "Amount"], ...d.settled.map((r) => [r.forWhat ? `${r.label} · ${r.forWhat}` : r.label, r.effect, r.amount]), ["Total settled without cash", "", d.settledTotal]] : []),
   ];
   const cash: (string | number)[][] = [
     [ctx.company, "Daybook", ctx.dateLabel],
@@ -142,7 +153,7 @@ export function daybookSheets(d: Daybook, ctx: ExportContext, list: ListRow[] = 
   if (list.length > 0) {
     sheets.push({
       name: "Entries",
-      rows: [[ctx.company, "Daybook", ctx.dateLabel], [], ["What", "Reference", "Note", "Amount"], ...list.map((r) => [r.correction ? `${r.kind} (correction)` : r.kind, r.reference, r.note, r.amount])],
+      rows: [[ctx.company, "Daybook", ctx.dateLabel], [], ["What", "Reference", "Note", "Amount"], ...list.map((r) => [(r.correction ? `${r.kind} (correction)` : r.kind) + (r.via ? ` (${r.noCash ? "no cash, " : ""}via ${r.via})` : ""), r.reference, r.note, r.amount])],
     });
   }
   if (cheques?.any) {

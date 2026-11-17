@@ -24,6 +24,8 @@ const MONEY_IN = "#15803d";
 const MONEY_OUT = "#b91c1c";
 const DARK = "#121316";
 const SHARE = ["#0f766e", "#b45309", "#475569", "#cbd5e1"];
+const VIA = "#7c3aed"; // settled through a ledger account, not cash or bank
+const shareColor = (i: number, via: boolean) => (via ? VIA : SHARE[i % SHARE.length]);
 
 const HEADER_H = 88;
 const SECTION_H = 40;
@@ -106,7 +108,7 @@ function drawCard(ctx: CanvasRenderingContext2D, c: ImageCard, x: number, y: num
   c.modes.forEach((m, i) => {
     const sw = barW * m.share;
     if (sw <= 0) return;
-    ctx.fillStyle = SHARE[i % SHARE.length];
+    ctx.fillStyle = shareColor(i, m.via);
     ctx.fillRect(cx, barY, Math.max(1, sw - 1), 8);
     cx += sw;
   });
@@ -115,13 +117,13 @@ function drawCard(ctx: CanvasRenderingContext2D, c: ImageCard, x: number, y: num
   let ry = y + 90;
   if (c.modes.length === 0) text(ctx, "Nothing today", x + inner, ry, { size: 13, color: MUTED });
   c.modes.forEach((m, i) => {
-    ctx.fillStyle = SHARE[i % SHARE.length];
+    ctx.fillStyle = shareColor(i, m.via);
     roundRect(ctx, x + inner, ry - 9, 9, 9, 2);
     ctx.fill();
     ctx.font = `400 13px ${FONT}`;
     const amountW = ctx.measureText(m.amount).width;
     text(ctx, m.amount, x + w - inner, ry, { size: 13, color: INK, align: "right" });
-    text(ctx, fit(ctx, m.label, w - inner * 2 - 15 - amountW - 6), x + inner + 15, ry, { size: 13, color: "#4b5563" });
+    text(ctx, fit(ctx, m.label, w - inner * 2 - 15 - amountW - 6), x + inner + 15, ry, { size: 13, color: m.via ? VIA : "#4b5563" });
     ry += CARD_ROW;
   });
   if (c.returns) text(ctx, `Returns  -${c.returns}`, x + inner, ry, { size: 12, color: MUTED });
@@ -149,7 +151,7 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
   const m = imageModel(d, extras);
   const cardRows = Math.max(1, ...m.cards.map((c) => Math.max(1, c.modes.length))) + (m.cards.some((c) => c.returns) ? 1 : 0);
   const cardH = 90 + cardRows * CARD_ROW + 6;
-  const H = HEADER_H + 18 + SECTION_H + cardH + 30 + 22 + SECTION_H + FLOW_ROW * (m.flows.length + 1) + 22 + SECTION_H + CASH_ROW * (m.cash.rows.length + 1) + 28 + m.chips.length * (CHIP_H + 8) + 18 + FOOTER_H;
+  const H = HEADER_H + 18 + SECTION_H + cardH + 30 + 22 + SECTION_H + FLOW_ROW * (m.flows.length + 1) + 22 + SECTION_H + CASH_ROW * (m.cash.rows.length + 1) + 28 + (m.settled ? 22 + SECTION_H + 24 + CASH_ROW * m.settled.table.rows.length + 30 : 0) + m.chips.length * (CHIP_H + 8) + 18 + FOOTER_H;
 
   const canvas = document.createElement("canvas");
   canvas.width = W * SCALE;
@@ -243,6 +245,40 @@ export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExt
   y += 8;
   text(ctx, fit(ctx, m.monthCash, W - PAD * 2), PAD, y + 8, { size: 12, color: MUTED });
   y += 24;
+
+  // 4. Settled without cash: only on days it happened.
+  if (m.settled) {
+    divider(ctx, y - 6);
+    y += 16;
+    sectionHeader(ctx, 4, "Settled without cash", y);
+    y += SECTION_H;
+    const amountX = W - PAD;
+    const effectX = W - PAD - 170;
+    text(ctx, "Settled through", PAD, y + 14, { size: 12, weight: 500, color: MUTED });
+    text(ctx, "Effect", effectX, y + 14, { size: 12, weight: 500, color: MUTED });
+    text(ctx, "Amount", amountX, y + 14, { size: 12, weight: 500, color: MUTED, align: "right" });
+    y += 24;
+    m.settled.table.rows.forEach((r) => {
+      if (r.strong) {
+        ctx.fillStyle = SOFT;
+        ctx.fillRect(PAD - 6, y, W - PAD * 2 + 12, CASH_ROW - 2);
+      } else {
+        ctx.strokeStyle = LINE;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(PAD, y);
+        ctx.lineTo(W - PAD, y);
+        ctx.stroke();
+      }
+      ctx.font = `${r.strong ? 600 : 400} 13px ${FONT}`;
+      text(ctx, fit(ctx, r.label, effectX - PAD - 12), PAD, y + 20, { size: 13, weight: r.strong ? 600 : 400, color: r.strong ? INK : VIA });
+      text(ctx, fit(ctx, r.values[0], amountX - effectX - 90), effectX, y + 20, { size: 13, color: MUTED });
+      text(ctx, r.values[1], amountX, y + 20, { size: 13, weight: r.strong ? 600 : 400, color: INK, align: "right" });
+      y += CASH_ROW;
+    });
+    text(ctx, m.settled.note, PAD, y + 16, { size: 12, color: MUTED });
+    y += 30;
+  }
   m.chips.forEach((c) => {
     ctx.fillStyle = SOFT;
     roundRect(ctx, PAD, y, W - PAD * 2, CHIP_H, 8);

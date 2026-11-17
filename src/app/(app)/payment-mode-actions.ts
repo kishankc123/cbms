@@ -2,6 +2,7 @@
 
 import { requireTenantSession, can } from "@/lib/session";
 import { listModeOptions } from "@/lib/payment-modes";
+import { listSettlementAccounts } from "@/lib/ledger/settlement-accounts";
 
 // The payment modes with their accounts, for the payment pickers on every screen that records money in or out. Anyone who can
 // record a transaction in one of those modules may see them (they are the choices on the form, nothing more).
@@ -11,4 +12,11 @@ export async function getPaymentModeOptions() {
   const session = await requireTenantSession();
   if (!MODULES.some((m) => can(session, m, "create") || can(session, m, "edit"))) throw new Error("Not permitted");
   return listModeOptions(session.tenantId);
+}
+
+/** The ledger accounts a payment can be settled through instead of cash or bank (a director's account, the owner's capital...), for the pickers that offer them. */
+export async function getLedgerOptions() {
+  const session = await requireTenantSession();
+  if (!MODULES.some((m) => can(session, m, "create") || can(session, m, "edit"))) throw new Error("Not permitted");
+  return listSettlementAccounts(session.tenantId);
 }

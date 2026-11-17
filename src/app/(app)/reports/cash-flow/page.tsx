@@ -1,15 +1,19 @@
 import { requireTenantSession, can } from "@/lib/session";
 import { clampToBooksStart, getBooksStart } from "@/lib/ledger/books-start";
 import { BooksStartNote } from "../books-start-note";
-import { cashFlowStatement } from "@/lib/ledger/reports";
-import { validateADDate } from "@/lib/calendar";
+import { comparativeCashFlow } from "@/lib/ledger/cashflow-compare";
+import { asCompare, asKind, comparisonOf, periodLabel, periodOf, periodOptions, reportTitle, KIND_LABEL } from "@/lib/ledger/pnl-compare-rules";
+import { loadReportHeader } from "@/lib/report-header";
+import { formatDate, todayIso, validateADDate } from "@/lib/calendar";
 import { getFiscalRange, getActiveFiscalYear, fiscalYearDefaultRange } from "@/lib/fiscal";
-import { D } from "@/components/calendar/date-text";
 import { ReportFilter } from "@/components/calendar/report-filter";
+import { ReportFooter, ReportHeader, ReportSheet } from "@/components/report-sheet";
+import { ExportButtons } from "@/components/export-buttons";
 import { StatusPill } from "@/components/ui/status-pill";
-import { AccountLink } from "../account-link";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { ComparePicker, ViewSelect } from "../profit-and-loss/pnl-controls";
+import { CashFlowTable } from "./cash-flow-table";
 
 const asIso = (v: string | string[] | undefined) => (typeof v === "string" && validateADDate(v) ? v : null);
 
@@ -17,119 +21,77 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
   const sp = await searchParams;
+  const [header, booksStart] = await Promise.all([loadReportHeader(session.tenantId), getBooksStart(session.tenantId)]);
+  // The books begin on the books start date: a report cannot start before it, and the opening balances are then its opening line.
+  const clamp = (r: { from: string; to: string }) => clampToBooksStart(r, booksStart.date);
+  const check = (diff: number, label?: string) => <StatusPill tone={diff === 0 ? "success" : "critical"}>{diff === 0 ? `✓ Ties to actual cash movement${label ? ` (${label})` : ""}` : `⚠ Difference — does not match actual cash movement${label ? ` (${label})` : ""}`}</StatusPill>;
+
+  const top = (
+    <div className="flex items-center gap-3">
+      <BackButton href="/reports" label="Back to Reports" />
+      <PageHeader title="Cash Flow Statement" className="!mb-0" />
+    </div>
+  );
+
+  if (sp.view === "comparative") {
+    const kind = asKind(sp.kind);
+    const compare = asCompare(sp.compare);
+    const today = todayIso();
+    const chosen = periodOf(kind, session.calendar, asIso(sp.at) ?? today);
+    const current = clamp(chosen);
+    const previous = clamp(comparisonOf(kind, session.calendar, chosen, compare));
+    const data = await comparativeCashFlow(session.tenantId, current, previous);
+    return (
+      <div className="space-y-4">
+        {top}
+        <BooksStartNote date={booksStart.date} calendar={session.calendar} clamped={current.clamped || previous.clamped} beforeBooks={current.beforeBooks} />
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3 print:hidden">
+          <ViewSelect view="comparative" />
+          <ComparePicker kind={kind} at={chosen.from} compare={compare} options={periodOptions(kind, session.calendar, today, chosen.from)} />
+          <div className="ml-auto">
+            <ExportButtons />
+          </div>
+        </div>
+        <ReportSheet>
+          <ReportHeader {...header} title={reportTitle(kind, "Cash Flow Statement")} period={`${KIND_LABEL[kind]}: ${periodLabel(kind, session.calendar, chosen)}`} />
+          <CashFlowTable data={data} range={current} currentLabel={periodLabel(kind, session.calendar, chosen)} previousLabel={periodLabel(kind, session.calendar, comparisonOf(kind, session.calendar, chosen, compare))} />
+          <div className="mt-2 flex gap-2 print:hidden">
+            {check(data.difference.cur, "this period")}
+            {check(data.difference.prev, "comparison")}
+          </div>
+          <ReportFooter />
+        </ReportSheet>
+      </div>
+    );
+  }
+
   const [fiscal, activeFiscalYear] = await Promise.all([getFiscalRange(session.tenantId), getActiveFiscalYear(session.tenantId)]);
   const dflt = fiscalYearDefaultRange(activeFiscalYear, session.calendar);
   let from = asIso(sp.from) ?? dflt.from;
   const to = asIso(sp.to) ?? dflt.to;
   if (from > to) from = to;
-  // The books begin on the books start date: a report cannot start before it, and the opening balances are then its opening line.
-  const booksStart = (await getBooksStart(session.tenantId)).date;
-  const span = clampToBooksStart({ from, to }, booksStart);
+  const span = clamp({ from, to });
   from = span.from;
-
-  const cf = await cashFlowStatement(session.tenantId, new Date(from + "T00:00:00Z"), new Date(to + "T00:00:00Z"));
+  const data = await comparativeCashFlow(session.tenantId, { from, to });
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <BackButton href="/reports" label="Back to Reports" />
-        <PageHeader title="Cash Flow Statement" className="!mb-0" />
+      {top}
+      <BooksStartNote date={booksStart.date} calendar={session.calendar} clamped={span.clamped} beforeBooks={span.beforeBooks} />
+      <div className="print:hidden">
+        <ReportFilter from={from} to={to} fiscal={fiscal}>
+          <ViewSelect view="standard" />
+        </ReportFilter>
       </div>
-      <BooksStartNote date={booksStart} calendar={session.calendar} clamped={span.clamped} beforeBooks={span.beforeBooks} />
-      <ReportFilter from={from} to={to} fiscal={fiscal} />
-
-      <div>
-        <p className="mb-2 text-sm text-gray-500">
-          <D value={from} /> – <D value={to} />
-        </p>
-        <table className="border-collapse text-[13px] w-full">
-          <tbody>
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Operating Activities</td>
-            </tr>
-            <tr className="border-b border-line transition-colors hover:bg-hover">
-              <td className="px-2.5 py-1.5 pl-8">Net Profit</td>
-              <td className="px-2.5 py-1.5 text-right">{cf.netProfit.toFixed(2)}</td>
-            </tr>
-            {cf.operating.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} from={from} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Net Cash from Operating Activities</td>
-              <td className="px-2.5 py-1.5 text-right">{cf.netCashFromOperating.toFixed(2)}</td>
-            </tr>
-
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Investing Activities</td>
-            </tr>
-            {cf.investing.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} from={from} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            {cf.investing.length === 0 && (
-              <tr className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8 text-gray-400">No investing activity</td>
-                <td className="px-2.5 py-1.5 text-right"></td>
-              </tr>
-            )}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Net Cash from Investing Activities</td>
-              <td className="px-2.5 py-1.5 text-right">{cf.netCashFromInvesting.toFixed(2)}</td>
-            </tr>
-
-            <tr className="bg-gray-50">
-              <td className="px-2.5 py-1.5 font-medium" colSpan={2}>Financing Activities</td>
-            </tr>
-            {cf.financing.map((r) => (
-              <tr key={r.accountId} className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8">
-                  <AccountLink accountId={r.accountId} from={from} to={to}>
-                    {r.code} — {r.name}
-                  </AccountLink>
-                </td>
-                <td className="px-2.5 py-1.5 text-right">{r.amount.toFixed(2)}</td>
-              </tr>
-            ))}
-            {cf.financing.length === 0 && (
-              <tr className="border-b border-line transition-colors hover:bg-hover">
-                <td className="px-2.5 py-1.5 pl-8 text-gray-400">No financing activity</td>
-                <td className="px-2.5 py-1.5 text-right"></td>
-              </tr>
-            )}
-            <tr className="border-t border-gray-200 font-medium">
-              <td className="px-2.5 py-1.5">Net Cash from Financing Activities</td>
-              <td className="px-2.5 py-1.5 text-right">{cf.netCashFromFinancing.toFixed(2)}</td>
-            </tr>
-
-            <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="px-2.5 py-1.5">Net Change in Cash</td>
-              <td className="px-2.5 py-1.5 text-right">{cf.netChangeInCash.toFixed(2)}</td>
-            </tr>
-            <tr className="border-b border-line transition-colors hover:bg-hover">
-              <td className="px-2.5 py-1.5 text-gray-500">Actual Cash Movement (Cash + Bank accounts)</td>
-              <td className="px-2.5 py-1.5 text-right text-gray-500">{cf.actualCashMovement.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div className="mt-2">
-          <StatusPill tone={cf.isBalanced ? "success" : "critical"}>
-            {cf.isBalanced ? "✓ Balance Check: Ties to actual cash movement" : "⚠ Difference — does not match actual cash movement"}
-          </StatusPill>
-        </div>
+      <div className="flex justify-end print:hidden">
+        <ExportButtons />
       </div>
+      <ReportSheet>
+        <ReportHeader {...header} title="Cash Flow Statement" period={`${formatDate(from, session.calendar, "long")} – ${formatDate(to, session.calendar, "long")}`} />
+        <CashFlowTable data={data} range={{ from, to }} currentLabel="Amount" />
+        <div className="mt-2 print:hidden">{check(data.difference.cur)}</div>
+        <ReportFooter />
+      </ReportSheet>
     </div>
   );
 }
