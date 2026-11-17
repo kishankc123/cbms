@@ -2,9 +2,7 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { getLedgerOptions, getPaymentModeOptions } from "@/app/(app)/payment-mode-actions";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { AmountInput } from "@/components/ui/amount-input";
-import { ledgerLabel } from "@/lib/ledger/settlement-rules";
 
 type Option = Awaited<ReturnType<typeof getPaymentModeOptions>>[number];
 type Ledger = Awaited<ReturnType<typeof getLedgerOptions>>[number];
@@ -29,19 +27,14 @@ export function useLedgerOptions(): LedgerOption[] {
 
 /**
  * A separate picker for settling through a ledger account (a director's account, the owner's capital, a receivable netted off) instead of cash or
- * bank. Choosing one asks first, because no cash or bank moves: the amount is recorded against that account in the Chart of Accounts.
+ * bank: no cash or bank moves, the amount is recorded against that account in the Chart of Accounts.
  */
 export function LedgerSelect({ value, onChange, accounts, className }: { value: string; onChange: (accountId: string) => void; accounts: LedgerOption[]; className?: string }) {
-  const ask = useConfirm();
   const groups = [...new Set(accounts.map((a) => a.group ?? ""))];
   return (
     <select
       value={value}
-      onChange={async (e) => {
-        const chosen = accounts.find((x) => x.id === e.target.value);
-        if (chosen && !(await ask(`Settle through ${ledgerLabel(chosen)}? No cash or bank moves: the amount is recorded against this account in your Chart of Accounts.`, { confirmLabel: "Settle through it" }))) return;
-        onChange(e.target.value);
-      }}
+      onChange={(e) => onChange(e.target.value)}
       className={className}
     >
       <option value="">Select ledger account</option>
@@ -114,12 +107,11 @@ export function LedgerLinesField({ options, lines, onChange }: { options: Ledger
  * choice is one of those accounts. The same account (a bank, say) can sit under several modes, so the choice keeps the
  * mode as well. A value that only has an account (an invoice being edited) shows under the first mode that includes it.
  * With `ledger`, the list ends with the ledger accounts a payment can be settled through instead (a director's account, the owner's
- * capital): no mode, and no cash or bank moves, so choosing one asks first. Only for screens whose payments may be settled that way.
+ * capital): no mode, and no cash or bank moves. Only for screens whose payments may be settled that way.
  */
 export function PaymentModeSelect({ value, onChange, className, ledger = false }: { value: ModeAccount; onChange: (v: ModeAccount) => void; className?: string; ledger?: boolean }) {
   const [options, setOptions] = useState<Option[] | null>(null);
   const [accounts, setAccounts] = useState<Ledger[]>([]);
-  const ask = useConfirm();
 
   useEffect(() => {
     let live = true;
@@ -158,10 +150,8 @@ export function PaymentModeSelect({ value, onChange, className, ledger = false }
   return (
     <select
       value={selected}
-      onChange={async (e) => {
+      onChange={(e) => {
         const [m, a] = e.target.value.split("|");
-        const chosen = !m && a ? accounts.find((x) => x.id === a) : undefined;
-        if (chosen && !(await ask(`Settle through ${ledgerLabel(chosen)}? No cash or bank moves: the amount is recorded against this account in your Chart of Accounts.`, { confirmLabel: "Settle through it" }))) return;
         onChange({ modeId: m ?? "", accountId: a ?? "", modeName: options?.find((o) => o.id === m)?.name });
       }}
       className={className}
