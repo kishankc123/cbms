@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { LedgerSelect, PaymentModeSelect, useLedgerOptions } from "@/components/payment-mode-select";
 
 import { AmountInput } from "@/components/ui/amount-input";
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -46,6 +46,22 @@ export function PaymentModal({
       : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }]
   );
   const [customerId, setCustomerId] = useState(initialCustomerId);
+  // Payments settled through a ledger account instead of cash or bank have their own field, below the customer.
+  const ledgerOptions = useLedgerOptions();
+  const [ledgerLines, setLedgerLines] = useState<{ accountId: string; amount: string }[]>([]);
+  const [moved, setMoved] = useState(false);
+
+  // When an invoice settled that way is being edited, its ledger lines move out of the cash and bank rows into the ledger field.
+  useEffect(() => {
+    if (moved || ledgerOptions.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMoved(true);
+    const isLedger = (id: string) => ledgerOptions.some((a) => a.id === id);
+    if (!lines.some((l) => isLedger(l.accountId))) return;
+    setLedgerLines(lines.filter((l) => isLedger(l.accountId)).map((l) => ({ accountId: l.accountId, amount: l.amount })));
+    const rest = lines.filter((l) => !isLedger(l.accountId));
+    setLines(rest.length > 0 ? rest : [{ modeId: "", accountId: firstSelectableId(cashBankAccounts), amount: "" }]);
+  }, [ledgerOptions, moved, lines, cashBankAccounts]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -59,7 +75,7 @@ export function PaymentModal({
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
   }
 
-  const totalEntered = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const totalEntered = [...lines, ...ledgerLines].reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const difference = grandTotal - totalEntered;
   const mismatch = Math.abs(difference) > 0.004;
   const customerRequired = mismatch && !customerId;
@@ -70,6 +86,7 @@ export function PaymentModal({
     const payments = lines
       .filter((l) => l.accountId && (parseFloat(l.amount) || 0) > 0)
       .map((l) => ({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: l.modeId || null }));
+    for (const l of ledgerLines) if (l.accountId && (parseFloat(l.amount) || 0) > 0) payments.push({ accountId: l.accountId, amount: parseFloat(l.amount) || 0, modeId: null });
     onConfirm(payments, customerId);
   }
 
@@ -93,10 +110,9 @@ export function PaymentModal({
           {lines.map((line, i) => (
             <div key={i} className="flex items-center gap-2">
               <PaymentModeSelect
-                ledger
                 value={{ modeId: line.modeId, accountId: line.accountId }}
                 onChange={(v) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...v } : l)))}
-                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 flex-1"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 min-w-0 flex-1"
               />
               <AmountInput bare
                 type="number"
@@ -105,7 +121,7 @@ export function PaymentModal({
                 value={line.amount}
                 onChange={(e) => updateLine(i, "amount", e.target.value)}
                 placeholder="Amount"
-                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28 shrink-0"
               />
             </div>
           ))}
@@ -156,6 +172,39 @@ export function PaymentModal({
           <div className="flex justify-between text-sm">
             <span className="text-gray-700">{selectedCustomer.name}</span>
             <span className="text-gray-900">{(customerBalances[selectedCustomer.id] ?? 0).toFixed(2)}</span>
+          </div>
+        )}
+
+        {ledgerOptions.length > 0 && (
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Settled through a ledger account (no cash or bank)</label>
+            <div className="space-y-2">
+              {ledgerLines.map((l, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <LedgerSelect
+                    accounts={ledgerOptions}
+                    value={l.accountId}
+                    onChange={(accountId) => setLedgerLines((prev) => prev.map((x, idx) => (idx === i ? { ...x, accountId } : x)))}
+                    className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 min-w-0 flex-1"
+                  />
+                  <AmountInput bare
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={l.amount}
+                    onChange={(e) => setLedgerLines((prev) => prev.map((x, idx) => (idx === i ? { ...x, amount: e.target.value } : x)))}
+                    placeholder="Amount"
+                    className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-28 shrink-0"
+                  />
+                  <button type="button" aria-label="Remove" onClick={() => setLedgerLines((prev) => prev.filter((_, idx) => idx !== i))} className="shrink-0 text-gray-400 hover:text-gray-600">
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={() => setLedgerLines((prev) => [...prev, { accountId: "", amount: "" }])} className="mt-1 text-sm text-gray-600 hover:text-gray-900">
+              + Add a ledger account
+            </button>
           </div>
         )}
 

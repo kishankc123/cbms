@@ -9,6 +9,56 @@ type Option = Awaited<ReturnType<typeof getPaymentModeOptions>>[number];
 type Ledger = Awaited<ReturnType<typeof getLedgerOptions>>[number];
 export type ModeAccount = { modeId: string; accountId: string; /** The mode name, filled in when a choice is made. */ modeName?: string };
 
+export type LedgerOption = Ledger;
+
+/** The ledger accounts a payment can be settled through (loaded once; empty until they arrive). */
+export function useLedgerOptions(): LedgerOption[] {
+  const [accounts, setAccounts] = useState<Ledger[]>([]);
+  useEffect(() => {
+    let live = true;
+    getLedgerOptions()
+      .then((a) => live && setAccounts(a))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  return accounts;
+}
+
+/**
+ * A separate picker for settling through a ledger account (a director's account, the owner's capital, a receivable netted off) instead of cash or
+ * bank. Choosing one asks first, because no cash or bank moves: the amount is recorded against that account in the Chart of Accounts.
+ */
+export function LedgerSelect({ value, onChange, accounts, className }: { value: string; onChange: (accountId: string) => void; accounts: LedgerOption[]; className?: string }) {
+  const ask = useConfirm();
+  const groups = [...new Set(accounts.map((a) => a.group ?? ""))];
+  return (
+    <select
+      value={value}
+      onChange={async (e) => {
+        const chosen = accounts.find((x) => x.id === e.target.value);
+        if (chosen && !(await ask(`Settle through ${ledgerLabel(chosen)}? No cash or bank moves: the amount is recorded against this account in your Chart of Accounts.`, { confirmLabel: "Settle through it" }))) return;
+        onChange(e.target.value);
+      }}
+      className={className}
+    >
+      <option value="">Select ledger account</option>
+      {groups.map((g) => (
+        <optgroup key={g} label={g || "Ledger account"}>
+          {accounts
+            .filter((a) => (a.group ?? "") === g)
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.code} — {a.name}
+              </option>
+            ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
 /**
  * Picks how money was received or paid: each payment mode is a heading with the accounts linked to it beneath, and the
  * choice is one of those accounts. The same account (a bank, say) can sit under several modes, so the choice keeps the
