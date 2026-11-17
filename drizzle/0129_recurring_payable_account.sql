@@ -1,0 +1,2 @@
+ALTER TABLE "recurring_expenses" ADD COLUMN "payable_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "recurring_expenses" ADD CONSTRAINT "recurring_expenses_payable_account_id_accounts_id_fk" FOREIGN KEY ("payable_account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;

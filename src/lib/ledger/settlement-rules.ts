@@ -8,7 +8,7 @@ export type SettlementAccount = { id: string; code: string; name: string; catego
 // Cash and bank are chosen through the payment modes, and retained earnings and brought forward are where the books close, so neither is offered here.
 const CASH_AND_BANK = (code: string) => code === "1000" || code.startsWith("1010");
 const CLOSING_EQUITY = new Set(["3100", "3200"]);
-const APP_MANAGED_GROUPS = new Set(["1200", "1210", "1300", "1500", "2090", "2100", "2300", "2310", "2320", "2340", "2350", "2360"]);
+const APP_MANAGED_GROUPS = new Set(["1200", "1210", "1300", "1500", "2090", "2100", "2300", "2310", "2320", "2340", "2345", "2350", "2360"]);
 
 /**
  * The accounts a payment can be settled through: the lowest level of the chart (never a group that has sub-groups), an asset, a liability or equity (never

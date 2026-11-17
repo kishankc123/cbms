@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { expenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
+import { expenses, recurringExpenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { tdsRateOn } from "@/lib/compliance/tds-rate";
 import { suggestForDescription } from "@/lib/expenses/suggestions";
@@ -133,7 +133,9 @@ export async function updateExpense(input: UpdateExpenseInput) {
   await assertPeriodOpen(session.tenantId, input.expenseDate);
   await assertPeriodOpen(session.tenantId, todayIso());
 
-  const payableAccountId = await expenseSupplierAccountId(session.tenantId, input.vendorId);
+  // An expense that came from a recurring expense and has no supplier stays on that recurring expense's own account.
+  const [recurring] = existing.payableAccountId && !input.vendorId ? await db.select({ id: recurringExpenses.id }).from(recurringExpenses).where(and(eq(recurringExpenses.tenantId, session.tenantId), eq(recurringExpenses.payableAccountId, existing.payableAccountId))).limit(1) : [];
+  const payableAccountId = recurring ? existing.payableAccountId : await expenseSupplierAccountId(session.tenantId, input.vendorId);
   await reverseAllActiveEntriesForSource(session.tenantId, input.expenseId, session.userId, `Edit of expense ${existing.expenseNumber}`);
 
   await db

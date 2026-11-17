@@ -4,11 +4,13 @@ import { recurringExpenses } from "@/db/schema";
 import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { assertSupplierOwned, assertCashBankAccounts } from "@/lib/ledger/account-guards";
 import { resolvePaymentMode } from "@/lib/payment-modes";
+import { ensureRecurringPayableAccountId, renameRecurringPayableAccount } from "./payable-account";
 import { intervalMonthsFor, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "./schedule";
 
 export * from "./schedule";
 export * from "./summary";
 export * from "./history";
+export * from "./payable-account";
 
 // ------------------------------------------------------------------
 // CRUD — the recurring expense DEFINITION only. Nothing here ever touches the
@@ -107,7 +109,9 @@ export async function createRecurringExpense(tenantId: string, userId: string, i
       createdBy: userId,
     })
     .returning();
-  return row;
+  // Without a supplier, it gets its own payable account straight away, so it is there in the Chart of Accounts before the first occurrence.
+  const payableAccountId = row.vendorId ? row.payableAccountId : await ensureRecurringPayableAccountId(tenantId, row);
+  return { ...row, payableAccountId };
 }
 
 export async function updateRecurringExpense(tenantId: string, userId: string, id: string, input: RecurringExpenseInput) {
@@ -142,7 +146,9 @@ export async function updateRecurringExpense(tenantId: string, userId: string, i
     })
     .where(and(eq(recurringExpenses.tenantId, tenantId), eq(recurringExpenses.id, id)))
     .returning();
-  return row;
+  await renameRecurringPayableAccount(tenantId, row.payableAccountId, row.expenseName);
+  const payableAccountId = row.vendorId ? row.payableAccountId : await ensureRecurringPayableAccountId(tenantId, row);
+  return { ...row, payableAccountId };
 }
 
 export async function pauseRecurringExpense(tenantId: string, id: string) {

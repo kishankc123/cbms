@@ -63,6 +63,8 @@ export const recurringExpenses = pgTable("recurring_expenses", {
   expectedPaymentModeId: uuid("expected_payment_mode_id").references(() => paymentModes.id, { onDelete: "set null" }),
   expectedPaymentModeName: text("expected_payment_mode_name"),
   notes: text("notes"),
+  /** The recurring expense's own liability account under Recurring Payable, where each occurrence is owed until it is paid. Empty when it has a supplier: the supplier's own account is used then. */
+  payableAccountId: uuid("payable_account_id").references(() => accounts.id),
 
   status: recurringExpenseStatusEnum("status").notNull().default("active"),
   pausedAt: timestamp("paused_at", { withTimezone: true }),
