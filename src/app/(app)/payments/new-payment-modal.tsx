@@ -15,7 +15,7 @@ import {
 import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { useProblem } from "@/components/problem-dialog";
-import { PaymentModeSelect } from "@/components/payment-mode-select";
+import { LedgerSelect, PaymentModeSelect, useLedgerOptions } from "@/components/payment-mode-select";
 import { methodForMode } from "@/lib/payment-mode-rules";
 import { getPayableTaxItems, recordObligationPayment } from "../compliance/tax-actions";
 import { HeadSplitFields, shareAcross, splitAmounts, splitHeadings, splitTotal, startingSplit, type HeadSplit } from "../compliance/tax/heading-split";
@@ -83,6 +83,9 @@ export function NewPaymentModal({
   const [paymentType, setPaymentType] = useState<string>(editing?.paymentType ?? (fixedDirection === "money_out" ? "supplier_payment" : "customer_payment"));
   const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? prefill?.date ?? today());
   const [accountId, setAccountId] = useState(editing?.accountId ?? prefill?.accountId ?? "");
+  // A payment is settled either through cash, bank or a wallet (the mode field) or through a ledger account (its own field, below the party).
+  const ledgerOptions = useLedgerOptions();
+  const ledgerChosen = ledgerOptions.some((a) => a.id === accountId);
   const [paymentModeId, setPaymentModeId] = useState(editing?.paymentModeId ?? "");
   const [paymentModeName, setPaymentModeName] = useState(editing?.paymentModeName ?? "");
   const [transferToAccountId, setTransferToAccountId] = useState(editing?.transferToAccountId ?? "");
@@ -224,7 +227,7 @@ export function NewPaymentModal({
       first.push({ message, target });
     };
     if (!paymentDate) bad("paymentDate", "Please enter the payment date.", "#pay-date");
-    if (!accountId) bad("accountId", "Select the payment mode and the account the money moves through.", '[data-field="account"]');
+    if (!accountId || (config.showTransferTo && ledgerChosen)) bad("accountId", config.showTransferTo ? "Select the payment mode and the account the money moves through." : "Select the payment mode and account, or settle through a ledger account.", '[data-field="account"]');
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
@@ -380,8 +383,7 @@ export function NewPaymentModal({
               <label className="block text-xs text-gray-500 mb-1">{config.showTransferTo ? "From Account" : "Mode and Account"}</label>
               <div data-field="account">
                 <PaymentModeSelect
-                  ledger={!config.showTransferTo}
-                  value={{ modeId: paymentModeId, accountId, modeName: paymentModeName }}
+                  value={{ modeId: paymentModeId, accountId: ledgerChosen ? "" : accountId, modeName: paymentModeName }}
                   onChange={(v) => {
                     setPaymentModeId(v.modeId);
                     setPaymentModeName(v.modeName ?? "");
@@ -501,6 +503,22 @@ export function NewPaymentModal({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Party (optional)</label>
                 <input value={partyOtherName} onChange={(e) => setPartyOtherName(e.target.value)} placeholder="e.g. lender, owner, description" className={inputCls} />
+              </div>
+            )}
+            {!config.showTransferTo && ledgerOptions.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Or settle through a ledger account (no cash or bank)</label>
+                <LedgerSelect
+                  accounts={ledgerOptions}
+                  value={ledgerChosen ? accountId : ""}
+                  onChange={(id) => {
+                    // Choosing a ledger account replaces the mode and account above; clearing it leaves the payment to be set there.
+                    setPaymentModeId("");
+                    setPaymentModeName("");
+                    setAccountId(id);
+                  }}
+                  className={fieldErrors.accountId && !accountId ? inputErrCls : inputCls}
+                />
               </div>
             )}
             {paymentType === "tax_payment" && !editing && taxItems.length > 0 && (
