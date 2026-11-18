@@ -168,6 +168,7 @@ export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> 
   });
 
   revalidatePath("/payroll/employees");
+  return { employeeCode };
 }
 
 // Only master-data fields — never touches salary. Salary changes must go

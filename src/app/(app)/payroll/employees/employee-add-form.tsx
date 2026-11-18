@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createEmployee, getNextEmployeeCode } from "./actions";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
+import { D } from "@/components/calendar/date-text";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
@@ -46,9 +49,15 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
   const [priorTds, setPriorTds] = useState("");
   const [initialSalary, setInitialSalary] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<{ code: string; name: string; designation: string; department: string; joiningDate: string; salary: number } | null>(null);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
 
+  const loadCode = () => {
+    getNextEmployeeCode()
+      .then(setNextCode)
+      .catch(() => {});
+  };
   useEffect(() => {
     let live = true;
     getNextEmployeeCode()
@@ -59,6 +68,31 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
     };
   }, []);
 
+  // Starts the next employee: blank, or (same department) keeping the department, joining date, employment type and status, tax status and bank, as when several people join together.
+  function startAnother(keepDepartment: boolean) {
+    setFullName("");
+    setAddress("");
+    setContactNumber("");
+    setEmail("");
+    setPanNumber("");
+    setLeavingDate("");
+    setDesignation("");
+    setBankAccountNumber("");
+    setPriorIncome("");
+    setPriorTds("");
+    setInitialSalary("");
+    if (!keepDepartment) {
+      setJoiningDate(today());
+      setDepartment("");
+      setEmploymentType("full_time");
+      setEmploymentStatus("active");
+      setBankName("");
+      setTaxStatus("single");
+    }
+    setSaved(null);
+    loadCode();
+  }
+
   async function handleSave() {
     if (!fullName.trim()) {
       report("Full name is required.", null);
@@ -66,7 +100,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
     }
     setSaving(true);
     try {
-      await createEmployee({
+      const created = await createEmployee({
         fullName,
         address,
         contactNumber,
@@ -86,7 +120,7 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         initialSalary: parseFloat(initialSalary) || 0,
       });
       router.refresh();
-      onDone();
+      setSaved({ code: created.employeeCode, name: fullName.trim(), designation, department, joiningDate, salary: parseFloat(initialSalary) || 0 });
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to save", null);
     } finally {
@@ -215,6 +249,27 @@ export function EmployeeAddForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
       {dialog}
+      {saved && (
+        <SavedScreen
+          title="Employee saved"
+          number={saved.name}
+          noun={`(${saved.code}) has been added.`}
+          sameLabel="Add another, same department"
+          rows={[
+            { label: "Employee ID", value: saved.code },
+            ...(saved.designation ? [{ label: "Designation", value: saved.designation }] : []),
+            ...(saved.department ? [{ label: "Department", value: saved.department }] : []),
+            { label: "Joining date", value: <D value={saved.joiningDate} /> },
+            { label: "Basic salary", value: <Amount value={saved.salary} /> },
+          ]}
+          onDone={() => {
+            startAnother(false);
+            onDone();
+          }}
+          onAnother={() => startAnother(false)}
+          onSameDate={() => startAnother(true)}
+        />
+      )}
     </div>
   );
 }
