@@ -34,9 +34,14 @@ export type EntryInput = { employeeId: string; amount: number; note: string };
 
 /** What is wrong with a round's entries, in plain words, or null. Empty rows (no employee and no amount) are ignored by the caller. */
 export function entryProblem(entries: EntryInput[]): string | null {
+  const firstRow = new Map<string, number>();
   for (const [i, e] of entries.entries()) {
     const row = `Row ${i + 1}`;
     if (!e.employeeId) return `${row}: choose the employee.`;
+    // One row per employee in a round: the amount for a month is one figure, with the note saying what it is made of.
+    const earlier = firstRow.get(e.employeeId);
+    if (earlier !== undefined) return `${row}: this employee is already in row ${earlier}. Put the whole amount in one row.`;
+    firstRow.set(e.employeeId, i + 1);
     if (!Number.isFinite(e.amount) || e.amount <= 0) return `${row}: enter an amount above zero.`;
     if (e.amount > 1_000_000_000) return `${row}: that amount is too large.`;
   }

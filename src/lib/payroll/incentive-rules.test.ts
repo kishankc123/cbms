@@ -39,6 +39,7 @@ describe("round entries and labels", () => {
     expect(entryProblem([{ employeeId: "e1", amount: 100, note: "" }])).toBeNull();
     expect(entryProblem([{ employeeId: "", amount: 100, note: "" }])).toBe("Row 1: choose the employee.");
     expect(entryProblem([{ employeeId: "e1", amount: 100, note: "" }, { employeeId: "e2", amount: 0, note: "" }])).toBe("Row 2: enter an amount above zero.");
+    expect(entryProblem([{ employeeId: "e1", amount: 100, note: "" }, { employeeId: "e2", amount: 50, note: "" }, { employeeId: "e1", amount: 25, note: "" }])).toBe("Row 3: this employee is already in row 1. Put the whole amount in one row.");
   });
 
   it("suggests a period label from the frequency", () => {

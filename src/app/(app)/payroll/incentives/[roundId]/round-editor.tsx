@@ -20,7 +20,7 @@ const th = "border-b border-line bg-app px-2.5 py-1.5 text-left text-xs font-med
 const td = "border-b border-line px-2 py-1.5";
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-// Who gets how much in one round. An employee can have more than one row (different targets, different amounts).
+// Who gets how much in one round. Each employee appears once: the amount is one figure and the note says what it is made of.
 export function RoundEditor({
   roundId,
   status,
@@ -127,7 +127,8 @@ export function RoundEditor({
                   <Select value={r.employeeId} disabled={readOnly} onChange={(e) => set(r.key, { employeeId: e.target.value })}>
                     <option value="">Choose employee</option>
                     {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
+                      // Someone already chosen in another row can't be chosen again.
+                      <option key={e.id} value={e.id} disabled={e.id !== r.employeeId && rows.some((x) => x.employeeId === e.id)}>
                         {e.code} {e.name}
                       </option>
                     ))}

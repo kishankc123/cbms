@@ -54,15 +54,17 @@ describe("performance incentives", () => {
     await expect(createHeadingAction({ name: "sales incentive ", frequency: "monthly", taxable: true, countsForRetirement: false })).rejects.toThrow(/already an incentive heading|duplicate|already/i);
   });
 
-  it("a draft round is not paid; an approved one is, as one line per heading, several entries adding up", async () => {
+  it("a draft round is not paid; an approved one is, as one line per heading", async () => {
     roundId = await createRoundAction({ headingId, calendarSystem: "AD", year: 2026, month: 3, periodLabel: "March 2026", note: "" });
     await expect(createRoundAction({ headingId, calendarSystem: "AD", year: 2026, month: 3, periodLabel: "march 2026", note: "" })).rejects.toThrow(/already has a round/);
-    await saveRoundAction({ roundId, entries: [{ employeeId: asha, amount: 5000, note: "Target 1" }, { employeeId: asha, amount: 2500, note: "Target 2" }, { employeeId: bikram, amount: 4000, note: "" }] });
+    // an employee can be in a round once only
+    await expect(saveRoundAction({ roundId, entries: [{ employeeId: asha, amount: 5000, note: "" }, { employeeId: asha, amount: 2500, note: "" }] })).rejects.toThrow(/already in row 1/);
+    await saveRoundAction({ roundId, entries: [{ employeeId: asha, amount: 7500, note: "Target 1 and 2" }, { employeeId: bikram, amount: 4000, note: "" }] });
 
     runId = await generatePayrollRun({ month: 3, year: 2026, calendar: "AD", employeeIds: [asha, bikram] });
     expect(Number((await lineOf(runId, asha)).incentives)).toBe(0); // still a draft
 
-    const { status } = await saveRoundAction({ roundId, entries: [{ employeeId: asha, amount: 5000, note: "Target 1" }, { employeeId: asha, amount: 2500, note: "Target 2" }, { employeeId: bikram, amount: 4000, note: "" }], approve: true });
+    const { status } = await saveRoundAction({ roundId, entries: [{ employeeId: asha, amount: 7500, note: "Target 1 and 2" }, { employeeId: bikram, amount: 4000, note: "" }], approve: true });
     expect(status).toBe("approved");
     // approving worked the open salary sheet out again by itself
     const a = await lineOf(runId, asha);
