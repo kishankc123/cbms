@@ -14,6 +14,8 @@ export type PayrollSummaryRunRow = {
   employeeCount: number;
   grossPay: number;
   allowances: number;
+  /** Performance incentives paid in the run. */
+  incentives: number;
   deductions: number;
   overtimeAmount: number;
   benefitsAmount: number;
@@ -66,6 +68,7 @@ export async function payrollSummary(tenantId: string, periodStart: Date, period
         employeeCount: runLines.length,
         grossPay: round2(runLines.reduce((s, l) => s + Number(l.grossPay), 0)),
         allowances: round2(runLines.reduce((s, l) => s + Number(l.allowances), 0)),
+        incentives: round2(runLines.reduce((s, l) => s + Number(l.incentives), 0)),
         deductions: round2(runLines.reduce((s, l) => s + Number(l.deductions), 0)),
         overtimeAmount: round2(runLines.reduce((s, l) => s + Number(l.overtimeAmount), 0)),
         benefitsAmount: round2(runLines.reduce((s, l) => s + Number(l.benefitsAmount), 0)),

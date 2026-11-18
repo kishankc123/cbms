@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, employeeBenefits, employeeComponents, employeeRetirement, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
+import { employees, employeeComponents, employeeRetirement, attendanceRecords, payrollComponents, payrollRuns, payrollLines, auditLog } from "@/db/schema";
 import { componentPay, type Assignment, type CatalogComponent } from "@/lib/payroll/components";
+import { approvedIncentivesFor } from "@/lib/payroll/incentives";
+import { incentivePay } from "@/lib/payroll/incentive-rules";
 import { payrollRulesOn } from "@/lib/payroll/platform-rules";
 import { retirementPay } from "@/lib/payroll/retirement-pay";
 import type { Enrolment } from "@/lib/payroll/employee-retirement";
@@ -114,6 +116,8 @@ export async function generatePayrollRun(input: GenerateRunInput) {
   // Each employee gets the components assigned to them (see Employees > profile > Salary components), not one company-wide total.
   const catalog: CatalogComponent[] = (await db.select().from(payrollComponents).where(eq(payrollComponents.tenantId, session.tenantId))).map((c) => ({ id: c.id, name: c.name, type: c.type, amount: Number(c.amount), taxable: c.taxable, calcType: c.calcType === "percent" ? "percent" : "fixed", countsForRetirement: c.countsForRetirement, recurrence: c.recurrence === "one_time" ? "one_time" : "recurring" }));
   const assignmentRows = await db.select().from(employeeComponents).where(eq(employeeComponents.tenantId, session.tenantId));
+  // Performance incentives: the entries of every approved round paid with this month (see Payroll > Performance incentives).
+  const monthIncentives = await approvedIncentivesFor(session.tenantId, { calendarSystem: calendar, year: input.year, month: input.month });
   // Salary TDS: the fiscal year this pay falls in, the months left in it, and the slabs in force on the pay date (null = none published).
   const taxCtx = await payrollTaxContext(session.tenantId, periodStart);
   const slabInfo = taxCtx.headKey ? await slabsOn(taxCtx.countryCode, taxCtx.headKey, periodEnd) : null;
@@ -175,28 +179,8 @@ export async function generatePayrollRun(input: GenerateRunInput) {
 
     const proratedBasic = round2(basic * (presentDays / workingDays));
 
-    const benefitRows = await db
-      .select()
-      .from(employeeBenefits)
-      .where(
-        and(
-          eq(employeeBenefits.tenantId, session.tenantId),
-          eq(employeeBenefits.employeeId, employee.id),
-          eq(employeeBenefits.eligibilityStatus, "active")
-        )
-      );
-    const benefitsAmount = round2(
-      benefitRows
-        .filter((b) => b.effectiveFrom <= periodEnd && (!b.effectiveTo || b.effectiveTo >= periodStart))
-        .reduce((sum, b) => {
-          const amount = Number(b.amount);
-          if (b.frequency === "monthly") return sum + amount;
-          if (b.frequency === "yearly") return sum + amount / 12;
-          // one_time: only counts if it falls inside this period
-          if (b.effectiveFrom >= periodStart && b.effectiveFrom <= periodEnd) return sum + amount;
-          return sum;
-        }, 0)
-    );
+    // Benefits were retired: what they paid is now salary components. Only runs made before that carry a benefits figure.
+    const benefitsAmount = 0;
 
     const assignments: Assignment[] = assignmentRows.filter((a) => a.employeeId === employee.id).map((a) => ({ componentId: a.componentId, amount: a.amount === null ? null : Number(a.amount), effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo }));
     const pay = componentPay(catalog, assignments, { periodStart, periodEnd, proratedBasic });
@@ -204,22 +188,25 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     const deductionTotal = pay.deductions;
     const taxableAllowanceTotal = pay.taxableAllowances;
 
-    const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal);
+    const incentive = incentivePay(employee.id, monthIncentives.entries, monthIncentives.headings);
+    const grossPay = round2(proratedBasic + benefitsAmount + allowanceTotal + incentive.total);
 
     // Employee contributions come out of pay; the employer's are an extra cost and never reduce net pay.
     const enrolments: Enrolment[] = enrolmentRows
       .filter((r) => r.employeeId === employee.id)
       .map((r) => ({ id: r.id, scheme: r.scheme as EmployeeScheme, registrationNumber: r.registrationNumber, startDate: r.startDate, endDate: r.endDate, citMode: r.citMode === "percent" ? "percent" : r.citMode === "fixed" ? "fixed" : null, citValue: r.citValue === null ? null : Number(r.citValue), citEmployerValue: r.citEmployerValue === null ? null : Number(r.citEmployerValue) }));
-    const retirement = retirementPay({ enrolments, rules: rulesInfo?.rules ?? null, proratedBasic, retirementAllowances: pay.retirementAllowances, periodStart, periodEnd });
+    const retirement = retirementPay({ enrolments, rules: rulesInfo?.rules ?? null, proratedBasic, retirementAllowances: round2(pay.retirementAllowances + incentive.retirement), periodStart, periodEnd });
     const employeeRetirementAmount = retirement.employee;
 
     // Salary TDS: projected for the year, less what was already withheld, split over the months left. It can't be more than the pay itself.
-    const taxablePay = round2(proratedBasic + benefitsAmount + taxableAllowanceTotal);
+    const taxablePay = round2(proratedBasic + benefitsAmount + taxableAllowanceTotal + incentive.taxable);
     const taxpayerClass: TaxpayerClass = employee.taxStatus === "couple" ? "couple" : "single";
     const earlier = taxCtx.fy ? await earlierInFiscalYear(session.tenantId, employee.id, taxCtx.fy.from, periodStart, run.id) : { earned: 0, withheld: 0, retirement: 0 };
     const joinedThisYear = Boolean(taxCtx.fy && employee.joiningDate >= taxCtx.fy.from); // earlier-employer figures only count in the year the person joined
     const working = computeMonthlyTds({
       taxablePay,
+      // A bonus, overtime or an incentive is paid this month only: tax counts it once in the year's projection, not once for every month left.
+      oneOffPay: round2(pay.taxableOneTime + incentive.taxable),
       earnedBefore: earlier.earned,
       withheldBefore: earlier.withheld,
       priorIncome: joinedThisYear ? Number(employee.priorIncome) : 0,
@@ -258,6 +245,8 @@ export async function generatePayrollRun(input: GenerateRunInput) {
       tdsAmount: tdsAmount.toFixed(2),
       tdsDetail,
       componentsDetail: pay.lines,
+      incentives: incentive.total.toFixed(2),
+      incentivesDetail: incentive.lines.length > 0 ? incentive.lines : null,
       employeeRetirement: employeeRetirementAmount.toFixed(2),
       employerRetirement: retirement.employer.toFixed(2),
       retirementDetail: retirement.lines.length > 0 || retirement.warnings.length > 0 ? { lines: retirement.lines, warnings: retirement.warnings, rulesVersionId: rulesInfo?.id ?? null, rulesVerified: rulesInfo?.isVerified ?? null } : null,

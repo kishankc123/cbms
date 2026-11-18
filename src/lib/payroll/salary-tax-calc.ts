@@ -49,6 +49,8 @@ export type TdsInput = {
   /** How many of the lowest slabs are waived for this employee; 0 or omitted when not confirmed eligible. */
   sstExemptBands?: number;
   taxablePay: number;
+  /** The part of taxablePay that is paid this month only (an incentive, a bonus): counted once in the projection, not once for every month left. */
+  oneOffPay?: number;
   earnedBefore: number;
   withheldBefore: number;
   priorIncome: number;
@@ -60,7 +62,8 @@ export type TdsInput = {
 
 export function computeMonthlyTds(i: TdsInput): Omit<TdsWorking, "taxpayerClass" | "classAssumed" | "slabVersion"> {
   const monthsLeft = Math.max(i.monthsLeft, 1);
-  const projected = round2(i.priorIncome + i.earnedBefore + i.taxablePay * monthsLeft);
+  const oneOff = Math.min(Math.max(i.oneOffPay ?? 0, 0), Math.max(i.taxablePay, 0));
+  const projected = round2(i.priorIncome + i.earnedBefore + (i.taxablePay - oneOff) * monthsLeft + oneOff);
   const base = { missing: null, taxablePay: round2(i.taxablePay), earnedBefore: round2(i.earnedBefore), priorIncome: round2(i.priorIncome), monthsLeft, projected, withheldBefore: round2(i.withheldBefore), priorTds: round2(i.priorTds) };
   if (!i.slabs) return { ...base, missing: "slabs", breakdown: [], annualTax: 0, stillToWithhold: 0, tds: 0 };
   const deduction = i.retirement ? retirementDeduction(i.retirement.actualAnnual, projected, i.retirement.limits) : null;

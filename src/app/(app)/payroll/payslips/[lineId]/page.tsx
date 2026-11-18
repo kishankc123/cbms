@@ -48,6 +48,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ lineId
   const earnings: { label: string; amount: number }[] = [
     { label: "Basic salary", amount: n(line.proratedBasic) },
     ...allowancesShown.map((a) => ({ label: a.name, amount: a.amount })),
+    ...(((line.incentivesDetail ?? []) as { name: string; amount: number }[]).filter((i) => i.amount > 0).map((i) => ({ label: i.name, amount: i.amount }))),
     ...(n(line.benefitsAmount) > 0 ? [{ label: "Benefits", amount: n(line.benefitsAmount) }] : []),
   ];
   const deductionRows: { label: string; amount: number }[] = [

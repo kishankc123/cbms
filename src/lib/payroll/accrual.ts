@@ -3,13 +3,14 @@ import { db } from "@/db";
 import { employees, journalEntries, journalLines, payrollLines, type payrollRuns } from "@/db/schema";
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { getOrCreateEmployeeAdvanceAccountId } from "@/lib/ledger/advance-accounts";
-import { getOrCreateSalaryExpenseAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
+import { getOrCreateSalaryExpenseAccount, getSalaryPartAccounts, getOrCreateIncentiveHeadingAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
 import { getOrCreateTdsHeadPayableAccount, payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { getOrCreateEmployerRetirementExpense, getOrCreateRetirementPayable } from "@/lib/ledger/retirement-accounts";
 import { creditsFor, RETIREMENT_ACCOUNTS, type RetirementAccountKey, type RetirementLine } from "@/lib/payroll/retirement-pay";
 
 type Run = typeof payrollRuns.$inferSelect;
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /** The salary entries currently in force for a run (neither one that has been reversed, nor a reversal entry itself). */
 export async function activePayrollEntries(tenantId: string, runId: string) {
@@ -34,7 +35,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
   if ((await activePayrollEntries(tenantId, run.id)).length > 0) throw new Error("This payroll run has already been posted to the ledger");
 
   const lines = await db
-    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, deductions: payrollLines.deductions, netPay: payrollLines.netPay, advanceRecovered: payrollLines.advanceRecovered, tdsAmount: payrollLines.tdsAmount, employeeRetirement: payrollLines.employeeRetirement, employerRetirement: payrollLines.employerRetirement, retirementDetail: payrollLines.retirementDetail })
+    .select({ employeeId: payrollLines.employeeId, grossPay: payrollLines.grossPay, allowances: payrollLines.allowances, benefitsAmount: payrollLines.benefitsAmount, incentivesDetail: payrollLines.incentivesDetail, deductions: payrollLines.deductions, netPay: payrollLines.netPay, advanceRecovered: payrollLines.advanceRecovered, tdsAmount: payrollLines.tdsAmount, employeeRetirement: payrollLines.employeeRetirement, employerRetirement: payrollLines.employerRetirement, retirementDetail: payrollLines.retirementDetail })
     .from(payrollLines)
     .where(eq(payrollLines.payrollRunId, run.id));
   if (lines.length === 0) throw new Error("This payroll run has no employee lines — generate it first");
@@ -45,7 +46,10 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     .where(eq(employees.tenantId, tenantId));
   const employeeById = new Map(employeeRows.map((e) => [e.id, e]));
 
+  // Gross pay is posted across Salaries' three parts: basic salary, allowances (components and benefits) and each performance incentive heading.
   const salaryExpense = await getOrCreateSalaryExpenseAccount(tenantId);
+  const parts = await getSalaryPartAccounts(tenantId);
+  const headingAccounts = new Map<string, string>();
   const totalDeductions = lines.reduce((s, l) => s + Number(l.deductions), 0);
   const deductionsAccount = totalDeductions > 0 ? await getOrCreatePayrollDeductionsAccount(tenantId) : null;
   const totalTds = lines.reduce((s, l) => s + Number(l.tdsAmount), 0);
@@ -72,7 +76,25 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     if (gross <= 0) continue;
     retirementLines.push(...(((line.retirementDetail as { lines?: RetirementLine[] } | null)?.lines ?? []) as RetirementLine[]));
 
-    postLines.push({ accountId: salaryExpense.id, debitAmount: gross, description: `Salary expense - ${employee.fullName}` });
+    const incentives = ((line.incentivesDetail ?? []) as { headingId: string; name: string; amount: number }[]).filter((i) => i.amount > 0);
+    const allowancePart = round2(Number(line.allowances) + Number(line.benefitsAmount));
+    const incentivePart = round2(incentives.reduce((sum, i) => sum + i.amount, 0));
+    const basicPart = round2(gross - allowancePart - incentivePart);
+    if (basicPart < 0) {
+      // Figures that don't add up (should not happen): post the whole of it to Salaries rather than refuse.
+      postLines.push({ accountId: salaryExpense.id, debitAmount: gross, description: `Salary expense - ${employee.fullName}` });
+    } else {
+      if (basicPart > 0) postLines.push({ accountId: parts.basic.id, debitAmount: basicPart, description: `Basic salary - ${employee.fullName}` });
+      if (allowancePart > 0) postLines.push({ accountId: parts.allowances.id, debitAmount: allowancePart, description: `Allowances - ${employee.fullName}` });
+      for (const i of incentives) {
+        let accountId = headingAccounts.get(i.headingId);
+        if (!accountId) {
+          accountId = (await getOrCreateIncentiveHeadingAccount(tenantId, i.headingId, i.name)).id;
+          headingAccounts.set(i.headingId, accountId);
+        }
+        postLines.push({ accountId, debitAmount: round2(i.amount), description: `${i.name} - ${employee.fullName}` });
+      }
+    }
     if (net > 0) postLines.push({ accountId: payableAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
     if (advance > 0) postLines.push({ accountId: await getOrCreateEmployeeAdvanceAccountId(tenantId, employee.id), creditAmount: advance, description: `Staff advance recovered - ${employee.fullName}` });
     if (tds > 0 && tdsAccount) postLines.push({ accountId: tdsAccount.id, creditAmount: tds, description: `Salary TDS - ${employee.fullName}` });

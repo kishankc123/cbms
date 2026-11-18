@@ -48,7 +48,6 @@ const runOf = async (id: string) => (await db.select().from(payrollRuns).where(e
 async function finalize(runId: string) {
   await advanceRunStatus({ runId });
   await advanceRunStatus({ runId });
-  await advanceRunStatus({ runId });
 }
 const salaryPayment = (employeeId: string, amount: number) =>
   createPayment(org.tenantId, org.userId, "TMP", { direction: "money_out", paymentType: "salary_payment", paymentDate: "2026-09-01", partyType: "employee", employeeId, accountId: cashId, paymentMethod: "cash", amount, confirmDuplicate: true });

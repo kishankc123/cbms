@@ -192,6 +192,9 @@ export const payrollLines = pgTable("payroll_lines", {
   tdsDetail: jsonb("tds_detail"),
   // Each component that made up this month's allowances and deductions (name, kind, amount, taxable, counts for retirement), so a payslip can list them.
   componentsDetail: jsonb("components_detail"),
+  // Performance incentives paid with this month's pay (part of gross pay), and one row per heading, so a payslip and the ledger posting can show each.
+  incentives: numeric("incentives", { precision: 18, scale: 2 }).notNull().default("0"),
+  incentivesDetail: jsonb("incentives_detail"),
   // Retirement contributions for the month: taken from the employee's pay, and added on top by the employer (never taken from net pay),
   // with the line-by-line breakdown (scheme, contribution, employee, employer). Zero and null for anyone not in a scheme.
   employeeRetirement: numeric("employee_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
@@ -230,4 +233,55 @@ export const employeeRetirement = pgTable("employee_retirement", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").references(() => users.id),
+});
+
+// Performance incentives: a heading (Sales incentive, Attendance bonus ...) is published once; each period a round says who gets what under it.
+// Approved rounds flow into the salary sheet of their pay month. Every heading has its own expense account under Salaries > Performance incentives.
+export const incentiveFrequencyEnum = pgEnum("incentive_frequency", ["monthly", "quarterly", "half_yearly", "yearly", "one_off"]);
+export const incentiveRoundStatusEnum = pgEnum("incentive_round_status", ["draft", "approved"]);
+
+export const incentiveHeadings = pgTable(
+  "incentive_headings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    frequency: incentiveFrequencyEnum("frequency").notNull().default("monthly"),
+    taxable: boolean("taxable").notNull().default(true),
+    countsForRetirement: boolean("counts_for_retirement").notNull().default(false),
+    // The expense account this heading is posted to, under Salaries > Performance incentives.
+    accountId: uuid("account_id").references(() => accounts.id),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("incentive_headings_tenant_name").on(t.tenantId, t.name)]
+);
+
+// One heading for one period, paid in one pay month (calendar, year and month name the payroll run it flows into).
+export const incentiveRounds = pgTable("incentive_rounds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  headingId: uuid("heading_id").notNull().references(() => incentiveHeadings.id),
+  calendarSystem: text("calendar_system").notNull().default("AD"),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  /** What it is for ("Q1 2083", "Kartik sales"). Free text; a heading can't have two rounds with the same label. */
+  periodLabel: text("period_label").notNull(),
+  status: incentiveRoundStatusEnum("status").notNull().default("draft"),
+  note: text("note"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+});
+
+// Who gets how much in a round. The same employee can appear more than once (different targets, different amounts).
+export const incentiveEntries = pgTable("incentive_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  roundId: uuid("round_id").notNull().references(() => incentiveRounds.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

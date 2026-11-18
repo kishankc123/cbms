@@ -5,6 +5,8 @@ import { payrollRuns, payrollLines, employees } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { listRunAdjustments } from "@/lib/payroll/run-adjustments";
 import { AdjustmentsPanel } from "./adjustments-panel";
+import { IncentivesPanel } from "./incentives-panel";
+import { roundsForMonth } from "@/lib/payroll/incentives";
 import { RunStatusControls } from "./run-status-controls";
 
 import { D } from "@/components/calendar/date-text";
@@ -43,6 +45,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       deductions: payrollLines.deductions,
       advanceRecovered: payrollLines.advanceRecovered,
       benefitsAmount: payrollLines.benefitsAmount,
+      incentives: payrollLines.incentives,
+      incentivesDetail: payrollLines.incentivesDetail,
       grossPay: payrollLines.grossPay,
       tdsAmount: payrollLines.tdsAmount,
       tdsDetail: payrollLines.tdsDetail,
@@ -71,6 +75,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
   const recoveries = hasAdvances ? await getRunRecoveryBreakdown(session.tenantId, run) : [];
   const nameOf = new Map(lines.map((l) => [l.employeeId, l.fullName]));
   const adjustments = await listRunAdjustments(session.tenantId, run);
+  const incentiveRounds = await roundsForMonth(session.tenantId, { calendarSystem: run.calendarSystem, year: run.year, month: run.month });
+  // Benefits no longer exist as a setting; the column is shown only for runs made while they did.
+  const showBenefits = lines.some((l) => Number(l.benefitsAmount) > 0);
   const canAdjust = run.status !== "finalized" && can(session, "payroll", "edit") && can(session, "payroll", "create");
 
   return (
@@ -114,6 +121,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
         ]}
       />
 
+      <IncentivesPanel rounds={incentiveRounds} locked={run.status === "finalized"} />
+
       <AdjustmentsPanel runId={run.id} canAdjust={canAdjust} employees={lines.map((l) => ({ id: l.employeeId, name: l.fullName }))} adjustments={adjustments} />
 
       <div className="overflow-x-auto">
@@ -127,7 +136,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
               <th className="px-3 py-2 font-medium whitespace-nowrap">Absent</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Prorated Basic</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Allowances</th>
-              <th className="px-3 py-2 font-medium whitespace-nowrap">Benefits</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">Incentives</th>
+              {showBenefits && <th className="px-3 py-2 font-medium whitespace-nowrap">Benefits</th>}
               <th className="px-3 py-2 font-medium whitespace-nowrap">Deductions</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Gross Pay</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">SSF / PF / CIT</th>
@@ -150,7 +160,10 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.absentDays).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.proratedBasic).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.allowances).toFixed(2)}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{Number(l.benefitsAmount).toFixed(2)}</td>
+                <td className="px-3 py-2 whitespace-nowrap" title={((l.incentivesDetail ?? []) as { name: string; amount: number }[]).map((i) => `${i.name}: ${i.amount.toFixed(2)}`).join(", ") || undefined}>
+                  {Number(l.incentives).toFixed(2)}
+                </td>
+                {showBenefits && <td className="px-3 py-2 whitespace-nowrap">{Number(l.benefitsAmount).toFixed(2)}</td>}
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.deductions).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.grossPay).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.employeeRetirement).toFixed(2)}</td>
@@ -169,7 +182,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={showBenefits ? 17 : 16} className="px-4 py-6 text-center text-gray-400">
                   No lines in this run
                 </td>
               </tr>
@@ -178,7 +191,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           {lines.length > 0 && (
             <tfoot>
               <tr className="border-t border-gray-200 bg-gray-50 font-medium">
-                <td colSpan={13} className="px-3 py-2 text-right">
+                <td colSpan={showBenefits ? 14 : 13} className="px-3 py-2 text-right">
                   Total Net Pay
                 </td>
                 <td className="px-3 py-2">{totalNet.toFixed(2)}</td>

@@ -16,13 +16,15 @@ export type CatalogComponent = {
 };
 export type Assignment = { componentId: string; amount: number | null; effectiveFrom: string; effectiveTo: string | null };
 
-export type ComponentLine = { componentId: string; name: string; type: "allowance" | "deduction"; calcType: "fixed" | "percent"; /** The figure paid (money), whatever the calculation type. */ amount: number; taxable: boolean; countsForRetirement: boolean };
+export type ComponentLine = { componentId: string; name: string; type: "allowance" | "deduction"; calcType: "fixed" | "percent"; /** The figure paid (money), whatever the calculation type. */ amount: number; taxable: boolean; countsForRetirement: boolean; /** Paid in this month only. */ oneTime: boolean };
 export type ComponentPay = {
   lines: ComponentLine[];
   allowances: number;
   deductions: number;
   /** Allowances that count toward tax. */
   taxableAllowances: number;
+  /** Of those, the one-time ones (a bonus, overtime): paid in this month only, so tax projects them once. */
+  taxableOneTime: number;
   /** Allowances that count toward the retirement (SSF / PF) basis. */
   retirementAllowances: number;
 };
@@ -41,10 +43,10 @@ export function componentPay(catalog: CatalogComponent[], assignments: Assignmen
     if (!c || !appliesInPeriod(c, a, period.periodStart, period.periodEnd)) continue;
     const figure = a.amount ?? c.amount;
     const amount = c.calcType === "percent" ? round2((period.proratedBasic * figure) / 100) : round2(figure);
-    lines.push({ componentId: c.id, name: c.name, type: c.type, calcType: c.calcType, amount, taxable: c.taxable, countsForRetirement: c.countsForRetirement });
+    lines.push({ componentId: c.id, name: c.name, type: c.type, calcType: c.calcType, amount, taxable: c.taxable, countsForRetirement: c.countsForRetirement, oneTime: c.recurrence === "one_time" });
   }
   const sum = (f: (l: ComponentLine) => boolean) => round2(lines.filter(f).reduce((s, l) => s + l.amount, 0));
-  return { lines, allowances: sum((l) => l.type === "allowance"), deductions: sum((l) => l.type === "deduction"), taxableAllowances: sum((l) => l.type === "allowance" && l.taxable), retirementAllowances: sum((l) => l.type === "allowance" && l.countsForRetirement) };
+  return { lines, allowances: sum((l) => l.type === "allowance"), deductions: sum((l) => l.type === "deduction"), taxableAllowances: sum((l) => l.type === "allowance" && l.taxable), taxableOneTime: sum((l) => l.type === "allowance" && l.taxable && l.oneTime), retirementAllowances: sum((l) => l.type === "allowance" && l.countsForRetirement) };
 }
 
 /** Components that should be given to a newly added employee. */

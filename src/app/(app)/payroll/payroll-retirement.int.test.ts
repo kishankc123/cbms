@@ -35,7 +35,7 @@ const empInput = (code: string) => ({
 const idOf = async (code: string) => (await db.select().from(employees).where(and(eq(employees.tenantId, org.tenantId), eq(employees.employeeCode, code))))[0].id;
 const lineOf = async (runId: string, employeeId: string) => (await db.select().from(payrollLines).where(and(eq(payrollLines.payrollRunId, runId), eq(payrollLines.employeeId, employeeId))))[0];
 const finalize = async (runId: string) => {
-  for (let i = 0; i < 3; i++) await advanceRunStatus({ runId });
+  for (let i = 0; i < 2; i++) await advanceRunStatus({ runId });
 };
 // What the run's journal credited and debited, by account name.
 async function journalOf(runId: string) {
@@ -109,7 +109,7 @@ describe("retirement contributions in payroll", () => {
     await finalize(run);
     const j = await journalOf(run);
     near(j.debits, j.credits);
-    expect(j.byName["Salaries"].debit).toBe(90000);
+    expect(j.byName["Basic salary"].debit).toBe(90000); // pay is posted to Salaries' parts: basic salary here, no allowances or incentives
     expect(j.byName["Employer Retirement Contributions"].debit).toBe(9000); // 6,000 SSF + 3,000 PF
     expect(j.byName["Employee SSF Payable"].credit).toBe(3300);
     expect(j.byName["Employer SSF Payable"].credit).toBe(3501);

@@ -1,7 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { employeeRetirement, tenants, employees, salaryHistory, employeeBenefits, employeeComponents, payrollComponents, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
+import { employeeRetirement, tenants, employees, salaryHistory, employeeComponents, payrollComponents, attendanceRecords, payrollLines, payrollRuns, users } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
@@ -57,11 +57,6 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       .where(and(eq(salaryHistory.tenantId, session.tenantId), eq(salaryHistory.employeeId, employeeId)))
       .orderBy(desc(salaryHistory.effectiveFrom)),
     db
-      .select()
-      .from(employeeBenefits)
-      .where(and(eq(employeeBenefits.tenantId, session.tenantId), eq(employeeBenefits.employeeId, employeeId)))
-      .orderBy(desc(employeeBenefits.effectiveFrom)),
-    db
       .select({
         id: payrollLines.id,
         calendarSystem: payrollRuns.calendarSystem,
@@ -89,7 +84,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
     ]);
 
   const [attendanceRows, pay] = await Promise.all([db.select().from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))), seesPay ? loadPay() : Promise.resolve(null)]);
-  const [currentSalary, salaryRows, benefitRows, payslipRows, advanceRows, componentCatalog, componentAssignments, retirementRows, tenantRows] = pay ?? [null, [], [], [], [], [], [], [], []];
+  const [currentSalary, salaryRows, payslipRows, advanceRows, componentCatalog, componentAssignments, retirementRows, tenantRows] = pay ?? [null, [], [], [], [], [], [], []];
 
   // The payroll rules in force today for the organization's country, and anything worth a look about this employee's enrolment.
   const today = todayIso();
@@ -112,7 +107,6 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         employee={employee}
         currentSalary={seesPay ? currentSalary ?? 0 : null}
         salaryRecords={salaryRows.map((r) => ({ ...r, createdByName: r.createdByName ?? "—", createdAt: r.createdAt.toISOString() }))}
-        benefits={benefitRows}
         componentCatalog={componentCatalog}
         componentAssignments={componentAssignments}
         retirementRows={retirementRows}

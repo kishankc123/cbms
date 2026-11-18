@@ -10,7 +10,6 @@ import {
   salaryHistory,
   payrollLines,
   payrollRuns,
-  employeeBenefits,
   employeeComponents,
   employeeRetirement,
   payrollComponents,
@@ -18,7 +17,6 @@ import {
   type employmentTypeEnum,
   type employmentStatusEnum,
   type salaryChangeTypeEnum,
-  type benefitFrequencyEnum,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCurrentSalary } from "@/lib/payroll/salary";
@@ -350,88 +348,6 @@ export async function addSalaryChange(input: SalaryChangeInput) {
   revalidatePath(`/payroll/employees/${input.employeeId}`);
 }
 
-type Frequency = (typeof benefitFrequencyEnum.enumValues)[number];
-
-export type BenefitInput = {
-  employeeId: string;
-  benefitType: string;
-  amount: number;
-  frequency: Frequency;
-  effectiveFrom: string;
-  notes: string;
-};
-
-// Adding a benefit closes any existing open-ended record of the same type
-// for this employee (sets its effectiveTo) instead of overwriting it, so the
-// old amount stays intact for historical payroll.
-export async function addBenefit(input: BenefitInput) {
-  const session = await requireTenantSession();
-  if (!can(session, "payroll", "create")) throw new Error("Not permitted");
-  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
-
-  const benefitType = input.benefitType.trim();
-  if (!benefitType) throw new Error("Benefit type is required");
-  if (!input.effectiveFrom) throw new Error("Effective from date is required");
-  if (input.amount <= 0) throw new Error("Amount must be greater than zero");
-  const [owner] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.tenantId, session.tenantId))).limit(1);
-  if (!owner) throw new Error("Employee not found");
-
-  const openEnded = await db
-    .select()
-    .from(employeeBenefits)
-    .where(
-      and(
-        eq(employeeBenefits.tenantId, session.tenantId),
-        eq(employeeBenefits.employeeId, input.employeeId),
-        eq(employeeBenefits.benefitType, benefitType),
-        eq(employeeBenefits.eligibilityStatus, "active")
-      )
-    );
-
-  for (const existing of openEnded) {
-    if (existing.effectiveTo && existing.effectiveTo < input.effectiveFrom) continue;
-    const closeDate = new Date(input.effectiveFrom + "T00:00:00Z");
-    closeDate.setUTCDate(closeDate.getUTCDate() - 1);
-    await db
-      .update(employeeBenefits)
-      .set({ effectiveTo: closeDate.toISOString().slice(0, 10) })
-      .where(eq(employeeBenefits.id, existing.id));
-  }
-
-  await db.insert(employeeBenefits).values({
-    tenantId: session.tenantId,
-    employeeId: input.employeeId,
-    benefitType,
-    amount: round2(input.amount).toFixed(2),
-    frequency: input.frequency,
-    effectiveFrom: input.effectiveFrom,
-    notes: input.notes.trim() || null,
-    createdBy: session.userId,
-  });
-
-  revalidatePath(`/payroll/employees/${input.employeeId}`);
-}
-
-export async function deactivateBenefit(input: { benefitId: string }) {
-  const session = await requireTenantSession();
-  if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
-  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
-
-  const [benefit] = await db
-    .select()
-    .from(employeeBenefits)
-    .where(and(eq(employeeBenefits.id, input.benefitId), eq(employeeBenefits.tenantId, session.tenantId)))
-    .limit(1);
-  if (!benefit) throw new Error("Benefit not found");
-
-  await db
-    .update(employeeBenefits)
-    .set({ eligibilityStatus: "inactive", effectiveTo: benefit.effectiveTo ?? todayIso() })
-    .where(eq(employeeBenefits.id, input.benefitId));
-
-  revalidatePath(`/payroll/employees/${benefit.employeeId}`);
-}
-
 export type ComponentAssignmentInput = { employeeId: string; componentId: string; /** null = the catalog's amount */ amount: number | null; effectiveFrom: string; notes: string };
 
 // Gives an employee a component. A recurring one replaces any open one of the same component (the old row ends the day before, so history is kept);
@@ -484,6 +400,30 @@ export async function endComponentAssignment(input: { assignmentId: string }) {
     await db.update(employeeComponents).set({ effectiveTo: row.effectiveFrom > today ? row.effectiveFrom : today }).where(and(eq(employeeComponents.id, row.id), eq(employeeComponents.tenantId, session.tenantId)));
   }
   await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "end", entityType: "employee_component", entityId: row.employeeId, afterValue: { component: component?.name ?? row.componentId } });
+  revalidatePath(`/payroll/employees/${row.employeeId}`);
+}
+
+// Takes an assignment off the employee altogether (a mistake, say), as long as no finished payroll run has paid it. One that has been paid can only be stopped,
+// so the earlier months stay explainable.
+export async function removeComponentAssignment(input: { assignmentId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit") || !can(session, "payroll", "delete")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [row] = await db.select().from(employeeComponents).where(and(eq(employeeComponents.id, input.assignmentId), eq(employeeComponents.tenantId, session.tenantId))).limit(1);
+  if (!row) throw new Error("That assignment was not found");
+  const [component] = await db.select().from(payrollComponents).where(and(eq(payrollComponents.id, row.componentId), eq(payrollComponents.tenantId, session.tenantId))).limit(1);
+
+  // Paid = a finished run whose period overlaps the days the assignment covers (a one-time one covers only its own date).
+  const last = component?.recurrence === "one_time" ? row.effectiveFrom : row.effectiveTo;
+  const [paid] = await db
+    .select({ id: payrollRuns.id })
+    .from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, session.tenantId), eq(payrollRuns.status, "finalized"), gte(payrollRuns.periodEnd, row.effectiveFrom), ...(last ? [lte(payrollRuns.periodStart, last)] : [])))
+    .limit(1);
+  if (paid) throw new Error(`${component?.name ?? "This component"} was already paid in a finished payroll run, so it can't be removed. Use Stop to end it from today.`);
+
+  await db.delete(employeeComponents).where(and(eq(employeeComponents.id, row.id), eq(employeeComponents.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "remove", entityType: "employee_component", entityId: row.employeeId, afterValue: { component: component?.name ?? row.componentId } });
   revalidatePath(`/payroll/employees/${row.employeeId}`);
 }
 
