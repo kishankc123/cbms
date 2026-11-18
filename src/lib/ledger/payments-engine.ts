@@ -60,6 +60,7 @@ export const MONEY_IN_TYPES: PaymentType[] = [
   "capital_introduced",
   "refund_received",
   "other_receipt",
+  "ledger_receipt",
 ];
 
 export const MONEY_OUT_TYPES: PaymentType[] = [
@@ -76,6 +77,7 @@ export const MONEY_OUT_TYPES: PaymentType[] = [
   "cash_withdrawal",
   "bank_transfer",
   "other_payment",
+  "ledger_payment",
 ];
 
 // Types that show the expense allocation section. Money from or to a customer or supplier is not allocated: it goes on their own
@@ -303,6 +305,12 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       if (!categoryId) throw new Error("Select a classification account for this payment");
       return [{ accountId: categoryId, debitAmount: amount, description: label }, primaryLine];
     }
+    // Money from or to any ledger account (a director's account, the owner's capital): it moves on that account, not on a party's ledger.
+    case "ledger_receipt":
+    case "ledger_payment": {
+      if (!input.categoryAccountId) throw new Error("Choose the ledger account the money comes from or goes to.");
+      return isIn ? [primaryLine, { accountId: input.categoryAccountId, creditAmount: amount, description: label }] : [{ accountId: input.categoryAccountId, debitAmount: amount, description: label }, primaryLine];
+    }
     default:
       throw new Error(`Unhandled payment type: ${input.paymentType}`);
   }
@@ -421,6 +429,10 @@ async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
   // A transfer moves money between own cash and bank accounts; any other payment may also be settled through a ledger account.
   if (input.transferToAccountId) await assertCashBankAccounts(tenantId, [input.accountId, input.transferToAccountId]);
   else await assertSettlementAccounts(tenantId, [input.accountId]);
+  if (input.paymentType === "ledger_receipt" || input.paymentType === "ledger_payment") {
+    if (!input.categoryAccountId) throw new Error("Choose the ledger account the money comes from or goes to.");
+    await assertSettlementAccounts(tenantId, [input.categoryAccountId]);
+  }
   if (input.categoryAccountId) {
     const [a] = await db.select({ code: accounts.code }).from(accounts).where(and(eq(accounts.id, input.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
     if (!a) throw new Error("Classification account not found");

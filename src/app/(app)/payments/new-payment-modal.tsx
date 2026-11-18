@@ -42,11 +42,13 @@ function typeConfig(paymentType: string) {
     needsAdvanceMonth: paymentType === "staff_advance",
     needsVendor: paymentType === "supplier_payment" || paymentType === "supplier_advance",
     optionalVendor: paymentType === "expense_payment" || paymentType === "refund_received",
-    optionalOtherParty: ["loan_received", "capital_introduced", "loan_repayment", "owner_withdrawal", "other_receipt", "other_payment"].includes(paymentType),
+    optionalOtherParty: ["ledger_receipt", "ledger_payment", "loan_received", "capital_introduced", "loan_repayment", "owner_withdrawal", "other_receipt", "other_payment"].includes(paymentType),
     noParty: TRANSFER_TYPES.includes(paymentType),
     showAllocation: ALLOCATABLE_TYPES.includes(paymentType),
     showTransferTo: TRANSFER_TYPES.includes(paymentType),
     showCategoryAccount: ["other_receipt", "other_payment", "tax_payment"].includes(paymentType),
+    // Money from or to a ledger account: the cash or bank side is chosen as usual, and the ledger account is the other side.
+    needsLedgerAccount: paymentType === "ledger_receipt" || paymentType === "ledger_payment",
   };
 }
 
@@ -227,7 +229,8 @@ export function NewPaymentModal({
       first.push({ message, target });
     };
     if (!paymentDate) bad("paymentDate", "Please enter the payment date.", "#pay-date");
-    if (!accountId || (config.showTransferTo && ledgerChosen)) bad("accountId", config.showTransferTo ? "Select the payment mode and the account the money moves through." : "Select the payment mode and account, or settle through a ledger account.", '[data-field="account"]');
+    if (config.needsLedgerAccount && !ledgerOptions.some((l) => l.id === categoryAccountId)) bad("categoryAccountId", "Choose the ledger account the money comes from or goes to.", '[data-field="ledger"]');
+    if (!accountId || ((config.showTransferTo || config.needsLedgerAccount) && ledgerChosen)) bad("accountId", config.showTransferTo ? "Select the payment mode and the account the money moves through." : "Select the payment mode and account, or settle through a ledger account.", '[data-field="account"]');
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
@@ -252,7 +255,7 @@ export function NewPaymentModal({
         accountId,
         paymentModeId: paymentModeId || null,
         transferToAccountId: config.showTransferTo ? transferToAccountId : null,
-        categoryAccountId: config.showCategoryAccount ? categoryAccountId || null : null,
+        categoryAccountId: config.showCategoryAccount || config.needsLedgerAccount ? categoryAccountId || null : null,
         paymentMethod: paymentMethod as never,
         chequeNumber: paymentMethod === "cheque" ? chequeNumber : null,
         chequeDate: paymentMethod === "cheque" ? chequeDate || null : null,
@@ -505,9 +508,17 @@ export function NewPaymentModal({
                 <input value={partyOtherName} onChange={(e) => setPartyOtherName(e.target.value)} placeholder="e.g. lender, owner, description" className={inputCls} />
               </div>
             )}
-            {!config.showTransferTo && ledgerOptions.length > 0 && (
+            {config.needsLedgerAccount && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Or settle through a ledger account (no cash or bank)</label>
+                <label className="block text-xs text-gray-500 mb-1">{direction === "money_in" ? "Received from ledger account" : "Paid to ledger account"}</label>
+                <div data-field="ledger">
+                  <LedgerSelect accounts={ledgerOptions} value={categoryAccountId} onChange={setCategoryAccountId} className={fieldErrors.categoryAccountId ? inputErrCls : inputCls} />
+                </div>
+              </div>
+            )}
+            {!config.showTransferTo && !config.needsLedgerAccount && ledgerOptions.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Settle through ledger account</label>
                 <LedgerSelect
                   accounts={ledgerOptions}
                   value={ledgerChosen ? accountId : ""}
