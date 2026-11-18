@@ -5,6 +5,7 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
   capital_introduced: "Capital Introduced",
   refund_received: "Refund Received",
   other_receipt: "Other Receipt",
+  ledger_receipt: "From a Ledger Account",
   supplier_payment: "Supplier Payment",
   customer_refund: "Customer Refund",
   salary_payment: "Salary Payment",
@@ -18,6 +19,7 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
   cash_withdrawal: "Cash Withdrawal",
   bank_transfer: "Bank Transfer",
   other_payment: "Other Payment",
+  ledger_payment: "To a Ledger Account",
 };
 
 export const MONEY_IN_TYPE_OPTIONS = [
@@ -25,6 +27,7 @@ export const MONEY_IN_TYPE_OPTIONS = [
   { value: "loan_received", label: "Loan Received" },
   { value: "capital_introduced", label: "Capital Introduced" },
   { value: "refund_received", label: "Refund Received" },
+  { value: "ledger_receipt", label: "From a Ledger Account" },
   { value: "other_receipt", label: "Other Receipt" },
 ] as const;
 
@@ -39,6 +42,7 @@ export const MONEY_OUT_TYPE_OPTIONS = [
   { value: "owner_withdrawal", label: "Owner Withdrawal" },
   { value: "cash_withdrawal", label: "Cash Withdrawal" },
   { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "ledger_payment", label: "To a Ledger Account" },
   { value: "other_payment", label: "Other Payment" },
 ] as const;
 

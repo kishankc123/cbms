@@ -911,6 +911,13 @@
       "when": 1794912052080,
       "tag": "0129_recurring_payable_account",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1794987206954,
+      "tag": "0130_ledger_payment_types",
+      "breakpoints": true
     }
   ]
 }

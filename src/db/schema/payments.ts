@@ -24,6 +24,8 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "capital_introduced",
   "refund_received",
   "other_receipt",
+  // Money in from any ledger account of the Chart of Accounts: a director putting money in, say.
+  "ledger_receipt",
   // Money out
   "supplier_payment",
   "customer_refund",
@@ -39,6 +41,8 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "cash_withdrawal",
   "bank_transfer",
   "other_payment",
+  // Money out to any ledger account of the Chart of Accounts: repaying a director, say.
+  "ledger_payment",
 ]);
 
 export const paymentPartyTypeEnum = pgEnum("payment_party_type", ["customer", "supplier", "employee", "other", "none"]);

@@ -20,6 +20,7 @@ export const CATEGORIES: FlowCategory[] = [
   { key: "asset_sales", label: "Asset sale proceeds", activity: "investing", side: "in" },
   { key: "loans_received", label: "Loans received", activity: "financing", side: "in" },
   { key: "capital_introduced", label: "Capital introduced", activity: "financing", side: "in" },
+  { key: "ledger_in", label: "Received from ledger accounts (directors, owners)", activity: "financing", side: "in" },
   { key: "adjustments_in", label: "Manual and bank adjustments in", activity: "other", side: "in" },
 
   { key: "supplier_payments", label: "Supplier payments and advances", activity: "operating", side: "out" },
@@ -31,6 +32,7 @@ export const CATEGORIES: FlowCategory[] = [
   { key: "asset_purchases", label: "Asset purchases", activity: "investing", side: "out" },
   { key: "loan_repayments", label: "Loan repayments", activity: "financing", side: "out" },
   { key: "owner_drawings", label: "Owner withdrawals and distributions", activity: "financing", side: "out" },
+  { key: "ledger_out", label: "Paid to ledger accounts (directors, owners)", activity: "financing", side: "out" },
   { key: "adjustments_out", label: "Manual and bank adjustments out", activity: "other", side: "out" },
 ];
 const BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
@@ -49,6 +51,10 @@ export function classify(sourceType: string, paymentType: string | null, isDebit
         return "supplier_refunds";
       case "other_receipt":
         return "other_receipts";
+      case "ledger_receipt":
+        return "ledger_in";
+      case "ledger_payment":
+        return "ledger_out";
       case "loan_received":
         return "loans_received";
       case "capital_introduced":
