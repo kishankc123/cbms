@@ -8,7 +8,10 @@ import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
-import { SavedDialog } from "./saved-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
+import { D } from "@/components/calendar/date-text";
+import { useSalesView } from "./sales-view-tabs";
 import { DraftBanner, useDraft } from "@/components/use-draft";
 import { RevenueAccountSelect } from "@/components/revenue-account-select";
 
@@ -142,7 +145,10 @@ export function SingleInvoiceForm({
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, reportError, dialog } = useProblem();
   // Shown after every new invoice is saved, so it is clear it went in.
-  const [savedInfo, setSavedInfo] = useState<{ number: string; total: number } | null>(null);
+  const [saved, setSaved] = useState<{ number: string; date: string; customer: string; total: number; paid: number; payment: { accountId: string; modeId: string | null } | null } | null>(null);
+  // How the last invoice was paid: offered again the next time Record Payment is opened, for a run of invoices paid the same way.
+  const [carryPay, setCarryPay] = useState<{ accountId: string; modeId: string | null } | null>(null);
+  const { showInvoices } = useSalesView();
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   // What is typed is kept in this browser as it goes, and offered back after a reload or a lost connection. The invoice number is only
@@ -276,20 +282,18 @@ export function SingleInvoiceForm({
         await createSingleInvoice(payload);
       }
 
-      const savedNumber = invoiceNumber.trim();
-      const savedTotal = grandTotal;
       draft.clear();
       if (onDone) {
         onDone();
       } else {
-        setInvoiceDate(today());
-        setInvoiceNumberOverride(null);
-        setDueDate("");
-        setCustomerId("");
-        setRevenueAccountId("");
-        setLines(Array.from({ length: MIN_LINES }, emptyLine));
-        setPayments([]);
-        setSavedInfo({ number: savedNumber, total: savedTotal });
+        setSaved({
+          number: invoiceNumber.trim(),
+          date: invoiceDate,
+          customer: customers.find((c) => c.id === customerId)?.name ?? "",
+          total: grandTotal,
+          paid: paidTotal,
+          payment: payments[0] ? { accountId: payments[0].accountId, modeId: payments[0].modeId ?? null } : null,
+        });
       }
       onDirtyChange?.(false);
       router.refresh();
@@ -298,6 +302,20 @@ export function SingleInvoiceForm({
     } finally {
       setSaving(false);
     }
+  }
+
+  // Starts the next invoice: blank, or (same date) with the date, bill type and way of paying kept.
+  function startAnother(sameDate: boolean) {
+    setInvoiceDate(sameDate && saved ? saved.date : today());
+    setInvoiceNumberOverride(null);
+    setDueDate("");
+    setCustomerId("");
+    setRevenueAccountId("");
+    if (!sameDate) setBillType("taxable");
+    setLines(Array.from({ length: MIN_LINES }, emptyLine));
+    setPayments([]);
+    setCarryPay(sameDate ? saved?.payment ?? null : null);
+    setSaved(null);
   }
 
   return (
@@ -563,7 +581,7 @@ export function SingleInvoiceForm({
           allCustomers={customers}
           customerBalances={customerBalances}
           initialCustomerId={customerId}
-          initialLines={payments}
+          initialLines={payments.length > 0 || !carryPay ? payments : [{ accountId: carryPay.accountId, modeId: carryPay.modeId, amount: grandTotal }]}
           saving={false}
           onCancel={() => setShowPayment(false)}
           onConfirm={(p) => {
@@ -573,7 +591,24 @@ export function SingleInvoiceForm({
         />
       )}
 
-      {savedInfo && <SavedDialog title="Invoice saved" lines={[`Invoice ${savedInfo.number} is saved.`, `Total ${fmt(savedInfo.total)}.`]} onClose={() => setSavedInfo(null)} />}
+      {saved && (
+        <SavedScreen
+          title="Invoice saved"
+          number={saved.number}
+          rows={[
+            { label: "Date", value: <D value={saved.date} /> },
+            ...(saved.customer ? [{ label: "Customer", value: saved.customer }] : []),
+            { label: "Invoice total", value: <Amount value={saved.total} /> },
+            { label: saved.paid > 0 && saved.paid < saved.total ? "Received so far" : "Received", value: saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed" },
+          ]}
+          onDone={() => {
+            startAnother(false);
+            showInvoices();
+          }}
+          onAnother={() => startAnother(false)}
+          onSameDate={() => startAnother(true)}
+        />
+      )}
 
       {dialog}
     </div>
