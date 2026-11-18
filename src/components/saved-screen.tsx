@@ -19,6 +19,7 @@ export function SavedScreen({
   onDone,
   onAnother,
   onSameDate,
+  sameLabel = "Add another, same date",
 }: {
   title: string;
   /** The number the record was given (EXP-0062, a bill number). */
@@ -30,6 +31,8 @@ export function SavedScreen({
   onDone: () => void;
   onAnother: () => void;
   onSameDate: () => void;
+  /** The main button's label, where "same date" doesn't fit (items keep their category instead). */
+  sameLabel?: string;
 }) {
   return (
     <Modal
@@ -41,7 +44,7 @@ export function SavedScreen({
           <Button onClick={onDone}>Done</Button>
           <Button onClick={onAnother}>Add another</Button>
           <Button variant="primary" autoFocus onClick={onSameDate}>
-            Add another, same date
+            {sameLabel}
           </Button>
         </>
       }
