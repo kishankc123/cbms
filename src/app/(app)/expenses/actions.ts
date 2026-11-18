@@ -38,13 +38,13 @@ export type { ExpenseTaxTreatment, ExpensePaymentLine, ExpenseBillType, ExpenseI
 export async function createExpense(input: ExpenseInput) {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "create")) throw new Error("Not permitted");
-  const { warnings } = await createExpenseCore({ tenantId: session.tenantId, userId: session.userId }, input);
+  const { warnings, expenseNumber } = await createExpenseCore({ tenantId: session.tenantId, userId: session.userId }, input);
 
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
 
-  return { warnings };
+  return { warnings, expenseNumber };
 }
 
 /** `detailsOnly`: payments have been recorded against this expense in Payments, so its amounts can't change under them. */
