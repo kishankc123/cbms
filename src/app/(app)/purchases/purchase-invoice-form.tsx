@@ -9,7 +9,9 @@ import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
 import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
-import { InfoDialog } from "../inventory/info-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
+import { D } from "@/components/calendar/date-text";
 import { InvoicePaymentModal } from "./invoice-payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -92,6 +94,7 @@ export function PurchaseInvoiceForm({
   vatRate,
   initial,
   onDone,
+  onFinished,
   onDirtyChange,
 }: {
   vendors: Vendor[];
@@ -100,6 +103,8 @@ export function PurchaseInvoiceForm({
   vatRate: number;
   initial?: InitialInvoice;
   onDone?: () => void;
+  /** A new invoice was saved and the person is finished entering: go back to the list. */
+  onFinished?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
@@ -130,7 +135,9 @@ export function PurchaseInvoiceForm({
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
-  const [showSavedDialog, setShowSavedDialog] = useState(false);
+  const [saved, setSaved] = useState<{ number: string; date: string; supplier: string; total: number; paid: number; payment: { accountId: string; modeId: string | null } | null } | null>(null);
+  // How the last invoice was paid: offered again the next time Record Payment is opened.
+  const [carryPay, setCarryPay] = useState<{ accountId: string; modeId: string | null } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
@@ -245,24 +252,24 @@ export function PurchaseInvoiceForm({
         payments,
       };
 
+      let savedNumber = "";
       if (initial) {
         await updatePurchaseInvoice({ ...payload, billId: initial.billId, ...(initial.pendingTotal != null && acceptDifferent ? { acceptDifferentTotal: true } : {}) });
       } else {
-        await createPurchaseInvoice(payload);
+        savedNumber = (await createPurchaseInvoice(payload)).billNumber;
       }
 
       if (onDone) {
         onDone();
       } else {
-        setInvoiceDate(today());
-        setInvoiceNumber("");
-        setDueDate("");
-        setBillAvailable(true);
-        setVendorId("");
-        setBillType("no_bill");
-        setLines(Array.from({ length: MIN_LINES }, emptyLine));
-        setPayments([]);
-        setShowSavedDialog(true);
+        setSaved({
+          number: savedNumber,
+          date: invoiceDate,
+          supplier: vendors.find((v) => v.id === vendorId)?.name ?? "",
+          total: grandTotal,
+          paid: paidTotal,
+          payment: payments[0] ? { accountId: payments[0].accountId, modeId: payments[0].modeId ?? null } : null,
+        });
       }
       onDirtyChange?.(false);
       router.refresh();
@@ -280,6 +287,20 @@ export function PurchaseInvoiceForm({
     } finally {
       setSaving(false);
     }
+  }
+
+  // Starts the next invoice: blank, or (same date) with the date, bill type and way of paying kept.
+  function startAnother(sameDate: boolean) {
+    setInvoiceDate(sameDate && saved ? saved.date : today());
+    setInvoiceNumber("");
+    setDueDate("");
+    setBillAvailable(true);
+    setVendorId("");
+    if (!sameDate) setBillType("no_bill");
+    setLines(Array.from({ length: MIN_LINES }, emptyLine));
+    setPayments([]);
+    setCarryPay(sameDate ? saved?.payment ?? null : null);
+    setSaved(null);
   }
 
   const pendingTotal = initial?.pendingTotal ?? null;
@@ -564,15 +585,30 @@ export function PurchaseInvoiceForm({
 
       {dialog}
 
-      {showSavedDialog && (
-        <InfoDialog message="Purchase invoice saved successfully." onOk={() => setShowSavedDialog(false)} />
+      {saved && (
+        <SavedScreen
+          title="Purchase saved"
+          number={saved.number}
+          rows={[
+            { label: "Date", value: <D value={saved.date} /> },
+            ...(saved.supplier ? [{ label: "Supplier", value: saved.supplier }] : []),
+            { label: "Invoice total", value: <Amount value={saved.total} /> },
+            { label: saved.paid > 0 && saved.paid < saved.total ? "Paid so far" : "Paid", value: saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed" },
+          ]}
+          onDone={() => {
+            startAnother(false);
+            onFinished?.();
+          }}
+          onAnother={() => startAnother(false)}
+          onSameDate={() => startAnother(true)}
+        />
       )}
 
       {showPayment && (
         <InvoicePaymentModal
           total={grandTotal}
           cashBankAccounts={cashBankAccounts}
-          initialLines={payments}
+          initialLines={payments.length > 0 || !carryPay ? payments : [{ accountId: carryPay.accountId, modeId: carryPay.modeId, amount: grandTotal }]}
           saving={false}
           onCancel={() => setShowPayment(false)}
           onConfirm={(p) => {

@@ -14,6 +14,7 @@ import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { Modal } from "@/components/ui/modal";
+import { SavedScreen } from "@/components/saved-screen";
 import { Button } from "@/components/ui/button";
 import { controlClass, Field, Input, Select } from "@/components/ui/field";
 import { Amount } from "@/components/ui/data-table";
@@ -281,41 +282,21 @@ function ExpenseForm({
   if (saved) {
     const next: Carry = { expenseDate, billType, taxTreatment, payment: payments[0] ? { accountId: payments[0].accountId, modeId: payments[0].modeId ?? null } : null };
     return (
-      <Modal
-        size="sm"
+      <SavedScreen
         title="Expense saved"
-        onClose={onClose}
-        footer={
-          <>
-            <Button onClick={onClose}>Done</Button>
-            <Button onClick={() => onAnother()}>Add another</Button>
-            <Button variant="primary" autoFocus onClick={() => onAnother(next)}>
-              Add another, same date
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-[13px]">
-          <p className="text-ink">
-            <span className="font-semibold">{saved.expenseNumber}</span> was recorded.
-          </p>
-          <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3">
-            <Line label="Date" value={<D value={expenseDate} />} />
-            {saved.category && <Line label="Category" value={saved.category} />}
-            {saved.supplier && <Line label="Supplier" value={saved.supplier} />}
-            <Line label="Amount payable" value={<Amount value={saved.amountPayable} />} />
-            <Line label={saved.paid > 0 && saved.paid < saved.amountPayable ? "Paid so far" : "Paid"} value={saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed"} />
-          </div>
-          {saved.warnings.length > 0 && (
-            <div className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
-              <p className="font-medium">Saved, but flagged by Rules &amp; Policies:</p>
-              {saved.warnings.map((w) => (
-                <p key={w}>{w}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      </Modal>
+        number={saved.expenseNumber}
+        rows={[
+          { label: "Date", value: <D value={expenseDate} /> },
+          ...(saved.category ? [{ label: "Category", value: saved.category }] : []),
+          ...(saved.supplier ? [{ label: "Supplier", value: saved.supplier }] : []),
+          { label: "Amount payable", value: <Amount value={saved.amountPayable} /> },
+          { label: saved.paid > 0 && saved.paid < saved.amountPayable ? "Paid so far" : "Paid", value: saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed" },
+        ]}
+        warnings={saved.warnings}
+        onDone={onClose}
+        onAnother={() => onAnother()}
+        onSameDate={() => onAnother(next)}
+      />
     );
   }
 
