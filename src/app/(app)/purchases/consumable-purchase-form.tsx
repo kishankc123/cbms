@@ -7,7 +7,9 @@ import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
 import { createCashPurchase, updateCashPurchase, type CashBillType } from "./actions";
-import { InfoDialog } from "../inventory/info-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
+import { D } from "@/components/calendar/date-text";
 import { RecordPayModal } from "./record-pay-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -86,6 +88,7 @@ export function ConsumablePurchaseForm({
   vatRate,
   initial,
   onDone,
+  onFinished,
   onDirtyChange,
 }: {
   vendors: Vendor[];
@@ -95,6 +98,8 @@ export function ConsumablePurchaseForm({
   vatRate: number;
   initial?: InitialConsumableBill;
   onDone?: () => void;
+  /** A new bill was saved and the person is finished entering: go back to the list. */
+  onFinished?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
@@ -112,7 +117,9 @@ export function ConsumablePurchaseForm({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showSavedDialog, setShowSavedDialog] = useState(false);
+  const [saved, setSaved] = useState<{ number: string; date: string; supplier: string; total: number; paid: number; payment: { accountId: string; modeId: string | null } | null } | null>(null);
+  // How the last bill was paid: offered again the next time Record Pay is opened, for a run of bills paid the same way.
+  const [carryPay, setCarryPay] = useState<{ accountId: string; modeId: string | null } | null>(null);
   const [badFields, setBadFields] = useState<Set<string>>(new Set());
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
@@ -189,20 +196,21 @@ export function ConsumablePurchaseForm({
         })),
         payments,
       };
+      let savedNumber = "";
       if (initial) await updateCashPurchase({ ...payload, billId: initial.billId });
-      else await createCashPurchase(payload);
+      else savedNumber = (await createCashPurchase(payload)).billNumber;
 
       if (onDone) {
         onDone();
       } else {
-        setBillDate(today());
-        setBillNumber("");
-        setVendorId("");
-        setBillType("no_bill");
-        setBillAvailable(true);
-        setLines(Array.from({ length: MIN_LINES }, emptyLine));
-        setPayments([]);
-        setShowSavedDialog(true);
+        setSaved({
+          number: savedNumber,
+          date: billDate,
+          supplier: vendors.find((v) => v.id === vendorId)?.name ?? "",
+          total: grandTotal,
+          paid: paidTotal,
+          payment: payments[0] ? { accountId: payments[0].accountId, modeId: payments[0].modeId ?? null } : null,
+        });
       }
       onDirtyChange?.(false);
       router.refresh();
@@ -220,6 +228,19 @@ export function ConsumablePurchaseForm({
     } finally {
       setSaving(false);
     }
+  }
+
+  // Starts the next bill: blank, or (same date) with the date, bill type and way of paying kept.
+  function startAnother(sameDate: boolean) {
+    setBillDate(sameDate && saved ? saved.date : today());
+    setBillNumber("");
+    setVendorId("");
+    if (!sameDate) setBillType("no_bill");
+    setBillAvailable(true);
+    setLines(Array.from({ length: MIN_LINES }, emptyLine));
+    setPayments([]);
+    setCarryPay(sameDate ? saved?.payment ?? null : null);
+    setSaved(null);
   }
 
   return (
@@ -456,7 +477,24 @@ export function ConsumablePurchaseForm({
 
       {dialog}
 
-      {showSavedDialog && <InfoDialog message="Purchase saved successfully." onOk={() => setShowSavedDialog(false)} />}
+      {saved && (
+        <SavedScreen
+          title="Purchase saved"
+          number={saved.number}
+          rows={[
+            { label: "Date", value: <D value={saved.date} /> },
+            ...(saved.supplier ? [{ label: "Supplier", value: saved.supplier }] : []),
+            { label: "Bill total", value: <Amount value={saved.total} /> },
+            { label: saved.paid > 0 && saved.paid < saved.total ? "Paid so far" : "Paid", value: saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed" },
+          ]}
+          onDone={() => {
+            startAnother(false);
+            onFinished?.();
+          }}
+          onAnother={() => startAnother(false)}
+          onSameDate={() => startAnother(true)}
+        />
+      )}
 
       {showPayment && (
         <RecordPayModal
@@ -465,7 +503,7 @@ export function ConsumablePurchaseForm({
           allVendors={vendors}
           vendorBalances={vendorBalances}
           initialVendorId={vendorId}
-          initialLines={payments}
+          initialLines={payments.length > 0 || !carryPay ? payments : [{ accountId: carryPay.accountId, modeId: carryPay.modeId, amount: grandTotal }]}
           saving={false}
           onCancel={() => setShowPayment(false)}
           onConfirm={(p, chosenVendorId) => {

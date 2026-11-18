@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ProfilePanel } from "./profile-panel";
 import { SalaryHistoryPanel } from "./salary-history-panel";
-import { BenefitsPanel } from "./benefits-panel";
 import { SalaryComponentsPanel } from "./components-panel";
 import { RetirementPanel } from "./retirement-panel";
 import { TaxPanel } from "./tax-panel";
@@ -18,7 +17,6 @@ const TABS = [
   { id: "components", label: "Salary components" },
   { id: "retirement", label: "Retirement" },
   { id: "tax", label: "Tax" },
-  { id: "benefits", label: "Benefits" },
   { id: "attendance", label: "Attendance" },
   { id: "payslips", label: "Payslips" },
   { id: "advances", label: "Advances" },
@@ -31,7 +29,6 @@ export function ProfileTabs(props: {
   /** null when the person's role does not include seeing salary amounts: the pay tabs are then left out. */
   currentSalary: number | null;
   salaryRecords: Parameters<typeof SalaryHistoryPanel>[0]["records"];
-  benefits: Parameters<typeof BenefitsPanel>[0]["benefits"];
   componentCatalog: Parameters<typeof SalaryComponentsPanel>[0]["catalog"];
   componentAssignments: Parameters<typeof SalaryComponentsPanel>[0]["assignments"];
   retirementRows: Parameters<typeof RetirementPanel>[0]["rows"];
@@ -69,7 +66,6 @@ export function ProfileTabs(props: {
       {tab === "components" && props.currentSalary !== null && <SalaryComponentsPanel employeeId={props.employee.id} catalog={props.componentCatalog} assignments={props.componentAssignments} />}
       {tab === "retirement" && props.currentSalary !== null && <RetirementPanel employeeId={props.employee.id} rows={props.retirementRows} warnings={props.retirementWarnings} rulesInForce={props.rulesInForce} />}
       {tab === "tax" && props.currentSalary !== null && <TaxPanel employee={props.employee} canExempt={props.canExempt} />}
-      {tab === "benefits" && <BenefitsPanel employeeId={props.employee.id} benefits={props.benefits} />}
       {tab === "attendance" && (
         <AttendancePanel
           employeeId={props.employee.id}

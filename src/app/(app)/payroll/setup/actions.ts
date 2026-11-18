@@ -1,13 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   payrollSettings,
   payrollComponents,
   employees,
   employeeComponents,
+  payrollLines,
+  payrollRuns,
   type prorationMethodEnum,
   type workingDaysMethodEnum,
   type payrollComponentTypeEnum,
@@ -126,6 +128,17 @@ export async function deleteComponent(input: { componentId: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "delete")) throw new Error("Not permitted");
   if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+
+  const [component] = await db.select().from(payrollComponents).where(and(eq(payrollComponents.id, input.componentId), eq(payrollComponents.tenantId, session.tenantId))).limit(1);
+  if (!component) throw new Error("That component was not found");
+  // Finished payroll keeps its own figures, but a component it paid should stay in the list so those payslips can still be explained.
+  const [paid] = await db
+    .select({ id: payrollLines.id })
+    .from(payrollLines)
+    .innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.payrollRunId))
+    .where(and(eq(payrollRuns.tenantId, session.tenantId), eq(payrollRuns.status, "finalized"), sql`${payrollLines.componentsDetail} @> ${JSON.stringify([{ componentId: input.componentId }])}::jsonb`))
+    .limit(1);
+  if (paid) throw new Error(`${component.name} was paid in a finished payroll run, so it can't be deleted. Stop it on each employee's profile instead (Salary components > Stop), and it won't be paid in later months.`);
 
   await db
     .delete(payrollComponents)

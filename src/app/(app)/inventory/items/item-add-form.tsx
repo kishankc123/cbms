@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { createItem, type BillingType, type CreatedItem, type ItemType } from "./actions";
-import { InfoDialog } from "../info-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
 
 import { AmountInput } from "@/components/ui/amount-input";
 type Unit = { id: string; name: string };
@@ -28,6 +29,7 @@ export function ItemAddForm({
   categories = [],
   accounts = [],
   onCreated,
+  onFinished,
   embedded,
 }: {
   /** Product shows purchase price/margin/category; Service, SaaS and Other never carry a cost, so those fields are hidden. */
@@ -40,6 +42,8 @@ export function ItemAddForm({
   accounts?: Account[];
   /** Called with the saved item (used when the form is opened from a sales/purchase screen). */
   onCreated?: (item: CreatedItem) => void;
+  /** A new item was saved and the person is finished adding: go back to the list. */
+  onFinished?: () => void;
   /** Inside a dialog: no card border, and no separate "created" message. */
   embedded?: boolean;
 }) {
@@ -58,7 +62,7 @@ export function ItemAddForm({
   const tracked = isProduct && inventoryTracking;
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
-  const [createdName, setCreatedName] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ name: string; unit: string; category: string; purchase: number; selling: number } | null>(null);
 
   const categoriesInGroup = useMemo(() => categories.filter((c) => c.groupId === groupId), [categories, groupId]);
 
@@ -72,6 +76,21 @@ export function ItemAddForm({
     setCategoryId("");
   }
 
+  // Starts the next item: blank, or (same category) with the category, unit and how it is tracked and billed kept.
+  function resetForm(keepCategory: boolean) {
+    setName("");
+    setPurchasePrice("");
+    setSellingPrice("");
+    if (!keepCategory) {
+      setUnitId("");
+      setGroupId("");
+      setCategoryId("");
+      setInventoryTracking(true);
+      setBillingType("one_time");
+      setRevenueAccountId("");
+    }
+  }
+
   async function handleSave() {
     if (!name.trim()) {
       report("Item name is required.", null);
@@ -79,19 +98,13 @@ export function ItemAddForm({
     }
     setSaving(true);
     try {
-      const savedName = name.trim();
       const created = await createItem({ name, itemType, inventoryTracking, billingType, revenueAccountId: revenueAccountId || null, unitId, categoryId, purchasePrice: purchase, sellingPrice: selling });
-      setName("");
-      setUnitId("");
-      setGroupId("");
-      setCategoryId("");
-      setInventoryTracking(true);
-      setBillingType("one_time");
-      setRevenueAccountId("");
-      setPurchasePrice("");
-      setSellingPrice("");
-      if (onCreated) onCreated(created);
-      else setCreatedName(savedName);
+      if (onCreated) {
+        resetForm(false);
+        onCreated(created);
+      } else {
+        setSaved({ name: name.trim(), unit: units.find((u) => u.id === unitId)?.name ?? "", category: categories.find((c) => c.id === categoryId)?.name ?? "", purchase, selling });
+      }
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to save", null);
@@ -250,7 +263,33 @@ export function ItemAddForm({
         </button>
       </div>
 
-      {createdName && <InfoDialog message={`${createdName} has been created`} onOk={() => setCreatedName(null)} />}
+      {saved && (
+        <SavedScreen
+          title="Item saved"
+          number={saved.name}
+          noun="has been created."
+          sameLabel="Add another, same category"
+          rows={[
+            ...(saved.category ? [{ label: "Category", value: saved.category }] : []),
+            ...(saved.unit ? [{ label: "Unit", value: saved.unit }] : []),
+            ...(isProduct && saved.purchase > 0 ? [{ label: "Purchase price", value: <Amount value={saved.purchase} /> }] : []),
+            { label: rateLabel, value: <Amount value={saved.selling} /> },
+          ]}
+          onDone={() => {
+            resetForm(false);
+            setSaved(null);
+            onFinished?.();
+          }}
+          onAnother={() => {
+            resetForm(false);
+            setSaved(null);
+          }}
+          onSameDate={() => {
+            resetForm(true);
+            setSaved(null);
+          }}
+        />
+      )}
       {dialog}
     </div>
   );

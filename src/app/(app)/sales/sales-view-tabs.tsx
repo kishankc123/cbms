@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,15 @@ const VIEWS = [
 ] as const;
 export type SalesView = (typeof VIEWS)[number]["id"];
 
+/** Lets the entry form, which is rendered inside the page, send the person to the invoice list when they are done entering. */
+const SalesViewContext = createContext<{ showInvoices: () => void }>({ showInvoices: () => {} });
+export const useSalesView = () => useContext(SalesViewContext);
+
 /** The Sales page's two views — Add new and Invoices — as a switcher, so Sales is a single nav entry. */
 export function SalesViewTabs({ initialView, addNew, invoices }: { initialView: SalesView; addNew: ReactNode; invoices: ReactNode }) {
   const [view, setView] = useState<SalesView>(initialView);
   return (
+    <SalesViewContext.Provider value={{ showInvoices: () => setView("invoices") }}>
     <div className="space-y-4">
       <PageHeader
         title="Sales"
@@ -28,5 +33,6 @@ export function SalesViewTabs({ initialView, addNew, invoices }: { initialView: 
       <div hidden={view !== "new"}>{addNew}</div>
       <div hidden={view !== "invoices"}>{invoices}</div>
     </div>
+    </SalesViewContext.Provider>
   );
 }

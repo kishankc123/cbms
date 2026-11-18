@@ -73,7 +73,7 @@ export function ItemsTabs({
       </div>
 
       {tab === "items" && <ItemsTable itemType={itemType} trackInventory={trackInventory} rateLabel={rateLabel} items={items} units={units} groups={groups} categories={categories} accounts={accounts} />}
-      {tab === "add" && <ItemAddForm itemType={itemType} rateLabel={rateLabel} units={units} groups={groups} categories={categories} accounts={accounts} />}
+      {tab === "add" && <ItemAddForm itemType={itemType} rateLabel={rateLabel} units={units} groups={groups} categories={categories} accounts={accounts} onFinished={() => setTab("items")} />}
     </div>
   );
 }

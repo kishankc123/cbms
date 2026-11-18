@@ -89,6 +89,7 @@ export function StockableTabs({
           cashBankAccounts={cashBankAccounts}
           vatRate={vatRate}
           onDirtyChange={setDirty}
+          onFinished={() => setTab("invoices")}
         />
       )}
 

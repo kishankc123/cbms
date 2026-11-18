@@ -86,12 +86,13 @@ export type { CashBillType, CashPaymentLine, CashPurchaseLine, CashPurchaseInput
 export async function createCashPurchase(input: CashPurchaseInput) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "create")) throw new Error("Not permitted");
-  await createCashPurchaseCore({ tenantId: session.tenantId, userId: session.userId }, input);
+  const { billNumber } = await createCashPurchaseCore({ tenantId: session.tenantId, userId: session.userId }, input);
 
   revalidatePath("/purchases/consumable");
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
+  return { billNumber };
 }
 
 export type UpdateCashPurchaseInput = CashPurchaseInput & { billId: string };
@@ -447,6 +448,7 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   revalidatePath("/journal");
   revalidatePath("/inventory/items");
   await recalculateAfter(session.tenantId, validLines.map((l) => l.itemId), session.userId, `Purchase ${invoiceNumber}`);
+  return { billNumber: invoiceNumber };
 }
 
 export type PurchaseInvoiceEditData = {

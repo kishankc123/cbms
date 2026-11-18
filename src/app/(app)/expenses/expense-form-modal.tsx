@@ -9,12 +9,12 @@ import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { InvoicePaymentModal } from "../purchases/invoice-payment-modal";
 
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { Modal } from "@/components/ui/modal";
+import { SavedScreen } from "@/components/saved-screen";
 import { Button } from "@/components/ui/button";
 import { controlClass, Field, Input, Select } from "@/components/ui/field";
 import { Amount } from "@/components/ui/data-table";
@@ -44,6 +44,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean };
 
+/** What the next new expense starts with after one is saved: the day's batch usually shares its date, how it was paid and the bill type. */
+type Carry = { expenseDate: string; billType: ExpenseBillType; taxTreatment: ExpenseTaxTreatment; payment: { accountId: string; modeId: string | null } | null };
+type Saved = { expenseNumber: string; supplier: string; category: string; amountPayable: number; paid: number; warnings: string[] };
+
 type FieldKey = "expenseDate" | "category" | "supplier" | "billType" | "invoiceNumber" | "invoiceDate" | "dueDate" | "taxable" | "taxTreatment" | "vat" | "tds" | "pay";
 
 // Which field a message from the server is about, so the cursor can be put there after the message is read.
@@ -70,12 +74,20 @@ const at = (key: FieldKey) => `[data-field="${key}"], #exp-${key}`;
 // New Expense and Edit Expense share one form — sections mirror the spec:
 // Expense Information, Invoice/Supporting Document, Tax Information, Amount
 // (computed, read-only), Settlement.
-export function ExpenseFormModal({
+// New expense: after a save the form is replaced by a confirmation with ways to carry on, so a day's expenses can be entered one after another.
+export function ExpenseFormModal(props: Omit<Parameters<typeof ExpenseForm>[0], "carry" | "onAnother">) {
+  const [run, setRun] = useState<{ n: number; carry?: Carry }>({ n: 0 });
+  return <ExpenseForm key={run.n} {...props} carry={run.carry} onAnother={(carry) => setRun((r) => ({ n: r.n + 1, carry }))} />;
+}
+
+function ExpenseForm({
   vendors: vendorsProp,
   categoryAccounts,
   cashBankAccounts,
   vatRate,
   initial,
+  carry,
+  onAnother,
   onClose,
 }: {
   vendors: Vendor[];
@@ -83,20 +95,22 @@ export function ExpenseFormModal({
   cashBankAccounts: CashBankGroup[];
   vatRate: number;
   initial?: InitialExpense;
+  carry?: Carry;
+  onAnother: (carry?: Carry) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [vendors, addVendor] = useWithAdded(vendorsProp);
-  const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? today());
+  const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? carry?.expenseDate ?? today());
   const [categoryAccountId, setCategoryAccountId] = useState(initial?.categoryAccountId ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
-  const [billType, setBillType] = useState<ExpenseBillType>(initial?.billType ?? "no_bill");
+  const [billType, setBillType] = useState<ExpenseBillType>(initial?.billType ?? carry?.billType ?? "no_bill");
   const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
-  const [taxTreatment, setTaxTreatment] = useState<ExpenseTaxTreatment>(initial?.taxTreatment ?? "taxable");
+  const [taxTreatment, setTaxTreatment] = useState<ExpenseTaxTreatment>(initial?.taxTreatment ?? carry?.taxTreatment ?? "taxable");
   const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : "");
   const [vatAmount, setVatAmount] = useState(initial ? String(initial.vatAmount) : "0.00");
   const [tdsAmount, setTdsAmount] = useState(initial ? String(initial.tdsAmount) : "0.00");
@@ -106,7 +120,7 @@ export function ExpenseFormModal({
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
   const [showPayment, setShowPayment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [asking, setAsking] = useState(false);
+  const [saved, setSaved] = useState<Saved | null>(null);
   // What the typed description meant last time. Only for a new expense; it is shown, never filled in without a click.
   const [found, setFound] = useState<{ text: string; suggestion: ExpenseSuggestion | null } | null>(null);
   const [applied, setApplied] = useState<string | null>(null);
@@ -114,7 +128,6 @@ export function ExpenseFormModal({
   // Payments recorded later in Payments pin the amounts: then only the details can be edited.
   const locked = Boolean(initial?.detailsOnly);
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
-  const ask = useConfirm();
   const { problem, report, dialog } = useProblem();
 
   // The date is already today, so the cursor starts in the description.
@@ -206,23 +219,16 @@ export function ExpenseFormModal({
   const paidTotal = round2(payments.reduce((s, p) => s + p.amount, 0));
   const remaining = Math.max(round2(amountPayable - paidTotal), 0);
 
-  // Everything is checked first; then the person is asked once, and only a yes saves.
-  async function askThenSave() {
-    setAsking(true);
-    const yes = await ask("Do you want to save?", { confirmLabel: "Save" });
-    setAsking(false);
-    if (yes) performSave();
-  }
-
+  // Everything is checked first, then it saves: the confirmation after it says what was recorded.
   function handleSaveClick() {
-    if (locked) return askThenSave();
+    if (locked) return performSave();
     if (!categoryAccountId) return report("Select an expense category.", at("category"));
     if (subtotal <= 0) return report("Taxable amount must be greater than zero.", at("taxable"));
     if (amountPayable < 0) return report("TDS and other withholdings cannot exceed the total expense amount.", at("tds"));
     if (!vendorId && remaining > 0) {
       return report("Select a supplier: the unpaid balance needs someone it is owed to. A supplier isn't needed once the expense is paid in full.", at("supplier"));
     }
-    askThenSave();
+    performSave();
   }
 
   async function performSave() {
@@ -252,9 +258,16 @@ export function ExpenseFormModal({
         await updateExpense({ ...payload, expenseId: initial.expenseId });
       } else {
         const result = await createExpense(payload);
-        if (result.warnings.length > 0) {
-          await ask(`Saved, but flagged by Rules & Policies:\n\n${result.warnings.join("\n")}`, { title: "Saved with a warning", confirmLabel: "OK", cancelLabel: "" });
-        }
+        router.refresh();
+        setSaved({
+          expenseNumber: result.expenseNumber,
+          supplier: vendors.find((v) => v.id === vendorId)?.name ?? "",
+          category: categoryAccounts.find((c) => c.id === categoryAccountId)?.name ?? "",
+          amountPayable,
+          paid: paidTotal,
+          warnings: result.warnings,
+        });
+        return;
       }
       router.refresh();
       onClose();
@@ -266,13 +279,34 @@ export function ExpenseFormModal({
     }
   }
 
+  if (saved) {
+    const next: Carry = { expenseDate, billType, taxTreatment, payment: payments[0] ? { accountId: payments[0].accountId, modeId: payments[0].modeId ?? null } : null };
+    return (
+      <SavedScreen
+        title="Expense saved"
+        number={saved.expenseNumber}
+        rows={[
+          { label: "Date", value: <D value={expenseDate} /> },
+          ...(saved.category ? [{ label: "Category", value: saved.category }] : []),
+          ...(saved.supplier ? [{ label: "Supplier", value: saved.supplier }] : []),
+          { label: "Amount payable", value: <Amount value={saved.amountPayable} /> },
+          { label: saved.paid > 0 && saved.paid < saved.amountPayable ? "Paid so far" : "Paid", value: saved.paid > 0 ? <Amount value={saved.paid} /> : "Not yet: owed" },
+        ]}
+        warnings={saved.warnings}
+        onDone={onClose}
+        onAnother={() => onAnother()}
+        onSameDate={() => onAnother(next)}
+      />
+    );
+  }
+
   return (
     <>
       <Modal
         size="xl"
         title={initial ? `Edit expense ${initial.expenseNumber}` : "New expense"}
         onClose={onClose}
-        dismissible={!showPayment && !problem && !saving && !asking}
+        dismissible={!showPayment && !problem && !saving}
         footer={
           <>
             <Button data-field="pay" onClick={() => setShowPayment(true)} disabled={amountPayable <= 0 || locked}>
@@ -512,7 +546,7 @@ export function ExpenseFormModal({
         <InvoicePaymentModal
           total={amountPayable}
           cashBankAccounts={cashBankAccounts}
-          initialLines={payments}
+          initialLines={payments.length > 0 || !carry?.payment ? payments : [{ accountId: carry.payment.accountId, modeId: carry.payment.modeId, amount: amountPayable }]}
           saving={false}
           onCancel={() => setShowPayment(false)}
           onConfirm={(p) => {

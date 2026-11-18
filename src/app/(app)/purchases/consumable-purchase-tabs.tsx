@@ -90,6 +90,7 @@ export function ConsumablePurchaseTabs({
           vendorBalances={vendorBalances}
           vatRate={vatRate}
           onDirtyChange={setDirty}
+          onFinished={() => setTab("invoices")}
         />
       )}
 

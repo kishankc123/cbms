@@ -70,7 +70,7 @@ export function RunStatusControls({
   }
 
   async function handleRecalculate() {
-    if (!(await ask("Recalculate this payroll run from the latest salary, benefits, and attendance records?", { confirmLabel: "Recalculate" }))) return;
+    if (!(await ask("Recalculate this payroll run from the latest salary, components, incentives and attendance records?", { confirmLabel: "Recalculate" }))) return;
     setBusy(true);
     try {
       await generatePayrollRun({ month, year, calendar, employeeIds: [] });

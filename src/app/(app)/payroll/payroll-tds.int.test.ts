@@ -53,7 +53,7 @@ const tdsPayable = async () => {
   return { exists: true, balance: Number(row.v) };
 };
 async function finalize(runId: string) {
-  for (let i = 0; i < 3; i++) await advanceRunStatus({ runId });
+  for (let i = 0; i < 2; i++) await advanceRunStatus({ runId });
 }
 const rows = (...rates: number[]) => rates.map((rate, i) => ({ upTo: i === rates.length - 1 ? null : (i + 1) * 500000 - (i === 1 ? 300000 : 0), rate }));
 

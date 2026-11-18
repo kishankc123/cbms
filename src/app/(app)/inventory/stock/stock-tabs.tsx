@@ -7,7 +7,9 @@ import { useProblem } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { todayIso } from "@/lib/calendar";
-import { InfoDialog } from "../info-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
+import { D } from "@/components/calendar/date-text";
 import { OpeningPanel } from "./opening-panel";
 import type { HistoryRow, OpeningRow } from "@/lib/inventory/opening";
 
@@ -69,12 +71,12 @@ export function StockTabs({
 
       {tab === "stock" && report}
       {tab === "opening" && <OpeningPanel openingDate={openingDate} followsBooksStart={followsBooksStart} booksStartDate={booksStartDate} rows={openingRows} items={items} units={units} history={history} />}
-      {tab === "adjust" && <AdjustForm items={items} units={units} />}
+      {tab === "adjust" && <AdjustForm items={items} units={units} onFinished={() => setTab("stock")} />}
     </div>
   );
 }
 
-function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
+function AdjustForm({ items, units, onFinished }: { items: ItemOption[]; units: Unit[]; onFinished: () => void }) {
   const router = useRouter();
   const { report, dialog } = useProblem();
   const [unitId, setUnitId] = useState("");
@@ -85,7 +87,7 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
   const [unitCost, setUnitCost] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ item: string; date: string; direction: "in" | "out"; quantity: number; unit: string; reason: string } | null>(null);
   const { guard, notice } = useOpeningDateGuard(date, true);
 
   // Choosing a unit narrows the items to those counted in it; choosing an item fills in its unit.
@@ -104,6 +106,20 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
     if (chosen?.unitId) setUnitId(chosen.unitId);
   }
 
+  // Starts the next adjustment: blank, or (same date) keeping the date and whether stock goes in or out, as in a stock count.
+  function startAnother(sameDate: boolean) {
+    setItemId("");
+    setQuantity("");
+    setUnitCost("");
+    setReason("");
+    if (!sameDate) {
+      setDate(todayIso());
+      setDirection("out");
+      setUnitId("");
+    }
+    setSaved(null);
+  }
+
   async function save() {
     const qty = parseFloat(quantity);
     if (!itemId) return report("Select the item.", '[data-field="item"]');
@@ -113,11 +129,7 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
     setSaving(true);
     try {
       await adjustStock({ itemId, quantityChange: direction === "in" ? qty : -qty, unitCost: direction === "in" && unitCost !== "" ? parseFloat(unitCost) : null, date, reason });
-      setSavedMessage(`The stock adjustment for ${item?.name ?? "the item"} has been recorded`);
-      setItemId("");
-      setQuantity("");
-      setUnitCost("");
-      setReason("");
+      setSaved({ item: item?.name ?? "The item", date, direction, quantity: qty, unit: unitName ?? "", reason: reason.trim() });
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to save", null);
@@ -196,7 +208,25 @@ function AdjustForm({ items, units }: { items: ItemOption[]; units: Unit[] }) {
       </div>
 
       {dialog}
-      {savedMessage && <InfoDialog message={savedMessage} onOk={() => setSavedMessage(null)} />}
+      {saved && (
+        <SavedScreen
+          title="Adjustment saved"
+          number={saved.item}
+          noun="stock adjustment was recorded."
+          rows={[
+            { label: "Date", value: <D value={saved.date} /> },
+            { label: "Adjustment", value: saved.direction === "in" ? "Put in (gain)" : "Taken out (loss)" },
+            { label: "Quantity", value: `${saved.quantity}${saved.unit ? ` ${saved.unit}` : ""}` },
+            { label: "Reason", value: saved.reason },
+          ]}
+          onDone={() => {
+            startAnother(false);
+            onFinished();
+          }}
+          onAnother={() => startAnother(false)}
+          onSameDate={() => startAnother(true)}
+        />
+      )}
     </div>
   );
 }

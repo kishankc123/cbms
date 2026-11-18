@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
-import { assignComponent, endComponentAssignment } from "../actions";
+import { assignComponent, endComponentAssignment, removeComponentAssignment } from "../actions";
 
 import { AmountInput } from "@/components/ui/amount-input";
 type Catalog = { id: string; name: string; type: string; amount: string; calcType: string; recurrence: string; taxable: boolean; countsForRetirement: boolean };
@@ -70,6 +70,16 @@ export function SalaryComponentsPanel({ employeeId, catalog, assignments }: { em
     }
   }
 
+  async function removeRow(a: Assignment, c: Catalog | undefined) {
+    if (!(await ask(`Remove ${c?.name ?? "this component"} from this employee altogether? Use Stop instead to end it from today and keep the history. Anything a finished payroll run already paid can't be removed.`, { confirmLabel: "Remove", danger: true }))) return;
+    try {
+      await removeComponentAssignment({ assignmentId: a.id });
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not remove the component", null);
+    }
+  }
+
   const active = (a: Assignment, c: Catalog | undefined) => (c?.recurrence === "one_time" ? a.effectiveFrom >= today : a.effectiveFrom <= today && (!a.effectiveTo || a.effectiveTo >= today));
 
   return (
@@ -109,11 +119,14 @@ export function SalaryComponentsPanel({ employeeId, catalog, assignments }: { em
                 <td className="px-3 py-2">{c?.recurrence === "one_time" ? "—" : a.effectiveTo ? <D value={a.effectiveTo} /> : "Ongoing"}</td>
                 <td className="px-3 py-2">{a.notes ?? "—"}</td>
                 <td className="px-3 py-2 text-right">
-                  {on && (
-                    <button type="button" onClick={() => end(a, c)} className="text-xs text-red-600 hover:underline">
-                      {c?.recurrence === "one_time" ? "Remove" : "Stop"}
+                  {on && c?.recurrence !== "one_time" && (
+                    <button type="button" onClick={() => end(a, c)} className="mr-3 text-xs text-ink-2 hover:underline">
+                      Stop
                     </button>
                   )}
+                  <button type="button" onClick={() => removeRow(a, c)} className="text-xs text-red-600 hover:underline">
+                    Remove
+                  </button>
                 </td>
               </tr>
             );

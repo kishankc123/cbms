@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createPayment,
   updatePayment,
@@ -12,8 +13,10 @@ import {
   getEmployeeAdvanceInfo,
   type PaymentAllocationInput,
 } from "./actions";
-import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
+import { MONEY_IN_TYPE_OPTIONS, MONEY_OUT_TYPE_OPTIONS, PAYMENT_METHOD_OPTIONS, PAYMENT_TYPE_LABELS, ALLOCATABLE_TYPES, TRANSFER_TYPES } from "./payment-types";
 import { ConfirmDialog } from "../sales/confirm-dialog";
+import { SavedScreen } from "@/components/saved-screen";
+import { Amount } from "@/components/ui/data-table";
 import { useProblem } from "@/components/problem-dialog";
 import { LedgerSelect, PaymentModeSelect, useLedgerOptions } from "@/components/payment-mode-select";
 import { methodForMode } from "@/lib/payment-mode-rules";
@@ -64,13 +67,26 @@ function flattenAccounts(groups: FormOptions["cashBankAccounts"]) {
 type TaxItem = Awaited<ReturnType<typeof getPayableTaxItems>>[number];
 type OutstandingRow = { id: string; label: string; date: string; outstanding: number };
 
-export function NewPaymentModal({
+/** What the next new payment starts with after one is saved: a day's payments usually share the date, the kind of payment and how it was paid. */
+type Carry = { paymentDate: string; direction: Direction; paymentType: string; accountId: string; paymentModeId: string; paymentModeName: string };
+type Saved = { number: string; date: string; type: string; party: string; via: string; amount: number; carry: Carry };
+
+// A new payment: after it is posted the form is replaced by a confirmation with ways to carry on, so a day's payments can be entered one after another.
+// Editing a payment, or recording one against a bank line being reconciled, closes as before.
+export function NewPaymentModal(props: Omit<Parameters<typeof PaymentForm>[0], "carry" | "onAnother">) {
+  const [run, setRun] = useState<{ n: number; carry?: Carry }>({ n: 0 });
+  return <PaymentForm key={run.n} {...props} carry={run.carry} onAnother={(carry) => setRun((r) => ({ n: r.n + 1, carry }))} />;
+}
+
+function PaymentForm({
   formOptions,
   onDone,
   onCancel,
   fixedDirection,
   editing,
   prefill,
+  carry,
+  onAnother,
 }: {
   formOptions: FormOptions;
   onDone: () => void;
@@ -80,16 +96,20 @@ export function NewPaymentModal({
   editing?: EditingPayment;
   /** Opens a new payment with these filled in (from a bank line being reconciled). */
   prefill?: { amount: number; date: string; accountId: string };
+  carry?: Carry;
+  onAnother: (carry?: Carry) => void;
 }) {
-  const [direction, setDirection] = useState<Direction>(editing?.direction ?? fixedDirection ?? "money_in");
-  const [paymentType, setPaymentType] = useState<string>(editing?.paymentType ?? (fixedDirection === "money_out" ? "supplier_payment" : "customer_payment"));
-  const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? prefill?.date ?? today());
-  const [accountId, setAccountId] = useState(editing?.accountId ?? prefill?.accountId ?? "");
+  const router = useRouter();
+  const [saved, setSaved] = useState<Saved | null>(null);
+  const [direction, setDirection] = useState<Direction>(editing?.direction ?? fixedDirection ?? carry?.direction ?? "money_in");
+  const [paymentType, setPaymentType] = useState<string>(editing?.paymentType ?? carry?.paymentType ?? (fixedDirection === "money_out" ? "supplier_payment" : "customer_payment"));
+  const [paymentDate, setPaymentDate] = useState(editing?.paymentDate ?? prefill?.date ?? carry?.paymentDate ?? today());
+  const [accountId, setAccountId] = useState(editing?.accountId ?? prefill?.accountId ?? carry?.accountId ?? "");
   // A payment is settled either through cash, bank or a wallet (the mode field) or through a ledger account (its own field, below the party).
   const ledgerOptions = useLedgerOptions();
   const ledgerChosen = ledgerOptions.some((a) => a.id === accountId);
-  const [paymentModeId, setPaymentModeId] = useState(editing?.paymentModeId ?? "");
-  const [paymentModeName, setPaymentModeName] = useState(editing?.paymentModeName ?? "");
+  const [paymentModeId, setPaymentModeId] = useState(editing?.paymentModeId ?? carry?.paymentModeId ?? "");
+  const [paymentModeName, setPaymentModeName] = useState(editing?.paymentModeName ?? carry?.paymentModeName ?? "");
   const [transferToAccountId, setTransferToAccountId] = useState(editing?.transferToAccountId ?? "");
   const [categoryAccountId, setCategoryAccountId] = useState(editing?.categoryAccountId ?? "");
   const [chequeNumber, setChequeNumber] = useState(editing?.chequeNumber ?? "");
@@ -137,8 +157,12 @@ export function NewPaymentModal({
   // Payments > Inter-Transfer, so it's not offered as a payment type here.
   const typeOptions = direction === "money_in" ? MONEY_IN_TYPE_OPTIONS : MONEY_OUT_TYPE_OPTIONS.filter((t) => !TRANSFER_TYPES.includes(t.value));
 
+  // The kind of payment follows the direction, except on the first run of a payment that carries the last one's kind over.
+  const firstRun = useRef(true);
   useEffect(() => {
-    if (editing) return; // an edit keeps the kind of payment it has
+    const keep = firstRun.current && Boolean(carry);
+    firstRun.current = false;
+    if (editing || keep) return; // an edit keeps the kind of payment it has
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");
     setCustomerId("");
     setVendorId("");
@@ -221,6 +245,24 @@ export function NewPaymentModal({
     });
   }
 
+  // A new payment shows what was posted; one made from a bank line being reconciled closes, as the reconciliation carries on from there.
+  function finish(number: string) {
+    if (prefill) return onDone();
+    const party = config.needsCustomer ? formOptions.customers.find((c) => c.id === customerId)?.name : config.needsEmployee ? formOptions.employees.find((e) => e.id === employeeId)?.name : config.needsVendor || (config.optionalVendor && vendorId) ? formOptions.vendors.find((v) => v.id === vendorId)?.name : config.optionalOtherParty ? partyOtherName : "";
+    const ledger = ledgerOptions.find((a) => a.id === accountId);
+    const via = ledger ? `${ledger.code} — ${ledger.name}` : paymentModeName || flatAccounts.find((a) => a.id === accountId)?.label || "";
+    router.refresh();
+    setSaved({
+      number,
+      date: paymentDate,
+      type: PAYMENT_TYPE_LABELS[paymentType] ?? paymentType,
+      party: party ?? "",
+      via,
+      amount: amountNum,
+      carry: { paymentDate, direction, paymentType, accountId, paymentModeId, paymentModeName },
+    });
+  }
+
   async function performSave(confirmDup: boolean) {
     const errors: Record<string, string> = {};
     const first: { message: string; target: string }[] = [];
@@ -287,7 +329,7 @@ export function NewPaymentModal({
           setConfirmDuplicate(true);
           return;
         }
-        onDone();
+        finish(r.paymentNumber);
         return;
       }
 
@@ -311,7 +353,7 @@ export function NewPaymentModal({
         setConfirmDuplicate(true);
         return;
       }
-      onDone();
+      finish(result.paymentNumber);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to save payment";
       const rules: [RegExp, string][] = [
@@ -331,6 +373,25 @@ export function NewPaymentModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (saved) {
+    return (
+      <SavedScreen
+        title="Payment saved"
+        number={saved.number}
+        rows={[
+          { label: "Date", value: <D value={saved.date} /> },
+          { label: "Type", value: saved.type },
+          ...(saved.party ? [{ label: saved.carry.direction === "money_in" ? "From" : "To", value: saved.party }] : []),
+          ...(saved.via ? [{ label: "Through", value: saved.via }] : []),
+          { label: "Amount", value: <Amount value={saved.amount} /> },
+        ]}
+        onDone={onDone}
+        onAnother={() => onAnother()}
+        onSameDate={() => onAnother(saved.carry)}
+      />
+    );
   }
 
   return (

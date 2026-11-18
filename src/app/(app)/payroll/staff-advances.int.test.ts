@@ -33,7 +33,6 @@ const findEmployee = async (code: string) => (await db.select().from(employees).
 async function finalize(runId: string) {
   await advanceRunStatus({ runId });
   await advanceRunStatus({ runId });
-  await advanceRunStatus({ runId });
 }
 const lineOf = async (runId: string) => (await db.select().from(payrollLines).where(eq(payrollLines.payrollRunId, runId)))[0];
 const advance = (employeeId: string, amount: number, date: string, month: number | null, year = 2026) =>

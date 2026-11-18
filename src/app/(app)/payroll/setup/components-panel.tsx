@@ -12,7 +12,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { addStarterComponents, createComponent, deleteComponent, updateComponent, type ComponentInput } from "./actions";
 
 import { AmountInput } from "@/components/ui/amount-input";
-type Component = { id: string; name: string; type: string; amount: string; taxable: boolean; calcType: string; countsForRetirement: boolean; recurrence: string; autoAssign: boolean };
+type Component = { assigned?: number; id: string; name: string; type: string; amount: string; taxable: boolean; calcType: string; countsForRetirement: boolean; recurrence: string; autoAssign: boolean };
 type Form = { name: string; type: "allowance" | "deduction"; amount: string; taxable: boolean; calcType: "fixed" | "percent"; countsForRetirement: boolean; recurrence: "recurring" | "one_time"; autoAssign: boolean };
 
 const blank: Form = { name: "", type: "allowance", amount: "", taxable: true, calcType: "fixed", countsForRetirement: false, recurrence: "recurring", autoAssign: false };
@@ -54,7 +54,8 @@ export function ComponentsPanel({ components }: { components: Component[] }) {
   }
 
   async function remove(c: Component) {
-    if (!(await ask(`Delete ${c.name}? It is taken off every employee. Finished payroll keeps what was already paid.`, { confirmLabel: "Delete", danger: true }))) return;
+    const who = c.assigned ? `It is taken off the ${c.assigned} employee${c.assigned === 1 ? "" : "s"} who have it.` : "Nobody has it yet.";
+    if (!(await ask(`Delete ${c.name}? ${who} A component that finished payroll has already paid can't be deleted: stop it on each employee instead.`, { confirmLabel: "Delete", danger: true }))) return;
     try {
       await deleteComponent({ componentId: c.id });
       router.refresh();
