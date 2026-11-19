@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { okToChange } from "../suppliers/reconcile/confirm-change";
+import { explainShortageAction } from "../bank-reconciliation/cash-actions";
 import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import type { ExpenseSuggestion } from "@/lib/expenses/suggestion-rules";
 import { D } from "@/components/calendar/date-text";
@@ -90,6 +91,7 @@ function ExpenseForm({
   initial,
   carry,
   prefill,
+  explain,
   onAnother,
   onClose,
 }: {
@@ -101,6 +103,8 @@ function ExpenseForm({
   carry?: Carry;
   /** A bill being recorded from a supplier's statement (Suppliers > Reconcile statements): these are filled in, the rest is left to the person. */
   prefill?: { expenseDate: string; vendorId: string; invoiceNumber: string; description: string; amount: number };
+  /** A cash shortage being explained (Bank Reconciliation > cash account): the expense is settled from the Cash short and excess account for that amount, so the cash is not touched. */
+  explain?: { reconId: string; bankAccountId: string; amount: number; accountName: string };
   onAnother: (carry?: Carry) => void;
   onClose: () => void;
 }) {
@@ -117,7 +121,7 @@ function ExpenseForm({
   const [billType, setBillType] = useState<ExpenseBillType>(initial?.billType ?? carry?.billType ?? "no_bill");
   const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
   const [taxTreatment, setTaxTreatment] = useState<ExpenseTaxTreatment>(initial?.taxTreatment ?? carry?.taxTreatment ?? "taxable");
-  const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : prefill ? String(prefill.amount) : "");
+  const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : prefill ? String(prefill.amount) : explain ? String(explain.amount) : "");
   const [vatAmount, setVatAmount] = useState(initial ? String(initial.vatAmount) : "0.00");
   const [tdsAmount, setTdsAmount] = useState(initial ? String(initial.tdsAmount) : "0.00");
   const [otherTaxAmount, setOtherTaxAmount] = useState(initial ? String(initial.otherTaxAmount) : "0");
@@ -211,6 +215,7 @@ function ExpenseForm({
   }
 
   const accountLabels: Record<string, string> = {};
+  if (explain) accountLabels["__short"] = explain.accountName;
   for (const g of cashBankAccounts) {
     if (g.children.length === 0) accountLabels[g.id] = g.name;
     else for (const c of g.children) accountLabels[c.id] = c.name;
@@ -222,12 +227,15 @@ function ExpenseForm({
   const otherTax = round2(parseFloat(otherTaxAmount) || 0);
   const total = round2(subtotal + vat + otherTax);
   const amountPayable = round2(total - tds);
-  const paidTotal = round2(payments.reduce((s, p) => s + p.amount, 0));
+  // Explaining a shortage: the amount settled from the short and excess account is the amount explained, or the whole expense if that is less.
+  const effective: PaymentLine[] = explain ? (amountPayable > 0 ? [{ accountId: "__short", amount: Math.min(explain.amount, amountPayable) }] : []) : payments;
+  const paidTotal = round2(effective.reduce((s, p) => s + p.amount, 0));
   const remaining = Math.max(round2(amountPayable - paidTotal), 0);
 
   // Everything is checked first, then it saves: the confirmation after it says what was recorded.
   function handleSaveClick() {
     if (locked) return performSave();
+    if (explain && amountPayable <= 0) return report("Enter the amount of the expense.", at("taxable"));
     if (!categoryAccountId) return report("Select an expense category.", at("category"));
     if (subtotal <= 0) return report("Taxable amount must be greater than zero.", at("taxable"));
     if (amountPayable < 0) return report("TDS and other withholdings cannot exceed the total expense amount.", at("tds"));
@@ -256,13 +264,18 @@ function ExpenseForm({
         vatAmount: vat,
         tdsAmount: tds,
         otherTaxAmount: otherTax,
-        payments,
+        payments: explain ? [] : payments,
       };
 
       if (initial && locked) {
         await updateExpenseDetails({ expenseId: initial.expenseId, description, invoiceNumber, invoiceDate, dueDate, billAvailable });
       } else if (initial) {
         await updateExpense({ ...payload, expenseId: initial.expenseId });
+      } else if (explain) {
+        await explainShortageAction({ reconId: explain.reconId, bankAccountId: explain.bankAccountId, expense: payload, amount: paidTotal });
+        router.refresh();
+        onClose();
+        return;
       } else {
         const result = await createExpense(payload);
         router.refresh();
@@ -321,8 +334,8 @@ function ExpenseForm({
         dismissible={!showPayment && !problem && !saving}
         footer={
           <>
-            <Button data-field="pay" onClick={() => setShowPayment(true)} disabled={amountPayable <= 0 || locked}>
-              {payments.length > 0 ? "Edit payment" : "Record payment"}
+            <Button data-field="pay" onClick={() => setShowPayment(true)} disabled={amountPayable <= 0 || locked || Boolean(explain)}>
+              {explain ? "Settled from short and excess" : payments.length > 0 ? "Edit payment" : "Record payment"}
             </Button>
             <Button onClick={onClose} disabled={saving}>
               Cancel
@@ -334,6 +347,11 @@ function ExpenseForm({
         }
       >
         <div className="space-y-4">
+          {explain && (
+            <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-ink">
+              Explaining a cash shortage: up to {explain.amount.toFixed(2)} of this expense is settled from {explain.accountName}, so your cash is not changed again.
+            </p>
+          )}
           {locked && (
             <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
               Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
@@ -540,8 +558,8 @@ function ExpenseForm({
               </div>
 
               <div className="space-y-1 rounded-lg border border-line bg-surface-2 p-3 text-[13px] text-ink">
-                {payments.length === 0 && remaining <= 0 && <p className="text-ink-2">Unpaid</p>}
-                {payments.map((p, i) => (
+                {effective.length === 0 && remaining <= 0 && <p className="text-ink-2">Unpaid</p>}
+                {effective.map((p, i) => (
                   <Line key={i} label={accountLabels[p.accountId] ?? "Account"} value={<Amount value={p.amount} />} />
                 ))}
                 {remaining > 0 && <Line label="Expense Payable (unpaid)" value={<Amount value={remaining} />} />}

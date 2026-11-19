@@ -11,6 +11,7 @@ import { getExpenseCategoryAccounts, getOrCreateTdsPayableAccount, getOrCreateEx
 import { evaluateAmountThresholdRules } from "@/lib/audit-rules";
 import { tdsHeadLookup } from "@/lib/ledger/tds-links";
 import { getOrCreateTdsHeadPayableAccount } from "@/lib/ledger/tds-payable-accounts";
+import { findShortExcessAccount, isExplainingExpense } from "@/lib/ledger/cash-short-excess";
 
 // An expense: the rules, the amounts and the ledger entry. They live here so the Add form, the edit form and Import Expenses
 // all post the same way. Kept out of the "use server" action file so these are plain helpers, not callable endpoints.
@@ -44,7 +45,7 @@ export async function tdsHeadForExpense(tenantId: string, categoryAccountId: str
   return tdsAmount > 0 ? (await tdsHeadLookup(tenantId))(categoryAccountId) : null;
 }
 
-export async function validateExpenseInput(tenantId: string, input: ExpenseInput, excludeExpenseId?: string) {
+export async function validateExpenseInput(tenantId: string, input: ExpenseInput, excludeExpenseId?: string, allowAccountIds: readonly string[] = []) {
   if (input.taxableAmount <= 0) throw new Error("Taxable amount must be greater than zero");
   if (input.vatAmount < 0 || input.tdsAmount < 0 || input.otherTaxAmount < 0) throw new Error("VAT, TDS and other tax amounts can't be negative");
   if (!input.expenseDate) throw new Error("Expense date is required");
@@ -61,7 +62,13 @@ export async function validateExpenseInput(tenantId: string, input: ExpenseInput
   if (!category) throw new Error("Select a valid expense category — it must be an active Direct/Indirect expense account, and a category that has sub-categories can't be used itself: choose one of its sub-categories");
 
   if (input.vendorId) await assertSupplierOwned(tenantId, input.vendorId);
-  await assertSettlementAccounts(tenantId, input.payments.filter((p) => p.amount > 0).map((p) => p.accountId));
+  // An expense that explains a cash shortage is settled from the Cash short and excess account (and keeps being, when it is edited); nothing else may be.
+  const allowed = new Set(allowAccountIds);
+  if (excludeExpenseId && (await isExplainingExpense(tenantId, excludeExpenseId))) {
+    const shortExcess = await findShortExcessAccount(tenantId);
+    if (shortExcess) allowed.add(shortExcess.id);
+  }
+  await assertSettlementAccounts(tenantId, input.payments.filter((p) => p.amount > 0 && !allowed.has(p.accountId)).map((p) => p.accountId));
 
   // The same supplier's invoice can't be recorded twice.
   const invoiceNumber = input.invoiceNumber.trim();
@@ -159,10 +166,10 @@ export function isUniqueViolation(e: unknown) {
 export async function createExpenseCore(
   ctx: { tenantId: string; userId: string },
   input: ExpenseInput,
-  opts: { importId?: string; takenNumbers?: Set<string> } = {}
+  opts: { importId?: string; takenNumbers?: Set<string>; allowAccountIds?: readonly string[] } = {}
 ): Promise<{ expenseId: string; expenseNumber: string; warnings: string[] }> {
   const { tenantId, userId } = ctx;
-  await validateExpenseInput(tenantId, input);
+  await validateExpenseInput(tenantId, input, undefined, opts.allowAccountIds);
   const totals = computeExpenseTotals(input);
   assertSupplierIfUnpaid(input.vendorId, totals);
   await assertPeriodOpen(tenantId, input.expenseDate);

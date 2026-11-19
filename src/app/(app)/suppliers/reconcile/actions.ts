@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { can, requireTenantSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
+import { buildStatementTemplate } from "@/lib/suppliers/statement-template";
 import type { ColumnMapping } from "@/lib/banking/normalize-rows";
 import type { Orientation } from "@/lib/suppliers/reconcile-rules";
 import {
@@ -28,6 +29,12 @@ async function guard(action: "view" | "create" | "edit" | "delete") {
   const session = await requireTenantSession();
   if (!can(session, "purchases", action)) throw new Error("Not permitted");
   return session;
+}
+
+/** The sheet to send a supplier who asks what layout we want their statement in. */
+export async function downloadStatementTemplateAction(): Promise<{ fileName: string; base64: string }> {
+  await guard("view");
+  return { fileName: "supplier-statement-template.xlsx", base64: buildStatementTemplate() };
 }
 
 async function run<T>(fn: () => Promise<T>): Promise<T> {

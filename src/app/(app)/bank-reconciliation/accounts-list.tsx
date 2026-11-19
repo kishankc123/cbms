@@ -24,13 +24,18 @@ function differenceText(a: AccountOverview) {
 
 // The badge tells the truth about where the account stands: nothing imported, lines to match, a difference still to explain, or done.
 function StatusBadge({ a }: { a: AccountOverview }) {
+  if (a.cash) {
+    if (a.cash.through === null) return <StatusPill tone="pending">Not reconciled yet</StatusPill>;
+    if (a.cash.unreconciled > 0) return <StatusPill tone="action">{plural(a.cash.unreconciled, "entry to reconcile", "entries to reconcile")}</StatusPill>;
+    return <StatusPill tone="success">All reconciled</StatusPill>;
+  }
   if (!a.updatedUpTo) return <StatusPill tone="pending">No statement uploaded yet</StatusPill>;
   if (a.unreconciled > 0) return <StatusPill tone="action">{plural(a.unreconciled, "unreconciled transaction", "unreconciled transactions")}</StatusPill>;
   if (Math.abs(a.difference) >= 0.005) return <StatusPill tone="action">Difference to explain</StatusPill>;
   return <StatusPill tone="success">All reconciled</StatusPill>;
 }
 
-const stateOf = (a: AccountOverview) => (!a.updatedUpTo ? "nostatement" : a.unreconciled > 0 || Math.abs(a.difference) >= 0.005 ? "attention" : "reconciled");
+const stateOf = (a: AccountOverview) => (a.cash ? (a.cash.through === null ? "nostatement" : a.cash.unreconciled > 0 ? "attention" : "reconciled") : !a.updatedUpTo ? "nostatement" : a.unreconciled > 0 || Math.abs(a.difference) >= 0.005 ? "attention" : "reconciled");
 
 type SortKey = "name" | "difference";
 
@@ -106,7 +111,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
             <SortableTh direction={dirOf("name")} onSort={() => toggleSort("name")}>
               Account
             </SortableTh>
-            <Th align="right">Per bank statement</Th>
+            <Th align="right">Per statement or last reconciled</Th>
             <Th align="right">Per your books</Th>
             <SortableTh align="right" direction={dirOf("difference")} onSort={() => toggleSort("difference")}>
               Difference
@@ -119,7 +124,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
           {shown.map((a) => (
             <Tr key={a.id}>
               <Td>
-                <Link href={`/bank-reconciliation/${a.id}`} className="font-medium hover:underline">
+                <Link href={a.cash ? `/bank-reconciliation/${a.id}/cash` : `/bank-reconciliation/${a.id}`} className="font-medium hover:underline">
                   {a.label}
                 </Link>
                 <p className="text-xs text-ink-2">
@@ -128,18 +133,33 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 </p>
               </Td>
               <Td numeric>
-                <Amount value={a.statementBalance} />
-                <p className="text-xs text-ink-2">{a.updatedUpTo ? <>up to <D value={a.updatedUpTo} /></> : "no statement"}</p>
+                {a.cash ? (
+                  <>
+                    <Amount value={a.cash.closing ?? 0} />
+                    <p className="text-xs text-ink-2">{a.cash.through ? <>reconciled up to <D value={a.cash.through} /></> : "not reconciled yet"}</p>
+                  </>
+                ) : (
+                  <>
+                    <Amount value={a.statementBalance} />
+                    <p className="text-xs text-ink-2">{a.updatedUpTo ? <>up to <D value={a.updatedUpTo} /></> : "no statement"}</p>
+                  </>
+                )}
               </Td>
               <Td numeric>
                 <Amount value={a.ledgerBalance} />
               </Td>
+              {a.cash ? (
+                <Td numeric>
+                  <p className="text-xs text-ink-2">{a.cash.unreconciled === 0 ? "Every entry is reconciled." : "Tick the entries you have checked, and count the cash."}</p>
+                </Td>
+              ) : (
               <Td numeric>
                 <span className={Math.abs(a.difference) < 0.005 ? "text-[var(--success-text)]" : "text-[var(--danger-text)]"}>
                   <Amount value={a.difference} />
                 </span>
                 <p className="text-xs text-ink-2">{differenceText(a)}</p>
               </Td>
+              )}
               <Td>
                 <div className="flex flex-wrap gap-1">
                   <StatusBadge a={a} />
@@ -147,7 +167,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 </div>
               </Td>
               <Td className="whitespace-nowrap text-right">
-                <Link href={`/bank-reconciliation/${a.id}`} className="text-xs font-medium text-accent-text hover:underline">
+                <Link href={a.cash ? `/bank-reconciliation/${a.id}/cash` : `/bank-reconciliation/${a.id}`} className="text-xs font-medium text-accent-text hover:underline">
                   Open
                 </Link>
               </Td>

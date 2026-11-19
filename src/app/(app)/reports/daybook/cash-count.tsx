@@ -30,7 +30,8 @@ export function CashCount({ day, accounts, canEdit }: { day: string; accounts: C
   );
 }
 
-function CountForm({ day, account, canEdit, showName }: { day: string; account: CountAccount; canEdit: boolean; showName: boolean }) {
+// Used by the Daybook and by Bank Reconciliation (a cash account): one count record, written from either.
+export function CountForm({ day, account, canEdit, showName, onSaved }: { day: string; account: CountAccount; canEdit: boolean; showName: boolean; onSaved?: () => void }) {
   const router = useRouter();
   const toast = useToast();
   const saved = account.saved;
@@ -38,22 +39,25 @@ function CountForm({ day, account, canEdit, showName }: { day: string; account: 
   const [other, setOther] = useState(saved && saved.other > 0 ? String(saved.other) : "");
   const [remark, setRemark] = useState(saved?.remark ?? "");
   const [busy, setBusy] = useState(false);
+  // A business with no note-by-note record can enter just the total: it is kept as "coins and other cash" with no notes.
+  const [totalOnly, setTotalOnly] = useState(Boolean(saved && Object.keys(saved.notes).length === 0 && saved.other > 0));
 
-  const parsed = Object.fromEntries(Object.entries(notes).map(([k, v]) => [k, Number(v === "" ? 0 : v)]));
-  const noteProblem = Object.values(parsed).some((n) => !Number.isInteger(n) || n < 0);
+  const parsed = Object.fromEntries((totalOnly ? [] : Object.entries(notes)).map(([k, v]) => [k, Number(v === "" ? 0 : v)]));
+  const noteProblem = !totalOnly && Object.values(parsed).some((n) => !Number.isInteger(n) || n < 0);
   const otherNum = other.trim() === "" ? 0 : Number(other);
   const otherProblem = !Number.isFinite(otherNum) || otherNum < 0;
   const counted = noteProblem || otherProblem ? 0 : countedTotal(parsed, otherNum);
   const result = compareCount(counted, account.book);
-  const touched = Object.values(notes).some((v) => v !== "") || other !== "";
+  const touched = (!totalOnly && Object.values(notes).some((v) => v !== "")) || other !== "";
 
   async function save() {
     setBusy(true);
-    const r = await saveCashCountAction({ day, accountId: account.id, notes, other, remark });
+    const r = await saveCashCountAction({ day, accountId: account.id, notes: totalOnly ? {} : notes, other, remark });
     setBusy(false);
     if (!r.ok) return toast.error(r.error);
     toast.success("Cash count saved.");
     router.refresh();
+    onSaved?.();
   }
 
   const tone = result.status === "matches" ? "text-[var(--success-text)]" : "text-[var(--danger-text)]";
@@ -61,6 +65,22 @@ function CountForm({ day, account, canEdit, showName }: { day: string; account: 
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
       <div>
         {showName && <p className="mb-1.5 text-[13px] font-medium text-ink">{account.name}</p>}
+        {canEdit && (
+          <div className="mb-2 flex gap-3 text-xs">
+            <button type="button" onClick={() => setTotalOnly(false)} className={totalOnly ? "text-accent hover:underline" : "font-medium text-ink"}>
+              By notes and coins
+            </button>
+            <button type="button" onClick={() => setTotalOnly(true)} className={totalOnly ? "font-medium text-ink" : "text-accent hover:underline"}>
+              Total only
+            </button>
+          </div>
+        )}
+        {totalOnly ? (
+          <label className="flex items-center gap-2 text-[13px]">
+            <span className="text-ink-2">Total cash counted</span>
+            <Input inputMode="decimal" value={other} disabled={!canEdit} onChange={(e) => setOther(e.target.value)} placeholder="0" className="!h-8 w-36 text-right" aria-label="Total cash counted" />
+          </label>
+        ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-3 gap-y-2">
           {NOTE_VALUES.map((v) => (
             <label key={v} className="flex items-center gap-2 text-[13px]">
@@ -75,6 +95,7 @@ function CountForm({ day, account, canEdit, showName }: { day: string; account: 
             <Input inputMode="decimal" value={other} disabled={!canEdit} onChange={(e) => setOther(e.target.value)} placeholder="0" className="!h-8 w-20 text-right" aria-label="Coins and other cash" />
           </label>
         </div>
+        )}
         {(noteProblem || otherProblem) && <p className="mt-2 text-xs text-[var(--danger-text)]">Use whole numbers for notes and a plain amount for coins.</p>}
         <div className="mt-3">
           <Input value={remark} disabled={!canEdit} onChange={(e) => setRemark(e.target.value)} placeholder="Note, e.g. who counted or why it differs" maxLength={300} aria-label="Note about this count" />

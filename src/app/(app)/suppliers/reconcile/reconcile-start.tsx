@@ -14,7 +14,7 @@ import { D } from "@/components/calendar/date-text";
 import { AmountInput } from "@/components/ui/amount-input";
 import type { Preview } from "@/lib/suppliers/reconcile";
 import type { Orientation } from "@/lib/suppliers/reconcile-rules";
-import { createReconciliationAction, previewStatementAction } from "./actions";
+import { createReconciliationAction, downloadStatementTemplateAction, previewStatementAction } from "./actions";
 
 type Past = { id: string; vendorName: string; from: string; to: string; fileName: string; status: string; lines: number; matched: number };
 
@@ -69,6 +69,21 @@ export function ReconcileStart({ suppliers, initialSupplierId, today, canCreate,
       report(e instanceof Error ? e.message : "Could not read the file", null);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function downloadTemplate() {
+    try {
+      const t = await downloadStatementTemplateAction();
+      const bytes = Uint8Array.from(atob(t.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = t.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not download the template", null);
     }
   }
 
@@ -141,6 +156,11 @@ export function ReconcileStart({ suppliers, initialSupplierId, today, canCreate,
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-medium text-ink">{file ? file.name : "The supplier's statement"}</p>
               <p className="text-xs text-ink-2">{preview ? `${preview.rowsRead} rows read${preview.rowsSkipped > 0 ? `, ${preview.rowsSkipped} skipped (no date or no amount, such as an opening balance row)` : ""}, ${preview.inPeriod} in the period` : "An Excel (.xlsx) or CSV file, as the supplier sent it."}</p>
+              {!preview && (
+                <button type="button" onClick={downloadTemplate} className="mt-0.5 text-xs text-accent hover:underline">
+                  Download the template to send to a supplier
+                </button>
+              )}
             </div>
             <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFile} />
             <Button onClick={() => fileInput.current?.click()} loading={busy && !preview}>
