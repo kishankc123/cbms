@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { okToChange } from "../suppliers/reconcile/confirm-change";
 import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import type { ExpenseSuggestion } from "@/lib/expenses/suggestion-rules";
 import { D } from "@/components/calendar/date-text";
@@ -103,6 +105,7 @@ function ExpenseForm({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [vendors, addVendor] = useWithAdded(vendorsProp);
   const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? prefill?.expenseDate ?? carry?.expenseDate ?? today());
   const [categoryAccountId, setCategoryAccountId] = useState(initial?.categoryAccountId ?? "");
@@ -235,6 +238,7 @@ function ExpenseForm({
   }
 
   async function performSave() {
+    if (initial && !(await okToChange(ask, "expense", initial.expenseId))) return;
     setSaving(true);
     try {
       const payload: ExpenseInput = {

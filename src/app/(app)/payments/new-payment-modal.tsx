@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { okToChange } from "../suppliers/reconcile/confirm-change";
 import {
   createPayment,
   updatePayment,
@@ -146,6 +148,7 @@ function PaymentForm({
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
+  const ask = useConfirm();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
@@ -284,6 +287,7 @@ function PaymentForm({
     setFieldErrors(errors);
     if (first.length > 0) return report(first[0].message, first[0].target);
 
+    if (editing && !(await okToChange(ask, "payment", editing.id))) return;
     setSaving(true);
     try {
       const fields = {

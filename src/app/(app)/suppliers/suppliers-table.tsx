@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { D } from "@/components/calendar/date-text";
 import { Plus, Truck } from "lucide-react";
 import { createSupplier } from "./actions";
 import { SupplierFormModal } from "./supplier-form-modal";
@@ -30,6 +31,8 @@ type Supplier = {
   others: { date: string; amount: number }[];
   bills: { date: string; total: number }[];
   payments: { date: string; amount: number }[];
+  /** The last day reconciled with the supplier's own statement (a signed-off period's end), or empty when never. */
+  reconciledTo: string;
 };
 
 type SortField = "name" | "outstanding";
@@ -173,6 +176,7 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
             <SortableTh align="right" direction={dirOf("outstanding")} onSort={() => toggleSort("outstanding")}>
               Outstanding (AP)
             </SortableTh>
+            <Th>Reconciled to</Th>
             <Th className="w-24" />
           </Tr>
         </thead>
@@ -197,6 +201,7 @@ export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
               <Td numeric className="font-medium">
                 <Amount value={s.outstanding} />
               </Td>
+              <Td className="whitespace-nowrap text-ink-2">{s.reconciledTo ? <D value={s.reconciledTo} /> : <span className="text-ink-3">Never</span>}</Td>
               <Td className="whitespace-nowrap text-right">
                 <RowActions>
                   <Link href={`/suppliers/${s.id}`} className="text-xs text-accent-text hover:underline">

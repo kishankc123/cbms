@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
 import { voidBill } from "./actions";
+import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { RowMenu } from "@/components/row-menu";
 import { useProblem } from "@/components/problem-dialog";
 import { D } from "@/components/calendar/date-text";
@@ -100,7 +101,8 @@ export function BillsTable({
   const nameOf = (b: Bill) => vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "";
 
   async function voidRow(b: Bill) {
-    if (!(await ask(`Void bill ${b.billNumber}?`, { danger: true, confirmLabel: "Void" }))) return;
+    const warning = await getReconciledWarningAction({ kind: "bill", id: b.id }).catch(() => null);
+    if (!(await ask(`Void bill ${b.billNumber}?${warning ? `\n\n${warning}` : ""}`, { danger: true, confirmLabel: "Void" }))) return;
     const fd = new FormData();
     fd.set("billId", b.id);
     try {

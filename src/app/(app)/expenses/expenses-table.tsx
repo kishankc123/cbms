@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Plus, Receipt } from "lucide-react";
 import { voidExpense, getExpenseForEdit, type ExpenseEditData } from "./actions";
+import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { ExpenseFormModal, type InitialExpense } from "./expense-form-modal";
 import { RecordExpensePaymentModal } from "./record-expense-payment-modal";
 import { RowMenu } from "@/components/row-menu";
@@ -191,7 +192,8 @@ export function ExpensesTable({
   }
 
   async function voidRow(row: ExpenseRow) {
-    if (!(await ask(`Void expense ${row.expenseNumber}? Its accounting entries will be reversed.`, { danger: true, confirmLabel: "Void" }))) return;
+    const warning = await getReconciledWarningAction({ kind: "expense", id: row.id }).catch(() => null);
+    if (!(await ask(`Void expense ${row.expenseNumber}? Its accounting entries will be reversed.${warning ? `\n\n${warning}` : ""}`, { danger: true, confirmLabel: "Void" }))) return;
     const fd = new FormData();
     fd.set("expenseId", row.id);
     try {

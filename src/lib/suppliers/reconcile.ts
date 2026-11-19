@@ -361,14 +361,14 @@ export async function signOff(tenantId: string, userId: string, reconId: string,
   if (d.suggested > 0) fail(`Confirm or undo the ${d.suggested} suggested match${d.suggested === 1 ? "" : "es"} first.`);
   if (d.stale > 0) fail("Something in your books changed since a match was made. Refresh from your books first.");
   if (d.unresolved > 0) fail(`${d.unresolved} leftover${d.unresolved === 1 ? " has" : "s have"} no reason yet. Choose one for each, or fix it in your books and refresh.`);
-  await db.update(supplierReconciliations).set({ status: "reconciled", signedOffBy: userId, signedOffAt: new Date(), notes: notes.trim() || d.recon.notes }).where(and(eq(supplierReconciliations.id, reconId), eq(supplierReconciliations.tenantId, tenantId)));
+  await db.update(supplierReconciliations).set({ status: "reconciled", ourClosing: d.ours.closing.toFixed(2), signedOffBy: userId, signedOffAt: new Date(), notes: notes.trim() || d.recon.notes }).where(and(eq(supplierReconciliations.id, reconId), eq(supplierReconciliations.tenantId, tenantId)));
   await logAuditEvent({ tenantId, userId, action: "supplier_reconciliation_signed_off", entityType: "supplier_reconciliation", entityId: reconId });
 }
 
 export async function reopen(tenantId: string, userId: string, reconId: string) {
   const recon = await loadRecon(tenantId, reconId);
   if (recon.status !== "reconciled") fail("This reconciliation isn't signed off.");
-  await db.update(supplierReconciliations).set({ status: "draft", signedOffBy: null, signedOffAt: null }).where(and(eq(supplierReconciliations.id, reconId), eq(supplierReconciliations.tenantId, tenantId)));
+  await db.update(supplierReconciliations).set({ status: "draft", ourClosing: null, signedOffBy: null, signedOffAt: null }).where(and(eq(supplierReconciliations.id, reconId), eq(supplierReconciliations.tenantId, tenantId)));
   await logAuditEvent({ tenantId, userId, action: "supplier_reconciliation_reopened", entityType: "supplier_reconciliation", entityId: reconId });
 }
 

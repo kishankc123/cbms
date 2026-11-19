@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, vendors } from "@/db/schema";
+import { accounts, expenses, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry } from "@/lib/ledger/post";
 import { createExpenseCore } from "@/lib/expenses/expense-records";
 import { createPayment } from "@/lib/ledger/payments-engine";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
+import { reconciledThrough, reconciledWarning, statementRows, supplierReconStatus } from "./reconcile-status";
 import { confirmMatch, createReconciliation, ourSide, getReconciliation, manualMatch, previewStatement, rematch, reopen, setFlag, signOff, unmatch } from "./reconcile";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -107,6 +108,30 @@ describe("reconciling a supplier statement", () => {
     await expect(setFlag(org.tenantId, org.userId, reconId, { entryId: d.oursOnly[0].id }, null, "")).rejects.toThrow(/signed off/);
     await reopen(org.tenantId, org.userId, reconId);
     expect((await getReconciliation(org.tenantId, reconId)).recon.status).toBe("draft");
+  });
+
+  it("after sign-off the supplier's history says how far it is reconciled, what has happened since, and warns about changes inside the period", async () => {
+    await signOff(org.tenantId, org.userId, reconId, "");
+    await bill("2026-10-05", "INV-2001", 9000);
+    const st = await supplierReconStatus(org.tenantId, vendorId, "2026-10-20");
+    expect(st.through).toBe("2026-09-30");
+    expect(st.signedOffAt).not.toBeNull();
+    expect(st.gaps).toEqual([]);
+    expect(st.since).toEqual({ entries: 1, movement: 9000 });
+    expect(st.rows).toHaveLength(1);
+    expect(st.rows[0]).toMatchObject({ status: "reconciled", theirClosing: 135000 });
+    expect((await reconciledThrough(org.tenantId))[vendorId]).toBe("2026-09-30");
+
+    const [ex] = await db.select().from(expenses).where(and(eq(expenses.tenantId, org.tenantId), eq(expenses.vendorId, vendorId)));
+    expect(await reconciledWarning(org.tenantId, "expense", ex.id)).toMatchObject({ vendorName: "Himal Traders", from: "2026-09-01", to: "2026-09-30" });
+
+    const sr = await statementRows(org.tenantId, reconId);
+    expect(sr.rows.map((r) => r.state)).toEqual(["matched", "matched", "matched", "matched"]);
+    expect(sr.rows[0].against).toContain("INV-1042");
+
+    await reopen(org.tenantId, org.userId, reconId);
+    expect(await reconciledWarning(org.tenantId, "expense", ex.id)).toBeNull();
+    expect((await supplierReconStatus(org.tenantId, vendorId, "2026-10-20")).through).toBeNull();
   });
 
   it("a payment carries the receipt or cheque number it was recorded with, so the supplier's number can match it", async () => {

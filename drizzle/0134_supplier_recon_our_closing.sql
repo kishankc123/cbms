@@ -1,0 +1,1 @@
+ALTER TABLE "supplier_reconciliations" ADD COLUMN "our_closing" numeric(18, 2);

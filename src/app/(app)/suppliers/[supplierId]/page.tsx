@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db";
 import { vendors, tenants } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { can, requireTenantSession } from "@/lib/session";
+import { supplierReconStatus } from "@/lib/suppliers/reconcile-status";
+import { todayIso } from "@/lib/calendar";
 import { getPartyLines } from "@/lib/ledger/party-ledger";
 import { buildStatement, partyBuckets } from "@/lib/ledger/party-statement";
 import { ProfileTabs } from "./profile-tabs";
@@ -32,6 +34,7 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
   const paid = b.payments.reduce((s, p) => s + p.amount, 0);
   const other = b.others.reduce((s, o) => s + o.amount, 0);
   const outstanding = buildStatement(lines, "credit").closingBalance;
+  const recon = await supplierReconStatus(session.tenantId, supplier.id, todayIso());
 
   return (
     <div className="space-y-6">
@@ -60,6 +63,8 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
         other={Math.round(other * 100) / 100}
         outstanding={outstanding}
         fiscalYearStartDate={tenant?.fiscalYearStartDate ?? null}
+        recon={recon}
+        canReconcile={can(session, "purchases", "create")}
       />
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPaymentDetail, voidPayment } from "./actions";
+import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { PAYMENT_TYPE_LABELS } from "./payment-types";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useFormatDate, useFormatDateTime } from "@/components/calendar/calendar-provider";
@@ -15,6 +16,18 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showVoid, setShowVoid] = useState(false);
+  // Voiding a supplier payment inside a period already reconciled with them is allowed, with a word of warning.
+  const [reconWarning, setReconWarning] = useState<string | null>(null);
+  useEffect(() => {
+    if (!showVoid) return;
+    let live = true;
+    getReconciledWarningAction({ kind: "payment", id: paymentId })
+      .then((w) => live && setReconWarning(w))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [showVoid, paymentId]);
   const [voidReason, setVoidReason] = useState("");
   const [voiding, setVoiding] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
@@ -234,6 +247,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                 <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-3">
                   <h3 className="text-sm font-semibold text-gray-900">Void payment {detail.paymentNumber}</h3>
                   <p className="text-xs text-gray-500">This reverses its journal entry and rolls back any invoice/bill/expense allocation it made.</p>
+                  {reconWarning && <p className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">{reconWarning}</p>}
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Reason</label>
                     <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />

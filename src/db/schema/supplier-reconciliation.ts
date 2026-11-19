@@ -21,6 +21,8 @@ export const supplierReconciliations = pgTable(
     /** What the supplier's statement says we owed at the start of the period and at its end (positive = we owe them). */
     theirOpening: numeric("their_opening", { precision: 18, scale: 2 }).notNull().default("0"),
     theirClosing: numeric("their_closing", { precision: 18, scale: 2 }).notNull().default("0"),
+    /** What our books said we owed at the end of the period, kept when it was signed off so the history stays as it was signed even if the books change later. */
+    ourClosing: numeric("our_closing", { precision: 18, scale: 2 }),
     dateToleranceDays: integer("date_tolerance_days").notNull().default(7),
     amountTolerance: numeric("amount_tolerance", { precision: 18, scale: 2 }).notNull().default("1"),
     status: supplierReconStatusEnum("status").notNull().default("draft"),
