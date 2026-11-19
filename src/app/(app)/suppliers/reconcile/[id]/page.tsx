@@ -11,6 +11,7 @@ import { isOrgAdmin } from "@/lib/roles";
 import { PageHeader } from "@/components/ui/page-header";
 import { getReconciliation, ReconError } from "@/lib/suppliers/reconcile";
 import { bridge } from "@/lib/suppliers/reconcile-rules";
+import { loadReportHeader } from "@/lib/report-header";
 import { ReconcileDetail } from "./reconcile-detail";
 
 export default async function ReconciliationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,6 +40,8 @@ export default async function ReconciliationPage({ params }: { params: Promise<{
         ]).then(([vendorList, categoryAccounts, cashBankAccounts, tax]) => ({ vendors: vendorList, categoryAccounts, cashBankAccounts, vatRate: tax.vatRate }))
       : null;
   const paymentForm = open && can(session, "payments", "create") ? await getPaymentFormOptions() : null;
+
+  const header = await loadReportHeader(session.tenantId);
 
   return (
     <div className="space-y-4">
@@ -71,6 +74,8 @@ export default async function ReconciliationPage({ params }: { params: Promise<{
         canEdit={can(session, "purchases", "edit")}
         canDelete={can(session, "purchases", "delete")}
         canReopen={isOrgAdmin(session.role)}
+        header={header}
+        signedOffAt={d.recon.signedOffAt ? d.recon.signedOffAt.toISOString().slice(0, 10) : ""}
         expenseForm={expenseForm}
         paymentForm={paymentForm}
       />

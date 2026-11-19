@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Printer, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { ExportButtons } from "@/components/export-buttons";
+import { ReconciliationSheet } from "./reconcile-sheet";
 import { useProblem } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -57,6 +59,8 @@ export function ReconcileDetail(props: {
   canEdit: boolean;
   canDelete: boolean;
   canReopen: boolean;
+  header: { company: string; address: string };
+  signedOffAt: string;
   /** What the bill form needs (null when the person can't record expenses), and what the payment form needs (null when they can't record payments). */
   expenseForm: { vendors: { id: string; name: string }[]; categoryAccounts: React.ComponentProps<typeof ExpenseFormModal>["categoryAccounts"]; cashBankAccounts: React.ComponentProps<typeof ExpenseFormModal>["cashBankAccounts"]; vatRate: number } | null;
   paymentForm: Awaited<ReturnType<typeof getPaymentFormOptions>> | null;
@@ -159,9 +163,7 @@ export function ReconcileDetail(props: {
           <D value={props.from} /> – <D value={props.to} /> {signedOff ? <StatusPill tone="success">Reconciled</StatusPill> : <StatusPill tone="pending">In progress</StatusPill>}
         </p>
         <div className="flex flex-wrap gap-2 print:hidden">
-          <Button icon={<Printer size={14} />} onClick={() => window.print()}>
-            Print
-          </Button>
+          <ExportButtons />
           {editable && (
             <Button icon={<RefreshCw size={14} />} disabled={busy} onClick={() => act(() => rematchAction({ reconId: props.reconId }), "Matched again against your books.")}>
               Refresh from my books
@@ -429,7 +431,25 @@ export function ReconcileDetail(props: {
       )}
       {dialog}
 
-      {recording?.kind === "bill" && props.expenseForm && (
+      <ReconciliationSheet
+        header={props.header}
+        vendorName={props.vendorName}
+        from={props.from}
+        to={props.to}
+        status={props.status}
+        signedOffAt={props.signedOffAt}
+        ourClosing={props.ourClosing}
+        theirClosing={props.theirClosing}
+        difference={props.proof.difference}
+        bridge={props.bridge}
+        theirs={props.theirs}
+        ours={props.ours}
+        groups={props.groups}
+        theirsOnly={props.theirsOnly}
+        oursOnly={props.oursOnly}
+      />
+
+      {recording?.kind === "bill" && props.expenseForm && props.expenseForm && (
         <ExpenseFormModal
           vendors={props.expenseForm.vendors}
           categoryAccounts={props.expenseForm.categoryAccounts}
