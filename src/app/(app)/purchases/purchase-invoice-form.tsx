@@ -198,8 +198,7 @@ export function PurchaseInvoiceForm({
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
-  // New bills have no discount; the column appears only on an older bill that already carries one.
-  const showDiscount = Boolean(initial?.lines.some((l) => l.discount > 0));
+  const showDiscount = true;
   const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(grandTotal - paidTotal, 0);
   // A non-VAT bill paid in full needs no supplier and no invoice number; a VAT bill or an unpaid balance does.
