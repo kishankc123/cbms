@@ -21,13 +21,14 @@ export async function getPartyLines(tenantId: string, accountIds: string[]): Pro
       reference: journalEntries.referenceNumber,
       memo: journalEntries.memo,
       reversalOfId: journalEntries.reversalOfId,
+      sourceId: journalEntries.sourceId,
     })
     .from(journalLines)
     .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
     .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.accountId, accountIds)))
     .orderBy(asc(journalEntries.entryDate), asc(journalEntries.createdAt));
   for (const r of rows) {
-    out.get(r.accountId)!.push({ date: r.date, debit: Number(r.debit), credit: Number(r.credit), sourceType: r.sourceType, reference: r.reference || null, memo: r.memo || null, isReversal: r.reversalOfId !== null, entryId: r.entryId, isReversed: r.isReversed, reversalOfId: r.reversalOfId });
+    out.get(r.accountId)!.push({ date: r.date, debit: Number(r.debit), credit: Number(r.credit), sourceType: r.sourceType, reference: r.reference || null, memo: r.memo || null, isReversal: r.reversalOfId !== null, entryId: r.entryId, sourceId: r.sourceId, isReversed: r.isReversed, reversalOfId: r.reversalOfId });
   }
   return out;
 }

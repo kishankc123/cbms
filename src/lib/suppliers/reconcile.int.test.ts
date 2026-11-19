@@ -4,8 +4,10 @@ import { db } from "@/db";
 import { accounts, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry } from "@/lib/ledger/post";
+import { createExpenseCore } from "@/lib/expenses/expense-records";
+import { createPayment } from "@/lib/ledger/payments-engine";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
-import { confirmMatch, createReconciliation, getReconciliation, manualMatch, previewStatement, rematch, reopen, setFlag, signOff, unmatch } from "./reconcile";
+import { confirmMatch, createReconciliation, ourSide, getReconciliation, manualMatch, previewStatement, rematch, reopen, setFlag, signOff, unmatch } from "./reconcile";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let other: Awaited<ReturnType<typeof createTempOrg>>;
@@ -76,7 +78,8 @@ describe("reconciling a supplier statement", () => {
   });
 
   it("recording the missing bill and refreshing matches it; a match can be undone and made by hand", async () => {
-    await bill("2026-09-25", "INV-1075", 40000);
+    // Recorded as an expense with the supplier's own invoice number: the journal says EXP-0001, but the line still carries INV-1075 to match on.
+    await createExpenseCore({ tenantId: org.tenantId, userId: org.userId }, { expenseDate: "2026-09-25", categoryAccountId: expenseId, vendorId, description: "Per statement", invoiceNumber: "INV-1075", invoiceDate: "2026-09-25", dueDate: "", billType: "no_bill", taxTreatment: "exempt", taxableAmount: 40000, vatAmount: 0, tdsAmount: 0, otherTaxAmount: 0, payments: [] });
     await rematch(org.tenantId, org.userId, reconId);
     let d = await getReconciliation(org.tenantId, reconId);
     expect(d.theirsOnly).toHaveLength(0);
@@ -86,7 +89,7 @@ describe("reconciling a supplier statement", () => {
     await unmatch(org.tenantId, org.userId, m.id);
     d = await getReconciliation(org.tenantId, reconId);
     expect(d.theirsOnly).toHaveLength(1);
-    await manualMatch(org.tenantId, org.userId, reconId, [d.theirsOnly[0].id], [d.oursOnly.find((l) => l.reference === "INV-1075")!.id]);
+    await manualMatch(org.tenantId, org.userId, reconId, [d.theirsOnly[0].id], [d.oursOnly.find((l) => l.reference.includes("INV-1075"))!.id]);
     d = await getReconciliation(org.tenantId, reconId);
     expect(d.theirsOnly).toHaveLength(0);
     expect(d.groups.some((g) => g.kind === "manual" && g.status === "confirmed")).toBe(true);
@@ -104,6 +107,12 @@ describe("reconciling a supplier statement", () => {
     await expect(setFlag(org.tenantId, org.userId, reconId, { entryId: d.oursOnly[0].id }, null, "")).rejects.toThrow(/signed off/);
     await reopen(org.tenantId, org.userId, reconId);
     expect((await getReconciliation(org.tenantId, reconId)).recon.status).toBe("draft");
+  });
+
+  it("a payment carries the receipt or cheque number it was recorded with, so the supplier's number can match it", async () => {
+    await createPayment(org.tenantId, org.userId, "PAY-9001", { direction: "money_out", paymentType: "supplier_payment", paymentDate: "2026-09-28", partyType: "supplier", vendorId, accountId: cashId, paymentMethod: "cash", referenceNumber: "RCT-777", amount: 1234, confirmDuplicate: true } as never);
+    const ours = await ourSide(org.tenantId, vendorId, "2026-09-01", "2026-09-30");
+    expect(ours.lines.find((l) => l.effect === -1234)?.reference).toContain("RCT-777");
   });
 
   it("is private to the organization", async () => {

@@ -12,6 +12,9 @@ import { Select } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/status-pill";
 import { D } from "@/components/calendar/date-text";
 import type { Line, Proof } from "@/lib/suppliers/reconcile-rules";
+import { ExpenseFormModal } from "../../../expenses/expense-form-modal";
+import { NewPaymentModal } from "../../../payments/new-payment-modal";
+import type { getPaymentFormOptions } from "../../../payments/actions";
 import { confirmMatchAction, deleteReconciliationAction, manualMatchAction, rematchAction, reopenAction, setFlagAction, signOffAction, unmatchAction } from "../actions";
 
 type Group = { id: string; kind: string; status: "confirmed" | "suggested"; theirIds: string[]; ourIds: string[]; stale: boolean };
@@ -54,6 +57,9 @@ export function ReconcileDetail(props: {
   canEdit: boolean;
   canDelete: boolean;
   canReopen: boolean;
+  /** What the bill form needs (null when the person can't record expenses), and what the payment form needs (null when they can't record payments). */
+  expenseForm: { vendors: { id: string; name: string }[]; categoryAccounts: React.ComponentProps<typeof ExpenseFormModal>["categoryAccounts"]; cashBankAccounts: React.ComponentProps<typeof ExpenseFormModal>["cashBankAccounts"]; vatRate: number } | null;
+  paymentForm: Awaited<ReturnType<typeof getPaymentFormOptions>> | null;
 }) {
   const router = useRouter();
   const ask = useConfirm();
@@ -63,6 +69,8 @@ export function ReconcileDetail(props: {
   const [pickT, setPickT] = useState<Set<string>>(new Set());
   const [pickO, setPickO] = useState<Set<string>>(new Set());
   const [showMatched, setShowMatched] = useState(false);
+  // A bill or payment being recorded from a line on their statement.
+  const [recording, setRecording] = useState<{ kind: "bill" | "payment"; line: Left } | null>(null);
   const signedOff = props.status === "reconciled";
   const editable = props.canEdit && !signedOff;
   const theirById = new Map(props.theirs.map((l) => [l.id, l]));
@@ -91,6 +99,12 @@ export function ReconcileDetail(props: {
     else next.add(id);
     setter(next);
   };
+
+  // Back from a form: the new entry is in the books, so the lines are matched again (confirmed matches stay).
+  function afterRecord() {
+    setRecording(null);
+    void act(() => rematchAction({ reconId: props.reconId }));
+  }
 
   const pickedTheirs = props.theirsOnly.filter((l) => pickT.has(l.id)).reduce((s, l) => s + l.effect, 0);
   const pickedOurs = props.oursOnly.filter((l) => pickO.has(l.id)).reduce((s, l) => s + l.effect, 0);
@@ -255,11 +269,27 @@ export function ReconcileDetail(props: {
                   <td className={`${td} text-ink-2`}>{l.description || (l.effect > 0 ? "Their bill to you" : "Payment or credit")}</td>
                   <td className={`${td} text-right tabular-nums`}>{signed(l.effect)}</td>
                   <td className={`${td} whitespace-nowrap text-right`}>
-                    {l.effect > 0 ? (
+                    {editable && l.effect > 0 && props.expenseForm && (
+                      <>
+                        <button type="button" onClick={() => setRecording({ kind: "bill", line: l })} className="mr-2 text-xs text-accent hover:underline">
+                          Record as expense
+                        </button>
+                        <Link href="/purchases" target="_blank" className="mr-3 text-xs text-ink-2 hover:underline">
+                          or as a purchase
+                        </Link>
+                      </>
+                    )}
+                    {editable && l.effect > 0 && !props.expenseForm && (
                       <Link href="/purchases" target="_blank" className="mr-3 text-xs text-accent hover:underline">
                         Record this bill
                       </Link>
-                    ) : (
+                    )}
+                    {editable && l.effect < 0 && props.paymentForm && (
+                      <button type="button" onClick={() => setRecording({ kind: "payment", line: l })} className="mr-3 text-xs text-accent hover:underline">
+                        Record this payment
+                      </button>
+                    )}
+                    {editable && l.effect < 0 && !props.paymentForm && (
                       <Link href="/payments/money-out" target="_blank" className="mr-3 text-xs text-accent hover:underline">
                         Record this payment
                       </Link>
@@ -398,6 +428,26 @@ export function ReconcileDetail(props: {
         </div>
       )}
       {dialog}
+
+      {recording?.kind === "bill" && props.expenseForm && (
+        <ExpenseFormModal
+          vendors={props.expenseForm.vendors}
+          categoryAccounts={props.expenseForm.categoryAccounts}
+          cashBankAccounts={props.expenseForm.cashBankAccounts}
+          vatRate={props.expenseForm.vatRate}
+          prefill={{ expenseDate: recording.line.date, vendorId: props.vendorId, invoiceNumber: recording.line.reference, description: recording.line.description || `Per ${props.vendorName}'s statement`, amount: recording.line.effect }}
+          onClose={afterRecord}
+        />
+      )}
+      {recording?.kind === "payment" && props.paymentForm && (
+        <NewPaymentModal
+          formOptions={props.paymentForm}
+          fixedDirection="money_out"
+          prefill={{ amount: -recording.line.effect, date: recording.line.date, accountId: "", vendorId: props.vendorId, referenceNumber: recording.line.reference, description: recording.line.description || `Per ${props.vendorName}'s statement` }}
+          onDone={afterRecord}
+          onCancel={() => setRecording(null)}
+        />
+      )}
     </div>
   );
 }

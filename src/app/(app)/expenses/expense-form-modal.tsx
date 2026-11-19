@@ -87,6 +87,7 @@ function ExpenseForm({
   vatRate,
   initial,
   carry,
+  prefill,
   onAnother,
   onClose,
 }: {
@@ -96,22 +97,24 @@ function ExpenseForm({
   vatRate: number;
   initial?: InitialExpense;
   carry?: Carry;
+  /** A bill being recorded from a supplier's statement (Suppliers > Reconcile statements): these are filled in, the rest is left to the person. */
+  prefill?: { expenseDate: string; vendorId: string; invoiceNumber: string; description: string; amount: number };
   onAnother: (carry?: Carry) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [vendors, addVendor] = useWithAdded(vendorsProp);
-  const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? carry?.expenseDate ?? today());
+  const [expenseDate, setExpenseDate] = useState(initial?.expenseDate ?? prefill?.expenseDate ?? carry?.expenseDate ?? today());
   const [categoryAccountId, setCategoryAccountId] = useState(initial?.categoryAccountId ?? "");
-  const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
+  const [vendorId, setVendorId] = useState(initial?.vendorId ?? prefill?.vendorId ?? "");
+  const [description, setDescription] = useState(initial?.description ?? prefill?.description ?? "");
+  const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? prefill?.invoiceNumber ?? "");
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [billType, setBillType] = useState<ExpenseBillType>(initial?.billType ?? carry?.billType ?? "no_bill");
   const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
   const [taxTreatment, setTaxTreatment] = useState<ExpenseTaxTreatment>(initial?.taxTreatment ?? carry?.taxTreatment ?? "taxable");
-  const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : "");
+  const [taxableAmount, setTaxableAmount] = useState(initial ? String(initial.taxableAmount) : prefill ? String(prefill.amount) : "");
   const [vatAmount, setVatAmount] = useState(initial ? String(initial.vatAmount) : "0.00");
   const [tdsAmount, setTdsAmount] = useState(initial ? String(initial.tdsAmount) : "0.00");
   const [otherTaxAmount, setOtherTaxAmount] = useState(initial ? String(initial.otherTaxAmount) : "0");
@@ -259,6 +262,11 @@ function ExpenseForm({
       } else {
         const result = await createExpense(payload);
         router.refresh();
+        // Recorded from a statement: back to the reconciliation, which picks the new bill up.
+        if (prefill) {
+          onClose();
+          return;
+        }
         setSaved({
           expenseNumber: result.expenseNumber,
           supplier: vendors.find((v) => v.id === vendorId)?.name ?? "",

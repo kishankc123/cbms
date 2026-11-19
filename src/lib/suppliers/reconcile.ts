@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { supplierReconFlags, supplierReconLines, supplierReconMatchItems, supplierReconMatches, supplierReconciliations, vendors } from "@/db/schema";
+import { expenses, payments, supplierReconFlags, supplierReconLines, supplierReconMatchItems, supplierReconMatches, supplierReconciliations, vendors } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { buildStatement, describeLine, getPartyLines, type PartyLine } from "@/lib/ledger/party-ledger";
 import { parseStatementFile } from "@/lib/banking/parse-statement";
@@ -37,13 +37,21 @@ export async function ourSide(tenantId: string, vendorId: string, from: string, 
   const reversedInRange = new Set(inRange.map((l) => l.reversalOfId).filter(Boolean));
   const kept = inRange.filter((l) => !(l.reversalOfId && idsInRange.has(l.reversalOfId)) && !(l.entryId && reversedInRange.has(l.entryId)));
 
+  // The supplier knows an expense by their own invoice number and a payment by the cheque or receipt number, not by ours: add those to the line so they can be matched.
+  const expenseIds = [...new Set(kept.filter((l) => l.sourceType === "expense" && l.sourceId).map((l) => l.sourceId as string))];
+  const invoiceOf = new Map<string, string>();
+  if (expenseIds.length > 0) for (const e of await db.select({ id: expenses.id, n: expenses.invoiceNumber }).from(expenses).where(and(eq(expenses.tenantId, tenantId), inArray(expenses.id, expenseIds)))) if (e.n) invoiceOf.set(e.id, e.n);
+  const entryIds = [...new Set(kept.filter((l) => l.sourceType === "payment" && l.entryId).map((l) => l.entryId as string))];
+  const paymentRefs = new Map<string, string>();
+  if (entryIds.length > 0) for (const p of await db.select({ entry: payments.journalEntryId, ref: payments.referenceNumber, cheque: payments.chequeNumber }).from(payments).where(and(eq(payments.tenantId, tenantId), inArray(payments.journalEntryId, entryIds)))) if (p.entry) paymentRefs.set(p.entry, [p.ref, p.cheque].filter(Boolean).join(" "));
+
   const byEntry = new Map<string, Line>();
   for (const l of kept) {
     const id = l.entryId as string;
     const e = l.credit - l.debit;
     const have = byEntry.get(id);
     if (have) have.effect = round2(have.effect + e);
-    else byEntry.set(id, { id, date: l.date, reference: l.reference ?? "", description: describeLine(l), effect: round2(e) });
+    else byEntry.set(id, { id, date: l.date, reference: [invoiceOf.get(l.sourceId ?? ""), l.reference, paymentRefs.get(id)].filter(Boolean).join(" "), description: describeLine(l), effect: round2(e) });
   }
   const lines = [...byEntry.values()].filter((l) => l.effect !== 0);
   return { vendor: vendor!, opening: statement.openingBalance, closing: statement.closingBalance, lines };

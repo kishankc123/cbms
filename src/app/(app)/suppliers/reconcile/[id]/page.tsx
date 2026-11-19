@@ -1,4 +1,11 @@
 import { guardView } from "@/components/page-guard";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { vendors } from "@/db/schema";
+import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
+import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
+import { getExpenseTaxDefaults } from "../../../expenses/actions";
+import { getPaymentFormOptions } from "../../../payments/actions";
 import { can, requireTenantSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import { PageHeader } from "@/components/ui/page-header";
@@ -19,6 +26,19 @@ export default async function ReconciliationPage({ params }: { params: Promise<{
     if (e instanceof ReconError) return <p className="text-sm text-red-600">{e.message}</p>;
     throw e;
   }
+
+  // What the bill and payment forms need, only for someone who may use them on a reconciliation still open.
+  const open = d.recon.status !== "reconciled" && can(session, "purchases", "edit");
+  const expenseForm =
+    open && can(session, "expenses", "create")
+      ? await Promise.all([
+          db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
+          getExpenseCategoryAccounts(session.tenantId),
+          getCashBankAccounts(session.tenantId),
+          getExpenseTaxDefaults(),
+        ]).then(([vendorList, categoryAccounts, cashBankAccounts, tax]) => ({ vendors: vendorList, categoryAccounts, cashBankAccounts, vatRate: tax.vatRate }))
+      : null;
+  const paymentForm = open && can(session, "payments", "create") ? await getPaymentFormOptions() : null;
 
   return (
     <div className="space-y-4">
@@ -51,6 +71,8 @@ export default async function ReconciliationPage({ params }: { params: Promise<{
         canEdit={can(session, "purchases", "edit")}
         canDelete={can(session, "purchases", "delete")}
         canReopen={isOrgAdmin(session.role)}
+        expenseForm={expenseForm}
+        paymentForm={paymentForm}
       />
     </div>
   );
