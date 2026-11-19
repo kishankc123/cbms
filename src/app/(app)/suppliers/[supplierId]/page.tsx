@@ -1,6 +1,7 @@
 import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/db";
 import { vendors, tenants } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
@@ -34,9 +35,14 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{supplier.name}</h1>
-        <p className="text-sm text-gray-500">Supplier</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{supplier.name}</h1>
+          <p className="text-sm text-gray-500">Supplier</p>
+        </div>
+        <Link href={`/suppliers/reconcile?supplier=${supplier.id}`} className="text-sm text-accent hover:underline">
+          Reconcile with their statement
+        </Link>
       </div>
 
       <ProfileTabs

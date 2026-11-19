@@ -37,6 +37,7 @@ const usesPermission = (body: string, action: string) => new RegExp(`can\\(\\s*s
 /** Actions that do not follow the naming rule, with the reason. */
 const EXCEPTIONS: Record<string, string> = {
   "app/(app)/bank-reconciliation/actions.ts#unmatch": "Bank Reconciliation has no Void permission; Edit is its strongest",
+  "app/(app)/suppliers/reconcile/actions.ts#unmatchAction": "takes a suggested or confirmed pairing apart in a reconciliation worksheet, which posts nothing; it needs Edit on Purchases, as making the match does",
   "app/(app)/bank-reconciliation/actions.ts#classifyUnmatchedLedgerLine": "Bank Reconciliation has no Void permission; Edit is its strongest",
   "app/(app)/payroll/salary-sheet/actions.ts#reverseFinalizedRun": "Payroll has no Void permission, so any role with Edit and 'See salary amounts' can reverse a finalized run (review: consider a Payroll Void action)",
   "app/(app)/payroll/salary-sheet/actions.ts#removeRunAdjustmentAction": "takes a one-off adjustment off a run that is not finalized, a correction of a draft that needs the same permissions as adding one; Payroll's Delete permission is for salary components",
