@@ -166,9 +166,9 @@ export function CashReconciliation({
               </thead>
               <tbody>
                 {ws.lines.map((l) => (
-                  <tr key={l.id} className={`transition-colors hover:bg-hover ${ticked.has(l.id) ? "bg-hover" : ""}`}>
+                  <tr key={l.id} onClick={canEdit ? () => toggle(l.id) : undefined} className={`transition-colors hover:bg-hover ${canEdit ? "cursor-pointer select-none" : ""} ${ticked.has(l.id) ? "bg-hover" : ""}`}>
                     <td className={td}>
-                      <input type="checkbox" aria-label={`Tick ${l.label}`} checked={ticked.has(l.id)} disabled={!canEdit} onChange={() => toggle(l.id)} />
+                      <input type="checkbox" aria-label={`Tick ${l.label}`} checked={ticked.has(l.id)} disabled={!canEdit} onClick={(e) => e.stopPropagation()} onChange={() => toggle(l.id)} />
                     </td>
                     <td className={td}>
                       <D value={l.date} />
