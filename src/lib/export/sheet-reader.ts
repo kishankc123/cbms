@@ -61,7 +61,7 @@ export function readSheet(sheet: HTMLElement): Sheet {
     const pages = (sections.length ? sections : [copy]).map(readPage);
     const foot = [...copy.querySelectorAll("[data-report-footer] > span")].map((s) => clean(s.textContent));
     const first = pages[0]?.head.map((h) => h.text) ?? [];
-    return { pages, foot: [foot[0] ?? "", foot[1] ?? ""], name: [first[0], sections.length ? "Quarterly pack" : first[first.length - 2], first[first.length - 1]].filter(Boolean).join(" - ") };
+    return { pages, foot: [foot[0] ?? "", foot[1] ?? ""], name: [first[0], sections.length ? copy.dataset.reportName || "Quarterly pack" : first[first.length - 2], first[first.length - 1]].filter(Boolean).join(" - ") };
   } finally {
     copy.remove();
   }

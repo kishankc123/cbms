@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useOpeningDateGuard } from "@/components/inventory/opening-date";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { okToChange } from "../suppliers/reconcile/confirm-change";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
@@ -135,6 +137,7 @@ export function PurchaseInvoiceForm({
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
+  const ask = useConfirm();
   const [saved, setSaved] = useState<{ number: string; date: string; supplier: string; total: number; paid: number; payment: { accountId: string; modeId: string | null } | null } | null>(null);
   // How the last invoice was paid: offered again the next time Record Payment is opened.
   const [carryPay, setCarryPay] = useState<{ accountId: string; modeId: string | null } | null>(null);
@@ -195,8 +198,7 @@ export function PurchaseInvoiceForm({
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
-  // New bills have no discount; the column appears only on an older bill that already carries one.
-  const showDiscount = Boolean(initial?.lines.some((l) => l.discount > 0));
+  const showDiscount = true;
   const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(grandTotal - paidTotal, 0);
   // A non-VAT bill paid in full needs no supplier and no invoice number; a VAT bill or an unpaid balance does.
@@ -233,6 +235,7 @@ export function PurchaseInvoiceForm({
     setFieldErrors(errors);
     if (first.length > 0) return report(first[0].message, first[0].target);
 
+    if (initial && !(await okToChange(ask, "bill", initial.billId))) return;
     setSaving(true);
     try {
       const payload = {

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { okToChange } from "../suppliers/reconcile/confirm-change";
 import {
   createPayment,
   updatePayment,
@@ -95,7 +97,7 @@ function PaymentForm({
   /** When given, the form edits this payment (its kind cannot change) instead of recording a new one. */
   editing?: EditingPayment;
   /** Opens a new payment with these filled in (from a bank line being reconciled). */
-  prefill?: { amount: number; date: string; accountId: string };
+  prefill?: { amount: number; date: string; accountId: string; /** From a supplier's statement: the supplier, their document number and what it was for. */ vendorId?: string; referenceNumber?: string; description?: string };
   carry?: Carry;
   onAnother: (carry?: Carry) => void;
 }) {
@@ -115,9 +117,9 @@ function PaymentForm({
   const [chequeNumber, setChequeNumber] = useState(editing?.chequeNumber ?? "");
   const [chequeDate, setChequeDate] = useState(editing?.chequeDate ?? "");
   const [chequeBank, setChequeBank] = useState(editing?.chequeBank ?? "");
-  const [referenceNumber, setReferenceNumber] = useState(editing?.referenceNumber ?? "");
+  const [referenceNumber, setReferenceNumber] = useState(editing?.referenceNumber ?? prefill?.referenceNumber ?? "");
   const [customerId, setCustomerId] = useState(editing?.customerId ?? "");
-  const [vendorId, setVendorId] = useState(editing?.vendorId ?? "");
+  const [vendorId, setVendorId] = useState(editing?.vendorId ?? prefill?.vendorId ?? "");
   const [employeeId, setEmployeeId] = useState(editing?.employeeId ?? "");
   const [owed, setOwed] = useState<number | null>(null);
   // A staff advance is taken against a payroll month of the organization's calendar; it opens on the current month.
@@ -128,7 +130,7 @@ function PaymentForm({
   const [advInfo, setAdvInfo] = useState<{ outstanding: number; basic: number } | null>(null);
   const [partyOtherName, setPartyOtherName] = useState(editing?.partyOtherName ?? "");
   const [amount, setAmount] = useState(editing ? String(editing.amount) : prefill ? prefill.amount.toFixed(2) : "");
-  const [description, setDescription] = useState(editing?.description ?? "");
+  const [description, setDescription] = useState(editing?.description ?? prefill?.description ?? "");
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(editing?.attachmentUrl ?? "");
 
@@ -146,6 +148,7 @@ function PaymentForm({
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
+  const ask = useConfirm();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
@@ -160,7 +163,7 @@ function PaymentForm({
   // The kind of payment follows the direction, except on the first run of a payment that carries the last one's kind over.
   const firstRun = useRef(true);
   useEffect(() => {
-    const keep = firstRun.current && Boolean(carry);
+    const keep = firstRun.current && Boolean(carry || prefill?.vendorId);
     firstRun.current = false;
     if (editing || keep) return; // an edit keeps the kind of payment it has
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");
@@ -284,6 +287,7 @@ function PaymentForm({
     setFieldErrors(errors);
     if (first.length > 0) return report(first[0].message, first[0].target);
 
+    if (editing && !(await okToChange(ask, "payment", editing.id))) return;
     setSaving(true);
     try {
       const fields = {

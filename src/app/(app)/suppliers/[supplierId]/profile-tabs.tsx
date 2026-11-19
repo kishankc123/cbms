@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { DetailsPanel } from "./details-panel";
 import { HistoryPanel } from "./history-panel";
+import { ReconciliationPanel } from "./reconciliation-panel";
+import type { SupplierReconStatus } from "@/lib/suppliers/reconcile-status";
 
 const TABS = [
   { id: "details", label: "Details" },
   { id: "history", label: "Transaction History" },
+  { id: "reconciliation", label: "Reconciliation history" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -18,6 +21,8 @@ export function ProfileTabs({
   other,
   outstanding,
   fiscalYearStartDate,
+  recon,
+  canReconcile,
 }: {
   supplier: { id: string; name: string; panNumber: string; businessType: string; phone: string; details: string; openingBalance: number };
   purchases: number;
@@ -26,6 +31,8 @@ export function ProfileTabs({
   other: number;
   outstanding: number;
   fiscalYearStartDate: string | null;
+  recon: SupplierReconStatus;
+  canReconcile: boolean;
 }) {
   const [tab, setTab] = useState<TabId>("details");
 
@@ -48,6 +55,7 @@ export function ProfileTabs({
         <DetailsPanel supplier={supplier} purchases={purchases} paid={paid} other={other} outstanding={outstanding} />
       )}
       {tab === "history" && <HistoryPanel supplierId={supplier.id} fiscalYearStartDate={fiscalYearStartDate} />}
+      {tab === "reconciliation" && <ReconciliationPanel supplierId={supplier.id} status={recon} canReconcile={canReconcile} />}
     </div>
   );
 }

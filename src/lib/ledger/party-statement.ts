@@ -15,6 +15,8 @@ export type PartyLine = {
   isReversal: boolean;
   /** The journal entry behind the line, and whether a later entry reversed it (a void or an edit). */
   entryId?: string;
+  /** What the entry was made for (the expense, bill or payment it belongs to), where it has one. */
+  sourceId?: string | null;
   isReversed?: boolean;
   /** The entry this one reverses, when it is the reversal of a void or an edit. */
   reversalOfId?: string | null;

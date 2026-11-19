@@ -18,7 +18,7 @@ export function HistoryPanel({
   const [mode, setMode] = useDateDisplay();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<{ openingBalance: number; closingBalance: number; rows: LedgerRow[] } | null>(
+  const [data, setData] = useState<{ openingBalance: number; closingBalance: number; rows: LedgerRow[]; reconciled: { from: string; to: string }[] } | null>(
     null
   );
 
@@ -75,6 +75,7 @@ export function HistoryPanel({
               <th className="px-2.5 py-1.5 font-medium">Credit</th>
               <th className="px-2.5 py-1.5 font-medium">Balance</th>
               <th className="px-2.5 py-1.5 font-medium">Dr/Cr</th>
+              <th className="px-2.5 py-1.5 font-medium" title="Inside a period reconciled with the supplier's statement">Reconciled</th>
             </tr>
           </thead>
           <tbody>
@@ -85,6 +86,7 @@ export function HistoryPanel({
               <td className="px-2.5 py-1.5"></td>
               <td className="px-2.5 py-1.5 font-medium">{fmt(data.openingBalance)}</td>
               <td className="px-2.5 py-1.5">{drCr(data.openingBalance)}</td>
+              <td className="px-2.5 py-1.5"></td>
             </tr>
             {data.rows.map((r, i) => (
               <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
@@ -94,11 +96,12 @@ export function HistoryPanel({
                 <td className="px-2.5 py-1.5">{r.credit > 0 ? fmt(r.credit) : ""}</td>
                 <td className="px-2.5 py-1.5 font-medium">{fmt(r.balance)}</td>
                 <td className="px-2.5 py-1.5">{drCr(r.balance)}</td>
+                <td className="px-2.5 py-1.5 text-[var(--success-text)]">{data.reconciled.some((p) => r.date >= p.from && r.date <= p.to) ? "✓" : ""}</td>
               </tr>
             ))}
             {data.rows.length === 0 && (
               <tr>
-                <td colSpan={5 + dateColumnCount(mode)} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6 + dateColumnCount(mode)} className="px-4 py-6 text-center text-gray-400">
                   No transactions in this period
                 </td>
               </tr>
@@ -110,6 +113,7 @@ export function HistoryPanel({
               <td className="px-2.5 py-1.5"></td>
               <td className="px-2.5 py-1.5">{fmt(data.closingBalance)}</td>
               <td className="px-2.5 py-1.5">{drCr(data.closingBalance)}</td>
+              <td className="px-2.5 py-1.5"></td>
             </tr>
           </tbody>
         </table>

@@ -5,6 +5,7 @@ import { vendors } from "@/db/schema";
 import { requireTenantSession } from "@/lib/session";
 import { getSupplierLines } from "@/lib/ledger/supplier-balances";
 import { partyBuckets } from "@/lib/ledger/party-statement";
+import { reconciledThrough } from "@/lib/suppliers/reconcile-status";
 import { SuppliersTable } from "./suppliers-table";
 
 export default async function SuppliersPage() {
@@ -12,9 +13,10 @@ export default async function SuppliersPage() {
   if (denied) return denied;
   const session = await requireTenantSession();
 
-  const [supplierList, lines] = await Promise.all([
+  const [supplierList, lines, through] = await Promise.all([
     db.select().from(vendors).where(eq(vendors.tenantId, session.tenantId)).orderBy(asc(vendors.name)),
     getSupplierLines(session.tenantId),
+    reconciledThrough(session.tenantId),
   ]);
 
   // Balances come from each supplier's own ledger account, so a manual journal voucher posted to it is included.
@@ -31,6 +33,7 @@ export default async function SuppliersPage() {
       bills: b.invoices,
       payments: b.payments,
       others: b.others,
+      reconciledTo: through[s.id] ?? "",
     };
   });
 

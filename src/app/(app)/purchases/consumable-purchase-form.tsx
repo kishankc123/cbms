@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { okToChange } from "../suppliers/reconcile/confirm-change";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
@@ -123,6 +125,7 @@ export function ConsumablePurchaseForm({
   const [badFields, setBadFields] = useState<Set<string>>(new Set());
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { report, dialog } = useProblem();
+  const ask = useConfirm();
 
   useEffect(() => {
     if (!showPayment) return;
@@ -179,6 +182,7 @@ export function ConsumablePurchaseForm({
     setBadFields(problem?.field ? new Set([problem.field]) : new Set());
     if (problem) return report(problem.message, problem.target);
 
+    if (initial && !(await okToChange(ask, "bill", initial.billId))) return;
     setSaving(true);
     try {
       const payload = {

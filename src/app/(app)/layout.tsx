@@ -53,7 +53,15 @@ const NAV: NavEntry[] = [
       { href: "/purchases/stockable", label: "Stockable purchase" },
     ],
   },
-  { href: "/suppliers", icon: "suppliers", label: "Suppliers" },
+  {
+    href: "/suppliers",
+    icon: "suppliers",
+    label: "Suppliers",
+    children: [
+      { href: "/suppliers", label: "Suppliers" },
+      { href: "/suppliers/reconcile", label: "Reconcile statements" },
+    ],
+  },
   {
     href: "/expenses",
     icon: "expenses",
@@ -192,6 +200,7 @@ const NAV_ACCESS: Record<string, string> = {
   "/return/purchase": "purchases",
   "/purchases": "purchases",
   "/suppliers": "purchases",
+  "/suppliers/reconcile": "purchases",
   "/expenses": "expenses",
   "/payments": "payments",
   "/inventory": "inventory",

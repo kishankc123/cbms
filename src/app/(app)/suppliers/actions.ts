@@ -13,6 +13,7 @@ import { syncSupplierOpeningBalanceEntry } from "@/lib/ledger/opening-balance";
 import { getPartyLines } from "@/lib/ledger/party-ledger";
 import { signedOpeningBalance } from "@/lib/ledger/opening-sign";
 import { buildStatement } from "@/lib/ledger/party-statement";
+import { reconciledPeriods } from "@/lib/suppliers/reconcile-status";
 
 function parseOpeningBalance(formData: FormData): string {
   const amount = Math.abs(parseFloat(String(formData.get("openingBalance") ?? "0")) || 0);
@@ -160,5 +161,7 @@ export async function getSupplierHistory(supplierId: string, from?: string, to?:
   // manual journal voucher posted to it, so it always agrees with the Chart of Accounts.
   const lines = supplier.payableAccountId ? (await getPartyLines(session.tenantId, [supplier.payableAccountId])).get(supplier.payableAccountId) ?? [] : [];
   const statement = buildStatement(lines, "credit", { from, to });
-  return { name: supplier.name, openingBalance: statement.openingBalance, closingBalance: statement.closingBalance, rows: statement.rows };
+  // The periods signed off with the supplier, so the history can mark the lines that were reconciled.
+  const reconciled = await reconciledPeriods(session.tenantId, supplierId);
+  return { name: supplier.name, openingBalance: statement.openingBalance, closingBalance: statement.closingBalance, rows: statement.rows, reconciled };
 }
