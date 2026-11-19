@@ -34,6 +34,7 @@ import { parseStatementFile } from "@/lib/banking/parse-statement";
 import { buildStatementTemplate } from "@/lib/banking/statement-template";
 import { normalizeStatementRows, type ColumnMapping } from "@/lib/banking/normalize-rows";
 import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching";
+import { cashStatus } from "@/lib/ledger/cash-reconcile";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -136,6 +137,8 @@ export type AccountOverview = {
   updatedUpTo: string | null;
   /** Lines flagged for review. */
   flagged: number;
+  /** For cash and wallet accounts: where the reconciliation against the cash itself stands (Bank Reconciliation > the cash screen). */
+  cash: { through: string | null; closing: number | null; kind: string | null; unreconciled: number } | null;
 };
 
 /** Every active bank and wallet account with where its reconciliation stands, for the Home screen. */
@@ -168,6 +171,8 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
   const stmt = new Map(statement.map((r) => [r.id, r]));
   const book = new Map(ledger.map((r) => [r.id, Number(r.net)]));
 
+  const cashStates = new Map(await Promise.all(accountList.filter((b) => !b.ledgerCode.startsWith("1010")).map(async (b) => [b.id, await cashStatus(session.tenantId, b.id)] as const)));
+
   return accountList.map((b) => {
     const s = stmt.get(b.id);
     const statementBalance = round2(Number(b.openingBalance) + Number(s?.total ?? 0));
@@ -184,6 +189,7 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
       unreconciled: Number(s?.unreconciled ?? 0),
       updatedUpTo: s?.latest ?? null,
       flagged: Number(s?.flagged ?? 0),
+      cash: cashStates.get(b.id) ?? null,
     };
   });
 }

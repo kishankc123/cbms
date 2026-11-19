@@ -59,6 +59,8 @@ export async function getExpenseCategoryAccounts(tenantId: string) {
         inArray(accounts.subCategory, ["Direct expenses", "Indirect expenses"]),
         ne(accounts.code, "5200"),
         notLike(accounts.code, "5200.%"),
+        // Cash short and excess is where a count difference waits; an expense is never recorded to it.
+        ne(accounts.code, "5930"),
         // The Assets module posts depreciation and disposal losses itself; they are not expense categories to pick.
         notExists(db.select({ one: accountRoles.id }).from(accountRoles).where(and(eq(accountRoles.accountId, accounts.id), inArray(accountRoles.roleKey, ["asset_dep_expense", "asset_disposal_loss"])))),
         notExists(db.select({ one: child.id }).from(child).where(and(eq(child.parentAccountId, accounts.id), eq(child.isActive, true))))
