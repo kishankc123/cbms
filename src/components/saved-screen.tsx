@@ -36,7 +36,7 @@ export function SavedScreen({
 }) {
   return (
     <Modal
-      size="sm"
+      size="md"
       title={title}
       onClose={onDone}
       footer={
