@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { setAttendance, type AttendanceStatus } from "../attendance-actions";
 import { useCalendar } from "@/components/calendar/calendar-provider";
-import { monthCells, monthNames, weekdayOf } from "@/lib/calendar";
+import { monthCells, monthNames, todayIso, weekdayOf } from "@/lib/calendar";
+import { useProblem } from "@/components/problem-dialog";
+import { dayState, markProblem } from "@/lib/payroll/attendance-rules";
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "present", label: "Present" },
@@ -18,12 +20,21 @@ export function AttendancePanel({
   month,
   year,
   records,
+  joiningDate,
+  leavingDate,
+  employeeName,
 }: {
   employeeId: string;
   month: number;
   year: number;
   records: Record<string, AttendanceStatus>;
+  joiningDate: string;
+  leavingDate: string | null;
+  employeeName: string;
 }) {
+  const { report, dialog } = useProblem();
+  const today = todayIso();
+  const person = { fullName: employeeName, joiningDate, leavingDate };
   const router = useRouter();
   const calendar = useCalendar();
   const [selectedMonth, setSelectedMonth] = useState(month);
@@ -42,6 +53,8 @@ export function AttendancePanel({
     try {
       await setAttendance({ employeeId, date: dateStr, status });
       router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not save", null);
     } finally {
       setSaving(null);
     }
@@ -82,7 +95,8 @@ export function AttendancePanel({
               <select
                 value={status}
                 onChange={(e) => handleChange(d.dateStr, e.target.value as AttendanceStatus)}
-                disabled={saving === d.dateStr}
+                disabled={saving === d.dateStr || dayState(person, d.dateStr, today) !== "open"}
+                title={markProblem(person, d.dateStr, today) ?? undefined}
                 className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
               >
                 {STATUS_OPTIONS.map((o) => (
@@ -95,6 +109,7 @@ export function AttendancePanel({
           );
         })}
       </div>
+      {dialog}
     </div>
   );
 }

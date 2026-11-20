@@ -967,6 +967,20 @@
       "when": 1795170538734,
       "tag": "0137_item_purchase_vat_treatment",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1795185897646,
+      "tag": "0138_attendance_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1795197288394,
+      "tag": "0139_cash_recon_through_date",
+      "breakpoints": true
     }
   ]
 }

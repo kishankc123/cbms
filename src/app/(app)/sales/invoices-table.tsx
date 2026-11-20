@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
-import { voidInvoice } from "./actions";
+import { getInvoiceDetail, voidInvoice } from "./actions";
+import { DocumentDetailDialog } from "@/components/document-detail-dialog";
+import type { DocumentDetailView } from "@/lib/ledger/document-detail";
+import { NewPaymentModal } from "../payments/new-payment-modal";
+import { getPaymentFormOptions } from "../payments/actions";
 import { EditSingleInvoiceModal } from "./edit-single-invoice-modal";
 import { RowMenu } from "@/components/row-menu";
 import { useProblem } from "@/components/problem-dialog";
@@ -96,6 +100,9 @@ export function InvoicesTable({
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The details pop-up of a row (double-tap, double-click or swipe), and the payment form opened from it.
+  const [detail, setDetail] = useState<DocumentDetailView | null>(null);
+  const [payForm, setPayForm] = useState<{ options: Awaited<ReturnType<typeof getPaymentFormOptions>>; invoice: DocumentDetailView } | null>(null);
   const router = useRouter();
   const ask = useConfirm();
   const { report, dialog } = useProblem();
@@ -111,6 +118,24 @@ export function InvoicesTable({
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Could not void the invoice", null);
+    }
+  }
+
+  async function openDetail(id: string) {
+    try {
+      setDetail(await getInvoiceDetail(id));
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not open the invoice", null);
+    }
+  }
+
+  async function recordPayment(d: DocumentDetailView) {
+    try {
+      const options = await getPaymentFormOptions();
+      setDetail(null);
+      setPayForm({ options, invoice: d });
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not open the payment form", null);
     }
   }
 
@@ -270,6 +295,7 @@ export function InvoicesTable({
                 <Td className="whitespace-nowrap">
                   <RowActions>
                     <RowMenu
+                      onOpen={() => void openDetail(inv.id)}
                       items={[
                         { label: "Edit", onClick: () => setEditingId(inv.id), hidden: inv.status === "void" },
                         { label: "Void", onClick: () => voidRow(inv), danger: true, hidden: inv.status === "void" },
@@ -290,6 +316,34 @@ export function InvoicesTable({
         ))}
 
       {editingId && <EditSingleInvoiceModal invoiceId={editingId} customers={customers} items={items} cashBankAccounts={cashBankAccounts} customerBalances={customerBalances} vatRate={vatRate} onClose={() => setEditingId(null)} />}
+      {detail && (() => {
+        const row = invoiceList.find((i) => i.id === detail.id);
+        const voided = detail.status === "void";
+        return (
+          <DocumentDetailDialog
+            detail={detail}
+            badge={row ? BADGE[stateOf(row, today)] : BADGE.unpaid}
+            onClose={() => setDetail(null)}
+            actions={[
+              { label: "Record payment", primary: true, onClick: () => void recordPayment(detail), hidden: !detail.canPay || voided || detail.balance <= 0.005 },
+              { label: "Edit", onClick: () => { setDetail(null); setEditingId(detail.id); }, hidden: voided || !detail.canEdit },
+              { label: "Void", danger: true, onClick: () => { setDetail(null); if (row) void voidRow(row); }, hidden: voided || !detail.canVoid || !row },
+            ]}
+          />
+        );
+      })()}
+      {payForm && (
+        <NewPaymentModal
+          formOptions={payForm.options}
+          fixedDirection="money_in"
+          prefill={{ amount: payForm.invoice.balance, date: today, accountId: "", customerId: payForm.invoice.partyId ?? undefined, description: `Payment for invoice ${payForm.invoice.number}` }}
+          onDone={() => {
+            setPayForm(null);
+            router.refresh();
+          }}
+          onCancel={() => setPayForm(null)}
+        />
+      )}
       {dialog}
     </div>
   );

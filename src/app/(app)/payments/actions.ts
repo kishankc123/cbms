@@ -15,7 +15,6 @@ import {
   purchaseBills,
   expenses,
   journalLines,
-  bankReconciliationMatchJournalLines,
   complianceObligations,
   staffAdvances,
 } from "@/db/schema";
@@ -23,6 +22,7 @@ import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
 import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
 import { getCurrentSalary } from "@/lib/payroll/salary";
+import { reconciledEntryIds } from "@/lib/ledger/reconciled-entries";
 import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
@@ -220,15 +220,7 @@ async function getAllocationStatusMap(tenantId: string, paymentIds: string[]) {
   return map;
 }
 
-async function getReconciledJournalEntryIds(tenantId: string, journalEntryIds: string[]): Promise<Set<string>> {
-  if (journalEntryIds.length === 0) return new Set();
-  const rows = await db
-    .select({ journalEntryId: journalLines.journalEntryId })
-    .from(bankReconciliationMatchJournalLines)
-    .innerJoin(journalLines, eq(journalLines.id, bankReconciliationMatchJournalLines.journalLineId))
-    .where(inArray(journalLines.journalEntryId, journalEntryIds));
-  return new Set(rows.map((r) => r.journalEntryId));
-}
+const getReconciledJournalEntryIds = reconciledEntryIds;
 
 export async function listPayments(filters: PaymentListFilters) {
   const session = await requireTenantSession();

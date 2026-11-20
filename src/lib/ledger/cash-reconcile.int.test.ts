@@ -7,8 +7,9 @@ import { createTempOrg } from "@/test/temp-org";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
 import { saveCashCount } from "@/lib/ledger/cash-count";
-import { cashHistory, cashStatus, cashWorkspace, explainExcess, explainWithExpense, getCashLock, incomeAccountOptions, reopenCashBackTo, signOffCash, unexplainedTotal } from "./cash-reconcile";
+import { cashHistory, cashStatus, cashWorkspace, explainExcess, reconEntries, explainWithExpense, getCashLock, incomeAccountOptions, reopenCashBackTo, signOffCash, unexplainedTotal } from "./cash-reconcile";
 import { findShortExcessAccount } from "./cash-short-excess";
+import { reconciledEntryIds } from "./reconciled-entries";
 import type { ExpenseInput } from "@/lib/expenses/expense-records";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -82,6 +83,14 @@ describe("reconciling a cash account", () => {
     const h = await cashHistory(org.tenantId, bankAccountId);
     expect(h[0]).toMatchObject({ opening: 100, closing: 900, kind: "confirmed", counted: null });
     expect((await cashStatus(org.tenantId, bankAccountId)).unreconciled).toBe(0);
+    // "Up to" is the latest entry it took in (9 Oct), not the cut-off that was picked (10 Oct).
+    expect(h[0]).toMatchObject({ asOf: "2026-10-10", through: "2026-10-09", entries: 7 });
+    expect((await cashStatus(org.tenantId, bankAccountId)).through).toBe("2026-10-09");
+    expect((await reconEntries(org.tenantId, firstId)).map((e) => e.reference)).toEqual(expect.arrayContaining(["S-1", "E-2"]));
+    // The Reconciliation column of Payments counts a cash reconciliation, not only a bank match.
+    const entry = (await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.referenceNumber, "S-1"))))[0];
+    expect((await reconciledEntryIds(org.tenantId, [entry.id])).has(entry.id)).toBe(true);
+    expect((await reconciledEntryIds(other.tenantId, [entry.id])).has(entry.id)).toBe(false);
   });
 
   it("opens the next one at the last closing, and a count that is short is adjusted into the one short and excess account", async () => {
@@ -93,7 +102,8 @@ describe("reconciling a cash account", () => {
     expect(w.lines).toHaveLength(2);
     expect(w.count?.total).toBe(1050);
     // Books say 1,100; counted 1,050: 50 short.
-    await expect(signOffCash(org.tenantId, org.userId, { bankAccountId, asOf: "2026-10-09", lineIds: [], useCount: false, adjust: false, note: "" })).rejects.toThrow(/already reconciled up to/);
+    // Reconciling nothing, with no count, is refused whatever the cut-off date.
+    await expect(signOffCash(org.tenantId, org.userId, { bankAccountId, asOf: "2026-10-09", lineIds: [], useCount: false, adjust: false, note: "" })).rejects.toThrow(/Tick the entries/);
     const r = await signOffCash(org.tenantId, org.userId, { bankAccountId, asOf: "2026-10-11", lineIds: w.lines.map((l) => l.id), useCount: true, adjust: true, note: "Counted by Sita" });
     shortId = r.id;
     expect(r).toMatchObject({ closing: 1050, adjustment: -50 });
@@ -136,8 +146,8 @@ describe("reconciling a cash account", () => {
 
   it("locks a ticked entry: it can't be reversed, and nothing is posted to an earlier day of a reconciled account", async () => {
     const lock = await getCashLock(org.tenantId, firstSale);
-    expect(lock).toMatchObject({ asOf: "2026-10-10", accountName: "Cash" });
-    expect(lock?.reopens).toEqual(["2026-10-12", "2026-10-11", "2026-10-10"]);
+    expect(lock).toMatchObject({ asOf: "2026-10-09", accountName: "Cash" });
+    expect(lock?.reopens).toEqual(["2026-10-12", "2026-10-11", "2026-10-09"]);
     const [entry] = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceId, firstSale)));
     await expect(reverseJournalEntry(org.tenantId, entry.id, org.userId)).rejects.toThrow(/locked/);
     await expect(receipt("2026-10-11", "LATE-1", 10)).rejects.toThrow(/reconciled up to 2026-10-12/);

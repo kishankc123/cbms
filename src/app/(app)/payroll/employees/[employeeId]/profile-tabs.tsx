@@ -72,6 +72,9 @@ export function ProfileTabs(props: {
           month={props.attendanceMonth}
           year={props.attendanceYear}
           records={props.attendanceRecords}
+          joiningDate={props.employee.joiningDate}
+          leavingDate={props.employee.leavingDate}
+          employeeName={props.employee.fullName}
         />
       )}
       {tab === "payslips" && <PayslipsPanel payslips={props.payslips} />}

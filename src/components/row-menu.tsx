@@ -8,8 +8,12 @@ export type RowMenuItem = { label: string; onClick: () => void; danger?: boolean
 /**
  * A three-dot button that opens a small menu of row actions (View, Edit, Print, Void...). The menu is portalled and
  * positioned against the button, so a table's overflow never clips it; it flips upward near the bottom of the screen.
+ *
+ * The same menu also opens from the row itself, which is easier with a thumb: double-click or double-tap anywhere on the row, or swipe the row to the left.
+ * A double-click, double-tap or swipe that starts on a button, link or field does what that control does instead, and a row that opens
+ * its details when tapped keeps doing that.
  */
-export function RowMenu({ items, label = "Actions" }: { items: RowMenuItem[]; label?: string }) {
+export function RowMenu({ items, label = "Actions", onOpen }: { items: RowMenuItem[]; label?: string; /** What a double-tap, double-click or swipe on the row does instead of opening this menu (the details pop-up of an invoice or bill). */ onOpen?: () => void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -33,6 +37,55 @@ export function RowMenu({ items, label = "Actions" }: { items: RowMenuItem[]; la
       window.removeEventListener("scroll", place, true);
     };
   }, [open, visible.length]);
+
+  // Opening the menu from the row: double-click, double-tap or a swipe to the left.
+  useEffect(() => {
+    const row = buttonRef.current?.closest("tr");
+    // A row that already opens something on a tap keeps doing that, unless the table says what the gestures should open (its own details pop-up).
+    if (!row || (row.classList.contains("cursor-pointer") && !onOpen)) return;
+    const interactive = (t: EventTarget | null) => t instanceof Element && Boolean(t.closest("button, a, input, select, textarea, label, [role=menuitem]"));
+    const openFromRow = () => {
+      window.getSelection()?.removeAllRanges();
+      if (onOpen) onOpen();
+      else setOpen(true);
+    };
+    const onDouble = (e: MouseEvent) => {
+      if (!interactive(e.target)) openFromRow();
+    };
+    let start: { x: number; y: number; t: number } | null = null;
+    let lastTap = 0;
+    const onStart = (e: TouchEvent) => {
+      const p = e.touches[0];
+      start = e.touches.length === 1 && !interactive(e.target) ? { x: p.clientX, y: p.clientY, t: Date.now() } : null;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!start) return;
+      const p = e.changedTouches[0];
+      const dx = p.clientX - start.x;
+      const dy = p.clientY - start.y;
+      const took = Date.now() - start.t;
+      start = null;
+      if (dx < -60 && Math.abs(dy) < 40 && took < 700) return openFromRow();
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && took < 300) {
+        const now = Date.now();
+        if (now - lastTap < 350) {
+          lastTap = 0;
+          openFromRow();
+        } else lastTap = now;
+      }
+    };
+    const touchAction = row.style.touchAction;
+    row.style.touchAction = "manipulation";
+    row.addEventListener("dblclick", onDouble);
+    row.addEventListener("touchstart", onStart, { passive: true });
+    row.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      row.style.touchAction = touchAction;
+      row.removeEventListener("dblclick", onDouble);
+      row.removeEventListener("touchstart", onStart);
+      row.removeEventListener("touchend", onEnd);
+    };
+  }, [onOpen]);
 
   useEffect(() => {
     if (!open) return;

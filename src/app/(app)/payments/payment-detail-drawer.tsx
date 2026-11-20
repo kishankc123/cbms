@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { getPaymentDetail, voidPayment } from "./actions";
 import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { PAYMENT_TYPE_LABELS } from "./payment-types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useFormatDate, useFormatDateTime } from "@/components/calendar/calendar-provider";
 
 type Detail = Awaited<ReturnType<typeof getPaymentDetail>>;
-const fmt = (n: number) => n.toFixed(2);
+const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/**
+ * A payment's details as a centered pop-up, like an invoice, a bill or an expense: what it was for, the amount, the documents it settled, and the
+ * buttons that apply. The accounting entry, the edit history and the audit trail are there too, folded away until opened. Voiding asks for its reason
+ * inside the pop-up.
+ */
 export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { paymentId: string; onClose: () => void; onVoided: () => void; onEdit: (detail: Detail) => void }) {
   const fmtDT = useFormatDateTime();
   const fmtDate = useFormatDate();
@@ -18,6 +27,10 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
   const [showVoid, setShowVoid] = useState(false);
   // Voiding a supplier payment inside a period already reconciled with them is allowed, with a word of warning.
   const [reconWarning, setReconWarning] = useState<string | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!showVoid) return;
     let live = true;
@@ -28,9 +41,6 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
       live = false;
     };
   }, [showVoid, paymentId]);
-  const [voidReason, setVoidReason] = useState("");
-  const [voiding, setVoiding] = useState(false);
-  const [voidError, setVoidError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,17 +52,9 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
     };
   }, [paymentId]);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showVoid) onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, showVoid]);
-
   async function handleVoid() {
     if (!voidReason.trim()) {
-      setVoidError("A void reason is required.");
+      setVoidError("A reason is required.");
       return;
     }
     setVoiding(true);
@@ -67,136 +69,133 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
     }
   }
 
+  const canVoid = detail && detail.origin === "standalone" && detail.status === "posted";
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onClose} />
-
-      <div className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-lg space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Payment Detail</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
-            ✕
-          </button>
-        </div>
-
-        {loadError && <p className="text-sm text-red-600">{loadError}</p>}
-        {!detail && !loadError && <p className="text-sm text-gray-500">Loading...</p>}
-
-        {detail && (
+    <Modal
+      size="md"
+      title={detail ? `Payment ${detail.paymentNumber}` : "Payment"}
+      description={detail ? `${detail.party || "No party"} · ${PAYMENT_TYPE_LABELS[detail.paymentType] ?? detail.paymentType}` : undefined}
+      onClose={onClose}
+      dismissible={!voiding}
+      footer={
+        detail && !showVoid ? (
           <>
-            <section className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">{detail.paymentNumber}</h3>
-                <div className="flex gap-2">
-                  <StatusPill tone={detail.status === "voided" ? "critical" : detail.status === "draft" ? "pending" : "success"}>{detail.status}</StatusPill>
-                  <StatusPill tone={detail.reconciliationStatus === "reconciled" ? "success" : "pending"}>{detail.reconciliationStatus}</StatusPill>
-                </div>
-              </div>
-              <DetailGrid
-                rows={[
-                  ["Date", fmtDate(detail.paymentDate)],
-                  ["Direction", detail.direction === "money_in" ? "Money In" : "Money Out"],
-                  ["Type", PAYMENT_TYPE_LABELS[detail.paymentType] ?? detail.paymentType],
-                  ["Party", detail.party],
-                  ["Payment Mode", detail.paymentModeName ?? detail.paymentMethod.replace("_", " ")],
-                  ["Account", detail.accountName],
-                  ...(detail.transferToAccountName ? [["To Account", detail.transferToAccountName] as [string, string]] : []),
-                  ["Reference", detail.referenceNumber ?? "—"],
-                  ...(detail.chequeNumber ? [["Cheque No.", detail.chequeNumber] as [string, string]] : []),
-                  ["Amount", fmt(detail.amount)],
-                  ["Description", detail.description ?? "—"],
-                ]}
-              />
-            </section>
-
-            {detail.allocations.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-gray-900">Allocation</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
-                      <tr>
-                        <th className="px-2 py-1.5 text-xs">Target</th>
-                        <th className="px-2 py-1.5 text-xs text-right">Allocated</th>
-                        <th className="px-2 py-1.5 text-xs text-right">Outstanding</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detail.allocations.map((a, i) => (
-                        <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
-                          <td className="px-2 py-1 font-mono text-xs">{a.label}</td>
-                          <td className="px-2 py-1 text-right">{fmt(a.allocatedAmount)}</td>
-                          <td className="px-2 py-1 text-right">{a.outstandingAfter !== null ? fmt(a.outstandingAfter) : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+            {detail.canEdit && (
+              <Button variant="secondary" onClick={() => onEdit(detail)}>
+                Edit
+              </Button>
             )}
+            {canVoid && (
+              <Button variant="secondary" className="!text-[var(--danger-text)]" onClick={() => setShowVoid(true)}>
+                Void
+              </Button>
+            )}
+            <Button variant="primary" onClick={onClose}>
+              Close
+            </Button>
+          </>
+        ) : undefined
+      }
+    >
+      {loadError && <p className="text-sm text-[var(--danger-text)]">{loadError}</p>}
+      {!detail && !loadError && <p className="text-sm text-ink-2">Loading...</p>}
 
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900">Accounting Entry</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
-                    <tr>
-                      <th className="px-2 py-1.5 text-xs">Account</th>
-                      <th className="px-2 py-1.5 text-xs text-right">Debit</th>
-                      <th className="px-2 py-1.5 text-xs text-right">Credit</th>
+      {detail && (
+        <div className="space-y-4 text-[13px] text-ink">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone={detail.status === "voided" ? "critical" : detail.status === "draft" ? "pending" : "success"}>{detail.status === "posted" ? "Posted" : detail.status}</StatusPill>
+            <StatusPill tone={detail.reconciliationStatus === "reconciled" ? "success" : "pending"}>{detail.reconciliationStatus === "reconciled" ? "Reconciled" : "Not reconciled"}</StatusPill>
+            <span className="text-ink-2">{detail.direction === "money_in" ? "Money in" : "Money out"}</span>
+          </div>
+
+          <dl className="space-y-1 rounded-lg bg-surface-2 p-3">
+            <Row label="Amount" value={<span className="text-[15px] font-medium">{fmt(detail.amount)}</span>} />
+            <Row label="Date" value={fmtDate(detail.paymentDate)} />
+            <Row label={detail.direction === "money_in" ? "Paid into" : "Paid from"} value={`${detail.paymentModeName ?? detail.paymentMethod.replace("_", " ")} · ${detail.accountName}`} />
+            {detail.transferToAccountName && <Row label="To account" value={detail.transferToAccountName} />}
+            {(detail.referenceNumber || detail.chequeNumber) && <Row label="Reference" value={[detail.referenceNumber, detail.chequeNumber ? `Cheque ${detail.chequeNumber}` : ""].filter(Boolean).join(" · ")} />}
+            {detail.description && <Row label="Note" value={detail.description} />}
+          </dl>
+
+          {detail.allocations.length > 0 && (
+            <section>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-2">Settled</h3>
+              <table className="w-full border-collapse text-xs">
+                <thead className="text-ink-2">
+                  <tr className="border-b border-line">
+                    <th className="py-1 text-left font-medium">Document</th>
+                    <th className="py-1 text-right font-medium">Applied</th>
+                    <th className="py-1 text-right font-medium">Still owed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.allocations.map((a, i) => (
+                    <tr key={i}>
+                      <td className="py-1">{a.label}</td>
+                      <td className="py-1 text-right tabular-nums">{fmt(a.allocatedAmount)}</td>
+                      <td className="py-1 text-right tabular-nums">{a.outstandingAfter !== null ? fmt(a.outstandingAfter) : "—"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {detail.journalLines.map((l, i) => (
-                      <tr key={i} className="border-b border-line transition-colors hover:bg-hover">
-                        <td className="px-2 py-1">{l.accountName}</td>
-                        <td className="px-2 py-1 text-right">{l.debit > 0 ? fmt(l.debit) : ""}</td>
-                        <td className="px-2 py-1 text-right">{l.credit > 0 ? fmt(l.credit) : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </section>
+          )}
 
-            {detail.notes && (
-              <section>
-                <h3 className="text-sm font-semibold text-gray-900">Internal Notes</h3>
-                <p className="text-sm text-gray-600">{detail.notes}</p>
-              </section>
-            )}
-            {detail.attachmentUrl && (
-              <section>
-                <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
-                <a href={detail.attachmentUrl} target="_blank" rel="noreferrer" className="text-sm text-[var(--accent-text)] hover:underline break-all">
-                  {detail.attachmentUrl}
-                </a>
-              </section>
+          <div className="border-b border-line">
+            <Fold title="Accounting entry">
+              <table className="w-full border-collapse text-xs">
+                <thead className="text-ink-2">
+                  <tr className="border-b border-line">
+                    <th className="py-1 text-left font-medium">Account</th>
+                    <th className="py-1 text-right font-medium">Debit</th>
+                    <th className="py-1 text-right font-medium">Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.journalLines.map((l, i) => (
+                    <tr key={i}>
+                      <td className="py-1">{l.accountName}</td>
+                      <td className="py-1 text-right tabular-nums">{l.debit > 0 ? fmt(l.debit) : ""}</td>
+                      <td className="py-1 text-right tabular-nums">{l.credit > 0 ? fmt(l.credit) : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Fold>
+
+            {(detail.notes || detail.attachmentUrl) && (
+              <Fold title="Notes and attachment">
+                {detail.notes && <p className="text-ink-2">{detail.notes}</p>}
+                {detail.attachmentUrl && (
+                  <a href={detail.attachmentUrl} target="_blank" rel="noreferrer" className="break-all text-accent-text hover:underline">
+                    {detail.attachmentUrl}
+                  </a>
+                )}
+              </Fold>
             )}
 
             {detail.history.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold text-gray-900">Edit history</h3>
-                <div className="space-y-3">
+              <Fold title="Edit history" count={detail.history.length}>
+                <div className="space-y-2">
                   {detail.history.map((h) => (
-                    <div key={h.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-                      <p className="text-xs text-gray-500">
+                    <div key={h.id} className="rounded-lg border border-line p-2.5">
+                      <p className="text-xs text-ink-2">
                         Edited by {h.userName} on {fmtDT(h.at)}
                       </p>
-                      <table className="mt-1.5 w-full text-xs">
-                        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
-                          <tr>
-                            <th className="pr-2 py-0.5 font-medium">Field</th>
-                            <th className="pr-2 py-0.5 font-medium">Was</th>
-                            <th className="py-0.5 font-medium">Now</th>
+                      <table className="mt-1 w-full border-collapse text-xs">
+                        <thead className="text-ink-2">
+                          <tr className="border-b border-line">
+                            <th className="py-0.5 pr-2 text-left font-medium">Field</th>
+                            <th className="py-0.5 pr-2 text-left font-medium">Was</th>
+                            <th className="py-0.5 text-left font-medium">Now</th>
                           </tr>
                         </thead>
                         <tbody>
                           {h.changes.map((c) => (
-                            <tr key={c.field} className="border-b border-line transition-colors hover:bg-hover align-top">
-                              <td className="pr-2 py-0.5 text-gray-600">{c.field}</td>
-                              <td className="pr-2 py-0.5 text-gray-500 break-words">{c.before}</td>
-                              <td className="py-0.5 text-gray-900 break-words">{c.after}</td>
+                            <tr key={c.field} className="align-top">
+                              <td className="py-0.5 pr-2 text-ink-2">{c.field}</td>
+                              <td className="break-words py-0.5 pr-2 text-ink-2">{c.before}</td>
+                              <td className="break-words py-0.5">{c.after}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -204,82 +203,74 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
                     </div>
                   ))}
                 </div>
-              </section>
+              </Fold>
             )}
 
-            <section className="space-y-1">
-              <h3 className="text-sm font-semibold text-gray-900">Audit Trail</h3>
-              <DetailGrid
-                rows={[
-                  ["Created", fmtDT(detail.createdAt)],
-                  ...(detail.postedAt ? [["Posted", fmtDT(detail.postedAt)] as [string, string]] : []),
-                  ...(detail.updatedAt ? [["Last edited", fmtDT(detail.updatedAt)] as [string, string]] : []),
-                  ...(detail.voidedAt ? [["Voided", `${fmtDT(detail.voidedAt)} — ${detail.voidReason ?? ""}`] as [string, string]] : []),
-                ]}
+            <Fold title="Audit trail">
+              <dl className="space-y-0.5">
+                <Row label="Created" value={fmtDT(detail.createdAt)} />
+                {detail.postedAt && <Row label="Posted" value={fmtDT(detail.postedAt)} />}
+                {detail.updatedAt && <Row label="Last edited" value={fmtDT(detail.updatedAt)} />}
+                {detail.voidedAt && <Row label="Voided" value={`${fmtDT(detail.voidedAt)}${detail.voidReason ? `: ${detail.voidReason}` : ""}`} />}
+              </dl>
+            </Fold>
+          </div>
+
+          {detail.origin === "embedded" && detail.status !== "voided" && <p className="text-xs text-ink-2">This payment was recorded automatically when the invoice or bill was created. Void or edit that invoice or bill to change it.</p>}
+
+          {showVoid && (
+            <div className="space-y-2 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] p-3">
+              <p className="font-medium text-[var(--danger-text)]">Void this payment?</p>
+              <p className="text-xs text-ink-2">This reverses its entry and takes back what it settled on the invoices, bills or expenses.</p>
+              {reconWarning && <p className="text-xs text-[var(--warning-text)]">{reconWarning}</p>}
+              <Input
+                value={voidReason}
+                onChange={(e) => {
+                  setVoidReason(e.target.value);
+                  setVoidError(null);
+                }}
+                placeholder="Reason (required)"
+                aria-label="Reason for voiding"
               />
-            </section>
-
-            {detail.origin === "embedded" && detail.status !== "voided" && (
-              <p className="text-xs text-gray-500">
-                This payment was recorded automatically when the invoice/bill was created. Void or edit the source invoice/bill to change it.
-              </p>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              {detail.canEdit && (
-                <button type="button" onClick={() => onEdit(detail)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
-                  Edit
-                </button>
-              )}
-              {detail.origin === "standalone" && detail.status === "posted" && (
-                <button type="button" onClick={() => setShowVoid(true)} className="rounded border border-red-300 text-red-600 hover:bg-red-50 text-sm px-4 py-1.5">
-                  Void
-                </button>
-              )}
-              <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50">
-                Close
-              </button>
-            </div>
-
-            {showVoid && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setShowVoid(false)} />
-                <div className="relative w-full max-w-sm rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Void payment {detail.paymentNumber}</h3>
-                  <p className="text-xs text-gray-500">This reverses its journal entry and rolls back any invoice/bill/expense allocation it made.</p>
-                  {reconWarning && <p className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">{reconWarning}</p>}
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Reason</label>
-                    <input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-full" />
-                  </div>
-                  {voidError && <p className="text-xs text-red-600">{voidError}</p>}
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setShowVoid(false)} className="rounded px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
-                      Cancel
-                    </button>
-                    <button type="button" onClick={handleVoid} disabled={voiding} className="rounded bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 disabled:opacity-50">
-                      {voiding ? "Voiding..." : "Void Payment"}
-                    </button>
-                  </div>
-                </div>
+              {voidError && <p className="text-xs text-[var(--danger-text)]">{voidError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setShowVoid(false)} disabled={voiding}>
+                  Keep it
+                </Button>
+                <Button variant="secondary" className="!text-[var(--danger-text)]" onClick={handleVoid} loading={voiding}>
+                  Void payment
+                </Button>
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-ink-2">{label}</dt>
+      <dd className="text-right tabular-nums">{value}</dd>
     </div>
   );
 }
 
-function DetailGrid({ rows }: { rows: [string, string][] }) {
+// A section that stays closed until it is opened, so the pop-up stays short.
+function Fold({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-      {rows.map(([label, value]) => (
-        <div key={label} className="contents">
-          <span className="text-gray-500">{label}</span>
-          <span className="text-gray-900">{value}</span>
-        </div>
-      ))}
+    <div className="border-t border-line">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-9 w-full items-center justify-between text-left text-[13px] text-ink">
+        <span>
+          {title}
+          {count ? <span className="text-ink-2"> ({count})</span> : null}
+        </span>
+        <ChevronDown size={15} className={`text-ink-2 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {open && <div className="pb-2.5">{children}</div>}
     </div>
   );
 }

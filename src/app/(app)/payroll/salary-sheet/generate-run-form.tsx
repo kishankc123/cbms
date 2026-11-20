@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
 import { generatePayrollRun } from "./actions";
+import { getAttendanceCheckNotice } from "../employees/attendance-actions";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
 
@@ -20,6 +22,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
+  const ask = useConfirm();
 
   function toggleEmployee(id: string) {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
@@ -28,6 +31,9 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
   async function handleGenerate() {
     setSaving(true);
     try {
+      // Unmarked days count as present: ask before paying a month whose attendance nobody checked.
+      const notice = await getAttendanceCheckNotice({ month, year, calendar });
+      if (!notice.checked && !(await ask("Attendance for this month has not been marked as checked, so every day nobody marked will count as present. Generate payroll anyway?", { confirmLabel: "Generate anyway" }))) return;
       const runId = await generatePayrollRun({ month, year, calendar, employeeIds: selectedIds });
       router.push(`/payroll/salary-sheet/${runId}`);
     } catch (e) {

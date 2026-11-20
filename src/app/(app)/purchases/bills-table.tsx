@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
-import { voidBill } from "./actions";
+import { getBillDetail, voidBill } from "./actions";
+import { DocumentDetailDialog } from "@/components/document-detail-dialog";
+import type { DocumentDetailView } from "@/lib/ledger/document-detail";
+import { NewPaymentModal } from "../payments/new-payment-modal";
+import { getPaymentFormOptions } from "../payments/actions";
 import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { RowMenu } from "@/components/row-menu";
 import { useProblem } from "@/components/problem-dialog";
@@ -99,6 +103,28 @@ export function BillsTable({
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
   const nameOf = (b: Bill) => vendorById.get(b.vendorId ?? "")?.name ?? b.description ?? "";
+
+  // The details pop-up of a row (double-tap, double-click or swipe), and the payment form opened from it.
+  const [detail, setDetail] = useState<DocumentDetailView | null>(null);
+  const [payForm, setPayForm] = useState<{ options: Awaited<ReturnType<typeof getPaymentFormOptions>>; bill: DocumentDetailView } | null>(null);
+
+  async function openDetail(id: string) {
+    try {
+      setDetail(await getBillDetail(id));
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not open the bill", null);
+    }
+  }
+
+  async function recordPayment(d: DocumentDetailView) {
+    try {
+      const options = await getPaymentFormOptions();
+      setDetail(null);
+      setPayForm({ options, bill: d });
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not open the payment form", null);
+    }
+  }
 
   async function voidRow(b: Bill) {
     const warning = await getReconciledWarningAction({ kind: "bill", id: b.id }).catch(() => null);
@@ -276,6 +302,7 @@ export function BillsTable({
                 <Td className="whitespace-nowrap">
                   <RowActions>
                     <RowMenu
+                      onOpen={() => void openDetail(b.id)}
                       items={[
                         { label: b.detailsPending ? "Add item details" : "Edit", onClick: () => onEdit?.(b.id), hidden: b.status === "void" || !onEdit },
                         { label: "Void", onClick: () => voidRow(b), danger: true, hidden: b.status === "void" },
@@ -294,6 +321,34 @@ export function BillsTable({
         ) : (
           <EmptyState icon={ShoppingCart} title="No bills match" description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
         ))}
+      {detail && (() => {
+        const row = bills.find((x) => x.id === detail.id);
+        const voided = detail.status === "void";
+        return (
+          <DocumentDetailDialog
+            detail={detail}
+            badge={row ? BADGE[stateOf(row, today)] : BADGE.unpaid}
+            onClose={() => setDetail(null)}
+            actions={[
+              { label: "Record payment", primary: true, onClick: () => void recordPayment(detail), hidden: !detail.canPay || voided || detail.balance <= 0.005 || !detail.partyId || !row?.vendorId },
+              { label: detail.detailsPending ? "Add item details" : "Edit", onClick: () => { setDetail(null); onEdit?.(detail.id); }, hidden: voided || !detail.canEdit || !onEdit },
+              { label: "Void", danger: true, onClick: () => { setDetail(null); if (row) void voidRow(row); }, hidden: voided || !detail.canVoid || !row },
+            ]}
+          />
+        );
+      })()}
+      {payForm && (
+        <NewPaymentModal
+          formOptions={payForm.options}
+          fixedDirection="money_out"
+          prefill={{ amount: payForm.bill.balance, date: today, accountId: "", vendorId: payForm.bill.partyId ?? undefined, referenceNumber: payForm.bill.number, description: `Payment for bill ${payForm.bill.number}` }}
+          onDone={() => {
+            setPayForm(null);
+            router.refresh();
+          }}
+          onCancel={() => setPayForm(null)}
+        />
+      )}
       {dialog}
     </div>
   );

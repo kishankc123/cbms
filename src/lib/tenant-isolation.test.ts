@@ -159,7 +159,6 @@ const BASELINE: Record<string, number> = {
   "app/(app)/expenses/recurring/[id]/page.tsx": 1,
   "app/(app)/payments/actions.ts": 6,
   "app/(app)/payroll/employees/actions.ts": 1,
-  "app/(app)/payroll/employees/attendance-actions.ts": 1,
   "app/(app)/payroll/salary-sheet/actions.ts": 6,
   "app/(app)/purchases/actions.ts": 4,
   "app/(app)/return/purchase/actions.ts": 2,

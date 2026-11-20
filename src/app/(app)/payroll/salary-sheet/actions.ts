@@ -15,8 +15,9 @@ import { requireTenantSession, can } from "@/lib/session";
 import { addRunAdjustment, removeRunAdjustment } from "@/lib/payroll/run-adjustments";
 import { computeBasicForPeriod } from "@/lib/payroll/salary";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
-import { daysInMonth as calendarDaysInMonth, isoFromYmd, type CalendarSystem } from "@/lib/calendar";
+import type { CalendarSystem } from "@/lib/calendar";
 import { getOrCreateSettings } from "@/lib/payroll/settings";
+import { eachDate, periodForMonth } from "@/lib/payroll/period";
 import { reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, removeRunRecoveries } from "@/lib/payroll/staff-advances";
@@ -31,34 +32,6 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // The payroll month is a month of the organization's calendar: a BS run for
 // Ashwin 2083 covers the real Ashwin days (29–32 of them). What is stored and
 // calculated on is the pair of real AD dates it maps to.
-function periodForMonth(calendar: CalendarSystem, year: number, month: number, startDay: number, endDay: number) {
-  const lastDay = calendarDaysInMonth(calendar, year, month);
-  if (!lastDay) throw new Error("That month is outside the supported calendar range");
-  const start = Math.min(Math.max(startDay, 1), lastDay);
-  const end = Math.min(Math.max(endDay, start), lastDay);
-  const periodStart = isoFromYmd(calendar, { year, month, day: start });
-  const periodEnd = isoFromYmd(calendar, { year, month, day: end });
-  if (!periodStart || !periodEnd) throw new Error("Invalid payroll month");
-  return { periodStart, periodEnd };
-}
-
-function dayCount(startStr: string, endStr: string) {
-  const start = new Date(startStr + "T00:00:00Z");
-  const end = new Date(endStr + "T00:00:00Z");
-  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-}
-
-function eachDate(startStr: string, endStr: string) {
-  const dates: string[] = [];
-  const cur = new Date(startStr + "T00:00:00Z");
-  const end = new Date(endStr + "T00:00:00Z");
-  while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setUTCDate(cur.getUTCDate() + 1);
-  }
-  return dates;
-}
-
 export type GenerateRunInput = {
   month: number;
   year: number;

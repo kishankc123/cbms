@@ -14,6 +14,7 @@ import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertSettlementAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { filedVatPeriod } from "@/lib/compliance/vat-lock";
+import { purchaseBillDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { decideDetails } from "@/lib/purchases/pending-details";
 import { buildInvoiceJournalLines, computeInvoiceTotals, createStockableInvoiceCore, inventoryValues, type PurchaseInvoiceInput, type PurchaseInvoicePayment } from "@/lib/purchases/stockable-invoice";
 import { todayIso } from "@/lib/calendar";
@@ -222,6 +223,15 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
     lines,
     payments,
   };
+}
+
+/** The details of one bill for the pop-up on its row, with what this person may do with it. */
+export async function getBillDetail(billId: string): Promise<DocumentDetailView> {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
+  const detail = await purchaseBillDetail(session.tenantId, billId);
+  if (!detail) throw new Error("Bill not found");
+  return { ...detail, canEdit: can(session, "purchases", "edit"), canVoid: can(session, "purchases", "void"), canPay: can(session, "payments", "create") };
 }
 
 export async function voidBill(formData: FormData) {

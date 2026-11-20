@@ -113,6 +113,7 @@ const NAV: NavEntry[] = [
     children: [
       { href: "/payroll", label: "Overview" },
       { href: "/payroll/employees", label: "Employees" },
+      { href: "/payroll/attendance", label: "Attendance" },
       { href: "/payroll/structure", label: "Salary structure" },
       { href: "/payroll/incentives", label: "Performance incentives" },
       { href: "/payroll/salary-sheet", label: "Payroll processing" },

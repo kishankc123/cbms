@@ -37,12 +37,12 @@ export async function assertBankPeriodOpen(tenantId: string, date: string, accou
  */
 export async function assertCashPeriodOpen(tenantId: string, date: string, accountIds: string[]) {
   const [closed] = await db
-    .select({ name: accounts.name, through: sql<string>`max(${cashReconciliations.asOfDate})` })
+    .select({ name: accounts.name, through: sql<string>`max(${cashReconciliations.throughDate})` })
     .from(cashReconciliations)
     .innerJoin(accounts, eq(accounts.id, cashReconciliations.accountId))
     .where(and(eq(cashReconciliations.tenantId, tenantId), eq(cashReconciliations.status, "reconciled"), inArray(cashReconciliations.accountId, accountIds)))
     .groupBy(accounts.name)
-    .having(sql`max(${cashReconciliations.asOfDate}) > ${date}`)
+    .having(sql`max(${cashReconciliations.throughDate}) > ${date}`)
     .limit(1);
   if (closed) throw new Error(`${closed.name} has been reconciled up to ${closed.through}, so nothing can be posted to it on an earlier date. An administrator can unlock it: Bank Reconciliation, ${closed.name}, Reopen back to here.`);
 }
@@ -51,7 +51,7 @@ export async function assertCashPeriodOpen(tenantId: string, date: string, accou
 export async function assertEntriesNotCashReconciled(tenantId: string, entryIds: string[]) {
   if (entryIds.length === 0) return;
   const [hit] = await db
-    .select({ through: cashReconciliations.asOfDate, name: accounts.name })
+    .select({ through: cashReconciliations.throughDate, name: accounts.name })
     .from(cashReconciliationLines)
     .innerJoin(cashReconciliations, eq(cashReconciliations.id, cashReconciliationLines.reconId))
     .innerJoin(journalLines, eq(journalLines.id, cashReconciliationLines.journalLineId))
