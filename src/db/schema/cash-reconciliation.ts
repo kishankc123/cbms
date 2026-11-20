@@ -18,6 +18,8 @@ export const cashReconciliations = pgTable(
     /** The ledger account of that cash account, kept so the history survives a change to the link. */
     accountId: uuid("account_id").notNull().references(() => accounts.id),
     asOfDate: date("as_of_date").notNull(),
+    /** The date of the latest entry this reconciliation took in: what the account is really reconciled up to. (asOfDate is only the cut-off picked on the screen.) */
+    throughDate: date("through_date").notNull(),
     opening: numeric("opening", { precision: 18, scale: 2 }).notNull(),
     tickedIn: numeric("ticked_in", { precision: 18, scale: 2 }).notNull().default("0"),
     tickedOut: numeric("ticked_out", { precision: 18, scale: 2 }).notNull().default("0"),

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { can, requireTenantSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import type { ExpenseInput } from "@/lib/expenses/expense-records";
-import { CashReconError, cashWorkspace, explainExcess, explainWithExpense, getCashLock, reopenCashBackTo, signOffCash, type CashLockInfo, type CashWorkspace, type SignOffInput } from "@/lib/ledger/cash-reconcile";
+import { CashReconError, cashWorkspace, explainExcess, explainWithExpense, getCashLock, reconEntries, type ReconEntry, reopenCashBackTo, signOffCash, type CashLockInfo, type CashWorkspace, type SignOffInput } from "@/lib/ledger/cash-reconcile";
 
 // Reconciling a cash account. Whoever can reconcile the bank can reconcile cash. Every action checks first; the work is in lib/ledger/cash-reconcile.ts.
 
@@ -42,6 +42,12 @@ export async function signOffCashAction(input: SignOffInput) {
   const r = await run(() => signOffCash(session.tenantId, session.userId, input));
   refresh(input.bankAccountId);
   return r;
+}
+
+/** The entries one reconciliation took in, for the history. */
+export async function getReconEntriesAction(input: { reconId: string }): Promise<ReconEntry[]> {
+  const session = await guard("view");
+  return run(() => reconEntries(session.tenantId, input.reconId));
 }
 
 /** Whether a document's cash line is locked by a reconciliation, for the banner on its form. */
