@@ -97,7 +97,7 @@ function PaymentForm({
   /** When given, the form edits this payment (its kind cannot change) instead of recording a new one. */
   editing?: EditingPayment;
   /** Opens a new payment with these filled in (from a bank line being reconciled). */
-  prefill?: { amount: number; date: string; accountId: string; /** From a supplier's statement: the supplier, their document number and what it was for. */ vendorId?: string; referenceNumber?: string; description?: string };
+  prefill?: { amount: number; date: string; accountId: string; /** From a supplier's statement or a bill: the supplier, their document number and what it was for. */ vendorId?: string; /** From an invoice: the customer paying. */ customerId?: string; referenceNumber?: string; description?: string };
   carry?: Carry;
   onAnother: (carry?: Carry) => void;
 }) {
@@ -118,7 +118,7 @@ function PaymentForm({
   const [chequeDate, setChequeDate] = useState(editing?.chequeDate ?? "");
   const [chequeBank, setChequeBank] = useState(editing?.chequeBank ?? "");
   const [referenceNumber, setReferenceNumber] = useState(editing?.referenceNumber ?? prefill?.referenceNumber ?? "");
-  const [customerId, setCustomerId] = useState(editing?.customerId ?? "");
+  const [customerId, setCustomerId] = useState(editing?.customerId ?? prefill?.customerId ?? "");
   const [vendorId, setVendorId] = useState(editing?.vendorId ?? prefill?.vendorId ?? "");
   const [employeeId, setEmployeeId] = useState(editing?.employeeId ?? "");
   const [owed, setOwed] = useState<number | null>(null);
@@ -163,7 +163,7 @@ function PaymentForm({
   // The kind of payment follows the direction, except on the first run of a payment that carries the last one's kind over.
   const firstRun = useRef(true);
   useEffect(() => {
-    const keep = firstRun.current && Boolean(carry || prefill?.vendorId);
+    const keep = firstRun.current && Boolean(carry || prefill?.vendorId || prefill?.customerId);
     firstRun.current = false;
     if (editing || keep) return; // an edit keeps the kind of payment it has
     setPaymentType(direction === "money_in" ? "customer_payment" : "supplier_payment");

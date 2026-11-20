@@ -9,6 +9,7 @@ import {
   journalLines,
   type LineItem,
 } from "@/db/schema";
+import { salesInvoiceDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
@@ -164,6 +165,15 @@ export async function recordSalesBatch(input: { rows: BatchInvoiceRow[] }) {
   revalidatePath("/dashboard");
   revalidatePath("/journal");
   revalidatePath("/customers");
+}
+
+/** The details of one invoice for the pop-up on its row, with what this person may do with it. */
+export async function getInvoiceDetail(invoiceId: string): Promise<DocumentDetailView> {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
+  const detail = await salesInvoiceDetail(session.tenantId, invoiceId);
+  if (!detail) throw new Error("Invoice not found");
+  return { ...detail, canEdit: can(session, "sales", "edit"), canVoid: can(session, "sales", "void"), canPay: can(session, "payments", "create") };
 }
 
 export async function voidInvoice(formData: FormData) {
