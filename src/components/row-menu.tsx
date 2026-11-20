@@ -41,8 +41,8 @@ export function RowMenu({ items, label = "Actions", onOpen }: { items: RowMenuIt
   // Opening the menu from the row: double-click, double-tap or a swipe to the left.
   useEffect(() => {
     const row = buttonRef.current?.closest("tr");
-    // A row that already opens its details on a tap has a main action of its own; the gestures stay out of its way.
-    if (!row || row.classList.contains("cursor-pointer")) return;
+    // A row that already opens something on a tap keeps doing that, unless the table says what the gestures should open (its own details pop-up).
+    if (!row || (row.classList.contains("cursor-pointer") && !onOpen)) return;
     const interactive = (t: EventTarget | null) => t instanceof Element && Boolean(t.closest("button, a, input, select, textarea, label, [role=menuitem]"));
     const openFromRow = () => {
       window.getSelection()?.removeAllRanges();
