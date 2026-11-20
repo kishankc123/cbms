@@ -101,6 +101,8 @@ export type CashWorkspace = {
   ledgerBalance: number;
   /** The date of the most recent count of this account, when it is not the date being reconciled. */
   otherCountDate: string | null;
+  /** Open entries that were ticked in a reconciliation that has since been reopened: offered to be ticked again. */
+  remembered: string[];
 };
 
 /** The entries still to reconcile for one cash account up to a date, with the opening figure and the count of that day. */
@@ -117,6 +119,13 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
         .where(and(eq(daybookCashCounts.tenantId, tenantId), eq(daybookCashCounts.accountId, acct.accountId)))
         .orderBy(desc(daybookCashCounts.countDate))
         .limit(1);
+  const reopened = await db
+    .select({ ids: cashReconciliations.rememberedIds, at: cashReconciliations.reopenedAt })
+    .from(cashReconciliations)
+    .where(and(eq(cashReconciliations.tenantId, tenantId), eq(cashReconciliations.accountId, acct.accountId), eq(cashReconciliations.status, "reopened")));
+  const since = last ? last.reconciledAt.getTime() : 0;
+  const openIds = new Set(open.lines.map((l) => l.id));
+  const remembered = [...new Set(reopened.filter((r) => r.at && r.at.getTime() > since).flatMap((r) => r.ids ?? []))].filter((id) => openIds.has(id));
   return {
     account: { id: acct.id, name: acct.name, accountId: acct.accountId },
     asOf,
@@ -126,6 +135,7 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
     count,
     ledgerBalance: round2(all.filter((l) => l.date <= asOf).reduce((s, l) => s + netOf(l), 0)),
     otherCountDate: recent?.day ?? null,
+    remembered,
   };
 }
 
@@ -246,18 +256,59 @@ export async function signOffCash(tenantId: string, userId: string, input: SignO
   return { id: reconId, closing: s.closing, adjustment: s.adjustment };
 }
 
-/** Undoes the latest reconciliation of an account (the caller checks that the person may). The ticked entries become open again; a posted short or excess stays in the books. */
-export async function reopenCash(tenantId: string, userId: string, reconId: string, reason: string) {
+/** The reconciliations of an account from the one given up to the latest, newest first: what unlocking an entry of that one reopens. */
+async function chainFrom(tenantId: string, accountId: string, reconId: string) {
+  const all = await db
+    .select()
+    .from(cashReconciliations)
+    .where(and(eq(cashReconciliations.tenantId, tenantId), eq(cashReconciliations.accountId, accountId), eq(cashReconciliations.status, "reconciled")))
+    .orderBy(desc(cashReconciliations.asOfDate), desc(cashReconciliations.reconciledAt));
+  const at = all.findIndex((r) => r.id === reconId);
+  return at < 0 ? [] : all.slice(0, at + 1);
+}
+
+/**
+ * Unlocks by reopening: the reconciliation given and every later one of the same account, newest first (the caller checks that the person may). The ticked
+ * entries become open and are remembered, so the next reconciliation can tick them again. A short or excess that was posted stays in the books.
+ */
+export async function reopenCashBackTo(tenantId: string, userId: string, reconId: string, reason: string): Promise<{ reopened: number }> {
   const [recon] = await db.select().from(cashReconciliations).where(and(eq(cashReconciliations.id, reconId), eq(cashReconciliations.tenantId, tenantId))).limit(1);
   if (!recon || recon.status !== "reconciled") return fail("That reconciliation was not found.");
-  const last = await lastReconciled(tenantId, recon.accountId);
-  if (!last || last.id !== recon.id) fail("Only the latest reconciliation of an account can be reopened. Reopen the later one first.");
-  if (!reason.trim()) fail("Say why it is being reopened.");
+  if (!reason.trim()) fail("Say why it is being unlocked.");
+  const chain = await chainFrom(tenantId, recon.accountId, recon.id);
   await db.transaction(async (tx) => {
-    await tx.delete(cashReconciliationLines).where(and(eq(cashReconciliationLines.tenantId, tenantId), eq(cashReconciliationLines.reconId, recon.id)));
-    await tx.update(cashReconciliations).set({ status: "reopened", reopenedBy: userId, reopenedAt: new Date(), reopenReason: reason.trim().slice(0, 300) }).where(and(eq(cashReconciliations.id, recon.id), eq(cashReconciliations.tenantId, tenantId)));
+    for (const r of chain) {
+      const lines = await tx.select({ id: cashReconciliationLines.journalLineId }).from(cashReconciliationLines).where(and(eq(cashReconciliationLines.tenantId, tenantId), eq(cashReconciliationLines.reconId, r.id)));
+      await tx.delete(cashReconciliationLines).where(and(eq(cashReconciliationLines.tenantId, tenantId), eq(cashReconciliationLines.reconId, r.id)));
+      await tx
+        .update(cashReconciliations)
+        .set({ status: "reopened", reopenedBy: userId, reopenedAt: new Date(), reopenReason: reason.trim().slice(0, 300), rememberedIds: lines.map((l) => l.id) })
+        .where(and(eq(cashReconciliations.id, r.id), eq(cashReconciliations.tenantId, tenantId)));
+    }
   });
-  await logAuditEvent({ tenantId, userId, action: "cash_reconciliation_reopened", entityType: "cash_reconciliation", entityId: recon.id, after: { asOf: recon.asOfDate, reason: reason.trim() } });
+  for (const r of chain) await logAuditEvent({ tenantId, userId, action: "cash_reconciliation_reopened", entityType: "cash_reconciliation", entityId: r.id, after: { asOf: r.asOfDate, reason: reason.trim(), unlockedFrom: recon.asOfDate } });
+  return { reopened: chain.length };
+}
+
+export type CashLockInfo = CashLock & { canUnlock: boolean };
+
+export type CashLock = { reconId: string; bankAccountId: string; accountName: string; asOf: string; /** the reconciliations that unlocking reopens, newest first */ reopens: string[] };
+
+/** Whether a document's cash line is locked by a cash reconciliation, and what unlocking it would reopen. null when it is not locked. */
+export async function getCashLock(tenantId: string, sourceId: string): Promise<CashLock | null> {
+  const [hit] = await db
+    .select({ reconId: cashReconciliations.id, bankAccountId: cashReconciliations.bankAccountId, accountId: cashReconciliations.accountId, asOf: cashReconciliations.asOfDate, name: accounts.name })
+    .from(cashReconciliationLines)
+    .innerJoin(cashReconciliations, eq(cashReconciliations.id, cashReconciliationLines.reconId))
+    .innerJoin(journalLines, eq(journalLines.id, cashReconciliationLines.journalLineId))
+    .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+    .innerJoin(accounts, eq(accounts.id, cashReconciliations.accountId))
+    .where(and(eq(cashReconciliationLines.tenantId, tenantId), eq(cashReconciliations.status, "reconciled"), eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, sourceId)))
+    .orderBy(asc(cashReconciliations.asOfDate))
+    .limit(1);
+  if (!hit) return null;
+  const chain = await chainFrom(tenantId, hit.accountId, hit.reconId);
+  return { reconId: hit.reconId, bankAccountId: hit.bankAccountId, accountName: hit.name, asOf: hit.asOf, reopens: chain.map((r) => r.asOfDate) };
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------- history
@@ -308,9 +359,12 @@ export async function cashHistory(tenantId: string, bankAccountId: string): Prom
     .where(and(eq(cashReconciliations.tenantId, tenantId), eq(cashReconciliations.accountId, acct.accountId)))
     .orderBy(desc(cashReconciliations.asOfDate), desc(cashReconciliations.reconciledAt));
   const explained = await explainedFor(tenantId, rows.map((x) => x.r.id));
+  const voided = await reversedEntries(tenantId, rows.map((x) => x.r.adjustmentEntryId));
   const latestId = rows.find((x) => x.r.status === "reconciled")?.r.id;
   return rows.map(({ r, who }) => {
-    const e = explainState(Number(r.adjustment), explained.get(r.id) ?? 0);
+    // A short or excess whose entry was voided is no longer there to explain.
+    const standing = !r.adjustmentEntryId || !voided.has(r.adjustmentEntryId);
+    const e = explainState(standing ? Number(r.adjustment) : 0, explained.get(r.id) ?? 0);
     return {
       id: r.id,
       asOf: r.asOfDate,
@@ -333,24 +387,40 @@ export async function cashHistory(tenantId: string, bankAccountId: string): Prom
   });
 }
 
+async function reversedEntries(tenantId: string, ids: (string | null)[]): Promise<Set<string>> {
+  const list = ids.filter((x): x is string => Boolean(x));
+  if (list.length === 0) return new Set();
+  const rows = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, tenantId), inArray(journalEntries.id, list), eq(journalEntries.isReversed, true)));
+  return new Set(rows.map((r) => r.id));
+}
+
 /** How much is still unexplained over all of an organization's reconciliations: for a reminder. */
 export async function unexplainedTotal(tenantId: string): Promise<number> {
   const rows = await db
-    .select({ id: cashReconciliations.id, adjustment: cashReconciliations.adjustment })
+    .select({ id: cashReconciliations.id, adjustment: cashReconciliations.adjustment, entryId: cashReconciliations.adjustmentEntryId })
     .from(cashReconciliations)
-    .where(and(eq(cashReconciliations.tenantId, tenantId), eq(cashReconciliations.status, "reconciled")));
-  const withDiff = rows.filter((r) => Number(r.adjustment) !== 0);
+    .where(eq(cashReconciliations.tenantId, tenantId));
+  const voided = await reversedEntries(tenantId, rows.map((r) => r.entryId));
+  const withDiff = rows.filter((r) => Number(r.adjustment) !== 0 && !(r.entryId && voided.has(r.entryId)));
   const explained = await explainedFor(tenantId, withDiff.map((r) => r.id));
   return round2(withDiff.reduce((s, r) => s + explainState(Number(r.adjustment), explained.get(r.id) ?? 0).remaining, 0));
 }
 
 // --------------------------------------------------------------------------------------------------------------------------------- explaining
 
+/** A posted short or excess still counts unless its entry was voided. */
+async function adjustmentStands(tenantId: string, entryId: string | null): Promise<boolean> {
+  if (!entryId) return false;
+  const [e] = await db.select({ r: journalEntries.isReversed }).from(journalEntries).where(and(eq(journalEntries.id, entryId), eq(journalEntries.tenantId, tenantId))).limit(1);
+  return Boolean(e) && !e.r;
+}
+
 async function loadRecon(tenantId: string, reconId: string) {
   const [recon] = await db.select().from(cashReconciliations).where(and(eq(cashReconciliations.id, reconId), eq(cashReconciliations.tenantId, tenantId))).limit(1);
-  if (!recon || recon.status !== "reconciled") return fail("That reconciliation was not found.");
+  if (!recon) return fail("That reconciliation was not found.");
   const adjustment = Number(recon.adjustment);
   if (adjustment === 0) fail("Nothing was posted at that reconciliation, so there is nothing to explain.");
+  if (recon.status !== "reconciled" && !(await adjustmentStands(tenantId, recon.adjustmentEntryId))) fail("That short or excess was undone, so there is nothing to explain.");
   const explained = (await explainedFor(tenantId, [recon.id])).get(recon.id) ?? 0;
   return { recon, adjustment, state: explainState(adjustment, explained) };
 }

@@ -6,9 +6,11 @@ import { PurchaseInvoiceForm } from "./purchase-invoice-form";
 import { EditPurchaseInvoiceModal } from "./edit-purchase-invoice-modal";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { AmountPurchaseGrid } from "./amount-purchase-grid";
+import { MultiPurchaseInvoices } from "./multi-purchase-invoices";
+import { ImportItems } from "./import/import-items";
 
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; purchasePrice: string };
+type Item = { id: string; name: string; purchasePrice: string; purchaseVatTreatment?: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type Bill = {
   id: string;
@@ -23,7 +25,9 @@ type Bill = {
 
 const TABS = [
   { id: "invoices", label: "Invoices" },
-  { id: "add", label: "Add Invoices" },
+  { id: "single", label: "Single invoice" },
+  { id: "multi", label: "Multi-invoice" },
+  { id: "import", label: "Import purchases" },
   { id: "amount", label: "Add by amount" },
 ] as const;
 
@@ -82,7 +86,7 @@ export function StockableTabs({
       </div>
 
       {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} paymentModes={paymentModes} onEdit={setEditingBillId} />}
-      {tab === "add" && (
+      {tab === "single" && (
         <PurchaseInvoiceForm
           vendors={vendors}
           items={items}
@@ -92,6 +96,10 @@ export function StockableTabs({
           onFinished={() => setTab("invoices")}
         />
       )}
+
+      {tab === "multi" && <MultiPurchaseInvoices vendors={vendors} items={items} cashBankAccounts={cashBankAccounts} vatRate={vatRate} onDirtyChange={setDirty} />}
+
+      {tab === "import" && <ImportItems />}
 
       {tab === "amount" && <AmountPurchaseGrid vendors={vendors} categories={[]} cashBankAccounts={cashBankAccounts} vendorBalances={vendorBalances} vatRate={vatRate} pending onDirtyChange={setDirty} />}
 

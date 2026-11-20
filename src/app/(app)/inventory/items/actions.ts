@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, items, itemUnits, itemGroups, itemCategories, purchaseBills, purchaseReturns, salesInvoices, salesReturns, stockMovements } from "@/db/schema";
+import { isTreatment } from "@/lib/purchases/vat-lines";
 import { requireTenantSession, can } from "@/lib/session";
 
 export type ItemType = "product" | "service" | "saas" | "other";
@@ -27,6 +28,8 @@ export type ItemInput = {
   categoryId: string;
   purchasePrice: number;
   sellingPrice: number;
+  /** How VAT treats this item when it is bought. Taxable when left out. */
+  purchaseVatTreatment?: "taxable" | "zero_rated" | "exempt";
 };
 
 export type CreatedItem = { id: string; name: string; purchasePrice: string; sellingPrice: string };
@@ -122,6 +125,7 @@ export async function createItem(input: ItemInput): Promise<CreatedItem> {
         // Purchase price is a cost basis — meaningless (and never used) unless this item actually tracks stock.
         purchasePrice: inventoryTracking ? round2(input.purchasePrice || 0).toFixed(2) : "0",
         sellingPrice: round2(input.sellingPrice || 0).toFixed(2),
+        purchaseVatTreatment: inventoryTracking && isTreatment(input.purchaseVatTreatment) ? input.purchaseVatTreatment : "taxable",
       })
       .returning();
   } catch (e) {
@@ -191,6 +195,7 @@ export async function updateItem(input: ItemInput & { itemId: string }) {
         categoryId: existing.itemType === "product" ? input.categoryId || null : null,
         purchasePrice: inventoryTracking ? round2(input.purchasePrice || 0).toFixed(2) : "0",
         sellingPrice: round2(input.sellingPrice || 0).toFixed(2),
+        purchaseVatTreatment: inventoryTracking && isTreatment(input.purchaseVatTreatment) ? input.purchaseVatTreatment : "taxable",
       })
       .where(and(eq(items.id, input.itemId), eq(items.tenantId, session.tenantId)));
   } catch (e) {

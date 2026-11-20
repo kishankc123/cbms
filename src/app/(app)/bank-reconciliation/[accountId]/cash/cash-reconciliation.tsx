@@ -140,6 +140,9 @@ export function CashReconciliation({
         <Button onClick={() => setTicked(allTicked ? new Set() : new Set(ws.lines.map((l) => l.id)))} disabled={ws.lines.length === 0 || !canEdit}>
           {allTicked ? "Untick all" : "Select all up to this date"}
         </Button>
+        {ws.remembered.length > 0 && canEdit && (
+          <Button onClick={() => setTicked(new Set(ws.remembered))}>Tick again what was ticked before ({ws.remembered.length})</Button>
+        )}
         {ws.last && (
           <p className="pb-1.5 text-xs text-ink-2">
             Last reconciled up to <D value={ws.last.asOf} />, closing {money.format(ws.last.closing)}
@@ -357,19 +360,19 @@ export function CashReconciliation({
                     </p>
                   </td>
                   <td className={`${td} whitespace-nowrap text-right`}>
-                    {canEdit && h.status === "reconciled" && h.adjustment < 0 && h.remaining > 0 && expenseForm && (
+                    {canEdit && h.adjustment < 0 && h.remaining > 0 && expenseForm && (
                       <button type="button" onClick={() => setExplainShort(h)} className="mr-3 text-xs text-accent hover:underline">
                         Explain
                       </button>
                     )}
-                    {canEdit && h.status === "reconciled" && h.adjustment > 0 && h.remaining > 0 && (
+                    {canEdit && h.adjustment > 0 && h.remaining > 0 && (
                       <button type="button" onClick={() => setExplainOver(h)} className="mr-3 text-xs text-accent hover:underline">
                         Explain
                       </button>
                     )}
-                    {canReopen && h.latest && (
+                    {canReopen && h.status === "reconciled" && (
                       <button type="button" onClick={() => setReopening(h)} className="text-xs text-accent hover:underline">
-                        Reopen
+                        {h.latest ? "Reopen" : "Reopen back to here"}
                       </button>
                     )}
                   </td>
@@ -440,6 +443,10 @@ export function CashReconciliation({
       {reopening && (
         <ReopenDialog
           row={reopening}
+          dates={(() => {
+            const open = history.filter((x) => x.status === "reconciled");
+            return open.slice(0, open.findIndex((x) => x.id === reopening.id) + 1).map((x) => x.asOf);
+          })()}
           onClose={() => setReopening(null)}
           onDone={async () => {
             setReopening(null);
@@ -527,7 +534,7 @@ function ExplainExcess({ row, accounts, today, bankAccountId, onClose, onDone }:
   );
 }
 
-function ReopenDialog({ row, bankAccountId, onClose, onDone }: { row: HistoryRow; bankAccountId: string; onClose: () => void; onDone: () => void }) {
+function ReopenDialog({ row, dates, bankAccountId, onClose, onDone }: { row: HistoryRow; dates: string[]; bankAccountId: string; onClose: () => void; onDone: () => void }) {
   const { report, dialog } = useProblem();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -544,8 +551,8 @@ function ReopenDialog({ row, bankAccountId, onClose, onDone }: { row: HistoryRow
   }
   return (
     <Modal
-      title="Reopen this reconciliation"
-      description={`The entries ticked up to ${row.asOf} become open again. ${row.adjustment !== 0 ? "A short or excess that was posted stays in your books as an entry; void it from the ledger if it was wrong." : ""}`}
+      title={dates.length > 1 ? "Reopen back to here" : "Reopen this reconciliation"}
+      description={`${dates.length > 1 ? `This reopens ${dates.length} reconciliations, newest first: ${dates.join(", ")}. ` : ""}The entries that were ticked become open and unlocked, and are remembered so you can tick them again. ${row.adjustment !== 0 ? "A short or excess that was posted stays in your books as an entry." : ""}`}
       onClose={onClose}
       dismissible={!busy}
       footer={

@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, asc, ne } from "drizzle-orm";
+import { and, eq, asc, ne, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  purchaseBills,
   complianceObligations,
   complianceExceptions,
   complianceCountries,
@@ -12,6 +13,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
+import { isOrgAdmin } from "@/lib/roles";
 import { listOrgUsers } from "@/lib/org-users";
 import { generateObligations } from "@/lib/compliance/engine/generate";
 import { migrateLegacyCalendarItems } from "@/lib/compliance/engine/legacy-migration";
@@ -238,6 +240,13 @@ export async function updateCalendarItemStatus(input: { itemId: string; status: 
     .limit(1);
   if (!item) throw new Error("Compliance item not found");
 
+  // A filed VAT return is final: its sales and purchases are locked. Taking the filing back reopens them, so only an administrator may, and says why.
+  const wasFiled = item.status === "filed" || item.status === "paid" || item.status === "partially_paid";
+  if (item.taxTypeKey === "vat" && !item.filedBeforeSystem && wasFiled && (input.status === "pending" || input.status === "in_progress")) {
+    if (!isOrgAdmin(session.role)) throw new Error("This VAT return has been filed, so its figures are locked. Only an administrator can reopen the filing.");
+    if (!input.reason?.trim()) throw new Error("Say why the filing is being reopened.");
+  }
+
   // A requirement is never deleted to make it go away: it is marked not applicable, with a reason.
   if (input.status === "not_applicable" && !input.reason?.trim()) throw new Error("A reason is required to mark an item not applicable");
 
@@ -265,6 +274,21 @@ export async function updateCalendarItemStatus(input: { itemId: string; status: 
   });
   revalidatePath("/compliance/calendar");
   revalidatePath("/compliance");
+}
+
+export type VatFilingNotice = { label: string; filed: boolean; pendingBills: number; pendingAmount: number };
+
+/** For a VAT return: whether it is filed, and how many purchase bills in its period still wait for their item details (their VAT becomes final once it is filed). null for anything else. */
+export async function getVatFilingNotice(itemId: string): Promise<VatFilingNotice | null> {
+  const session = await requireTenantSession();
+  if (!can(session, "compliance", "view")) throw new Error("Not permitted");
+  const [item] = await db.select().from(complianceObligations).where(and(eq(complianceObligations.id, itemId), eq(complianceObligations.tenantId, session.tenantId))).limit(1);
+  if (!item || item.taxTypeKey !== "vat" || item.filedBeforeSystem || !item.periodStart || !item.periodEnd) return null;
+  const bills = await db
+    .select({ total: purchaseBills.total })
+    .from(purchaseBills)
+    .where(and(eq(purchaseBills.tenantId, session.tenantId), eq(purchaseBills.detailsPending, true), ne(purchaseBills.status, "void"), gte(purchaseBills.billDate, item.periodStart), lte(purchaseBills.billDate, item.periodEnd)));
+  return { label: item.periodLabel, filed: item.status === "filed" || item.status === "paid" || item.status === "partially_paid", pendingBills: bills.length, pendingAmount: Math.round(bills.reduce((s, b) => s + Number(b.total), 0) * 100) / 100 };
 }
 
 export async function deleteCalendarItem(itemId: string) {

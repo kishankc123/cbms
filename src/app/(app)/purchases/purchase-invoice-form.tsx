@@ -19,8 +19,9 @@ import { InvoicePaymentModal } from "./invoice-payment-modal";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { AmountInput } from "@/components/ui/amount-input";
+import { LINE_TREATMENTS, isTreatment, lineVatRate, splitByTreatment, type LineTreatment } from "@/lib/purchases/vat-lines";
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; purchasePrice: string };
+type Item = { id: string; name: string; purchasePrice: string; purchaseVatTreatment?: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
 type PaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
@@ -30,6 +31,8 @@ type LineRow = {
   rate: string;
   quantity: string;
   discount: string;
+  /** On a VAT bill: whether the line carries VAT. */
+  taxTreatment: LineTreatment;
 };
 
 const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
@@ -42,17 +45,17 @@ const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
 const MIN_LINES = 4;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
-const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0" });
+const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0", taxTreatment: "taxable" });
 
 // VAT only applies when the invoice is marked as a VAT bill — a PAN,
 // Estimate, or No bill invoice books the taxable amount with no VAT.
-function computeLine(line: LineRow, vatRate: number) {
+function computeLine(line: LineRow, vatRate: number, billType: string) {
   const rate = parseFloat(line.rate) || 0;
   const quantity = parseFloat(line.quantity) || 0;
   const discount = parseFloat(line.discount) || 0;
   const gross = rate * quantity;
   const taxable = Math.max(gross - discount, 0);
-  const vat = taxable * (vatRate / 100);
+  const vat = taxable * (lineVatRate(billType, line.taxTreatment, vatRate) / 100);
   const total = taxable + vat;
   return { gross, taxable, vat, total };
 }
@@ -73,7 +76,7 @@ export type InitialInvoice = {
   billAvailable?: boolean | null;
   vendorId: string;
   billType: CashBillType;
-  lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
+  lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number; taxTreatment?: LineTreatment }[];
   payments: PaymentLine[];
   /** A purchase recorded by amount, waiting for its items: the amount it was recorded with. The items should add up to it. */
   pendingTotal?: number | null;
@@ -127,6 +130,7 @@ export function PurchaseInvoiceForm({
           rate: String(l.rate),
           quantity: String(l.quantity),
           discount: String(l.discount),
+          taxTreatment: l.taxTreatment ?? "taxable",
         }))
       : Array.from({ length: MIN_LINES }, emptyLine)
   );
@@ -176,6 +180,7 @@ export function PurchaseInvoiceForm({
             itemId: value,
             description: item ? item.name : l.description,
             rate: item ? item.purchasePrice : l.rate,
+            taxTreatment: item && isTreatment(item.purchaseVatTreatment) ? item.purchaseVatTreatment : l.taxTreatment,
           };
         }
         return { ...l, [field]: value };
@@ -191,10 +196,12 @@ export function PurchaseInvoiceForm({
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  const effectiveVatRate = billType === "vat" ? vatRate : 0;
-  const computedLines = lines.map((l) => computeLine(l, effectiveVatRate));
+  // A VAT bill can mix goods that carry VAT with zero-rated and exempt ones: each line has its own treatment, shown when asked for or once one differs.
+  const [mixed, setMixed] = useState(false);
+  const showTreatment = billType === "vat" && (mixed || lines.some((l) => l.taxTreatment !== "taxable"));
+  const computedLines = lines.map((l) => computeLine(l, vatRate, billType));
+  const split = splitByTreatment(billType, computedLines.map((c, i) => ({ taxable: c.taxable, taxTreatment: lines[i].taxTreatment })));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
-  const grandTaxable = computedLines.reduce((s, c) => s + c.taxable, 0);
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
@@ -251,6 +258,7 @@ export function PurchaseInvoiceForm({
           rate: parseFloat(l.rate) || 0,
           quantity: parseFloat(l.quantity) || 0,
           discount: parseFloat(l.discount) || 0,
+          ...(billType === "vat" && l.taxTreatment !== "taxable" ? { taxTreatment: l.taxTreatment } : {}),
         })),
         payments,
       };
@@ -396,7 +404,15 @@ export function PurchaseInvoiceForm({
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Items</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-gray-900">Invoice Items</h2>
+          {billType === "vat" && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600">
+              <input type="checkbox" checked={showTreatment} disabled={lines.some((l) => l.taxTreatment !== "taxable")} onChange={(e) => setMixed(e.target.checked)} />
+              Mixed VAT bill: some items are zero-rated or exempt
+            </label>
+          )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -407,6 +423,7 @@ export function PurchaseInvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
                 {showDiscount && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>}
+                {showTreatment && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT treatment</th>}
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
@@ -468,6 +485,17 @@ export function PurchaseInvoiceForm({
                         />
                       </td>
                     )}
+                    {showTreatment && (
+                      <td className="px-1 py-1 text-center">
+                        <select value={line.taxTreatment} onChange={(e) => updateLine(i, "taxTreatment", e.target.value)} className={`w-28 ${cellInputCls}`} aria-label="VAT treatment of this line">
+                          {LINE_TREATMENTS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
@@ -515,9 +543,21 @@ export function PurchaseInvoiceForm({
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Taxable</span>
-              <span>{fmt(grandTaxable)}</span>
+              <span className="text-gray-500">{split.zeroRated > 0 || split.exempt > 0 ? "Taxable (VAT applies)" : "Taxable"}</span>
+              <span>{fmt(split.taxable)}</span>
             </div>
+            {split.zeroRated > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Zero-rated</span>
+                <span>{fmt(split.zeroRated)}</span>
+              </div>
+            )}
+            {split.exempt > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Exempt</span>
+                <span>{fmt(split.exempt)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-gray-500">VAT</span>
               <span>{fmt(grandVat)}</span>

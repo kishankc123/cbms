@@ -1,5 +1,7 @@
 "use client";
 
+import { LINE_TREATMENTS, isTreatment, type LineTreatment } from "@/lib/purchases/vat-lines";
+
 import { useEffect, useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
@@ -20,6 +22,7 @@ type Item = {
   inventoryTracking: boolean;
   billingType: BillingType;
   revenueAccountId: string | null;
+  purchaseVatTreatment?: string;
 };
 
 // Independent of item type — shown the same way for Product, Service, SaaS and Other.
@@ -61,6 +64,7 @@ export function EditItemModal({
   const [billingType, setBillingType] = useState<BillingType>(item.billingType);
   const [revenueAccountId, setRevenueAccountId] = useState(item.revenueAccountId ?? "");
   const [purchasePrice, setPurchasePrice] = useState(item.purchasePrice);
+  const [purchaseVat, setPurchaseVat] = useState<LineTreatment>(isTreatment(item.purchaseVatTreatment) ? item.purchaseVatTreatment : "taxable");
   const [sellingPrice, setSellingPrice] = useState(item.sellingPrice);
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why.
@@ -104,6 +108,7 @@ export function EditItemModal({
         revenueAccountId: revenueAccountId || null,
         purchasePrice: purchase,
         sellingPrice: selling,
+        purchaseVatTreatment: purchaseVat,
       });
       router.refresh();
       onClose();
@@ -238,6 +243,22 @@ export function EditItemModal({
                   </div>
                 )}
               </>
+            )}
+            {tracked && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">VAT when bought</label>
+                <select
+                  value={purchaseVat}
+                  onChange={(e) => setPurchaseVat(e.target.value as LineTreatment)}
+                  className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent w-full"
+                >
+                  {LINE_TREATMENTS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             <div className={isProduct ? "" : "col-span-2"}>
               <label className="block text-xs text-gray-500 mb-1">{rateLabel}</label>

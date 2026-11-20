@@ -36,8 +36,8 @@ export default async function CashReconciliationPage({ params }: { params: Promi
 
   // What the Explain screens need, only when something posted at a reconciliation is still unexplained and the person may use them.
   const canEdit = can(session, "bank_reconciliation", "edit");
-  const anyOpenShort = history.some((h) => h.status === "reconciled" && h.adjustment < 0 && h.remaining > 0);
-  const anyOpenExcess = history.some((h) => h.status === "reconciled" && h.adjustment > 0 && h.remaining > 0);
+  const anyOpenShort = history.some((h) => h.adjustment < 0 && h.remaining > 0);
+  const anyOpenExcess = history.some((h) => h.adjustment > 0 && h.remaining > 0);
   const shortExcess = await findShortExcessAccount(session.tenantId);
   const expenseForm =
     canEdit && anyOpenShort && can(session, "expenses", "create")

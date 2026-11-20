@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { can, requireTenantSession } from "@/lib/session";
 import { isOrgAdmin } from "@/lib/roles";
 import type { ExpenseInput } from "@/lib/expenses/expense-records";
-import { CashReconError, cashWorkspace, explainExcess, explainWithExpense, reopenCash, signOffCash, type CashWorkspace, type SignOffInput } from "@/lib/ledger/cash-reconcile";
+import { CashReconError, cashWorkspace, explainExcess, explainWithExpense, getCashLock, reopenCashBackTo, signOffCash, type CashLockInfo, type CashWorkspace, type SignOffInput } from "@/lib/ledger/cash-reconcile";
 
 // Reconciling a cash account. Whoever can reconcile the bank can reconcile cash. Every action checks first; the work is in lib/ledger/cash-reconcile.ts.
 
@@ -44,11 +44,24 @@ export async function signOffCashAction(input: SignOffInput) {
   return r;
 }
 
+/** Whether a document's cash line is locked by a reconciliation, for the banner on its form. */
+export async function getCashLockAction(input: { sourceId: string }): Promise<CashLockInfo | null> {
+  const session = await requireTenantSession();
+  const lock = await getCashLock(session.tenantId, input.sourceId);
+  return lock ? { ...lock, canUnlock: isOrgAdmin(session.role) && can(session, "bank_reconciliation", "edit") } : null;
+}
+
+/** Unlocks by reopening the reconciliation given and every later one of that account. Owner or admin only. */
 export async function reopenCashReconciliationAction(input: { reconId: string; bankAccountId: string; reason: string }) {
   const session = await guard("edit");
-  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can reopen a reconciliation");
-  await run(() => reopenCash(session.tenantId, session.userId, input.reconId, input.reason));
+  if (!isOrgAdmin(session.role)) throw new Error("Only an admin can unlock a reconciled cash entry");
+  const r = await run(() => reopenCashBackTo(session.tenantId, session.userId, input.reconId, input.reason));
   refresh(input.bankAccountId);
+  revalidatePath("/expenses");
+  revalidatePath("/purchases");
+  revalidatePath("/sales");
+  revalidatePath("/payments");
+  return r;
 }
 
 /** A shortage found to be an expense: recorded as an expense settled from Cash short and excess. */

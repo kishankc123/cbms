@@ -20,6 +20,7 @@ type Item = {
   inventoryTracking: boolean;
   billingType: BillingType;
   revenueAccountId: string | null;
+  purchaseVatTreatment: string;
   stockQuantity: string;
   stockValue: string;
 };

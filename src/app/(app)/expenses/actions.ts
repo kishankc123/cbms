@@ -11,6 +11,8 @@ import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
+import { getCashLock, type CashLockInfo } from "@/lib/ledger/cash-reconcile";
+import { isOrgAdmin } from "@/lib/roles";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
 import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
@@ -48,7 +50,7 @@ export async function createExpense(input: ExpenseInput) {
 }
 
 /** `detailsOnly`: payments have been recorded against this expense in Payments, so its amounts can't change under them. */
-export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly: boolean };
+export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly: boolean; /** Set when its cash line was ticked in a cash reconciliation: the amounts are then locked too. */ cashLock: CashLockInfo | null };
 
 export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditData> {
   const session = await requireTenantSession();
@@ -61,7 +63,9 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     .limit(1);
   if (!expense) throw new Error("Expense not found");
   if (expense.status === "void") throw new Error("A void expense can't be edited");
-  const detailsOnly = await assertNoLaterPayments(session.tenantId, "expense", expenseId, "expense").then(() => false, () => true);
+  const cashLockRaw = await getCashLock(session.tenantId, expenseId);
+  const cashLock = cashLockRaw ? { ...cashLockRaw, canUnlock: isOrgAdmin(session.role) && can(session, "bank_reconciliation", "edit") } : null;
+  const detailsOnly = Boolean(cashLock) || (await assertNoLaterPayments(session.tenantId, "expense", expenseId, "expense").then(() => false, () => true));
 
   const [entry] = await db
     .select()
@@ -105,6 +109,7 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     otherTaxAmount: Number(expense.otherTaxAmount),
     payments,
     detailsOnly,
+    cashLock,
   };
 }
 
