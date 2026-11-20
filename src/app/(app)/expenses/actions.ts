@@ -13,6 +13,7 @@ import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/ac
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { getCashLock, type CashLockInfo } from "@/lib/ledger/cash-reconcile";
 import { isOrgAdmin } from "@/lib/roles";
+import { expenseDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
 import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
@@ -47,6 +48,15 @@ export async function createExpense(input: ExpenseInput) {
   revalidatePath("/journal");
 
   return { warnings, expenseNumber };
+}
+
+/** The details of one expense for its pop-up, with what this person may do with it. */
+export async function getExpenseDetail(expenseId: string): Promise<DocumentDetailView> {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "view")) throw new Error("Not permitted");
+  const detail = await expenseDetail(session.tenantId, expenseId);
+  if (!detail) throw new Error("Expense not found");
+  return { ...detail, canEdit: can(session, "expenses", "edit"), canVoid: can(session, "expenses", "void"), canPay: can(session, "expenses", "edit") };
 }
 
 /** `detailsOnly`: payments have been recorded against this expense in Payments, so its amounts can't change under them. */

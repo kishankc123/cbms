@@ -1,13 +1,14 @@
 import { and, asc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, customers, items, journalEntries, journalLines, paymentAllocations, payments, purchaseBills, salesInvoices, vendors } from "@/db/schema";
+import { accounts, customers, expenses, items, journalEntries, journalLines, paymentAllocations, payments, purchaseBills, salesInvoices, vendors } from "@/db/schema";
+import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 
 // What the details pop-up of an invoice or a bill shows: the amounts, the items and the payments. Read-only plain helpers; the actions check the permission.
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export type DocumentDetail = {
-  kind: "sale" | "purchase";
+  kind: "sale" | "purchase" | "expense";
   id: string;
   number: string;
   date: string;
@@ -23,6 +24,12 @@ export type DocumentDetail = {
   paid: number;
   balance: number;
   detailsPending: boolean;
+  /** Expenses only: other tax, TDS withheld, what was payable after it, the category and the description. */
+  otherTax?: number;
+  tds?: number;
+  payable?: number;
+  category?: string;
+  description?: string;
   lines: { name: string; quantity: number; rate: number; amount: number }[];
   payments: { date: string; mode: string; amount: number }[];
 };
@@ -113,6 +120,53 @@ export async function purchaseBillDetail(tenantId: string, billId: string): Prom
     balance: bill.status === "void" ? 0 : Math.max(round2(total - amountPaid), 0),
     detailsPending: bill.detailsPending,
     lines: lineItems.map((l) => ({ name: l.description || (l.itemId ? itemNames.get(l.itemId) ?? "" : "") || "Item", quantity: l.quantity, rate: l.rate, amount: round2(l.quantity * l.rate - l.discount) })),
+    payments: paid.map((p) => ({ date: p.date, mode: p.mode ?? p.account, amount: Number(p.amount) })),
+  };
+}
+
+export async function expenseDetail(tenantId: string, expenseId: string): Promise<DocumentDetail | null> {
+  const [e] = await db.select().from(expenses).where(and(eq(expenses.id, expenseId), eq(expenses.tenantId, tenantId))).limit(1);
+  if (!e) return null;
+  const [vendor] = e.vendorId ? await db.select({ name: vendors.name }).from(vendors).where(and(eq(vendors.id, e.vendorId), eq(vendors.tenantId, tenantId))).limit(1) : [];
+  const [category] = await db.select({ name: accounts.name }).from(accounts).where(and(eq(accounts.id, e.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
+
+  // What was paid, from the cash, bank and wallet lines of the expense's own entries (never the reversals of edited or voided ones).
+  const cashIds = (await getCashBankAccounts(tenantId)).flatMap((g) => [g.id, ...g.children.map((c) => c.id)]);
+  const paid =
+    cashIds.length === 0
+      ? []
+      : await db
+          .select({ date: journalEntries.entryDate, mode: journalLines.paymentModeName, account: accounts.name, amount: journalLines.creditAmount })
+          .from(journalLines)
+          .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+          .innerJoin(accounts, eq(accounts.id, journalLines.accountId))
+          .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalEntries.sourceType, ["expense", "payment"]), eq(journalEntries.sourceId, expenseId), eq(journalEntries.isReversed, false), isNull(journalEntries.reversalOfId), inArray(journalLines.accountId, cashIds), gt(journalLines.creditAmount, "0")))
+          .orderBy(asc(journalEntries.createdAt));
+
+  const payable = Number(e.amountPayable);
+  const amountPaid = Number(e.amountPaid);
+  return {
+    kind: "expense",
+    id: e.id,
+    number: e.expenseNumber,
+    date: e.expenseDate,
+    dueDate: e.dueDate,
+    partyId: e.vendorId,
+    partyName: vendor?.name ?? e.payeeName ?? "",
+    status: e.status,
+    typeLabel: BILL_TYPE[e.billType] ?? e.billType,
+    taxable: Number(e.subtotal),
+    vat: Number(e.vatAmount),
+    total: Number(e.total),
+    paid: amountPaid,
+    balance: e.status === "void" ? 0 : Math.max(round2(payable - amountPaid), 0),
+    detailsPending: false,
+    otherTax: Number(e.otherTaxAmount),
+    tds: Number(e.tdsAmount),
+    payable,
+    category: category?.name ?? "",
+    description: e.description ?? "",
+    lines: [],
     payments: paid.map((p) => ({ date: p.date, mode: p.mode ?? p.account, amount: Number(p.amount) })),
   };
 }

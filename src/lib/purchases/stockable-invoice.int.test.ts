@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, customers, items, journalEntries, journalLines, purchaseBills, salesInvoices, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { purchaseBillDetail, salesInvoiceDetail } from "@/lib/ledger/document-detail";
+import { expenseDetail, purchaseBillDetail, salesInvoiceDetail } from "@/lib/ledger/document-detail";
+import { createExpenseCore } from "@/lib/expenses/expense-records";
 import { createStockableInvoiceCore } from "./stockable-invoice";
 import { buildItemTemplate, importItemBills, reviewItemFile, type ItemImportSettings } from "./import/item-service";
 
@@ -140,5 +141,14 @@ describe("the details pop-up of a bill and an invoice", () => {
     const d = await salesInvoiceDetail(org.tenantId, inv.id);
     expect(d).toMatchObject({ kind: "sale", number: "I-1", partyName: "Annapurna Stores", total: 113, paid: 50, balance: 63, typeLabel: "Taxable" });
     expect(d?.lines).toEqual([{ name: "Rice", quantity: 2, rate: 50, amount: 100 }]);
+  });
+
+  it("shows an expense with its category, TDS and what was paid", async () => {
+    const [misc] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, "5900")));
+    const [cash] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, "1000")));
+    const made = await createExpenseCore(ctx(), { expenseDate: "2026-09-05", categoryAccountId: misc.id, vendorId, description: "Office rent", invoiceNumber: "R-1", invoiceDate: "", dueDate: "", billType: "pan", taxTreatment: "taxable", taxableAmount: 20000, vatAmount: 0, tdsAmount: 1000, otherTaxAmount: 0, payments: [{ accountId: cash.id, amount: 5000 }] });
+    const d = await expenseDetail(org.tenantId, made.expenseId);
+    expect(d).toMatchObject({ kind: "expense", partyName: "Himal Traders", category: "Miscellaneous Expense", description: "Office rent", taxable: 20000, tds: 1000, payable: 19000, paid: 5000, balance: 14000, typeLabel: "PAN bill" });
+    expect(d?.payments.map((p) => p.amount)).toEqual([5000]);
   });
 });

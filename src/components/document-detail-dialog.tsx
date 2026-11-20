@@ -18,8 +18,8 @@ export function DocumentDetailDialog({ detail, badge, actions, onClose }: { deta
   const shown = actions.filter((a) => !a.hidden);
   return (
     <Modal
-      title={`${detail.kind === "sale" ? "Invoice" : "Bill"} ${detail.number}`}
-      description={`${detail.partyName || "No name"} · ${detail.typeLabel}`}
+      title={`${detail.kind === "sale" ? "Invoice" : detail.kind === "purchase" ? "Bill" : "Expense"} ${detail.number}`}
+      description={`${detail.partyName || "No name"} · ${detail.kind === "expense" && detail.category ? `${detail.category} · ` : ""}${detail.typeLabel}`}
       onClose={onClose}
       footer={
         shown.length > 0 ? (
@@ -47,10 +47,15 @@ export function DocumentDetailDialog({ detail, badge, actions, onClose }: { deta
           {detail.detailsPending && <StatusPill tone="pending">Item details pending</StatusPill>}
         </div>
 
+        {detail.description && <p className="text-ink-2">{detail.description}</p>}
+
         <div className="space-y-1 rounded-lg bg-surface-2 p-3">
           <Row label="Taxable" value={<Amount value={detail.taxable} />} />
           <Row label="VAT" value={<Amount value={detail.vat} />} />
+          {(detail.otherTax ?? 0) > 0 && <Row label="Other tax" value={<Amount value={detail.otherTax ?? 0} />} />}
           <Row label="Total" value={<Amount value={detail.total} />} strong />
+          {(detail.tds ?? 0) > 0 && <Row label="TDS withheld" value={<span>-<Amount value={detail.tds ?? 0} /></span>} />}
+          {(detail.tds ?? 0) > 0 && <Row label="Payable" value={<Amount value={detail.payable ?? 0} />} strong />}
           <Row label={detail.kind === "sale" ? "Received" : "Paid"} value={<Amount value={detail.paid} />} />
           <Row label="Balance" value={<span className={detail.balance > 0.005 ? "text-[var(--danger-text)]" : "text-[var(--success-text)]"}><Amount value={detail.balance} /></span>} strong />
         </div>

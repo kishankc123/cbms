@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Plus, Receipt } from "lucide-react";
-import { voidExpense, getExpenseForEdit, type ExpenseEditData } from "./actions";
+import { voidExpense, getExpenseDetail, getExpenseForEdit, type ExpenseEditData } from "./actions";
+import { DocumentDetailDialog } from "@/components/document-detail-dialog";
+import type { DocumentDetailView } from "@/lib/ledger/document-detail";
 import { getReconciledWarningAction } from "../suppliers/reconcile/status-actions";
 import { ExpenseFormModal, type InitialExpense } from "./expense-form-modal";
 import { RecordExpensePaymentModal } from "./record-expense-payment-modal";
@@ -22,7 +24,6 @@ import { FilterBar, SearchInput } from "@/components/ui/filters";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Modal } from "@/components/ui/modal";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Vendor = { id: string; name: string };
@@ -103,7 +104,22 @@ export function ExpensesTable({
   const ask = useConfirm();
   const { report, dialog } = useProblem();
   const [payingRow, setPayingRow] = useState<ExpenseRow | null>(null);
+  // The details pop-up of a row: opened by a tap, a double-tap or a swipe.
   const [viewingRow, setViewingRow] = useState<ExpenseRow | null>(null);
+  const [detail, setDetail] = useState<DocumentDetailView | null>(null);
+  async function openView(e: ExpenseRow) {
+    setViewingRow(e);
+    try {
+      setDetail(await getExpenseDetail(e.id));
+    } catch (err) {
+      setViewingRow(null);
+      report(err instanceof Error ? err.message : "Could not open the expense", null);
+    }
+  }
+  function closeView() {
+    setViewingRow(null);
+    setDetail(null);
+  }
 
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -294,7 +310,7 @@ export function ExpensesTable({
             const badge = badgeOf(e, today);
             const modes = paymentModes[e.id];
             return (
-              <Tr key={e.id} clickable selected={viewingRow?.id === e.id} onClick={() => setViewingRow(e)}>
+              <Tr key={e.id} clickable selected={viewingRow?.id === e.id} onClick={() => void openView(e)}>
                 <Td className="font-mono text-xs">{e.expenseNumber}</Td>
                 <Td className="whitespace-nowrap">
                   <D value={e.expenseDate} />
@@ -318,8 +334,9 @@ export function ExpensesTable({
                 <Td className="whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
                   <RowActions>
                     <RowMenu
+                      onOpen={() => void openView(e)}
                       items={[
-                        { label: "View", onClick: () => setViewingRow(e) },
+                        { label: "View", onClick: () => void openView(e) },
                         { label: "Edit", onClick: () => openEdit(e.id), hidden: e.status === "void" },
                         { label: "Record payment", onClick: () => setPayingRow(e), hidden: !(e.status === "unpaid" || e.status === "partially_paid") },
                         { label: "Print", onClick: () => printExpense(e) },
@@ -346,59 +363,20 @@ export function ExpensesTable({
 
       {payingRow && <RecordExpensePaymentModal expenseId={payingRow.id} expenseNumber={payingRow.expenseNumber} remaining={payingRow.amountPayable - payingRow.amountPaid} cashBankAccounts={cashBankAccounts} onClose={() => setPayingRow(null)} />}
 
-      {viewingRow && (
-        <Modal
-          size="sm"
-          title={viewingRow.expenseNumber}
-          onClose={() => setViewingRow(null)}
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => printExpense(viewingRow)}>
-                Print
-              </Button>
-              <Button variant="primary" onClick={() => setViewingRow(null)}>
-                Close
-              </Button>
-            </>
-          }
-        >
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
-            <Item label="Date">
-              <D value={viewingRow.expenseDate} />
-            </Item>
-            <Item label="Supplier">{viewingRow.payee}</Item>
-            <Item label="Category">{viewingRow.category}</Item>
-            <Item label="Status">
-              <StatusPill tone={badgeOf(viewingRow, today).tone}>{badgeOf(viewingRow, today).label}</StatusPill>
-            </Item>
-            <Item label="Description" wide>
-              {viewingRow.description || "—"}
-            </Item>
-            <Item label="Net amount">
-              <Amount value={viewingRow.subtotal} />
-            </Item>
-            <Item label="Tax">
-              <Amount value={viewingRow.tax} />
-            </Item>
-            <Item label="Total">
-              <Amount value={viewingRow.total} className="font-semibold" />
-            </Item>
-            <Item label="Amount paid">
-              <Amount value={viewingRow.amountPaid} />
-            </Item>
-          </dl>
-        </Modal>
+      {viewingRow && detail && (
+        <DocumentDetailDialog
+          detail={detail}
+          badge={badgeOf(viewingRow, today)}
+          onClose={closeView}
+          actions={[
+            { label: "Record payment", primary: true, onClick: () => { closeView(); setPayingRow(viewingRow); }, hidden: !detail.canPay || !(viewingRow.status === "unpaid" || viewingRow.status === "partially_paid") },
+            { label: "Edit", onClick: () => { closeView(); void openEdit(viewingRow.id); }, hidden: viewingRow.status === "void" || !detail.canEdit },
+            { label: "Print", onClick: () => printExpense(viewingRow) },
+            { label: "Void", danger: true, onClick: () => { closeView(); void voidRow(viewingRow); }, hidden: viewingRow.status === "void" || !detail.canVoid },
+          ]}
+        />
       )}
       {dialog}
-    </div>
-  );
-}
-
-function Item({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={wide ? "col-span-2" : ""}>
-      <dt className="text-xs text-ink-2">{label}</dt>
-      <dd className="mt-0.5 text-ink">{children}</dd>
     </div>
   );
 }
