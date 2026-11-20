@@ -21,6 +21,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { useErrorDialog, FIRST_FIELD_IN_MODAL } from "@/components/problem-dialog";
 import { todayIso } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { vatStatusFlow } from "../vat-status-flow";
 import { HeadSplitFields, shareAcross, splitAmounts, splitHeadings, splitTotal, startingSplit, type Breakdown, type HeadSplit } from "./heading-split";
 
 import { AmountInput } from "@/components/ui/amount-input";
@@ -95,7 +96,9 @@ export function TaxObligationDrawer({ id, onClose }: { id: string; onClose: () =
       reason = window.prompt("Why is this not applicable?")?.trim();
       if (!reason) return;
     }
-    await run(() => updateCalendarItemStatus({ itemId: id, status, reason }));
+    const flow = await vatStatusFlow(ask, id, status);
+    if (!flow.proceed) return;
+    await run(() => updateCalendarItemStatus({ itemId: id, status, reason: reason ?? flow.reason }));
   }
 
   async function openPanel(next: "payment" | "charge") {

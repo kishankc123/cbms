@@ -8,11 +8,13 @@ import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
 import { getOrCreateSupplierPayableAccountId } from "@/lib/ledger/subledger-accounts";
-import { assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
+import { allocateProportional, assertInventoryDate, assertItemsUsable, assertStockTimeline, moveStock, unwindStock } from "@/lib/inventory/stock";
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertSettlementAccounts, assertSupplierOwned, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { inputVatClaimable } from "@/lib/purchases/vat";
+import { filedVatPeriod } from "@/lib/compliance/vat-lock";
+import { decideDetails } from "@/lib/purchases/pending-details";
 import { buildInvoiceJournalLines, computeInvoiceTotals, createStockableInvoiceCore, inventoryValues, type PurchaseInvoiceInput, type PurchaseInvoicePayment } from "@/lib/purchases/stockable-invoice";
 import { todayIso } from "@/lib/calendar";
 import { resettleParty } from "@/lib/ledger/party-settlement";
@@ -37,7 +39,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // Finds the entry currently in force for a bill (i.e. not superseded by a
 // reversal) and reverses it — used by both void and edit, since editing a
 // posted bill means reversing the old entry and posting a fresh one.
-async function reverseActiveEntry(tenantId: string, billId: string, userId: string, memo: string) {
+async function reverseActiveEntry(tenantId: string, billId: string, userId: string, memo: string, opts: { vatLockBypass?: boolean } = {}) {
   const [entry] = await db
     .select()
     .from(journalEntries)
@@ -54,7 +56,7 @@ async function reverseActiveEntry(tenantId: string, billId: string, userId: stri
     .limit(1);
 
   if (entry) {
-    await reverseJournalEntry(tenantId, entry.id, userId, memo);
+    await reverseJournalEntry(tenantId, entry.id, userId, memo, opts);
   }
 }
 
@@ -371,10 +373,34 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   if (input.dueDate && input.dueDate < input.invoiceDate) throw new Error("The due date can't be before the invoice date");
 
-  const { validLines, computed, subtotal, taxAmount, total } = await computeInvoiceTotals(session.tenantId, input.lines, input.billType, input.invoiceDate);
+  const entered = await computeInvoiceTotals(session.tenantId, input.lines, input.billType, input.invoiceDate);
+  const { validLines } = entered;
+  let { computed, subtotal, taxAmount, total } = entered;
   if (validLines.length === 0) throw new Error("Add at least one item line");
-  if (existing.detailsPending && !input.acceptDifferentTotal && Math.abs(total - Number(existing.total)) > 0.005) {
-    throw new Error(`The items add up to ${total.toFixed(2)}, but this bill was recorded as ${Number(existing.total).toFixed(2)}. Make the items add up to the bill, or confirm that the recorded amount was wrong.`);
+
+  // Adding the items to a purchase recorded by amount. Once its VAT return is filed the bill's value and VAT are final, so the items only split them.
+  let vatLockBypass = false;
+  if (existing.detailsPending) {
+    const filed = await filedVatPeriod(session.tenantId, existing.billDate);
+    const recorded = { subtotal: Number(existing.subtotal), tax: Number(existing.taxAmount), total: Number(existing.total) };
+    if (filed) {
+      if (input.invoiceDate !== existing.billDate || input.billType !== existing.billType) {
+        throw new Error(`The VAT return for ${filed.label} has been filed, so this bill's date and bill type can't change. Add the items without changing them.`);
+      }
+      vatLockBypass = true;
+    }
+    const decision = decideDetails({ recorded, items: { subtotal, tax: taxAmount, total }, filed: Boolean(filed) });
+    if (decision.mode === "refused") throw new Error(decision.message);
+    if (decision.mode === "confirm" && !input.acceptDifferentTotal) throw new Error(decision.message);
+    if (decision.mode === "fixed") {
+      const taxWeights = computed.map((c) => c.vat);
+      const values = allocateProportional(recorded.subtotal, computed.map((c) => c.taxable));
+      const vats = allocateProportional(recorded.tax, taxWeights.some((w) => w > 0) ? taxWeights : computed.map((c) => c.taxable));
+      computed = computed.map((c, i) => ({ ...c, taxable: values[i], vat: vats[i], total: round2(values[i] + vats[i]) }));
+      subtotal = recorded.subtotal;
+      taxAmount = recorded.tax;
+      total = recorded.total;
+    }
   }
   await assertItemsUsable(session.tenantId, validLines, { requireItem: true, stillAllowed: (existing.lineItems ?? []).map((l) => l.itemId) });
 
@@ -414,7 +440,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     claimable
   );
 
-  await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of invoice ${existing.billNumber}`);
+  await reverseActiveEntry(session.tenantId, input.billId, session.userId, `Edit of invoice ${existing.billNumber}`, { vatLockBypass });
   await deleteEmbeddedPaymentsForBill(session.tenantId, input.billId);
   await unwindStock(session.tenantId, { date: existing.billDate, sourceType: "purchase", sourceId: input.billId, userId: session.userId });
   await moveStock(
@@ -451,6 +477,7 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
     memo: `Stockable purchase ${invoiceNumber} (edited)`,
     createdBy: session.userId,
     lines: journalLines,
+    vatLockBypass,
   });
 
   if (paid > 0) {

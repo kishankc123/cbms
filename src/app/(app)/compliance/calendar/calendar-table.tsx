@@ -10,6 +10,7 @@ import { D } from "@/components/calendar/date-text";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { WEEKDAYS_SHORT, monthCells, todayIso, ymdOf } from "@/lib/calendar";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { vatStatusFlow } from "../vat-status-flow";
 import { AmountInput } from "@/components/ui/amount-input";
 type Item = Awaited<ReturnType<typeof listCalendarItems>>[number];
 type UserOption = Awaited<ReturnType<typeof listAssignableUsers>>[number];
@@ -77,7 +78,9 @@ export function CalendarTable({ items, users }: { items: Item[]; users: UserOpti
     setBusy(true);
     setError(null);
     try {
-      await updateCalendarItemStatus({ itemId: id, status, reason });
+      const flow = await vatStatusFlow(ask, id, status);
+      if (!flow.proceed) return;
+      await updateCalendarItemStatus({ itemId: id, status, reason: reason ?? flow.reason });
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update status");

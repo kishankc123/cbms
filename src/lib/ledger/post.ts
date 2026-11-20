@@ -6,6 +6,7 @@ import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertFiscalYearOpen, resolveFiscalYearId } from "@/lib/fiscal";
 import { assertBankPeriodOpen, assertEntriesNotCashReconciled } from "./reconciliation-guards";
+import { assertEntriesVatOpen, assertVatOpenForEntry } from "@/lib/compliance/vat-lock";
 import { modeNamesForLines } from "@/lib/payment-modes";
 import { assertNotBeforeBooksStart } from "./books-start";
 
@@ -37,6 +38,8 @@ export type PostJournalEntryInput = {
   memo?: string;
   createdBy: string;
   lines: PostLineInput[];
+  /** Only for adding item details to a purchase already counted in a filed VAT return: its VAT and value are kept exactly as filed. */
+  vatLockBypass?: boolean;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -103,6 +106,7 @@ export async function postJournalEntry(input: PostJournalEntryInput) {
 
   await assertAccountsUsable(input.tenantId, input.lines.map((l) => l.accountId));
   await assertBankPeriodOpen(input.tenantId, input.entryDate, input.lines.map((l) => l.accountId));
+  if (!input.vatLockBypass) await assertVatOpenForEntry(input.tenantId, input.entryDate, input.sourceType, input.lines.map((l) => l.accountId), "post");
   const modeNames = await modeNamesForLines(input.tenantId, input.lines);
   const fiscalYearId = await resolveFiscalYearId(input.tenantId, input.entryDate);
 
@@ -170,12 +174,14 @@ export async function reverseJournalEntry(
   tenantId: string,
   journalEntryId: string,
   reversedBy: string,
-  memo?: string
+  memo?: string,
+  opts: { vatLockBypass?: boolean } = {}
 ) {
-  const [before] = await db.select({ entryDate: journalEntries.entryDate }).from(journalEntries).where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.tenantId, tenantId))).limit(1);
+  const [before] = await db.select({ entryDate: journalEntries.entryDate, sourceType: journalEntries.sourceType }).from(journalEntries).where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.tenantId, tenantId))).limit(1);
   if (!before) throw new Error("Journal entry not found");
   await assertEntriesNotCashReconciled(tenantId, [journalEntryId]);
   const beforeLines = await db.select({ accountId: journalLines.accountId }).from(journalLines).where(eq(journalLines.journalEntryId, journalEntryId));
+  if (!opts.vatLockBypass) await assertVatOpenForEntry(tenantId, before.entryDate, before.sourceType, beforeLines.map((l) => l.accountId), "change");
   const reversalDate = await reversalDateFor(tenantId, before.entryDate, beforeLines.map((l) => l.accountId));
   await assertPeriodOpen(tenantId, reversalDate);
   await assertFiscalYearOpen(tenantId, reversalDate);
@@ -285,6 +291,7 @@ export async function reverseAllActiveEntriesForSource(
 
   // All of them are checked first, so a locked one never leaves the others half reversed.
   await assertEntriesNotCashReconciled(tenantId, activeEntries.map((e) => e.id));
+  await assertEntriesVatOpen(tenantId, activeEntries.map((e) => e.id));
   for (const entry of activeEntries) {
     await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
   }
