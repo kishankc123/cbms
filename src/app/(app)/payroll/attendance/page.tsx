@@ -1,58 +1,41 @@
 import { guardView } from "@/components/page-guard";
-import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
-import { db } from "@/db";
-import { employees } from "@/db/schema";
-import { requireTenantSession } from "@/lib/session";
+import { can, requireTenantSession } from "@/lib/session";
+import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
 import { PageHeader } from "@/components/ui/page-header";
+import { loadAttendanceMonth } from "@/lib/payroll/attendance";
+import { AttendanceSheet } from "./attendance-sheet";
 
-// Attendance is marked per employee (Employees > profile > Attendance tab) —
-// this page is the entry point for picking which employee's attendance to
-// open, since attendance always belongs to one employee's record.
-export default async function AttendanceIndexPage() {
+// Attendance of a payroll month, for everyone at once (it can still be marked from an employee's own profile). Months open on the organization's calendar;
+// a month that hasn't started can't be opened, and neither can a day that hasn't come.
+export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ y?: string; m?: string }> }) {
   const denied = await guardView("payroll");
   if (denied) return denied;
   const session = await requireTenantSession();
-  const employeeList = await db
-    .select()
-    .from(employees)
-    .where(eq(employees.tenantId, session.tenantId))
-    .orderBy(asc(employees.employeeCode));
+  const calendar = session.calendar;
+  const today = todayIso();
+  const now = ymdOf(calendar, today) ?? ymdOf("AD", today)!;
+
+  const q = await searchParams;
+  let year = Number(q.y) || now.year;
+  let month = Number(q.m) || now.month;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year > now.year || (year === now.year && month > now.month)) {
+    year = now.year;
+    month = now.month;
+  }
+
+  let data;
+  try {
+    data = await loadAttendanceMonth(session.tenantId, calendar, year, month);
+  } catch {
+    year = now.year;
+    month = now.month;
+    data = await loadAttendanceMonth(session.tenantId, calendar, year, month);
+  }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Attendance" className="!mb-0" />
-      <p className="text-sm text-gray-500">Select an employee to view or mark their attendance.</p>
-
-      <table className="border-collapse text-[13px] w-full">
-        <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
-          <tr>
-            <th className="px-2.5 py-1.5 font-medium">Employee ID</th>
-            <th className="px-2.5 py-1.5 font-medium">Full Name</th>
-            <th className="px-2.5 py-1.5 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {employeeList.map((e) => (
-            <tr key={e.id} className="border-b border-line transition-colors hover:bg-hover">
-              <td className="px-2.5 py-1.5 font-mono">{e.employeeCode}</td>
-              <td className="px-2.5 py-1.5">{e.fullName}</td>
-              <td className="px-2.5 py-1.5 text-right">
-                <Link href={`/payroll/employees/${e.id}`} className="text-xs text-gray-600 hover:underline">
-                  Open profile
-                </Link>
-              </td>
-            </tr>
-          ))}
-          {employeeList.length === 0 && (
-            <tr>
-              <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
-                No employees yet
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      <PageHeader title="Attendance" description="Mark who was absent, on leave or on a half day. Everyone else counts as present." className="!mb-0" />
+      <AttendanceSheet data={data} monthName={monthNames(calendar)[month - 1]} today={today} current={now} canEdit={can(session, "payroll", "edit")} />
     </div>
   );
 }

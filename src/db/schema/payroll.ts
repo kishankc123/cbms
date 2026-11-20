@@ -214,6 +214,22 @@ export const attendanceRecords = pgTable("attendance_records", {
   notes: text("notes"),
 });
 
+// A month's attendance marked as checked: someone looked over the sheet and the days nobody marked really were present. Payroll warns, but does not
+// stop, when it is generated for a month nobody checked.
+export const attendanceChecks = pgTable(
+  "attendance_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** The payroll period of that month, as real dates. */
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    checkedBy: uuid("checked_by").references(() => users.id),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("attendance_checks_period").on(t.tenantId, t.periodStart)]
+);
+
 // The retirement schemes an employee is in, from when to when. SSF and PF never overlap each other; CIT can sit beside either.
 // Rates come from the platform's payroll rules for the pay date, not from here.
 export const employeeRetirement = pgTable("employee_retirement", {

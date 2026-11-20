@@ -16,6 +16,7 @@ import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
 import { TdsCell } from "../../tds-working";
 import Link from "next/link";
 import { StatStrip } from "@/components/ui/stat-strip";
+import { attendanceCheckedFor } from "@/lib/payroll/attendance";
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const denied = (await guardView("payroll")) ?? (await guardSalary());
@@ -78,6 +79,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
   const incentiveRounds = await roundsForMonth(session.tenantId, { calendarSystem: run.calendarSystem, year: run.year, month: run.month });
   // Benefits no longer exist as a setting; the column is shown only for runs made while they did.
   const showBenefits = lines.some((l) => Number(l.benefitsAmount) > 0);
+  // Unmarked days count as present: say so when nobody has checked this month's attendance.
+  const attendanceChecked = run.status === "finalized" ? true : Boolean((await attendanceCheckedFor(session.tenantId, run.calendarSystem === "BS" ? "BS" : "AD", run.year, run.month)).checked);
   const canAdjust = run.status !== "finalized" && can(session, "payroll", "edit") && can(session, "payroll", "create");
 
   return (
@@ -94,6 +97,14 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
         <RunStatusControls runId={run.id} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} slabsMissing={slabsMissing} />
       </div>
 
+      {!attendanceChecked && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Attendance for this month has not been marked as checked, so every day nobody marked counts as present.{" "}
+          <Link href={`/payroll/attendance?y=${run.year}&m=${run.month}`} className="font-medium underline">
+            Check attendance
+          </Link>
+        </p>
+      )}
       {slabsMissing && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">Salary-tax slabs are not set for this fiscal year, so no TDS was taken in this run. Once the platform administrator has published them, recalculate the run.</p>}
       {assumedStatus > 0 && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{assumedStatus} employee{assumedStatus === 1 ? " has" : "s have"} no tax status, so the Single slabs were used. Choose Single or Couple on the employee&apos;s profile, then recalculate.</p>}
 
