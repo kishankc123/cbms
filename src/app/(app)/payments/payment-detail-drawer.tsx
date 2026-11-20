@@ -104,7 +104,7 @@ export function PaymentDetailDrawer({ paymentId, onClose, onVoided, onEdit }: { 
         <div className="space-y-4 text-[13px] text-ink">
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone={detail.status === "voided" ? "critical" : detail.status === "draft" ? "pending" : "success"}>{detail.status === "posted" ? "Posted" : detail.status}</StatusPill>
-            <StatusPill tone={detail.reconciliationStatus === "reconciled" ? "success" : "pending"}>{detail.reconciliationStatus === "reconciled" ? "Matched to the bank" : "Not bank-matched"}</StatusPill>
+            <StatusPill tone={detail.reconciliationStatus === "reconciled" ? "success" : "pending"}>{detail.reconciliationStatus === "reconciled" ? "Reconciled" : "Not reconciled"}</StatusPill>
             <span className="text-ink-2">{detail.direction === "money_in" ? "Money in" : "Money out"}</span>
           </div>
 

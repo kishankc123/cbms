@@ -9,6 +9,7 @@ import { getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts"
 import { saveCashCount } from "@/lib/ledger/cash-count";
 import { cashHistory, cashStatus, cashWorkspace, explainExcess, explainWithExpense, getCashLock, incomeAccountOptions, reopenCashBackTo, signOffCash, unexplainedTotal } from "./cash-reconcile";
 import { findShortExcessAccount } from "./cash-short-excess";
+import { reconciledEntryIds } from "./reconciled-entries";
 import type { ExpenseInput } from "@/lib/expenses/expense-records";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -82,6 +83,10 @@ describe("reconciling a cash account", () => {
     const h = await cashHistory(org.tenantId, bankAccountId);
     expect(h[0]).toMatchObject({ opening: 100, closing: 900, kind: "confirmed", counted: null });
     expect((await cashStatus(org.tenantId, bankAccountId)).unreconciled).toBe(0);
+    // The Reconciliation column of Payments counts a cash reconciliation, not only a bank match.
+    const entry = (await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.referenceNumber, "S-1"))))[0];
+    expect((await reconciledEntryIds(org.tenantId, [entry.id])).has(entry.id)).toBe(true);
+    expect((await reconciledEntryIds(other.tenantId, [entry.id])).has(entry.id)).toBe(false);
   });
 
   it("opens the next one at the last closing, and a count that is short is adjusted into the one short and excess account", async () => {
