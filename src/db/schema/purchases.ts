@@ -29,6 +29,8 @@ export type PurchaseLineItem = {
   rate: number;
   quantity: number;
   discount: number;
+  // On a VAT bill: whether the line carries VAT. Missing means taxable. Only written when it is zero-rated or exempt.
+  taxTreatment?: "taxable" | "zero_rated" | "exempt";
 };
 
 export const vendors = pgTable("vendors", {

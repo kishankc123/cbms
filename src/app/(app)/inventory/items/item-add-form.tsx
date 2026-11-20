@@ -1,5 +1,7 @@
 "use client";
 
+import { LINE_TREATMENTS, type LineTreatment } from "@/lib/purchases/vat-lines";
+
 import { useMemo, useState } from "react";
 import { useProblem } from "@/components/problem-dialog";
 import { useRouter } from "next/navigation";
@@ -58,6 +60,7 @@ export function ItemAddForm({
   const [revenueAccountId, setRevenueAccountId] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [purchaseVat, setPurchaseVat] = useState<LineTreatment>("taxable");
   const [saving, setSaving] = useState(false);
   const tracked = isProduct && inventoryTracking;
   // Problems are shown in a dialog that says why.
@@ -98,7 +101,7 @@ export function ItemAddForm({
     }
     setSaving(true);
     try {
-      const created = await createItem({ name, itemType, inventoryTracking, billingType, revenueAccountId: revenueAccountId || null, unitId, categoryId, purchasePrice: purchase, sellingPrice: selling });
+      const created = await createItem({ name, itemType, inventoryTracking, billingType, revenueAccountId: revenueAccountId || null, unitId, categoryId, purchasePrice: purchase, sellingPrice: selling, purchaseVatTreatment: purchaseVat });
       if (onCreated) {
         resetForm(false);
         onCreated(created);
@@ -226,6 +229,22 @@ export function ItemAddForm({
               </div>
             )}
           </>
+        )}
+        {tracked && (
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">VAT when bought</label>
+            <select
+              value={purchaseVat}
+              onChange={(e) => setPurchaseVat(e.target.value as LineTreatment)}
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent w-full"
+            >
+              {LINE_TREATMENTS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">{rateLabel}</label>

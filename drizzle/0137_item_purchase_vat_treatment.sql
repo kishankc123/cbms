@@ -1,0 +1,1 @@
+ALTER TABLE "items" ADD COLUMN "purchase_vat_treatment" text DEFAULT 'taxable' NOT NULL;

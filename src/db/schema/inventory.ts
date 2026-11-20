@@ -61,6 +61,8 @@ export const items = pgTable("items", {
   // tracked in stockValue below (a purchase price is only used as the cost of units sold beyond what is on hand).
   purchasePrice: numeric("purchase_price", { precision: 18, scale: 2 }).notNull().default("0"),
   sellingPrice: numeric("selling_price", { precision: 18, scale: 2 }).notNull().default("0"),
+  // How VAT treats this item when it is bought (taxable, zero_rated, exempt): the line on a VAT purchase invoice starts with it.
+  purchaseVatTreatment: text("purchase_vat_treatment").notNull().default("taxable"),
   // Running on-hand quantity and the cost of it (weighted average: stockValue / stockQuantity is the cost per unit), both
   // kept in step by stock movements. The stock value of all items is what the Inventory account should hold.
   stockQuantity: numeric("stock_quantity", { precision: 18, scale: 3 }).notNull().default("0"),
