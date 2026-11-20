@@ -1,0 +1,1 @@
+ALTER TABLE "cash_reconciliations" ADD COLUMN "remembered_ids" jsonb;

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, date, numeric, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, date, numeric, timestamp, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 import { bankAccounts } from "./banking";
@@ -40,6 +40,8 @@ export const cashReconciliations = pgTable(
     reopenedBy: uuid("reopened_by").references(() => users.id),
     reopenedAt: timestamp("reopened_at", { withTimezone: true }),
     reopenReason: text("reopen_reason"),
+    /** The journal lines that were ticked when it was reopened, so the next reconciliation can offer to tick them again. */
+    rememberedIds: jsonb("remembered_ids").$type<string[]>(),
   },
   (t) => [index("cash_recon_tenant_account").on(t.tenantId, t.accountId, t.asOfDate)]
 );

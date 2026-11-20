@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, bankAccounts, journalEntries, journalLines } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { postJournalEntry } from "@/lib/ledger/post";
+import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { getOrCreateBroughtForwardAccount } from "@/lib/ledger/control-accounts";
 import { saveCashCount } from "@/lib/ledger/cash-count";
-import { cashHistory, cashStatus, cashWorkspace, explainExcess, explainWithExpense, incomeAccountOptions, reopenCash, signOffCash, unexplainedTotal } from "./cash-reconcile";
+import { cashHistory, cashStatus, cashWorkspace, explainExcess, explainWithExpense, getCashLock, incomeAccountOptions, reopenCashBackTo, signOffCash, unexplainedTotal } from "./cash-reconcile";
 import { findShortExcessAccount } from "./cash-short-excess";
 import type { ExpenseInput } from "@/lib/expenses/expense-records";
 
@@ -19,8 +20,9 @@ let incomeId: string;
 let bankAccountId: string;
 
 const acct = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
-const receipt = (date: string, ref: string, amount: number) =>
-  postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "sale", referenceNumber: ref, createdBy: org.userId, lines: [{ accountId: cashId, debitAmount: amount }, { accountId: salesId, creditAmount: amount }] });
+const firstSale = randomUUID();
+const receipt = (date: string, ref: string, amount: number, sourceId?: string) =>
+  postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "sale", sourceId, referenceNumber: ref, createdBy: org.userId, lines: [{ accountId: cashId, debitAmount: amount }, { accountId: salesId, creditAmount: amount }] });
 const spend = (date: string, ref: string, amount: number) =>
   postJournalEntry({ tenantId: org.tenantId, entryDate: date, sourceType: "expense", referenceNumber: ref, createdBy: org.userId, lines: [{ accountId: miscId, debitAmount: amount }, { accountId: cashId, creditAmount: amount }] });
 const balanceOf = async (accountId: string) => {
@@ -44,7 +46,7 @@ beforeAll(async () => {
   // Opening 100, five receipts of 200 and two payments of 100: the books say 900.
   const bf = await getOrCreateBroughtForwardAccount(org.tenantId);
   await postJournalEntry({ tenantId: org.tenantId, entryDate: "2026-10-01", sourceType: "opening_balance", createdBy: org.userId, lines: [{ accountId: cashId, debitAmount: 100 }, { accountId: bf.id, creditAmount: 100 }] });
-  for (let i = 1; i <= 5; i++) await receipt("2026-10-0" + (i + 1), `S-${i}`, 200);
+  for (let i = 1; i <= 5; i++) await receipt("2026-10-0" + (i + 1), `S-${i}`, 200, i === 1 ? firstSale : undefined);
   await spend("2026-10-08", "E-1", 100);
   await spend("2026-10-09", "E-2", 100);
 });
@@ -132,14 +134,40 @@ describe("reconciling a cash account", () => {
     expect(await balanceOf(cashId)).toBe(1075);
   });
 
-  it("reopens only the latest reconciliation, freeing its entries", async () => {
-    await expect(reopenCash(org.tenantId, org.userId, firstId, "mistake")).rejects.toThrow(/latest/);
-    await reopenCash(org.tenantId, org.userId, excessId, "Counted the wrong drawer");
-    const h = await cashHistory(org.tenantId, bankAccountId);
-    expect(h[0]).toMatchObject({ status: "reopened" });
-    // The excess entry it posted is an ordinary open entry again.
+  it("locks a ticked entry: it can't be reversed, and nothing is posted to an earlier day of a reconciled account", async () => {
+    const lock = await getCashLock(org.tenantId, firstSale);
+    expect(lock).toMatchObject({ asOf: "2026-10-10", accountName: "Cash" });
+    expect(lock?.reopens).toEqual(["2026-10-12", "2026-10-11", "2026-10-10"]);
+    const [entry] = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceId, firstSale)));
+    await expect(reverseJournalEntry(org.tenantId, entry.id, org.userId)).rejects.toThrow(/locked/);
+    await expect(receipt("2026-10-11", "LATE-1", 10)).rejects.toThrow(/reconciled up to 2026-10-12/);
+    // The reconciled day itself stays open: a sale entered after the count is accepted and waits for the next reconciliation.
+    await receipt("2026-10-12", "LATE-2", 10);
     const w = await cashWorkspace(org.tenantId, bankAccountId, "2026-10-12");
-    expect(w.lines.map((l) => l.reference)).toContain("CASH-EXCESS");
-    expect(w.opening).toBe(1050);
+    expect(w.lines.map((l) => l.reference)).toEqual(["LATE-2"]);
+  });
+
+  it("unlocks by reopening the reconciliation and every later one, remembering what was ticked", async () => {
+    const r = await reopenCashBackTo(org.tenantId, org.userId, firstId, "Wrong amount on the first sale");
+    expect(r.reopened).toBe(3);
+    const h = await cashHistory(org.tenantId, bankAccountId);
+    expect(h.map((x) => x.status)).toEqual(["reopened", "reopened", "reopened"]);
+    const w = await cashWorkspace(org.tenantId, bankAccountId, "2026-10-12");
+    expect(w.last).toBeNull();
+    expect(w.opening).toBe(100);
+    // Everything is open again, and what had been ticked is offered back (the adjustments are entries now too).
+    expect(w.lines).toHaveLength(12);
+    expect(w.remembered).toHaveLength(11);
+    expect(w.remembered).not.toContain(w.lines.find((l) => l.reference === "LATE-2")!.id);
+    const [entry] = await db.select({ id: journalEntries.id }).from(journalEntries).where(and(eq(journalEntries.tenantId, org.tenantId), eq(journalEntries.sourceId, firstSale)));
+    await reverseJournalEntry(org.tenantId, entry.id, org.userId, "Corrected");
+    expect(await getCashLock(org.tenantId, firstSale)).toBeNull();
+    await expect(reopenCashBackTo(org.tenantId, org.userId, firstId, "again")).rejects.toThrow(/not found/);
+  });
+
+  it("can still explain a short whose reconciliation was reopened, until its entry is voided", async () => {
+    const h = await cashHistory(org.tenantId, bankAccountId);
+    const short = h.find((x) => x.id === shortId)!;
+    expect(short).toMatchObject({ adjustment: -50, state: "explained", status: "reopened" });
   });
 });

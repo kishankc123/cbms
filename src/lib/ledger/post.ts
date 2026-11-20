@@ -5,7 +5,7 @@ import { accounts, journalEntries, journalLines } from "@/db/schema";
 import type { journalSourceTypeEnum } from "@/db/schema/ledger";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertFiscalYearOpen, resolveFiscalYearId } from "@/lib/fiscal";
-import { assertBankPeriodOpen } from "./reconciliation-guards";
+import { assertBankPeriodOpen, assertEntriesNotCashReconciled } from "./reconciliation-guards";
 import { modeNamesForLines } from "@/lib/payment-modes";
 import { assertNotBeforeBooksStart } from "./books-start";
 
@@ -174,6 +174,7 @@ export async function reverseJournalEntry(
 ) {
   const [before] = await db.select({ entryDate: journalEntries.entryDate }).from(journalEntries).where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.tenantId, tenantId))).limit(1);
   if (!before) throw new Error("Journal entry not found");
+  await assertEntriesNotCashReconciled(tenantId, [journalEntryId]);
   const beforeLines = await db.select({ accountId: journalLines.accountId }).from(journalLines).where(eq(journalLines.journalEntryId, journalEntryId));
   const reversalDate = await reversalDateFor(tenantId, before.entryDate, beforeLines.map((l) => l.accountId));
   await assertPeriodOpen(tenantId, reversalDate);
@@ -282,6 +283,8 @@ export async function reverseAllActiveEntriesForSource(
     .from(journalEntries)
     .where(and(eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, sourceId), eq(journalEntries.isReversed, false), isNull(journalEntries.reversalOfId)));
 
+  // All of them are checked first, so a locked one never leaves the others half reversed.
+  await assertEntriesNotCashReconciled(tenantId, activeEntries.map((e) => e.id));
   for (const entry of activeEntries) {
     await reverseJournalEntry(tenantId, entry.id, reversedBy, memo);
   }

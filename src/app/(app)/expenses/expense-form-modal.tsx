@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { okToChange } from "../suppliers/reconcile/confirm-change";
 import { explainShortageAction } from "../bank-reconciliation/cash-actions";
+import { CashLockBanner } from "@/components/cash-lock-banner";
+import type { CashLockInfo } from "@/lib/ledger/cash-reconcile";
 import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import type { ExpenseSuggestion } from "@/lib/expenses/suggestion-rules";
 import { D } from "@/components/calendar/date-text";
@@ -45,7 +47,7 @@ const BILL_TYPES: { value: ExpenseBillType; label: string }[] = [
 const today = () => todayIso();
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean };
+export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean; cashLock?: CashLockInfo | null };
 
 /** What the next new expense starts with after one is saved: the day's batch usually shares its date, how it was paid and the bill type. */
 type Carry = { expenseDate: string; billType: ExpenseBillType; taxTreatment: ExpenseTaxTreatment; payment: { accountId: string; modeId: string | null } | null };
@@ -352,7 +354,8 @@ function ExpenseForm({
               Explaining a cash shortage: up to {explain.amount.toFixed(2)} of this expense is settled from {explain.accountName}, so your cash is not changed again.
             </p>
           )}
-          {locked && (
+          {initial?.cashLock && <CashLockBanner lock={initial.cashLock} onUnlocked={() => { router.refresh(); onClose(); }} />}
+          {locked && !initial?.cashLock && (
             <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
               Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
             </p>
