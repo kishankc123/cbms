@@ -2,7 +2,7 @@
 // import here, deliberately, so this file is safe to import from a CLIENT
 // component too (the live "Recurrence Preview" on the create/edit form uses it
 // directly, without a round-trip to the server). CRUD lives in ./index.ts.
-import { addDays, daysInMonth, isoFromYmd, ymdOf, monthRange, monthLabel, filingDueDate, type CalendarSystem, type IsoDate } from "@/lib/calendar";
+import { addDays, addMonths, daysInMonth, isoFromYmd, ymdOf, monthRange, monthLabel, filingDueDate, type CalendarSystem, type IsoDate } from "@/lib/calendar";
 
 export type RecurringFrequency = "monthly" | "quarterly" | "half_yearly" | "yearly" | "custom";
 export type RecognitionRule = "first_day" | "last_day" | "specific_day";
@@ -55,6 +55,36 @@ export function periodKeyAndLabel(calendar: CalendarSystem, anchorMonthIso: IsoD
   const cal: CalendarSystem = ymdOf(calendar, anchorMonthIso) ? calendar : "AD";
   const ymd = ymdOf(cal, anchorMonthIso)!;
   return { periodKey: `${cal}:${ymd.year}-${String(ymd.month).padStart(2, "0")}`, periodLabel: monthLabel(cal, anchorMonthIso) };
+}
+
+/**
+ * The next occurrence that has not happened yet: the first one on or after `fromIso` (today), walking the same months the engine schedules from the
+ * effective date. Null when the schedule has ended (past its end date or stop date). Unlike previewNextOccurrence, this takes what has already passed into account.
+ */
+export function nextOccurrenceFrom(input: {
+  calendar: CalendarSystem;
+  effectiveFrom: IsoDate;
+  intervalMonths: number;
+  recognitionRule: RecognitionRule;
+  recognitionDay: number | null;
+  dueRule: DueRule;
+  dueRuleValue: number | null;
+  endDate: IsoDate | null;
+  stoppedEffectiveDate: IsoDate | null;
+  fromIso: IsoDate;
+}): RecurrencePreview | null {
+  let anchor = monthRange(input.calendar, input.effectiveFrom).from;
+  for (let i = 0; i < 1200; i++) {
+    const expenseDate = computeRecognitionDate(input.calendar, anchor, input.recognitionRule, input.recognitionDay);
+    if (input.endDate && expenseDate > input.endDate) return null;
+    if (input.stoppedEffectiveDate && expenseDate >= input.stoppedEffectiveDate) return null;
+    if (expenseDate >= input.effectiveFrom && expenseDate >= input.fromIso) {
+      const { periodKey, periodLabel } = periodKeyAndLabel(input.calendar, anchor);
+      return { periodKey, periodLabel, expenseDate, dueDate: computeDueDate(input.calendar, expenseDate, input.dueRule, input.dueRuleValue) };
+    }
+    anchor = addMonths(input.calendar, anchor, Math.max(input.intervalMonths, 1));
+  }
+  return null;
 }
 
 export type RecurrencePreview = { periodKey: string; periodLabel: string; expenseDate: IsoDate; dueDate: IsoDate };
