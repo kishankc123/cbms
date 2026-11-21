@@ -11,6 +11,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry, type PostLineInput } from "@/lib/ledger/post";
 import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
+import { voidExpenseCore } from "@/lib/expenses/void-expense";
 import { getCashLock, type CashLockInfo } from "@/lib/ledger/cash-reconcile";
 import { isOrgAdmin } from "@/lib/roles";
 import { expenseDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
@@ -335,41 +336,11 @@ export async function recordExpensePayment(input: { expenseId: string; payments:
   revalidatePath("/journal");
 }
 
-// Marks every Payment-module row recorded for this expense as voided
-// (without reversing their journal entries again — reverseAllActiveEntriesForSource
-// above already reversed the underlying entries) so the Payments list
-// reflects the expense's void immediately rather than showing a stale
-// "posted" payment pointing at a reversed entry.
-async function voidPaymentsForExpense(tenantId: string, expenseId: string, userId: string, reason: string) {
-  const rows = await db
-    .select({ paymentId: paymentAllocations.paymentId })
-    .from(paymentAllocations)
-    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
-    .where(and(eq(payments.tenantId, tenantId), eq(paymentAllocations.targetType, "expense"), eq(paymentAllocations.targetId, expenseId), ne(payments.status, "voided")));
-
-  const paymentIds = [...new Set(rows.map((r) => r.paymentId))];
-  for (const id of paymentIds) {
-    await db.update(payments).set({ status: "voided", voidReason: reason, voidedBy: userId, voidedAt: new Date() }).where(eq(payments.id, id));
-  }
-}
-
 export async function voidExpense(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "void")) throw new Error("Not permitted");
 
-  const expenseId = String(formData.get("expenseId"));
-  const [expense] = await db
-    .select()
-    .from(expenses)
-    .where(and(eq(expenses.id, expenseId), eq(expenses.tenantId, session.tenantId)))
-    .limit(1);
-  if (!expense) throw new Error("Expense not found");
-  if (expense.status === "void") throw new Error("Expense is already void");
-  await assertSourceNotReconciled(session.tenantId, expenseId, "expense");
-
-  await reverseAllActiveEntriesForSource(session.tenantId, expenseId, session.userId, `Void of expense ${expense.expenseNumber}`);
-  await voidPaymentsForExpense(session.tenantId, expenseId, session.userId, `Void of expense ${expense.expenseNumber}`);
-  await db.update(expenses).set({ status: "void" }).where(eq(expenses.id, expenseId));
+  await voidExpenseCore(session.tenantId, session.userId, String(formData.get("expenseId")));
 
   revalidatePath("/expenses");
   revalidatePath("/payments");

@@ -4,6 +4,7 @@ import { recurringExpenses } from "@/db/schema";
 import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { assertSupplierOwned, assertCashBankAccounts } from "@/lib/ledger/account-guards";
 import { resolvePaymentMode } from "@/lib/payment-modes";
+import { applyStartChange, newEffectiveFrom } from "./start-change";
 import { ensureRecurringPayableAccountId, renameRecurringPayableAccount } from "./payable-account";
 import { intervalMonthsFor, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "./schedule";
 
@@ -11,6 +12,7 @@ export * from "./schedule";
 export * from "./summary";
 export * from "./history";
 export * from "./payable-account";
+export { bookedBefore, newEffectiveFrom, type BookedBefore } from "./start-change";
 
 // ------------------------------------------------------------------
 // CRUD — the recurring expense DEFINITION only. Nothing here ever touches the
@@ -114,11 +116,15 @@ export async function createRecurringExpense(tenantId: string, userId: string, i
   return { ...row, payableAccountId };
 }
 
-export async function updateRecurringExpense(tenantId: string, userId: string, id: string, input: RecurringExpenseInput) {
+/** `voidInstanceIds`: when the start date moves forward, the already-booked months before it that are to be voided (the rest are kept). */
+export async function updateRecurringExpense(tenantId: string, userId: string, id: string, input: RecurringExpenseInput, voidInstanceIds: string[] = []) {
   const existing = await getRecurringExpenseById(tenantId, id);
   if (!existing) throw new Error("Recurring expense not found");
   await validateRecurringExpenseInput(tenantId, input);
   const mode = await expectedMode(tenantId, input);
+  // The schedule is built from the effective date, so a moved start date has to move it too (back: the earlier months are booked next run; forward: the earlier months drop).
+  const effectiveFrom = newEffectiveFrom(existing, input.startDate);
+  if (effectiveFrom > existing.effectiveFrom) await applyStartChange(tenantId, userId, id, effectiveFrom, voidInstanceIds);
 
   const [row] = await db
     .update(recurringExpenses)
@@ -135,6 +141,7 @@ export async function updateRecurringExpense(tenantId: string, userId: string, i
       dueRule: input.dueRule,
       dueRuleValue: input.dueRule === "same_day" ? null : input.dueRuleValue,
       startDate: input.startDate,
+      effectiveFrom,
       endDate: input.endDate,
       priority: input.priority,
       expectedPaymentAccountId: input.expectedPaymentAccountId,

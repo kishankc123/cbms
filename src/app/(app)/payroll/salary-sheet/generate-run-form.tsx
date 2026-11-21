@@ -9,24 +9,17 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCalendar } from "@/components/calendar/calendar-provider";
 import { monthNames, todayIso, ymdOf } from "@/lib/calendar";
 
-type Employee = { id: string; employeeCode: string; fullName: string; employmentStatus: string };
-
-export function GenerateRunForm({ employees }: { employees: Employee[] }) {
+export function GenerateRunForm() {
   const router = useRouter();
   // Payroll months are months of the organization's calendar (Baisakh…Chaitra for BS).
   const calendar = useCalendar();
   const current = ymdOf(calendar, todayIso()) ?? ymdOf("AD", todayIso())!;
   const [month, setMonth] = useState(current.month);
   const [year, setYear] = useState(current.year);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   // Problems are shown in a dialog that says why.
   const { report, dialog } = useProblem();
   const ask = useConfirm();
-
-  function toggleEmployee(id: string) {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
-  }
 
   async function handleGenerate() {
     setSaving(true);
@@ -34,7 +27,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
       // Unmarked days count as present: ask before paying a month whose attendance nobody checked.
       const notice = await getAttendanceCheckNotice({ month, year, calendar });
       if (!notice.checked && !(await ask("Attendance for this month has not been marked as checked, so every day nobody marked will count as present. Generate payroll anyway?", { confirmLabel: "Generate anyway" }))) return;
-      const runId = await generatePayrollRun({ month, year, calendar, employeeIds: selectedIds });
+      const runId = await generatePayrollRun({ month, year, calendar, employeeIds: [] });
       router.push(`/payroll/salary-sheet/${runId}`);
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed to generate", null);
@@ -62,19 +55,7 @@ export function GenerateRunForm({ employees }: { employees: Employee[] }) {
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">Employees (leave none checked to include all active employees)</label>
-        <div className="max-h-56 overflow-y-auto rounded border border-gray-200 divide-y divide-gray-100">
-          {employees.map((e) => (
-            <label key={e.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-              <input type="checkbox" checked={selectedIds.includes(e.id)} onChange={() => toggleEmployee(e.id)} />
-              <span className="font-mono text-xs text-gray-500">{e.employeeCode}</span>
-              <span>{e.fullName}</span>
-            </label>
-          ))}
-          {employees.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">No employees yet</p>}
-        </div>
-      </div>
+      <p className="text-xs text-gray-500">Everyone employed during the month is included: active staff, anyone who joined during it and anyone who left during it. You can leave someone out, or add them back, on the run once it is made. Generating a month that already has a draft rebuilds that draft.</p>
 
       <div className="flex items-center justify-end gap-3">
         <button

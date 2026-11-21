@@ -35,7 +35,7 @@ export const PERMISSION_CATALOG: PermissionModule[] = [
     label: "Payroll",
     description: "Employees, attendance and salary sheets",
     actions: ["view", "create", "edit", "delete"],
-    help: { delete: "Delete salary components" },
+    help: { delete: "Delete salary components and draft salary sheets" },
     extras: [{ key: "view_salary", label: "See salary amounts", help: "See and change what people are paid: salaries, salary sheets, salary components and the payroll reports", staffDefault: false }],
   },
   { key: "bank_reconciliation", label: "Bank Reconciliation", description: "Bank accounts and reconciliations", actions: ["view", "create", "edit"] },

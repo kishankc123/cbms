@@ -1,0 +1,1 @@
+ALTER TABLE "payroll_runs" ADD COLUMN "excluded_employee_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

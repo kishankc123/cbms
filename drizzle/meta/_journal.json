@@ -981,6 +981,13 @@
       "when": 1795197288394,
       "tag": "0139_cash_recon_through_date",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1795248629650,
+      "tag": "0140_payroll_run_excluded_employees",
+      "breakpoints": true
     }
   ]
 }

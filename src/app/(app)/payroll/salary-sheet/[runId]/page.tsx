@@ -1,5 +1,5 @@
 import { guardView, guardSalary } from "@/components/page-guard";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { payrollRuns, payrollLines, employees } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
@@ -8,6 +8,8 @@ import { AdjustmentsPanel } from "./adjustments-panel";
 import { IncentivesPanel } from "./incentives-panel";
 import { roundsForMonth } from "@/lib/payroll/incentives";
 import { RunStatusControls } from "./run-status-controls";
+import { LeaveOutButton, NotInRunPanel } from "./run-people";
+import { whyNotInRun } from "@/lib/payroll/run-eligibility";
 
 import { D } from "@/components/calendar/date-text";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
@@ -81,6 +83,15 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
   const showBenefits = lines.some((l) => Number(l.benefitsAmount) > 0);
   // Unmarked days count as present: say so when nobody has checked this month's attendance.
   const attendanceChecked = run.status === "finalized" ? true : Boolean((await attendanceCheckedFor(session.tenantId, run.calendarSystem === "BS" ? "BS" : "AD", run.year, run.month)).checked);
+  const inRun = new Set(lines.map((l) => l.employeeId));
+  const leftOut = new Set(run.excludedEmployeeIds);
+  const everyone = await db.select().from(employees).where(eq(employees.tenantId, session.tenantId)).orderBy(asc(employees.employeeCode));
+  const notInRun = everyone
+    .filter((e) => !inRun.has(e.id))
+    .map((e) => ({ id: e.id, name: e.fullName, code: e.employeeCode, reason: leftOut.has(e.id) ? null : whyNotInRun(e, run.periodStart, run.periodEnd) }))
+    // Someone who left long ago is not worth listing; people who could be in the run, or were left out on purpose, are.
+    .filter((p) => p.reason === null || !/before this period starts/.test(p.reason));
+  const canChangePeople = run.status !== "finalized" && can(session, "payroll", "edit") && can(session, "payroll", "create");
   const canAdjust = run.status !== "finalized" && can(session, "payroll", "edit") && can(session, "payroll", "create");
 
   return (
@@ -94,7 +105,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
             <D value={run.periodStart} /> – <D value={run.periodEnd} />
           </p>
         </div>
-        <RunStatusControls runId={run.id} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} slabsMissing={slabsMissing} />
+        <RunStatusControls runId={run.id} canDelete={can(session, "payroll", "delete")} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} slabsMissing={slabsMissing} />
       </div>
 
       {!attendanceChecked && (
@@ -188,6 +199,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                   <Link href={`/payroll/payslips/${l.id}`} className="text-xs text-accent hover:underline">
                     Payslip
                   </Link>
+                  {canChangePeople && <LeaveOutButton runId={run.id} employeeId={l.employeeId} name={l.fullName} />}
                 </td>
               </tr>
             ))}
@@ -213,6 +225,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
           )}
         </table>
       </div>
+
+      <NotInRunPanel runId={run.id} people={notInRun} canEdit={canChangePeople} />
 
       {recoveries.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">

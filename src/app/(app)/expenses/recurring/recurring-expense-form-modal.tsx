@@ -11,7 +11,10 @@ import { SupplierSelect } from "@/components/quick-add/pickers";
 import { PaymentModeSelect } from "@/components/payment-mode-select";
 import { todayIso } from "@/lib/calendar";
 import { previewNextOccurrence, type RecurringFrequency, type RecognitionRule, type DueRule, type RecurringPriority } from "@/lib/recurring-expenses/schedule";
-import { createRecurringExpense, updateRecurringExpense } from "./actions";
+import { createRecurringExpense, updateRecurringExpense, previewRecurringStartChange } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import type { BookedBefore } from "@/lib/recurring-expenses/start-change";
 
 import { AmountInput } from "@/components/ui/amount-input";
 type Vendor = { id: string; name: string };
@@ -143,11 +146,52 @@ export function RecurringExpenseFormModal({
     }
   }, [calendar, startDate, recognitionRule, recognitionDay, dueRule, dueRuleValue]);
 
+  // Months already booked before a start date that was moved forward: the person chooses to keep them or void the ones that can be.
+  const [booked, setBooked] = useState<BookedBefore[] | null>(null);
+  const [voidThem, setVoidThem] = useState(false);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      const input = {
+      const input = buildInput();
+      if (initial && startDate !== initial.startDate && booked === null) {
+        const already = await previewRecurringStartChange(initial.id, startDate);
+        if (already.length > 0) {
+          setBooked(already);
+          return;
+        }
+      }
+      await save(input);
+    } catch (err) {
+      reportError(err, SERVER_RULES, '[data-field="name"]');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmStartChange() {
+    setSaving(true);
+    try {
+      await save(buildInput(), voidThem ? (booked ?? []).filter((b) => b.voidable).map((b) => b.instanceId) : []);
+    } catch (err) {
+      setBooked(null);
+      reportError(err, SERVER_RULES, '[data-field="name"]');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function save(input: ReturnType<typeof buildInput>, voidInstanceIds: string[] = []) {
+    if (initial) await updateRecurringExpense(initial.id, input, voidInstanceIds);
+    else await createRecurringExpense(input);
+    router.refresh();
+    onClose();
+  }
+
+  function buildInput() {
+    {
+      return {
         expenseName,
         expenseAccountId,
         vendorId: vendorId || null,
@@ -166,14 +210,6 @@ export function RecurringExpenseFormModal({
         expectedPaymentModeId: expectedPaymentAccountId ? expectedPaymentModeId || null : null,
         notes: notes.trim() || null,
       };
-      if (initial) await updateRecurringExpense(initial.id, input);
-      else await createRecurringExpense(input);
-      router.refresh();
-      onClose();
-    } catch (err) {
-      reportError(err, SERVER_RULES, '[data-field="name"]');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -190,6 +226,43 @@ export function RecurringExpenseFormModal({
         </div>
 
         {dialog}
+        {booked && (
+          <Modal
+            size="md"
+            title="Months already booked before the new start"
+            description="These were booked as expenses before the start date you chose. They are kept unless you void them."
+            onClose={() => setBooked(null)}
+            dismissible={!saving}
+            footer={
+              <>
+                <Button type="button" variant="secondary" onClick={() => setBooked(null)} disabled={saving}>
+                  Back
+                </Button>
+                <Button type="button" variant="primary" onClick={confirmStartChange} loading={saving}>
+                  {voidThem ? "Save and void" : "Save and keep them"}
+                </Button>
+              </>
+            }
+          >
+            <div className="space-y-3 text-[13px]">
+              <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+                {booked.map((b) => (
+                  <li key={b.instanceId} className="flex items-start justify-between gap-3 px-3 py-2">
+                    <span>
+                      <span className="font-medium">{b.periodLabel}</span> <span className="text-[var(--text-secondary)]">{b.expenseNumber}</span>
+                      {b.blockedReason && <span className="block text-xs text-[var(--warning-text)]">Can&apos;t be voided: {b.blockedReason}</span>}
+                    </span>
+                    <span className="tabular-nums">{b.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  </li>
+                ))}
+              </ul>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" checked={voidThem} onChange={(e) => setVoidThem(e.target.checked)} className="mt-0.5" disabled={!booked.some((b) => b.voidable)} />
+                <span>Void the ones that can be voided. Each is reversed in the books and the month is left unscheduled. The rest stay as they are.</span>
+              </label>
+            </div>
+          </Modal>
+        )}
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-[var(--text-secondary)]">Basic Information</h3>

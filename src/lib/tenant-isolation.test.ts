@@ -155,7 +155,7 @@ const BASELINE: Record<string, number> = {
   "app/(app)/compliance/statutory-actions.ts": 2,
   "app/(app)/compliance/tax-actions.ts": 1,
   "app/(app)/customers/actions.ts": 3,
-  "app/(app)/expenses/actions.ts": 6,
+  "app/(app)/expenses/actions.ts": 4,
   "app/(app)/expenses/recurring/[id]/page.tsx": 1,
   "app/(app)/payments/actions.ts": 6,
   "app/(app)/payroll/employees/actions.ts": 1,
