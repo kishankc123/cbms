@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { employees } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { attendanceCheckedFor, loadAttendanceMonth, markAttendance, markMonthChecked, unmarkMonthChecked } from "./attendance";
+import { attendanceCheckedFor, loadAttendanceHistory, loadAttendanceMonth, markAttendance, markMonthChecked, unmarkMonthChecked } from "./attendance";
 
 // The attendance of a month: who is on the sheet, which days can be marked, what is stored, and the "month checked" mark that payroll warns about.
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -73,7 +73,16 @@ describe("a month of attendance", () => {
     expect((await loadAttendanceMonth(org.tenantId, "AD", 2026, 10)).checked).not.toBeNull();
     // another organization's sheet is not affected
     expect((await attendanceCheckedFor(other.tenantId, "AD", 2026, 10)).checked).toBeNull();
-    await unmarkMonthChecked(org.tenantId, org.userId, "2026-10-01");
+    // a mark changed after the check is kept in the history
+    await mark(gita, "2026-10-08", "leave");
+    await expect(unmarkMonthChecked(org.tenantId, org.userId, "2026-10-01", " ")).rejects.toThrow(/reason/);
+    await unmarkMonthChecked(org.tenantId, org.userId, "2026-10-01", "A leave was missed");
     expect((await attendanceCheckedFor(org.tenantId, "AD", 2026, 10)).checked).toBeNull();
+    // the history outlives the undo: checked, the changed mark, and the undo with its reason
+    const history = await loadAttendanceHistory(org.tenantId, "2026-10-01");
+    expect(history.map((h) => h.kind).sort()).toEqual(["check_undone","checked","mark_changed"]);
+    expect(history.find((h) => h.kind === "check_undone")?.reason).toBe("A leave was missed");
+    expect(history.find((h) => h.kind === "mark_changed")).toMatchObject({ employee: "Gita", workDate: "2026-10-08", from: "present", to: "leave" });
+    expect(await loadAttendanceHistory(other.tenantId, "2026-10-01")).toEqual([]);
   });
 });

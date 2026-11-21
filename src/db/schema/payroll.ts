@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, date, numeric, integer, boolean, timestamp, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, date, numeric, integer, boolean, timestamp, jsonb, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { tenants, users } from "./tenancy";
 import { accounts } from "./accounts";
 
@@ -230,6 +230,28 @@ export const attendanceChecks = pgTable(
     checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("attendance_checks_period").on(t.tenantId, t.periodStart)]
+);
+
+// What happened to a month's attendance after it was looked over: the check itself, an undo (with its reason) and any mark changed in a checked month.
+// The check row above is only the current state; this is the history.
+export const attendanceEvents = pgTable(
+  "attendance_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    /** The month the event belongs to, by its payroll period start. */
+    periodStart: date("period_start").notNull(),
+    /** "checked", "check_undone" or "mark_changed". */
+    kind: text("kind").notNull(),
+    employeeId: uuid("employee_id").references(() => employees.id),
+    workDate: date("work_date"),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    reason: text("reason"),
+    byUser: uuid("by_user").references(() => users.id),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("attendance_events_period").on(t.tenantId, t.periodStart)]
 );
 
 // The retirement schemes an employee is in, from when to when. SSF and PF never overlap each other; CIT can sit beside either.
