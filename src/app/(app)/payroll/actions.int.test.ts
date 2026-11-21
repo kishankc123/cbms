@@ -19,7 +19,7 @@ vi.mock("@/lib/session", () => ({
 const { createEmployee, updateEmployee, addSalaryChange } = await import("./employees/actions");
 const { getSalaryAsOf } = await import("@/lib/payroll/salary");
 const { setAttendance } = await import("./employees/attendance-actions");
-const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun, revertRunToDraft } = await import("./salary-sheet/actions");
+const { generatePayrollRun, advanceRunStatus, reverseFinalizedRun, revertRunToDraft, leaveEmployeeOutOfRun, putEmployeeBackInRun, deletePayrollRun } = await import("./salary-sheet/actions");
 
 let cashId: string;
 const acct = async (code: string) => (await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, code))))[0];
@@ -175,6 +175,38 @@ describe("employment window", () => {
     expect(joiner).toBeGreaterThan(0);
     expect(joiner).toBeLessThan(full);
   });
+});
+
+describe("choosing who is in a draft run, and deleting a draft", () => {
+  const inRun = async (id: string) => new Set((await db.select().from(payrollLines).where(eq(payrollLines.payrollRunId, id))).map((l) => l.employeeId));
+
+  beforeAll(async () => {
+    await createEmployee(empInput("CH-1", "Choose One", { joiningDate: "2026-01-01" }));
+    await createEmployee(empInput("CH-2", "Choose Two", { joiningDate: "2026-01-01" }));
+  });
+
+  it("includes everyone employed, lets one be left out (and stay out when recalculated), and puts them back", async () => {
+    const id = await generatePayrollRun({ month: 10, year: 2026, calendar: "AD", employeeIds: [] });
+    const e1 = (await findEmployee("CH-1")).id;
+    expect((await inRun(id)).has(e1)).toBe(true);
+    await leaveEmployeeOutOfRun({ runId: id, employeeId: e1 });
+    expect((await inRun(id)).has(e1)).toBe(false);
+    await generatePayrollRun({ month: 10, year: 2026, calendar: "AD", employeeIds: [] });
+    expect((await inRun(id)).has(e1)).toBe(false);
+    await putEmployeeBackInRun({ runId: id, employeeId: e1 });
+    expect((await inRun(id)).has(e1)).toBe(true);
+  }, 240_000);
+
+  it("deletes a draft so the month can be run again, and refuses a finalized run", async () => {
+    const id = await generatePayrollRun({ month: 11, year: 2026, calendar: "AD", employeeIds: [] });
+    await deletePayrollRun({ runId: id });
+    expect((await db.select().from(payrollRuns).where(eq(payrollRuns.id, id))).length).toBe(0);
+    expect((await db.select().from(payrollLines).where(eq(payrollLines.payrollRunId, id))).length).toBe(0);
+    const again = await generatePayrollRun({ month: 11, year: 2026, calendar: "AD", employeeIds: [] });
+    await finalize(again);
+    await expect(deletePayrollRun({ runId: again })).rejects.toThrow(/finalized/);
+    await expect(leaveEmployeeOutOfRun({ runId: again, employeeId: (await findEmployee("CH-1")).id })).rejects.toThrow(/finalized/);
+  }, 240_000);
 });
 
 describe("changing an employee's basic salary", () => {

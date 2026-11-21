@@ -18,6 +18,7 @@ import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import type { CalendarSystem } from "@/lib/calendar";
 import { getOrCreateSettings } from "@/lib/payroll/settings";
 import { eachDate, periodForMonth } from "@/lib/payroll/period";
+import { whyNotInRun } from "@/lib/payroll/run-eligibility";
 import { reverseJournalEntry } from "@/lib/ledger/post";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, removeRunRecoveries } from "@/lib/payroll/staff-advances";
@@ -37,9 +38,10 @@ export type GenerateRunInput = {
   year: number;
   /** Calendar the month/year are in; defaults to the organization's. Pass a run's own calendar when regenerating it. */
   calendar?: CalendarSystem;
-  employeeIds: string[]; // empty = all active employees
+  employeeIds: string[]; // empty = everyone employed in the period (what the screens always pass)
 };
 
+// A run is made for everyone employed in the month: nobody has to be picked. Calling it again for the same month rebuilds the draft.
 // Recomputes a payroll run's lines from the salary/benefits/attendance
 // applicable to the selected period — never from the employee's "current"
 // salary. Blocked once the run is finalized, per the immutability rule.
@@ -81,9 +83,9 @@ export async function generatePayrollRun(input: GenerateRunInput) {
     .select()
     .from(employees)
     .where(and(eq(employees.tenantId, session.tenantId), ...(input.employeeIds.length > 0 ? [inArray(employees.id, input.employeeIds)] : [])));
-  const employeeList = everyone
-    .filter((e) => (input.employeeIds.length > 0 ? true : e.employmentStatus === "active" || Boolean(e.leavingDate && e.leavingDate >= periodStart)))
-    .filter((e) => e.joiningDate <= periodEnd && (!e.leavingDate || e.leavingDate >= periodStart));
+  // People left out of this run on purpose stay out until they are put back (see leaveEmployeeOutOfRun).
+  const leftOut = new Set(existingRun?.excludedEmployeeIds ?? []);
+  const employeeList = everyone.filter((e) => !leftOut.has(e.id) && whyNotInRun(input.employeeIds.length > 0 ? { ...e, employmentStatus: "active" } : e, periodStart, periodEnd) === null);
   if (employeeList.length === 0) throw new Error("No employees were employed during this period, so there is nothing to include in this payroll run");
 
   // Each employee gets the components assigned to them (see Employees > profile > Salary components), not one company-wide total.
@@ -382,4 +384,49 @@ export async function removeRunAdjustmentAction(input: { runId: string; adjustme
   if (!run) throw new Error("Payroll run not found");
   await removeRunAdjustment(session.tenantId, session.userId, run, input.adjustmentId);
   await generatePayrollRun({ month: run.month, year: run.year, calendar: run.calendarSystem === "BS" ? "BS" : "AD", employeeIds: [] });
+}
+
+async function openRun(session: Awaited<ReturnType<typeof requireTenantSession>>, runId: string) {
+  const [run] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.id, runId), eq(payrollRuns.tenantId, session.tenantId))).limit(1);
+  if (!run) throw new Error("Payroll run not found");
+  if (run.status === "finalized") throw new Error("This payroll run is finalized. Reverse it first, then change who is in it.");
+  return run;
+}
+
+/** Leaves one employee out of a run that is not finalized (they stay out when it is recalculated) and rebuilds it. */
+export async function leaveEmployeeOutOfRun(input: { runId: string; employeeId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit") || !can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const run = await openRun(session, input.runId);
+  const lines = await db.select({ employeeId: payrollLines.employeeId }).from(payrollLines).where(eq(payrollLines.payrollRunId, run.id));
+  if (!lines.some((l) => l.employeeId === input.employeeId)) throw new Error("That employee is not in this payroll run.");
+  if (lines.length === 1) throw new Error("This is the only employee in the run. Delete the draft instead.");
+  await db.update(payrollRuns).set({ excludedEmployeeIds: [...new Set([...run.excludedEmployeeIds, input.employeeId])] }).where(and(eq(payrollRuns.id, run.id), eq(payrollRuns.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "payroll_run_employee_left_out", entityType: "payroll_run", entityId: run.id, afterValue: { employeeId: input.employeeId } });
+  await generatePayrollRun({ month: run.month, year: run.year, calendar: run.calendarSystem === "BS" ? "BS" : "AD", employeeIds: [] });
+}
+
+/** Puts an employee who was left out back into a run that is not finalized and rebuilds it. */
+export async function putEmployeeBackInRun(input: { runId: string; employeeId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit") || !can(session, "payroll", "create")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const run = await openRun(session, input.runId);
+  await db.update(payrollRuns).set({ excludedEmployeeIds: run.excludedEmployeeIds.filter((id) => id !== input.employeeId) }).where(and(eq(payrollRuns.id, run.id), eq(payrollRuns.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "payroll_run_employee_put_back", entityType: "payroll_run", entityId: run.id, afterValue: { employeeId: input.employeeId } });
+  await generatePayrollRun({ month: run.month, year: run.year, calendar: run.calendarSystem === "BS" ? "BS" : "AD", employeeIds: [] });
+}
+
+/** Deletes a run that is not finalized, so the month can be run again. Nothing was posted to the books; staff advances it was going to recover are outstanding again. */
+export async function deletePayrollRun(input: { runId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "delete")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const run = await openRun(session, input.runId);
+  if ((await activePayrollEntries(session.tenantId, run.id)).length > 0) throw new Error("This run has an accounting entry. Reverse it first.");
+  await removeRunRecoveries(session.tenantId, run.id);
+  await db.delete(payrollRuns).where(and(eq(payrollRuns.id, run.id), eq(payrollRuns.tenantId, session.tenantId)));
+  await db.insert(auditLog).values({ tenantId: session.tenantId, userId: session.userId, action: "payroll_run_deleted", entityType: "payroll_run", entityId: run.id, beforeValue: { status: run.status, month: run.month, year: run.year, calendar: run.calendarSystem } });
+  revalidatePath("/payroll/salary-sheet");
 }

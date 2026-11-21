@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalizedRun } from "../actions";
+import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalizedRun, deletePayrollRun } from "../actions";
 import { useProblem } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
@@ -27,6 +27,7 @@ export function RunStatusControls({
   year,
   calendar,
   slabsMissing = false,
+  canDelete = false,
 }: {
   runId: string;
   status: string;
@@ -35,6 +36,7 @@ export function RunStatusControls({
   calendar: "AD" | "BS";
   /** The run took no salary TDS because no slabs are published: finalizing asks first. */
   slabsMissing?: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -65,6 +67,18 @@ export function RunStatusControls({
     } catch (e) {
       report(e instanceof Error ? e.message : "Failed", null);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!(await ask("Delete this draft? Nothing has been posted to the books. You can then generate the month again from the start. One-off adjustments you added stay on the employees and are included again.", { confirmLabel: "Delete draft" }))) return;
+    setBusy(true);
+    try {
+      await deletePayrollRun({ runId });
+      router.push("/payroll/salary-sheet");
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Failed to delete the draft", null);
       setBusy(false);
     }
   }
@@ -120,6 +134,16 @@ export function RunStatusControls({
           >
             Recalculate
           </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-[var(--danger-text)] transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
+            >
+              Delete draft
+            </button>
+          )}
           {status !== "draft" && (
             <button
               type="button"

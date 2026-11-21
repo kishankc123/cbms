@@ -160,6 +160,8 @@ export const payrollRuns = pgTable("payroll_runs", {
   periodEnd: date("period_end").notNull(),
   status: payrollRunStatusEnum("status").notNull().default("draft"),
   processingDate: date("processing_date"),
+  /** People deliberately left out of this run; every recalculation keeps them out until they are put back. */
+  excludedEmployeeIds: jsonb("excluded_employee_ids").$type<string[]>().notNull().default([]),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finalizedAt: timestamp("finalized_at", { withTimezone: true }),

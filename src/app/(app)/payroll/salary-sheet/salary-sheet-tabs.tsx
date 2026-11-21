@@ -11,13 +11,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export function SalarySheetTabs({
-  runs,
-  employees,
-}: {
-  runs: Parameters<typeof RunsTable>[0]["runs"];
-  employees: Parameters<typeof GenerateRunForm>[0]["employees"];
-}) {
+export function SalarySheetTabs({ runs }: { runs: Parameters<typeof RunsTable>[0]["runs"] }) {
   const [tab, setTab] = useState<TabId>("runs");
 
   return (
@@ -36,7 +30,7 @@ export function SalarySheetTabs({
       </div>
 
       {tab === "runs" && <RunsTable runs={runs} />}
-      {tab === "new" && <GenerateRunForm employees={employees} />}
+      {tab === "new" && <GenerateRunForm />}
     </div>
   );
 }
