@@ -10,6 +10,9 @@ import {
   pauseRecurringExpense as pauseRecurringExpenseRow,
   resumeRecurringExpense as resumeRecurringExpenseRow,
   stopRecurringExpense as stopRecurringExpenseRow,
+  getRecurringExpenseById,
+  bookedBefore,
+  newEffectiveFrom,
   type RecurringExpenseInput,
 } from "@/lib/recurring-expenses";
 import { runRecurringExpenseEngine } from "@/lib/recurring-expenses/generate";
@@ -24,12 +27,26 @@ export async function createRecurringExpense(input: RecurringExpenseInput) {
   return row;
 }
 
-export async function updateRecurringExpense(id: string, input: RecurringExpenseInput) {
+/** Before the start date of a recurring expense is moved forward: the months already booked before the new start, and which of them can be voided. */
+export async function previewRecurringStartChange(id: string, newStart: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "view")) throw new Error("Not permitted");
+  const existing = await getRecurringExpenseById(session.tenantId, id);
+  if (!existing) throw new Error("Recurring expense not found");
+  const cutoff = newEffectiveFrom(existing, newStart);
+  if (cutoff <= existing.effectiveFrom) return [];
+  return bookedBefore(session.tenantId, id, cutoff);
+}
+
+export async function updateRecurringExpense(id: string, input: RecurringExpenseInput, voidInstanceIds: string[] = []) {
   const session = await requireTenantSession();
   if (!can(session, "expenses", "edit")) throw new Error("Not permitted");
+  if (voidInstanceIds.length > 0 && !can(session, "expenses", "void")) throw new Error("Not permitted to void expenses");
 
-  const row = await updateRecurringExpenseRow(session.tenantId, session.userId, id, input);
-  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "recurring_expense_updated", entityType: "recurring_expense", entityId: id, after: input });
+  const row = await updateRecurringExpenseRow(session.tenantId, session.userId, id, input, voidInstanceIds);
+  await logAuditEvent({ tenantId: session.tenantId, userId: session.userId, action: "recurring_expense_updated", entityType: "recurring_expense", entityId: id, after: { ...input, voidedInstanceIds: voidInstanceIds } });
+  revalidatePath("/expenses");
+  revalidatePath("/journal");
   revalidatePath("/expenses/recurring");
   return row;
 }
