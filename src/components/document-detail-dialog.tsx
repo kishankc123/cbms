@@ -14,11 +14,14 @@ export type DetailAction = { label: string; onClick: () => void; primary?: boole
  * with the actions that apply to it along the bottom. The actions are the screen's own, so permissions, locks and warnings are exactly what they are
  * from the row's menu.
  */
+const TITLE: Record<DocumentDetailView["kind"], string> = { sale: "Invoice", purchase: "Bill", expense: "Expense", sales_return: "Debit note", purchase_return: "Credit note" };
+
 export function DocumentDetailDialog({ detail, badge, actions, onClose }: { detail: DocumentDetailView; badge: { tone: StatusTone; label: string }; actions: DetailAction[]; onClose: () => void }) {
   const shown = actions.filter((a) => !a.hidden);
+  const isReturn = detail.kind === "sales_return" || detail.kind === "purchase_return";
   return (
     <Modal
-      title={`${detail.kind === "sale" ? "Invoice" : detail.kind === "purchase" ? "Bill" : "Expense"} ${detail.number}`}
+      title={`${TITLE[detail.kind]} ${detail.number}`}
       description={`${detail.partyName || "No name"} · ${detail.kind === "expense" && detail.category ? `${detail.category} · ` : ""}${detail.typeLabel}`}
       onClose={onClose}
       footer={
@@ -53,11 +56,11 @@ export function DocumentDetailDialog({ detail, badge, actions, onClose }: { deta
           <Row label="Taxable" value={<Amount value={detail.taxable} />} />
           <Row label="VAT" value={<Amount value={detail.vat} />} />
           {(detail.otherTax ?? 0) > 0 && <Row label="Other tax" value={<Amount value={detail.otherTax ?? 0} />} />}
-          <Row label="Total" value={<Amount value={detail.total} />} strong />
+          <Row label={isReturn ? "Total returned" : "Total"} value={<Amount value={detail.total} />} strong />
           {(detail.tds ?? 0) > 0 && <Row label="TDS withheld" value={<span>-<Amount value={detail.tds ?? 0} /></span>} />}
           {(detail.tds ?? 0) > 0 && <Row label="Payable" value={<Amount value={detail.payable ?? 0} />} strong />}
-          <Row label={detail.kind === "sale" ? "Received" : "Paid"} value={<Amount value={detail.paid} />} />
-          <Row label="Balance" value={<span className={detail.balance > 0.005 ? "text-[var(--danger-text)]" : "text-[var(--success-text)]"}><Amount value={detail.balance} /></span>} strong />
+          {!isReturn && <Row label={detail.kind === "sale" ? "Received" : "Paid"} value={<Amount value={detail.paid} />} />}
+          {!isReturn && <Row label="Balance" value={<span className={detail.balance > 0.005 ? "text-[var(--danger-text)]" : "text-[var(--success-text)]"}><Amount value={detail.balance} /></span>} strong />}
         </div>
 
         {detail.lines.length > 0 && (

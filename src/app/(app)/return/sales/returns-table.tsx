@@ -1,6 +1,6 @@
 "use client";
 
-import { voidSalesReturn } from "./actions";
+import { getSalesReturnDetail, voidSalesReturn } from "./actions";
 import { ReturnsList } from "../returns-list";
 
 type Customer = { id: string; name: string };
@@ -13,6 +13,7 @@ export function SalesReturnsTable({ noteList, customerById }: { noteList: Note[]
       partyById={customerById}
       partyLabel="Customer"
       noteLabel="Debit note"
+      loadDetail={getSalesReturnDetail}
       onVoid={(noteId) => {
         const fd = new FormData();
         fd.set("noteId", noteId);
