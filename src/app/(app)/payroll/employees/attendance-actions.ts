@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTenantSession, can } from "@/lib/session";
 import type { CalendarSystem } from "@/lib/calendar";
-import { AttendanceError, attendanceCheckedFor, markAttendance, markMonthChecked, unmarkMonthChecked } from "@/lib/payroll/attendance";
+import { AttendanceError, attendanceCheckedFor, loadAttendanceHistory, markAttendance, markMonthChecked, unmarkMonthChecked } from "@/lib/payroll/attendance";
 
 export type AttendanceStatus = "present" | "absent" | "leave" | "half_day";
 
@@ -34,12 +34,19 @@ export async function markAttendanceChecked(input: { periodStart: string; period
   revalidatePath("/payroll/salary-sheet");
 }
 
-export async function clearAttendanceCheck(input: { periodStart: string }) {
+export async function clearAttendanceCheck(input: { periodStart: string; reason: string }) {
   const session = await requireTenantSession();
   if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
-  await run(() => unmarkMonthChecked(session.tenantId, session.userId, input.periodStart));
+  await run(() => unmarkMonthChecked(session.tenantId, session.userId, input.periodStart, input.reason));
   revalidatePath("/payroll/attendance");
   revalidatePath("/payroll/salary-sheet");
+}
+
+/** What happened to one month's attendance: checked, undone (with the reason) and marks changed after the check. */
+export async function getAttendanceHistory(input: { periodStart: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "view")) throw new Error("Not permitted");
+  return loadAttendanceHistory(session.tenantId, input.periodStart);
 }
 
 /** For the warning before a payroll run is generated: was this month's attendance checked? */
