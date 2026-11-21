@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { purchaseReturns, tenants, vendors, items, type PurchaseLineItem } from "@/db/schema";
+import { purchaseReturnDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
@@ -152,6 +153,15 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
 }
 
 /** Voids a credit note: reverses what it posted and puts the goods back into stock. */
+/** The details of one credit note for the pop-up on its row. */
+export async function getPurchaseReturnDetail(noteId: string): Promise<DocumentDetailView> {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "view")) throw new Error("Not permitted");
+  const detail = await purchaseReturnDetail(session.tenantId, noteId);
+  if (!detail) throw new Error("Credit note not found");
+  return { ...detail, canEdit: false, canVoid: can(session, "purchases", "void"), canPay: false };
+}
+
 export async function voidPurchaseReturn(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "purchases", "void")) throw new Error("Not permitted");

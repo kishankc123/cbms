@@ -15,6 +15,8 @@ import { StatStrip } from "@/components/ui/stat-strip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { DocumentDetailDialog } from "@/components/document-detail-dialog";
+import type { DocumentDetailView } from "@/lib/ledger/document-detail";
 
 // The list of debit notes (sales returns) or credit notes (purchase returns): the two screens differ only in their words and
 // in which action voids a note, so one list serves both.
@@ -32,6 +34,7 @@ export function ReturnsList({
   partyLabel,
   noteLabel,
   onVoid,
+  loadDetail,
 }: {
   notes: ReturnNote[];
   partyById: Record<string, { id: string; name: string }>;
@@ -41,6 +44,8 @@ export function ReturnsList({
   noteLabel: string;
   /** Voids one note by its id (the screen's own server action). */
   onVoid: (noteId: string) => Promise<unknown>;
+  /** The details of one note for its pop-up (the screen's own server action). */
+  loadDetail: (noteId: string) => Promise<DocumentDetailView>;
 }) {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -52,6 +57,15 @@ export function ReturnsList({
   const router = useRouter();
   const ask = useConfirm();
   const { report, dialog } = useProblem();
+  // The details pop-up of a row: opened by a double-tap, a double-click or a swipe.
+  const [detail, setDetail] = useState<DocumentDetailView | null>(null);
+  async function openDetail(id: string) {
+    try {
+      setDetail(await loadDetail(id));
+    } catch (e) {
+      report(e instanceof Error ? e.message : `Could not open the ${lower}`, null);
+    }
+  }
   const filtering = Boolean(search || dateFrom || dateTo || partyFilter || statusFilter);
   const lower = noteLabel.toLowerCase();
 
@@ -201,7 +215,13 @@ export function ReturnsList({
               </Td>
               <Td className="whitespace-nowrap">
                 <RowActions>
-                  <RowMenu items={[{ label: "Void", onClick: () => voidRow(n), danger: true, hidden: n.status === "void" }]} />
+                  <RowMenu
+                    onOpen={() => void openDetail(n.id)}
+                    items={[
+                      { label: "View", onClick: () => void openDetail(n.id) },
+                      { label: "Void", onClick: () => voidRow(n), danger: true, hidden: n.status === "void" },
+                    ]}
+                  />
                 </RowActions>
               </Td>
             </Tr>
@@ -214,6 +234,18 @@ export function ReturnsList({
         ) : (
           <EmptyState icon={Undo2} title={`No ${lower}s match`} description="Try a different search, or clear the filters." action={<Button onClick={clearFilters}>Clear filters</Button>} />
         ))}
+      {detail && (() => {
+        const note = notes.find((x) => x.id === detail.id);
+        const voided = detail.status === "void";
+        return (
+          <DocumentDetailDialog
+            detail={detail}
+            badge={{ tone: voided ? "neutral" : "success", label: voided ? "Void" : "Posted" }}
+            onClose={() => setDetail(null)}
+            actions={[{ label: "Void", danger: true, onClick: () => { setDetail(null); if (note) void voidRow(note); }, hidden: voided || !detail.canVoid || !note }]}
+          />
+        );
+      })()}
       {dialog}
     </div>
   );

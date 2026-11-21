@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, customers, items, journalEntries, journalLines, purchaseBills, salesInvoices, tenantTaxRegistrations, vendors } from "@/db/schema";
+import { accounts, customers, items, journalEntries, journalLines, purchaseBills, purchaseReturns, salesInvoices, salesReturns, tenantTaxRegistrations, vendors } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
-import { expenseDetail, purchaseBillDetail, salesInvoiceDetail } from "@/lib/ledger/document-detail";
+import { expenseDetail, purchaseBillDetail, purchaseReturnDetail, salesInvoiceDetail, salesReturnDetail } from "@/lib/ledger/document-detail";
 import { createExpenseCore } from "@/lib/expenses/expense-records";
 import { createStockableInvoiceCore } from "./stockable-invoice";
 import { buildItemTemplate, importItemBills, reviewItemFile, type ItemImportSettings } from "./import/item-service";
@@ -150,5 +150,22 @@ describe("the details pop-up of a bill and an invoice", () => {
     const d = await expenseDetail(org.tenantId, made.expenseId);
     expect(d).toMatchObject({ kind: "expense", partyName: "Himal Traders", category: "Miscellaneous Expense", description: "Office rent", taxable: 20000, tds: 1000, payable: 19000, paid: 5000, balance: 14000, typeLabel: "PAN bill" });
     expect(d?.payments.map((p) => p.amount)).toEqual([5000]);
+  });
+
+  it("shows a debit note and a credit note with their items and no payments", async () => {
+    const [customer] = await db.select().from(customers).where(eq(customers.tenantId, org.tenantId)).limit(1);
+    const [dn] = await db.insert(salesReturns).values({ tenantId: org.tenantId, customerId: customer.id, noteNumber: "DN-1", noteDate: "2026-09-02", subtotal: "100.00", taxAmount: "13.00", total: "113.00", lineItems: [{ description: "Rice", quantity: 2, unitPrice: 50, taxRate: 13 }] }).returning();
+    expect(await salesReturnDetail(org.tenantId, dn.id)).toMatchObject({ kind: "sales_return", number: "DN-1", partyName: "Annapurna Stores", total: 113, paid: 0, balance: 0, lines: [{ name: "Rice", quantity: 2, rate: 50, amount: 100 }] });
+    const [cn] = await db.insert(purchaseReturns).values({ tenantId: org.tenantId, vendorId, noteNumber: "CN-1", noteDate: "2026-09-12", subtotal: "250.00", taxAmount: "0.00", total: "250.00", lineItems: [{ itemId: mask, description: "", rate: 50, quantity: 5, discount: 0 }] }).returning();
+    const d = await purchaseReturnDetail(org.tenantId, cn.id);
+    expect(d).toMatchObject({ kind: "purchase_return", partyName: "Himal Traders", total: 250 });
+    expect(d?.lines).toEqual([{ name: "Mask", quantity: 5, rate: 50, amount: 250 }]);
+    const other = await createTempOrg("ZZ Return other");
+    try {
+      expect(await purchaseReturnDetail(other.tenantId, cn.id)).toBeNull();
+      expect(await salesReturnDetail(other.tenantId, dn.id)).toBeNull();
+    } finally {
+      await other.remove();
+    }
   });
 });

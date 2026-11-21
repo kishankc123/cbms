@@ -1,6 +1,6 @@
 "use client";
 
-import { voidPurchaseReturn } from "./actions";
+import { getPurchaseReturnDetail, voidPurchaseReturn } from "./actions";
 import { ReturnsList } from "../returns-list";
 
 type Vendor = { id: string; name: string };
@@ -13,6 +13,7 @@ export function PurchaseReturnsTable({ noteList, vendorById }: { noteList: Note[
       partyById={vendorById}
       partyLabel="Supplier"
       noteLabel="Credit note"
+      loadDetail={getPurchaseReturnDetail}
       onVoid={(noteId) => {
         const fd = new FormData();
         fd.set("noteId", noteId);

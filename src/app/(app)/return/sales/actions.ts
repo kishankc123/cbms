@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { salesReturns, customers, type LineItem } from "@/db/schema";
+import { salesReturnDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseAllActiveEntriesForSource, type PostLineInput } from "@/lib/ledger/post";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
@@ -176,6 +177,15 @@ export async function createSalesReturn(input: SalesReturnInput) {
 }
 
 /** Voids a debit note: reverses what it posted and takes the returned stock back out. */
+/** The details of one debit note for the pop-up on its row. */
+export async function getSalesReturnDetail(noteId: string): Promise<DocumentDetailView> {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "view")) throw new Error("Not permitted");
+  const detail = await salesReturnDetail(session.tenantId, noteId);
+  if (!detail) throw new Error("Debit note not found");
+  return { ...detail, canEdit: false, canVoid: can(session, "sales", "void"), canPay: false };
+}
+
 export async function voidSalesReturn(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "sales", "void")) throw new Error("Not permitted");
