@@ -9,9 +9,8 @@ import { StatStrip } from "@/components/ui/stat-strip";
 import { Amount, DataTable, Td, Th, Tr } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { D } from "@/components/calendar/date-text";
-import { useCalendar } from "@/components/calendar/calendar-provider";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
-import { previewNextOccurrence, type RecurringFrequency, type RecurringPriority, type RecurringStatus } from "@/lib/recurring-expenses/schedule";
+import { type RecurringFrequency, type RecurringPriority, type RecurringStatus } from "@/lib/recurring-expenses/schedule";
 import { RecurringExpenseFormModal, type InitialRecurringExpense } from "./recurring-expense-form-modal";
 import { LifecycleActions } from "./lifecycle-actions";
 
@@ -28,6 +27,7 @@ export type RecurringExpenseRow = {
   frequency: RecurringFrequency;
   priority: RecurringPriority;
   status: RecurringStatus;
+  next: { expenseDate: string; dueDate: string } | null;
   raw: InitialRecurringExpense;
 };
 
@@ -69,7 +69,6 @@ export function RecurringExpensesTable({
   categoryAccounts: CategoryAccount[];
   cashBankAccounts: CashBankGroup[];
 }) {
-  const calendar = useCalendar();
   const [editing, setEditing] = useState<InitialRecurringExpense | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -122,19 +121,7 @@ export function RecurringExpensesTable({
         </thead>
         <tbody>
           {expenses.map((row) => {
-            let preview: ReturnType<typeof previewNextOccurrence> | null = null;
-            try {
-              preview = previewNextOccurrence({
-                calendar,
-                startDate: row.raw.startDate,
-                recognitionRule: row.raw.recognitionRule,
-                recognitionDay: row.raw.recognitionDay,
-                dueRule: row.raw.dueRule,
-                dueRuleValue: row.raw.dueRuleValue,
-              });
-            } catch {
-              preview = null;
-            }
+            const preview = row.next;
             const statusInfo = STATUS_TONE[row.status];
             return (
               <Tr key={row.id}>

@@ -6,6 +6,7 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { listRecurringExpenses, getRecurringExpenseSummary } from "@/lib/recurring-expenses";
 import { todayIso } from "@/lib/calendar";
+import { nextOccurrenceFrom } from "@/lib/recurring-expenses/schedule";
 import { RecurringExpensesTable, type RecurringExpenseRow } from "./recurring-expenses-table";
 import { RecurringEngineRunner } from "./recurring-engine-runner";
 
@@ -39,6 +40,8 @@ export default async function RecurringExpensesPage() {
     frequency: r.frequency,
     priority: r.priority,
     status: r.status,
+    // The next one still to come, from what has already been scheduled (not from the start date alone). Only an active recurring expense has one.
+    next: r.status === "active" ? nextOccurrenceFrom({ calendar: session.calendar, effectiveFrom: r.effectiveFrom, intervalMonths: r.intervalMonths, recognitionRule: r.recognitionRule, recognitionDay: r.recognitionDay, dueRule: r.dueRule, dueRuleValue: r.dueRuleValue, endDate: r.endDate, stoppedEffectiveDate: r.stoppedEffectiveDate, fromIso: todayIso() }) : null,
     raw: {
       id: r.id,
       expenseName: r.expenseName,
