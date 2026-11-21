@@ -995,6 +995,13 @@
       "when": 1795251776556,
       "tag": "0141_recurring_effective_from_resync",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1795271762006,
+      "tag": "0142_attendance_events",
+      "breakpoints": true
     }
   ]
 }

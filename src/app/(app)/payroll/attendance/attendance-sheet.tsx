@@ -6,6 +6,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useProblem } from "@/components/problem-dialog";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Modal } from "@/components/ui/modal";
+import { Textarea } from "@/components/ui/field";
+import { AttendanceHistory } from "./attendance-history";
 import { D } from "@/components/calendar/date-text";
 import { dayState, markProblem, monthTotals, NEXT_STATUS, type AttendanceStatus } from "@/lib/payroll/attendance-rules";
 import type { AttendanceMonth } from "@/lib/payroll/attendance";
@@ -48,6 +51,9 @@ export function AttendanceSheet({
   const [view, setView] = useState<"month" | "day">("month");
   const [busy, setBusy] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  // Undoing a check asks why; the reason stays in the month's history.
+  const [undoing, setUndoing] = useState(false);
+  const [undoReason, setUndoReason] = useState("");
   const holidays = useMemo(() => new Set(data.days.filter((d) => d.holiday).map((d) => d.iso)), [data.days]);
   const dates = useMemo(() => data.days.map((d) => d.iso), [data.days]);
   const editable = canEdit && !data.locked;
@@ -86,10 +92,27 @@ export function AttendanceSheet({
   }
 
   async function toggleChecked() {
+    if (data.checked) {
+      setUndoReason("");
+      setUndoing(true);
+      return;
+    }
     setChecking(true);
     try {
-      if (data.checked) await clearAttendanceCheck({ periodStart: data.periodStart });
-      else await markAttendanceChecked({ periodStart: data.periodStart, periodEnd: data.periodEnd });
+      await markAttendanceChecked({ periodStart: data.periodStart, periodEnd: data.periodEnd });
+      router.refresh();
+    } catch (e) {
+      report(e instanceof Error ? e.message : "Could not save", null);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function confirmUndo() {
+    setChecking(true);
+    try {
+      await clearAttendanceCheck({ periodStart: data.periodStart, reason: undoReason });
+      setUndoing(false);
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Could not save", null);
@@ -114,7 +137,7 @@ export function AttendanceSheet({
         </div>
         <div className="inline-flex overflow-hidden rounded-lg border border-line-strong text-[13px]">
           {(["month", "day"] as const).map((v) => (
-            <button key={v} type="button" onClick={() => setView(v)} className={`h-8 px-3 ${view === v ? "bg-[var(--text-primary)] text-[var(--surface-2)]" : "text-ink hover:bg-hover"}`}>
+            <button key={v} type="button" onClick={() => setView(v)} className={`h-8 px-3 ${view === v ? "bg-accent text-[var(--on-accent)]" : "text-ink hover:bg-hover"}`}>
               {v === "month" ? "Month sheet" : "Day"}
             </button>
           ))}
@@ -140,6 +163,30 @@ export function AttendanceSheet({
           )}
         </div>
       </div>
+
+      <AttendanceHistory periodStart={data.periodStart} refreshKey={`${data.checked?.at ?? ""}|${data.checked?.by ?? ""}|${JSON.stringify(records).length}`} />
+
+      {undoing && (
+        <Modal
+          size="sm"
+          title="Undo the check?"
+          description="The month goes back to not checked. Who checked it and when stays in the history."
+          onClose={() => setUndoing(false)}
+          dismissible={!checking}
+          footer={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setUndoing(false)} disabled={checking}>
+                Keep it checked
+              </Button>
+              <Button type="button" variant="primary" onClick={confirmUndo} loading={checking}>
+                Undo the check
+              </Button>
+            </>
+          }
+        >
+          <Textarea value={undoReason} onChange={(e) => setUndoReason(e.target.value)} rows={3} placeholder="Reason (required)" aria-label="Reason for undoing the check" />
+        </Modal>
+      )}
 
       {data.employees.length === 0 && <p className="rounded-lg border border-line bg-surface p-6 text-center text-sm text-ink-3">No employee was employed in this month.</p>}
 
