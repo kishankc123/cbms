@@ -1,4 +1,5 @@
 import { imageModel, type DayExtras, type ExportContext, type ImageCard } from "@/lib/ledger/daybook-export";
+import { drawMark } from "@/lib/export/brand-mark";
 import type { Daybook } from "@/lib/ledger/daybook-rules";
 
 // Draws the Daybook as a picture, straight onto a canvas, in Workdela's colours: a fixed width and a white page, the same whatever theme the app is in,
@@ -127,24 +128,6 @@ function drawCard(ctx: CanvasRenderingContext2D, c: ImageCard, x: number, y: num
     ry += CARD_ROW;
   });
   if (c.returns) text(ctx, `Returns  -${c.returns}`, x + inner, ry, { size: 12, color: MUTED });
-}
-
-/** The logo: a W made of two interlocking Vs (see components/brand/logo.tsx), in the light tones used on dark backgrounds. */
-function drawMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-  const k = size / 56;
-  const line = (pts: number[][], color: string, alpha: number) => {
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = 7 * k;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(x + px * k, y + py * k) : ctx.lineTo(x + px * k, y + py * k)));
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  line([[6, 14], [18, 42], [30, 14]], "#afa9ec", 1);
-  line([[26, 14], [38, 42], [50, 14]], "#5dcaa5", 0.9);
 }
 
 export function drawDaybookImage(d: Daybook, info: ExportContext, extras: DayExtras): HTMLCanvasElement {

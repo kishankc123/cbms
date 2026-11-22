@@ -1,5 +1,6 @@
 import { D } from "@/components/calendar/date-text";
 import { todayIso } from "@/lib/calendar";
+import { LogoMark } from "@/components/brand/logo";
 
 /** The printable page of a report. Printing (or saving as PDF) shows only this, not the menus around it. */
 export function ReportSheet({ children, name }: { children: React.ReactNode; /** What a multi-page report is called in the saved file's name (the default is the quarterly pack). */ name?: string }) {
@@ -25,12 +26,16 @@ export function ReportHeader({ company, address, title, period }: { company: str
 
 export function ReportFooter({ note }: { note?: string }) {
   return (
-    <div data-report-footer className="mt-4 flex justify-between gap-4 text-[11px] text-ink-3">
+    <div data-report-footer className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-[11px] text-ink-3">
       <span>
         Prepared on <D value={todayIso()} style="long" />
         {note ? `  ·  ${note}` : ""}
       </span>
-      <span>Made with Workdela</span>
+      <span className="inline-flex items-center gap-1.5">
+        <LogoMark size={14} />
+        Made with Workdela
+      </span>
+      <span aria-hidden />
     </div>
   );
 }
