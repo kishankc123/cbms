@@ -1,11 +1,11 @@
-import { COST_OF_SALES, type AccountInfo, type Amount } from "./pnl-compare-rules";
+import { COST_OF_SALES, placement, rowOrder, type AccountInfo, type Amount, type SubGroup } from "./pnl-compare-rules";
 
 // Profit & Loss with any number of periods side by side (a quarter's three months, the quarter and the same quarter a year ago).
 // Same shape as the two-period comparison: costs and expenses are negative, so a positive change is better for profit. Plain functions, so they can be tested.
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type SeriesRow = { accountId: string; sub: string; values: number[] };
+export type SeriesRow = { accountId: string; sub: string; subGroup?: SubGroup; values: number[] };
 export type SeriesHeading = { key: string; name: string; rows: SeriesRow[] };
 export type SeriesSection = { headings: SeriesHeading[]; totals: number[] };
 export type PeriodAmounts = { income: Amount[]; expenses: Amount[] };
@@ -18,17 +18,18 @@ function seriesSection(infos: Map<string, AccountInfo>, lists: Amount[][], sign:
   lists.forEach((list, i) => {
     for (const { accountId, amount } of list) {
       const a = infos.get(accountId);
-      const group = a && ((a.parentId && infos.get(a.parentId)) || a);
-      if (!a || !group || !only(group)) continue;
-      const row = rows.get(accountId) ?? { accountId, sub: group === a ? "" : a.name, values: lists.map(() => 0) };
+      if (!a) continue;
+      const { group, subGroup } = placement(infos, a, true);
+      if (!only(group)) continue;
+      const row = rows.get(accountId) ?? { accountId, sub: group === a ? "" : a.name, ...(subGroup ? { subGroup } : {}), values: lists.map(() => 0) };
       row.values[i] = round2(sign * amount);
       rows.set(accountId, row);
     }
   });
   const byGroup = new Map<string, SeriesHeading>();
-  for (const row of [...rows.values()].sort((x, y) => infos.get(x.accountId)!.code.localeCompare(infos.get(y.accountId)!.code))) {
+  for (const row of [...rows.values()].sort(rowOrder(infos, true))) {
     const a = infos.get(row.accountId)!;
-    const group = (a.parentId && infos.get(a.parentId)) || a;
+    const { group } = placement(infos, a, true);
     const h = byGroup.get(group.id) ?? { key: group.id, name: group.name, rows: [] };
     h.rows.push(row);
     byGroup.set(group.id, h);

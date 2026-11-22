@@ -1,6 +1,7 @@
 import type { DateRange } from "@/lib/calendar";
 import { margin, money, percentText, changePercent, type Pair } from "@/lib/ledger/pnl-compare-rules";
-import type { Series, SeriesSection } from "@/lib/ledger/pnl-series-rules";
+import type { Series, SeriesRow, SeriesSection } from "@/lib/ledger/pnl-series-rules";
+import { FoldRows } from "../profit-and-loss/fold-rows";
 import { AccountLink } from "../account-link";
 import { NUM, tone } from "../profit-and-loss/comparative-table";
 
@@ -58,20 +59,45 @@ function Percent({ label, profit, income }: { label: string; profit: number[]; i
   );
 }
 
+// The rows of a heading in order, with the ones that share a sub-heading (Performance incentives) kept together.
+type Chunk = { subGroup: SeriesRow["subGroup"]; rows: SeriesRow[] };
+function chunksOf(rows: SeriesRow[]): Chunk[] {
+  const out: Chunk[] = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    if (last && r.subGroup && last.subGroup?.id === r.subGroup.id) last.rows.push(r);
+    else out.push({ subGroup: r.subGroup, rows: [r] });
+  }
+  return out;
+}
+
 function Rows({ section, range }: { section: SeriesSection; range: DateRange }) {
-  return section.headings.map((h) =>
-    h.rows.map((r, i) => (
-      <tr key={r.accountId} className={`transition-colors hover:bg-hover ${i === 0 ? "border-t border-line" : ""}`}>
-        <td className="px-2 py-1 font-medium">{i === 0 ? h.name : ""}</td>
-        <td className="px-2 py-1">
-          <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
-            {r.sub || h.name}
-          </AccountLink>
-        </td>
-        <Cells v={r.values} />
-      </tr>
-    )),
-  );
+  return section.headings.map((h) => {
+    let shown = 0;
+    return chunksOf(h.rows).map((c) => {
+      const lead = shown === 0 ? h.name : "";
+      const border = shown === 0;
+      shown += 1;
+      const line = (r: SeriesRow, indent: boolean, first: boolean) => (
+        <tr key={r.accountId} className={`transition-colors hover:bg-hover ${first && border ? "border-t border-line" : ""}`}>
+          <td className="px-2 py-1 font-medium">{first ? lead : ""}</td>
+          <td className={`px-2 py-1 ${indent ? "pl-6" : ""}`}>
+            <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
+              {r.sub || h.name}
+            </AccountLink>
+          </td>
+          <Cells v={r.values} />
+        </tr>
+      );
+      if (!c.subGroup) return line(c.rows[0], false, true);
+      const total = c.rows[0].values.map((_, i) => Math.round(c.rows.reduce((s, r) => s + r.values[i], 0) * 100) / 100);
+      return (
+        <FoldRows key={c.subGroup.id} lead={lead} label={c.subGroup.name} topBorder={border} amounts={<Cells v={total} />}>
+          {c.rows.map((r) => line(r, true, false))}
+        </FoldRows>
+      );
+    });
+  });
 }
 
 /** A quarter's Profit & Loss: each of its months, the quarter, the same quarter a year earlier, and the change. `months` are the three month headings. */
