@@ -1,6 +1,7 @@
 import type { DateRange } from "@/lib/calendar";
-import { change, changePercent, margin, money, percentText, type Comparison, type Pair, type Section } from "@/lib/ledger/pnl-compare-rules";
+import { change, changePercent, margin, money, percentText, type Comparison, type Pair, type Row, type Section } from "@/lib/ledger/pnl-compare-rules";
 import { AccountLink } from "../account-link";
+import { FoldRows } from "./fold-rows";
 
 // Green is better for profit, red worse. A balance sheet has no better or worse direction, so it passes `neutral`.
 export const tone = (n: number, neutral?: boolean) => (neutral ? "" : n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
@@ -51,25 +52,61 @@ function Percent({ label, cur, prev, single }: { label: string; cur: number | nu
   );
 }
 
+// The rows of a heading in order, with the ones that share a sub-heading (Performance incentives) kept together.
+type Chunk = { subGroup: Row["subGroup"]; rows: Row[] };
+function chunksOf(rows: Row[]): Chunk[] {
+  const out: Chunk[] = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    if (last && r.subGroup && last.subGroup?.id === r.subGroup.id) last.rows.push(r);
+    else out.push({ subGroup: r.subGroup, rows: [r] });
+  }
+  return out;
+}
+
 export function Rows({ section, range, single, neutral }: { section: Section; range: DateRange; single: boolean; neutral?: boolean }) {
-  return section.headings.map((h) =>
-    h.rows.map((r, i) => (
-      <tr key={r.accountId} className={`transition-colors hover:bg-hover ${i === 0 ? "border-t border-line" : ""}`}>
-        <td className="px-2.5 py-1 font-medium">{i === 0 ? h.name : ""}</td>
-        <td className="px-2.5 py-1">
-          {r.accountId ? (
-            <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
-              {r.sub || h.name}
-            </AccountLink>
-          ) : (
-            r.sub
-          )}
-        </td>
-        <td className={NUM}>{money(r.cur)}</td>
-        <Others p={r} single={single} neutral={neutral} />
-      </tr>
-    )),
-  );
+  return section.headings.map((h) => {
+    let shown = 0;
+    return chunksOf(h.rows).map((c) => {
+      const lead = shown === 0 ? h.name : "";
+      const border = shown === 0;
+      shown += 1;
+      const line = (r: Row, indent: boolean, first: boolean) => (
+        <tr key={r.accountId} className={`transition-colors hover:bg-hover ${first && border ? "border-t border-line" : ""}`}>
+          <td className="px-2.5 py-1 font-medium">{first ? lead : ""}</td>
+          <td className={`px-2.5 py-1 ${indent ? "pl-7" : ""}`}>
+            {r.accountId ? (
+              <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
+                {r.sub || h.name}
+              </AccountLink>
+            ) : (
+              r.sub
+            )}
+          </td>
+          <td className={NUM}>{money(r.cur)}</td>
+          <Others p={r} single={single} neutral={neutral} />
+        </tr>
+      );
+      if (!c.subGroup) return line(c.rows[0], false, true);
+      const total: Pair = { cur: Math.round(c.rows.reduce((s, r) => s + r.cur, 0) * 100) / 100, prev: Math.round(c.rows.reduce((s, r) => s + r.prev, 0) * 100) / 100 };
+      return (
+        <FoldRows
+          key={c.subGroup.id}
+          lead={lead}
+          label={c.subGroup.name}
+          topBorder={border}
+          amounts={
+            <>
+              <td className={NUM}>{money(total.cur)}</td>
+              <Others p={total} single={single} neutral={neutral} />
+            </>
+          }
+        >
+          {c.rows.map((r) => line(r, true, false))}
+        </FoldRows>
+      );
+    });
+  });
 }
 
 /**

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildSeries } from "./pnl-series-rules";
 import { convertBStoAD } from "@/lib/calendar";
 import { buildBalanceComparison, buildComparison, change, changePercent, comparisonOf, margin, money, periodLabel, periodOf, periodOptions, type AccountInfo } from "./pnl-compare-rules";
 
@@ -85,6 +86,36 @@ describe("the comparison table", () => {
     expect(margin(cmp.grossProfit, cmp.income)).toEqual({ cur: 80, prev: 58 });
     expect(margin({ cur: 5, prev: 5 }, { cur: 0, prev: 0 })).toEqual({ cur: null, prev: null });
     expect([money(0), money(1234.5), money(-1234.5)]).toEqual(["-", "1,234.50", "(1,234.50)"]);
+  });
+});
+
+describe("salaries on the Profit & Loss", () => {
+  const info = (id: string, code: string, name: string, parentId: string | null = null): AccountInfo => ({ id, code, name, subCategory: "Indirect expenses", parentId });
+  const infos = new Map([
+    info("sal", "5200", "Salaries"),
+    info("basic", "5200.01", "Basic salary", "sal"),
+    info("inc", "5200.02", "Performance incentives", "sal"),
+    info("ot", "5200.02.01", "Overtime bonus", "inc"),
+    info("dash", "5200.02.02", "Dashain bonus", "inc"),
+    info("allow", "5200.03", "Allowances", "sal"),
+    info("rent", "5100", "Rent"),
+  ].map((a) => [a.id, a] as const));
+  const none = { income: [], expenses: [] };
+  const cur = { income: [], expenses: [{ accountId: "basic", amount: 500 }, { accountId: "ot", amount: 35 }, { accountId: "dash", amount: 13 }, { accountId: "allow", amount: 20 }, { accountId: "rent", amount: 100 }] };
+
+  it("is one Salaries heading: Basic salary and Allowances as lines, the incentive headings under a Performance incentives sub-heading", () => {
+    const cmp = buildComparison(infos, cur, none);
+    expect(cmp.expenses.headings.map((h) => h.name)).toEqual(["Rent", "Salaries"]);
+    const rows = cmp.expenses.headings[1].rows;
+    expect(rows.map((r) => [r.sub, r.subGroup?.name ?? null])).toEqual([["Basic salary", null], ["Overtime bonus", "Performance incentives"], ["Dashain bonus", "Performance incentives"], ["Allowances", null]]);
+    expect(cmp.expenses.cur).toBe(-668);
+  });
+
+  it("does the same across several periods", () => {
+    const s = buildSeries(infos, [cur, none]);
+    const rows = s.expenses.headings[1].rows;
+    expect(rows.map((r) => r.subGroup?.name ?? null)).toEqual([null, "Performance incentives", "Performance incentives", null]);
+    expect(rows[1].values).toEqual([-35, 0]);
   });
 });
 

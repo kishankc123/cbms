@@ -96,31 +96,60 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export type Pair = { cur: number; prev: number };
 export type AccountInfo = { id: string; code: string; name: string; subCategory: string | null; parentId: string | null; category?: string };
 export type Amount = { accountId: string; amount: number };
-export type Row = Pair & { accountId: string; sub: string };
+/** `subGroup`: the middle level when the account sits two levels under its heading (Salaries > Performance incentives > Overtime bonus): the report shows it as a sub-heading that can be folded. */
+export type SubGroup = { id: string; name: string };
+export type Row = Pair & { accountId: string; sub: string; subGroup?: SubGroup };
 export type Heading = { key: string; name: string; rows: Row[] };
 export type Section = Pair & { headings: Heading[] };
 export type Comparison = { income: Section; cost: Section; expenses: Section; grossProfit: Pair; netProfit: Pair };
 
 export const COST_OF_SALES = "Cost of goods sold";
 
-export function section(infos: Map<string, AccountInfo>, cur: Amount[], prev: Amount[], sign: 1 | -1, only: (group: AccountInfo) => boolean): Section {
+/**
+ * Where an account sits on a report. Without `nested`, its heading is its parent group (one level). With it, the heading is its top-level ancestor, and
+ * an account two levels below that also has the middle account as its sub-group.
+ */
+export function placement(infos: Map<string, AccountInfo>, a: AccountInfo, nested: boolean): { group: AccountInfo; subGroup: SubGroup | undefined } {
+  if (!nested) return { group: (a.parentId && infos.get(a.parentId)) || a, subGroup: undefined };
+  const path: AccountInfo[] = [a];
+  for (let cur = a; cur.parentId && path.length < 12; ) {
+    const up = infos.get(cur.parentId);
+    if (!up) break;
+    path.unshift(up);
+    cur = up;
+  }
+  const mid = path.length >= 3 ? path[1] : undefined;
+  return { group: path[0], subGroup: mid && { id: mid.id, name: mid.name } };
+}
+
+/** Rows in code order, keeping the accounts of one sub-group together under it. */
+export const rowOrder = (infos: Map<string, AccountInfo>, nested: boolean) => (x: { accountId: string }, y: { accountId: string }) => {
+  const key = (id: string) => {
+    const a = infos.get(id)!;
+    const sg = placement(infos, a, nested).subGroup;
+    return `${sg ? infos.get(sg.id)!.code : a.code}|${a.code}`;
+  };
+  return key(x.accountId).localeCompare(key(y.accountId));
+};
+
+export function section(infos: Map<string, AccountInfo>, cur: Amount[], prev: Amount[], sign: 1 | -1, only: (group: AccountInfo) => boolean, nested = false): Section {
   const rows = new Map<string, Row>();
   for (const [period, list] of [["cur", cur], ["prev", prev]] as const) {
     for (const { accountId, amount } of list) {
       const a = infos.get(accountId);
       if (!a) continue;
-      const group = (a.parentId && infos.get(a.parentId)) || a;
+      const { group, subGroup } = placement(infos, a, nested);
       if (!only(group)) continue;
-      const row = rows.get(accountId) ?? { accountId, sub: group === a ? "" : a.name, cur: 0, prev: 0 };
+      const row = rows.get(accountId) ?? { accountId, sub: group === a ? "" : a.name, ...(subGroup ? { subGroup } : {}), cur: 0, prev: 0 };
       row[period] = round2(sign * amount);
       rows.set(accountId, row);
     }
   }
   const byGroup = new Map<string, Heading>();
   const codes = new Map<string, string>();
-  for (const row of [...rows.values()].sort((x, y) => infos.get(x.accountId)!.code.localeCompare(infos.get(y.accountId)!.code))) {
+  for (const row of [...rows.values()].sort(rowOrder(infos, nested))) {
     const a = infos.get(row.accountId)!;
-    const group = (a.parentId && infos.get(a.parentId)) || a;
+    const { group } = placement(infos, a, nested);
     const h = byGroup.get(group.id) ?? { key: group.id, name: group.name, rows: [] };
     h.rows.push(row);
     byGroup.set(group.id, h);
@@ -134,9 +163,9 @@ export function section(infos: Map<string, AccountInfo>, cur: Amount[], prev: Am
 /** Builds the comparison from the income and expense amounts of each period (as profitAndLoss returns them). */
 export function buildComparison(infos: Map<string, AccountInfo>, cur: { income: Amount[]; expenses: Amount[] }, prev: { income: Amount[]; expenses: Amount[] }): Comparison {
   const isCost = (g: AccountInfo) => g.subCategory === COST_OF_SALES;
-  const income = section(infos, cur.income, prev.income, 1, () => true);
-  const cost = section(infos, cur.expenses, prev.expenses, -1, isCost);
-  const expenses = section(infos, cur.expenses, prev.expenses, -1, (g) => !isCost(g));
+  const income = section(infos, cur.income, prev.income, 1, () => true, true);
+  const cost = section(infos, cur.expenses, prev.expenses, -1, isCost, true);
+  const expenses = section(infos, cur.expenses, prev.expenses, -1, (g) => !isCost(g), true);
   const grossProfit = { cur: round2(income.cur + cost.cur), prev: round2(income.prev + cost.prev) };
   const netProfit = { cur: round2(grossProfit.cur + expenses.cur), prev: round2(grossProfit.prev + expenses.prev) };
   return { income, cost, expenses, grossProfit, netProfit };
