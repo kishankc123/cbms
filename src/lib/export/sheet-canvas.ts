@@ -1,5 +1,6 @@
 import type { Cell, Page, Sheet } from "./sheet-reader";
 import { SHEET_WIDTH } from "./sheet-reader";
+import { drawMark } from "./brand-mark";
 
 // Paints each page of a report (company, title, period, the table, the footer) onto a canvas: a white page in plain greys, the same whatever theme the app
 // is in. Colour only where it means something (money in green, money out red). What goes where is read from the screen by sheet-reader.ts.
@@ -83,8 +84,15 @@ export function drawPage(page: Page, foot: Sheet["foot"]): HTMLCanvasElement {
   ctx.fillStyle = MUTED;
   ctx.textAlign = "left";
   ctx.fillText(foot[0], PAD, fy);
-  ctx.textAlign = "right";
-  ctx.fillText(foot[1], width - PAD, fy);
+  // "Made with Workdela" sits in the middle of the footer, behind the logo.
+  if (foot[1]) {
+    const MARK = 16;
+    const textW = ctx.measureText(foot[1]).width;
+    const start = (width - (MARK + 6 + textW)) / 2;
+    drawMark(ctx, start, fy - MARK / 2, MARK, "light");
+    ctx.textAlign = "left";
+    ctx.fillText(foot[1], start + MARK + 6, fy);
+  }
   return canvas;
 }
 

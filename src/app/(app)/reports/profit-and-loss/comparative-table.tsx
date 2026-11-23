@@ -1,7 +1,7 @@
 import type { DateRange } from "@/lib/calendar";
 import { change, changePercent, margin, money, percentText, type Comparison, type Pair, type Row, type Section } from "@/lib/ledger/pnl-compare-rules";
 import { AccountLink } from "../account-link";
-import { FoldRows } from "./fold-rows";
+import { FoldRows, Marker } from "./fold-rows";
 
 // Green is better for profit, red worse. A balance sheet has no better or worse direction, so it passes `neutral`.
 export const tone = (n: number, neutral?: boolean) => (neutral ? "" : n > 0 ? "text-[var(--success-text)]" : n < 0 ? "text-[var(--danger-text)]" : "");
@@ -67,26 +67,38 @@ function chunksOf(rows: Row[]): Chunk[] {
 export function Rows({ section, range, single, neutral }: { section: Section; range: DateRange; single: boolean; neutral?: boolean }) {
   return section.headings.map((h) => {
     let shown = 0;
-    return chunksOf(h.rows).map((c) => {
+    const chunks = chunksOf(h.rows);
+    const hasFold = chunks.some((c) => c.subGroup);
+    return chunks.map((c) => {
       const lead = shown === 0 ? h.name : "";
       const border = shown === 0;
       shown += 1;
-      const line = (r: Row, indent: boolean, first: boolean) => (
+      const line = (r: Row, indent: boolean, first: boolean) => {
+        const link = r.accountId ? (
+          <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
+            {r.sub || h.name}
+          </AccountLink>
+        ) : (
+          r.sub
+        );
+        return (
         <tr key={r.accountId} className={`transition-colors hover:bg-hover ${first && border ? "border-t border-line" : ""}`}>
           <td className="px-2.5 py-1 font-medium">{first ? lead : ""}</td>
-          <td className={`px-2.5 py-1 ${indent ? "pl-7" : ""}`}>
-            {r.accountId ? (
-              <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
-                {r.sub || h.name}
-              </AccountLink>
+          <td className={`px-2.5 py-1 ${indent ? "pl-10" : ""}`}>
+            {hasFold && !indent ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Marker />
+                {link}
+              </span>
             ) : (
-              r.sub
+              link
             )}
           </td>
           <td className={NUM}>{money(r.cur)}</td>
           <Others p={r} single={single} neutral={neutral} />
         </tr>
-      );
+        );
+      };
       if (!c.subGroup) return line(c.rows[0], false, true);
       const total: Pair = { cur: Math.round(c.rows.reduce((s, r) => s + r.cur, 0) * 100) / 100, prev: Math.round(c.rows.reduce((s, r) => s + r.prev, 0) * 100) / 100 };
       return (

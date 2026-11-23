@@ -1,7 +1,7 @@
 import type { DateRange } from "@/lib/calendar";
 import { margin, money, percentText, changePercent, type Pair } from "@/lib/ledger/pnl-compare-rules";
 import type { Series, SeriesRow, SeriesSection } from "@/lib/ledger/pnl-series-rules";
-import { FoldRows } from "../profit-and-loss/fold-rows";
+import { FoldRows, Marker } from "../profit-and-loss/fold-rows";
 import { AccountLink } from "../account-link";
 import { NUM, tone } from "../profit-and-loss/comparative-table";
 
@@ -74,21 +74,35 @@ function chunksOf(rows: SeriesRow[]): Chunk[] {
 function Rows({ section, range }: { section: SeriesSection; range: DateRange }) {
   return section.headings.map((h) => {
     let shown = 0;
-    return chunksOf(h.rows).map((c) => {
+    const chunks = chunksOf(h.rows);
+    const hasFold = chunks.some((c) => c.subGroup);
+    return chunks.map((c) => {
       const lead = shown === 0 ? h.name : "";
       const border = shown === 0;
       shown += 1;
-      const line = (r: SeriesRow, indent: boolean, first: boolean) => (
+      const line = (r: SeriesRow, indent: boolean, first: boolean) => {
+        const link = (
+          <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
+            {r.sub || h.name}
+          </AccountLink>
+        );
+        return (
         <tr key={r.accountId} className={`transition-colors hover:bg-hover ${first && border ? "border-t border-line" : ""}`}>
           <td className="px-2 py-1 font-medium">{first ? lead : ""}</td>
-          <td className={`px-2 py-1 ${indent ? "pl-6" : ""}`}>
-            <AccountLink accountId={r.accountId} from={range.from} to={range.to} className={r.sub ? undefined : "text-ink-3 hover:underline"}>
-              {r.sub || h.name}
-            </AccountLink>
+          <td className={`px-2 py-1 ${indent ? "pl-9" : ""}`}>
+            {hasFold && !indent ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Marker />
+                {link}
+              </span>
+            ) : (
+              link
+            )}
           </td>
           <Cells v={r.values} />
         </tr>
-      );
+        );
+      };
       if (!c.subGroup) return line(c.rows[0], false, true);
       const total = c.rows[0].values.map((_, i) => Math.round(c.rows.reduce((s, r) => s + r.values[i], 0) * 100) / 100);
       return (
