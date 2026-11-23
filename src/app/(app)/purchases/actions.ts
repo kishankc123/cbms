@@ -272,7 +272,7 @@ export async function voidBill(formData: FormData) {
 
 export type { PurchaseInvoicePayment, PurchaseInvoiceInput } from "@/lib/purchases/stockable-invoice";
 
-// A Stockable purchase invoice is a single vendor bill with multiple item lines. The writing itself is shared with the multi-invoice grid and the import
+// A Stockable purchase invoice is a single vendor bill with multiple item lines. The writing itself is shared with the import
 // (lib/purchases/stockable-invoice.ts).
 export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   const session = await requireTenantSession();
@@ -285,33 +285,6 @@ export async function createPurchaseInvoice(input: PurchaseInvoiceInput) {
   revalidatePath("/journal");
   revalidatePath("/inventory/items");
   return { billNumber };
-}
-
-export type PurchaseInvoiceBatchResult = { saved: number } & ({ ok: true } | { ok: false; error: string });
-
-// Many stockable invoices in one go (the multi-invoice grid), one per row, through the same writer as the single form. If a row fails, the rows before it
-// stay saved and the message says which row stopped.
-export async function createPurchaseInvoicesBatch(rows: PurchaseInvoiceInput[]): Promise<PurchaseInvoiceBatchResult> {
-  const session = await requireTenantSession();
-  if (!can(session, "purchases", "create")) throw new Error("Not permitted");
-  if (rows.length === 0) throw new Error("Add at least one invoice");
-  let saved = 0;
-  let failure: string | null = null;
-  for (let i = 0; i < rows.length; i++) {
-    try {
-      await createStockableInvoiceCore({ tenantId: session.tenantId, userId: session.userId }, rows[i]);
-      saved++;
-    } catch (e) {
-      failure = `Invoice ${i + 1}${rows[i].invoiceNumber ? ` (${rows[i].invoiceNumber})` : ""}: ${e instanceof Error ? e.message : "could not be saved"}`;
-      break;
-    }
-  }
-  revalidatePath("/purchases/stockable");
-  revalidatePath("/suppliers");
-  revalidatePath("/dashboard");
-  revalidatePath("/journal");
-  revalidatePath("/inventory/items");
-  return failure ? { ok: false, saved, error: failure } : { ok: true, saved };
 }
 
 export type PurchaseInvoiceEditData = {

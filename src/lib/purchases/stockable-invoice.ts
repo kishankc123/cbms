@@ -15,7 +15,7 @@ import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import { lineVatRate } from "@/lib/purchases/vat-lines";
 import type { CashBillType } from "@/lib/purchases/cash-purchase";
 
-// A stockable purchase invoice: one bill with item lines. The writing lives here so the single invoice form, the multi-invoice grid and the item import all
+// A stockable purchase invoice: one bill with item lines. The writing lives here so the single invoice form and the item import both
 // post the same way. Plain helpers, not server actions: the actions check the permission first.
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
