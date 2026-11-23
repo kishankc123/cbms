@@ -241,7 +241,7 @@ export function SingleInvoiceForm({
     const errors: FieldErrors = {};
     if (!invoiceNumber.trim()) errors.invoiceNumber = "Invoice number is required.";
     if (!invoiceDate) errors.date = "Please enter the invoice date.";
-    if (!customerId) errors.customerId = "Please select a customer.";
+    if (!customerId && !(grandTotal > 0 && remaining <= 0.005)) errors.customerId = "Choose a customer, or record the full payment to save it as a cash sale.";
     if (dueDate && dueDate < invoiceDate) errors.dueDate = "The due date can't be before the invoice date.";
     if (!lines.some(isLineComplete)) errors.items = "Add at least one item line with a valid rate and quantity.";
     setFieldErrors(errors);
@@ -345,7 +345,9 @@ export function SingleInvoiceForm({
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Customer</label>
+            <label className="block text-xs text-gray-500 mb-1">
+              Customer {!customerId && <span className="text-gray-400">(optional when paid in full)</span>}
+            </label>
             <div data-field="customer" data-opens>
               <CustomerSelect
                 value={customerId}

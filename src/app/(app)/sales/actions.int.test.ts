@@ -14,7 +14,7 @@ vi.mock("@/lib/session", () => ({
   can: () => true,
 }));
 
-const { createSingleInvoice, recordSalesBatch } = await import("./actions");
+const { createSingleInvoice, updateSingleInvoice, getSalesInvoiceForEdit, recordSalesBatch } = await import("./actions");
 
 const line = (rate: number, quantity = 1) => ({ itemId: null, description: "Service", rate, quantity, discount: 0 });
 const invoices = () => db.select().from(salesInvoices).where(eq(salesInvoices.tenantId, org.tenantId));
@@ -71,4 +71,26 @@ describe("sales invoice rules", () => {
     expect(Number(inv.amountPaid)).toBe(Number(inv.total));
     expect((await getCustomerBalances(org.tenantId))[advCustomer]).toBe(-(500 - Number(inv.total)));
   });
+
+  it("a sale with no customer is a cash sale only when it is paid in full", async () => {
+    const [cash] = await db.select().from(accounts).where(and(eq(accounts.tenantId, org.tenantId), eq(accounts.code, "1000")));
+    const base = { invoiceDate: "2026-09-12", customerId: "", lines: [line(300)] };
+    await expect(createSingleInvoice({ ...base, invoiceNumber: "CS-NONE", payments: [] })).rejects.toThrow(/Choose a customer/);
+    await expect(createSingleInvoice({ ...base, invoiceNumber: "CS-PART", payments: [{ accountId: cash.id, amount: 100 }] })).rejects.toThrow(/Choose a customer/);
+    expect((await invoices()).some((i) => i.invoiceNumber === "CS-NONE" || i.invoiceNumber === "CS-PART")).toBe(false);
+
+    await createSingleInvoice({ ...base, invoiceNumber: "CS-FULL", payments: [{ accountId: cash.id, amount: 339 }] });
+    const inv = (await invoices()).find((i) => i.invoiceNumber === "CS-FULL")!;
+    expect(inv.status).toBe("paid");
+    const [stand] = await db.select().from(customers).where(eq(customers.id, inv.customerId));
+    expect(stand.name).toBe("Cash Sale");
+
+    // it opens for editing with the customer left blank, and stays a cash sale when saved again
+    const data = await getSalesInvoiceForEdit(inv.id);
+    expect(data.customerId).toBe("");
+    await updateSingleInvoice({ invoiceId: inv.id, invoiceNumber: "CS-FULL", invoiceDate: "2026-09-12", customerId: "", lines: [line(350)], payments: [{ accountId: cash.id, amount: 395.5 }] });
+    const after = (await invoices()).find((i) => i.invoiceNumber === "CS-FULL")!;
+    expect(Number(after.total)).toBe(395.5);
+    expect(after.customerId).toBe(inv.customerId);
+  }, 240_000);
 });
