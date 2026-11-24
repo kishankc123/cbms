@@ -13,7 +13,8 @@ export type TbHeading = { key: string; name: string; rows: TbRow[] };
 export type TbSection = { title: string; headings: TbHeading[] };
 export type TrialBalanceByPeriod = { sections: TbSection[]; totals: { opening: Side; movement: Side; closing: Side } };
 
-const SECTIONS: [string, string][] = [["asset", "Assets"], ["liability", "Liabilities"], ["equity", "Equity"], ["income", "Income"], ["expense", "Expenses"]];
+// The Profit and Loss accounts first, then the Balance Sheet ones.
+const SECTIONS: [string, string][] = [["income", "Income"], ["expense", "Expenses"], ["asset", "Assets"], ["liability", "Liabilities"], ["equity", "Equity"]];
 const ZERO: Side = { dr: 0, cr: 0 };
 
 /** A balance sits on one side: whichever of debits and credits is larger, by the difference. */
@@ -48,6 +49,16 @@ export function buildTrialBalance(infos: Map<string, AccountInfo>, opening: Tota
 
   const totals = rows.reduce((t, r) => ({ opening: add(t.opening, r.opening), movement: add(t.movement, r.movement), closing: add(t.closing, r.closing) }), { opening: ZERO, movement: ZERO, closing: ZERO });
   return { sections, totals };
+}
+
+/** What a heading holds as a whole: its accounts' opening and closing balances netted together, and their movement added up. */
+export function headingTotals(rows: readonly TbRow[]): { opening: Side; movement: Side; closing: Side } {
+  const sum = (pick: (r: TbRow) => Side) => rows.reduce((t, r) => ({ dr: round2(t.dr + pick(r).dr), cr: round2(t.cr + pick(r).cr) }), ZERO);
+  const netted = (pick: (r: TbRow) => Side) => {
+    const t = sum(pick);
+    return net(t.dr, t.cr);
+  };
+  return { opening: netted((r) => r.opening), movement: sum((r) => r.movement), closing: netted((r) => r.closing) };
 }
 
 /** Whether debits equal credits in each of the three. */
