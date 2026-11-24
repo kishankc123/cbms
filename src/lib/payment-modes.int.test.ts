@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
+import { getOrCreateStaffAdvanceAccount, getOrCreateSupplierAdvanceAccount, getOrCreateSupplierAdvanceSubAccountId } from "@/lib/ledger/advance-accounts";
+import { getOrCreatePendingPurchasesAccount } from "@/lib/ledger/purchases-accounts";
 import { createPaymentMode, deletePaymentMode, listLinkableAccounts, listModeOptions, listPaymentModes, modeAccountIds, updatePaymentMode } from "@/lib/payment-modes";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
@@ -42,6 +44,17 @@ describe("payment modes", () => {
     const fonepay = await mode("Fonepay");
     const refused = await updatePaymentMode(org.tenantId, org.userId, fonepay.id, { name: "Fonepay", isActive: true, accountIds: [walletGroup.id] });
     expect(refused).toMatchObject({ ok: false, error: expect.stringMatching(/sub-groups/) });
+  });
+
+  it("does not offer the accounts the system keeps for supplier advances, staff advances or stock waiting for its details", async () => {
+    await getOrCreateSupplierAdvanceAccount(org.tenantId);
+    await getOrCreateSupplierAdvanceSubAccountId(org.tenantId, "An Advance Supplier");
+    await getOrCreateStaffAdvanceAccount(org.tenantId);
+    await getOrCreatePendingPurchasesAccount(org.tenantId);
+    const codes = (await listLinkableAccounts(org.tenantId)).map((a) => a.code);
+    expect(codes.filter((c) => /^(1100|1200|1210|1300|1350|1360)/.test(c))).toEqual([]);
+    // cash, the bank accounts and the wallet sub-accounts are still offered
+    expect(codes).toContain("1000");
   });
 
   it("links sub-groups, and one account can serve several modes", async () => {

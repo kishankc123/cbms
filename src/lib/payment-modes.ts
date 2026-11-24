@@ -39,7 +39,9 @@ export type LinkableAccount = { id: string; code: string; name: string; group: s
 
 /**
  * The accounts that can be linked to a mode: active, lowest-level, current-asset accounts (where cash, bank and wallet
- * balances live), leaving out receivables, inventory and tax, which are not ways of paying.
+ * balances live), leaving out the accounts the system keeps for other things, which are not ways of paying: receivables (1100), inventory (1200) and the
+ * stock waiting for its item details (1210), input tax (1300), what suppliers hold of ours in advance (1350, with one sub-account for each supplier) and
+ * staff advances (1360, with one for each employee).
  */
 export async function listLinkableAccounts(tenantId: string): Promise<LinkableAccount[]> {
   const child = alias(accounts, "child");
@@ -54,7 +56,7 @@ export async function listLinkableAccounts(tenantId: string): Promise<LinkableAc
         eq(accounts.isActive, true),
         eq(accounts.category, "asset"),
         eq(accounts.subCategory, "Current assets"),
-        sql`${accounts.code} not like '1100%' and ${accounts.code} not like '1200%' and ${accounts.code} not like '1300%'`,
+        sql`${accounts.code} not like '1100%' and ${accounts.code} not like '1200%' and ${accounts.code} not like '1210%' and ${accounts.code} not like '1300%' and ${accounts.code} not like '1350%' and ${accounts.code} not like '1360%'`,
         notExists(db.select({ one: child.id }).from(child).where(and(eq(child.parentAccountId, accounts.id), eq(child.isActive, true))))
       )
     )
