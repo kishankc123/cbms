@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   payments,
@@ -14,6 +14,7 @@ import {
   expenses,
   complianceObligations,
   journalLines,
+  journalEntries,
   bankReconciliationMatchJournalLines,
   type paymentTypeEnum,
   type paymentDirectionEnum,
@@ -21,7 +22,8 @@ import {
   type paymentMethodEnum,
   type paymentAllocationTargetEnum,
 } from "@/db/schema";
-import { postJournalEntry, reverseJournalEntry, type PostLineInput } from "./post";
+import { postJournalEntry, reverseJournalEntry, reversalDateFor, type PostLineInput } from "./post";
+import { reconciledEntryIds } from "./reconciled-entries";
 import { logAuditEvent } from "@/lib/audit";
 import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts, assertSettlementAccounts } from "./account-guards";
@@ -685,6 +687,42 @@ async function isReconciled(journalEntryId: string) {
 }
 
 /**
+ * The small entries posted when the party or category of a reconciled payment was changed (see updateReconciledPayment). They move only the other side of the
+ * payment, never its cash or bank line, and are tied to it by their source, so voiding or editing the payment later takes them back too.
+ */
+export async function reclassEntriesOf(tenantId: string, paymentId: string) {
+  const entries = await db
+    .select()
+    .from(journalEntries)
+    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalEntries.sourceId, paymentId), inArray(journalEntries.sourceType, ["receipt", "payment"]), eq(journalEntries.isReversed, false), isNull(journalEntries.reversalOfId)));
+  const out = [];
+  for (const e of entries) {
+    const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, e.id));
+    out.push({ ...e, lines: lines.map((l) => ({ accountId: l.accountId, debitAmount: Number(l.debitAmount) || undefined, creditAmount: Number(l.creditAmount) || undefined, description: l.description ?? undefined })) as PostLineInput[] });
+  }
+  return out;
+}
+
+/** Takes back those entries, then runs `fn` (the reversal of the payment's own entry); if `fn` is refused they are posted again, so nothing is left half done. */
+async function reversingReclass<T>(tenantId: string, paymentId: string, userId: string, memo: string, fn: () => Promise<T>): Promise<T> {
+  const found = await reclassEntriesOf(tenantId, paymentId);
+  if (found.length === 0) return fn();
+  const reversed: typeof found = [];
+  try {
+    for (const e of found) {
+      await reverseJournalEntry(tenantId, e.id, userId, memo);
+      reversed.push(e);
+    }
+    return await fn();
+  } catch (err) {
+    for (const e of reversed) {
+      await postJournalEntry({ tenantId, entryDate: e.entryDate, sourceType: e.sourceType, sourceId: paymentId, referenceNumber: e.referenceNumber ?? undefined, memo: e.memo ?? undefined, createdBy: userId, lines: e.lines }).catch(() => {});
+    }
+    throw err;
+  }
+}
+
+/**
  * Voids a standalone payment: reverses its journal entry and rolls back
  * every allocation it made on the invoices/bills/expenses it touched.
  * Embedded payments (recorded by Sales/Purchases at invoice/bill creation)
@@ -718,7 +756,9 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
   }
 
   if (payment.journalEntryId) {
-    await reverseJournalEntry(tenantId, payment.journalEntryId, userId, `Void of payment ${payment.paymentNumber}: ${reason}`);
+    const entryId = payment.journalEntryId;
+    const memo = `Void of payment ${payment.paymentNumber}: ${reason}`;
+    await reversingReclass(tenantId, paymentId, userId, memo, () => reverseJournalEntry(tenantId, entryId, userId, memo));
   }
 
   if (payment.paymentType === "staff_advance") await db.update(staffAdvances).set({ status: "void" }).where(eq(staffAdvances.paymentId, paymentId));
@@ -734,7 +774,10 @@ export async function voidPayment(tenantId: string, paymentId: string, userId: s
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** What an edit may change. The kind of payment (and so its direction) is fixed: a different kind is a different payment. */
-export type UpdatePaymentInput = Omit<CreatePaymentInput, "direction" | "paymentType" | "origin" | "confirmDuplicate">;
+export type UpdatePaymentInput = Omit<CreatePaymentInput, "direction" | "paymentType" | "origin" | "confirmDuplicate"> & {
+  /** Why the party or category of a reconciled payment is being changed: required then, recorded with the change. */
+  reason?: string;
+};
 
 export type UpdatePaymentResult = { changed: false } | { changed: true; changes: PaymentChange[] };
 export type PaymentChange = { field: string; before: string; after: string };
@@ -849,8 +892,9 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
   if (payment.status !== "posted") throw new Error("Only a posted payment can be edited");
   if (payment.paymentType === "retirement_payment") throw new Error("A contribution payment can't be edited. Void it and record it again.");
   if (payment.origin === "embedded") throw new Error("This payment was recorded automatically by Sales/Purchases — edit the source invoice/bill instead.");
-  if (payment.journalEntryId && (await isReconciled(payment.journalEntryId))) {
-    throw new Error("This payment has been matched in a bank reconciliation — undo that match before editing it");
+  // Matched in a bank reconciliation, or ticked in a cash one: the date, amount and account are locked, and what else was typed can still change.
+  if (payment.journalEntryId && (await reconciledEntryIds(tenantId, [payment.journalEntryId])).has(payment.journalEntryId)) {
+    return updateReconciledPayment(tenantId, userId, payment, edit);
   }
 
   const oldAllocs = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
@@ -923,7 +967,9 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
     for (const a of oldAllocs) await revertAllocationOnTarget(tenantId, a);
     progress.allocsReverted = true;
     if (payment.journalEntryId) {
-      await reverseJournalEntry(tenantId, payment.journalEntryId, userId, `Edit of payment ${payment.paymentNumber}`);
+      const entryId = payment.journalEntryId;
+      const memo = `Edit of payment ${payment.paymentNumber}`;
+      await reversingReclass(tenantId, paymentId, userId, memo, () => reverseJournalEntry(tenantId, entryId, userId, memo));
     }
     progress.oldReversed = true;
     await db.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
@@ -1001,6 +1047,177 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
     entityId: paymentId,
     before: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.before])) },
     after: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.after])) },
+  });
+  return { changed: true, changes };
+}
+
+/**
+ * Editing a payment that has been reconciled (matched to a bank statement, or ticked in a cash reconciliation). The reconciled line is its date, amount and
+ * payment account, so those cannot change; everything else can: the party, the category, what it settles, cheque details, reference, description and notes.
+ * The old entry cannot be reversed (it holds the reconciled line), so a change on the other side of the payment is posted as a small entry that moves just
+ * that part (from one customer's account to another's, say), dated the payment's own day when that period is open, otherwise today. It is tied to the payment,
+ * so voiding or editing it later takes it back. A reason is required then, and is recorded with the change.
+ */
+async function updateReconciledPayment(tenantId: string, userId: string, payment: PaymentRow, edit: UpdatePaymentInput): Promise<UpdatePaymentResult> {
+  const paymentId = payment.id;
+  const oldAllocs = await db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+  const [oldAdvance] = payment.paymentType === "staff_advance" ? await db.select().from(staffAdvances).where(eq(staffAdvances.paymentId, paymentId)).limit(1) : [];
+  if (oldAdvance) {
+    const [rec] = await db.select({ id: staffAdvanceRecoveries.id }).from(staffAdvanceRecoveries).where(eq(staffAdvanceRecoveries.advanceId, oldAdvance.id)).limit(1);
+    if (rec) throw new Error("Part of this advance has already been recovered through payroll — reverse that payroll run first, then edit the advance");
+  }
+
+  const input: CreatePaymentInput = { ...edit, direction: payment.direction, paymentType: payment.paymentType, origin: "standalone" };
+  const oldInput = inputFromRow(payment, oldAllocs, oldAdvance ?? null);
+
+  validateInput(input);
+  await validateOwnership(tenantId, input);
+  await assertAccountActive(tenantId, input.accountId);
+  if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
+  const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
+
+  // The reconciled line cannot move.
+  const locked: string[] = [];
+  if (input.paymentDate !== payment.paymentDate) locked.push("date");
+  if (round2(input.amount) !== round2(Number(payment.amount))) locked.push("amount");
+  if (input.accountId !== payment.accountId || (mode.paymentModeId ?? null) !== (payment.paymentModeId ?? null) || (input.transferToAccountId || null) !== (payment.transferToAccountId || null)) locked.push("payment account and mode");
+  if (locked.length > 0) throw new Error(`This payment has been reconciled, so its ${locked.join(", ")} can't change. Everything else can. To change these, ask an administrator to unlock the reconciliation (or undo the bank match) first.`);
+
+  await validateStaffAdvance(tenantId, input);
+  const credit = new Map<string, number>();
+  for (const a of oldAllocs) credit.set(a.targetId, round2((credit.get(a.targetId) ?? 0) + Number(a.allocatedAmount)));
+  await validateTaxAllocations(tenantId, input, credit);
+  await validateAllocations(tenantId, input, credit);
+  const sameParty = (a: string | null | undefined, b: string | null | undefined) => Boolean(a) && a === b;
+  await validateRefund(tenantId, input, sameParty(payment.customerId, input.customerId) ? Number(payment.amount) : 0);
+  await validateSalaryPayment(tenantId, input, sameParty(payment.employeeId, input.employeeId) ? Number(payment.amount) : 0);
+
+  const newAllocsAsRows = (input.allocations ?? []).map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }));
+  const draftRow: PaymentRow = {
+    ...payment,
+    partyType: input.partyType,
+    customerId: input.customerId || null,
+    vendorId: input.vendorId || null,
+    employeeId: input.employeeId || null,
+    partyOtherName: input.partyOtherName || null,
+    categoryAccountId: input.categoryAccountId || null,
+    chequeNumber: input.chequeNumber || null,
+    chequeDate: input.chequeDate || null,
+    chequeBank: input.chequeBank || null,
+    referenceNumber: input.referenceNumber || null,
+    description: input.description || null,
+    notes: input.notes || null,
+    attachmentUrl: input.attachmentUrl || null,
+  };
+  const [beforeText, afterText] = await Promise.all([
+    describePayment(tenantId, payment, oldAllocs, monthLabelOf(oldInput.advanceMonth)),
+    describePayment(tenantId, draftRow, newAllocsAsRows, monthLabelOf(input.advanceMonth)),
+  ]);
+  const changes: PaymentChange[] = Object.keys(afterText)
+    .filter((k) => beforeText[k] !== afterText[k])
+    .map((k) => ({ field: k, before: beforeText[k] ?? "—", after: afterText[k] }));
+  if (changes.length === 0) return { changed: false };
+
+  // What moves on the books: the difference between the lines the payment has now and the lines the edited one would have. The cash or bank line is the same
+  // in both, so it never appears here.
+  const net = new Map<string, number>();
+  const add = (lines: PostLineInput[], sign: 1 | -1) => {
+    for (const l of lines) net.set(l.accountId, round2((net.get(l.accountId) ?? 0) + sign * ((l.debitAmount ?? 0) - (l.creditAmount ?? 0))));
+  };
+  add(await buildLines(tenantId, input), 1);
+  add(await buildLines(tenantId, oldInput), -1);
+  const moves = [...net.entries()].filter(([, v]) => v !== 0);
+  const reason = (edit.reason ?? "").trim();
+  if (moves.length > 0 && !reason) throw new Error("Say why this is being changed: a payment that has been reconciled can still move to another party or category, and the reason is recorded with it.");
+  const entryDate = moves.length > 0 ? await reversalDateFor(tenantId, payment.paymentDate, moves.map(([id]) => id)) : payment.paymentDate;
+  if (moves.length > 0) await assertPeriodOpen(tenantId, entryDate);
+
+  const progress = { allocsReverted: false, entryId: null as string | null, rowUpdated: false, newApplied: [] as AllocationInput[] };
+  try {
+    for (const a of oldAllocs) await revertAllocationOnTarget(tenantId, a);
+    progress.allocsReverted = true;
+    await db.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+
+    if (moves.length > 0) {
+      const entry = await postJournalEntry({
+        tenantId,
+        entryDate,
+        sourceType: payment.direction === "money_in" ? "receipt" : "payment",
+        sourceId: paymentId,
+        referenceNumber: payment.paymentNumber,
+        memo: `${payment.paymentNumber} — changed after reconciliation: ${reason}`,
+        createdBy: userId,
+        lines: moves.map(([accountId, v]) => (v > 0 ? { accountId, debitAmount: v, description: reason } : { accountId, creditAmount: -v, description: reason })),
+      });
+      progress.entryId = entry.id;
+    }
+
+    await db
+      .update(payments)
+      .set({
+        partyType: draftRow.partyType,
+        customerId: draftRow.customerId,
+        vendorId: draftRow.vendorId,
+        employeeId: draftRow.employeeId,
+        partyOtherName: draftRow.partyOtherName,
+        categoryAccountId: draftRow.categoryAccountId,
+        chequeNumber: draftRow.chequeNumber,
+        chequeDate: draftRow.chequeDate,
+        chequeBank: draftRow.chequeBank,
+        referenceNumber: draftRow.referenceNumber,
+        description: draftRow.description,
+        notes: draftRow.notes,
+        attachmentUrl: draftRow.attachmentUrl,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId)));
+    progress.rowUpdated = true;
+
+    if (payment.paymentType === "staff_advance" && input.advanceMonth) {
+      const m = input.advanceMonth;
+      await db
+        .update(staffAdvances)
+        .set({ forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })! })
+        .where(eq(staffAdvances.paymentId, paymentId));
+    }
+
+    const allocations = input.allocations ?? [];
+    if (allocations.length > 0) {
+      await db.insert(paymentAllocations).values(allocations.map((a) => ({ paymentId, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), tdsHeadKey: a.tdsHeadKey ?? null })));
+      for (const a of allocations) {
+        await applyAllocationToTarget(tenantId, a);
+        progress.newApplied.push(a);
+      }
+    }
+  } catch (e) {
+    // Put the payment back as it was: the new settlements out, the small entry taken back, the old settlements and details in again.
+    try {
+      for (const a of progress.newApplied) await revertAllocationOnTarget(tenantId, { targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2), paymentId });
+      await db.delete(paymentAllocations).where(eq(paymentAllocations.paymentId, paymentId));
+      if (progress.entryId) await reverseJournalEntry(tenantId, progress.entryId, userId, `Change to payment ${payment.paymentNumber} could not be completed`);
+      if (progress.allocsReverted) for (const a of oldAllocs) await applyAllocationToTarget(tenantId, { targetType: a.targetType, targetId: a.targetId, allocatedAmount: Number(a.allocatedAmount) });
+      if (oldAllocs.length > 0) await db.insert(paymentAllocations).values(oldAllocs.map((a) => ({ paymentId, targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount, tdsHeadKey: a.tdsHeadKey })));
+      const { id: _id, tenantId: _tenant, ...oldValues } = payment;
+      void _id;
+      void _tenant;
+      await db.update(payments).set(oldValues).where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId)));
+    } catch (restoreError) {
+      console.error(`Could not fully restore payment ${payment.paymentNumber} after a failed change — check it in Payments and the journal`, restoreError);
+    }
+    await settleParties(tenantId, payment, input).catch(() => {});
+    throw e;
+  }
+  await settleParties(tenantId, payment, input);
+
+  await logAuditEvent({
+    tenantId,
+    userId,
+    action: "payment_edited",
+    entityType: "payment",
+    entityId: paymentId,
+    before: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.before])) },
+    after: { paymentNumber: payment.paymentNumber, ...Object.fromEntries(changes.map((c) => [c.field, c.after])), ...(reason ? { "Reason (payment already reconciled)": reason } : { "Edited after reconciliation": "details only" }) },
   });
   return { changed: true, changes };
 }

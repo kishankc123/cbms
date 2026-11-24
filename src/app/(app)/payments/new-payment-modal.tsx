@@ -133,6 +133,9 @@ function PaymentForm({
   const [description, setDescription] = useState(editing?.description ?? prefill?.description ?? "");
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(editing?.attachmentUrl ?? "");
+  // A payment that has been reconciled keeps its date, amount and payment account; the rest can still change, and moving it to another party or category needs a reason.
+  const lockedRecon = editing?.reconciliationStatus === "reconciled";
+  const [changeReason, setChangeReason] = useState("");
 
   const [refundable, setRefundable] = useState<{ credit: number; total: number } | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
@@ -342,6 +345,7 @@ function PaymentForm({
         // invoice links are dropped — what it settles now follows the party's ledger.
         const result = await updatePayment(editing.id, {
           ...fields,
+          reason: lockedRecon ? changeReason.trim() : undefined,
           allocations: config.showAllocation ? allocations : editing.allocations.filter((a) => a.targetType === "tax_obligation").map((a) => ({ targetType: "tax_obligation" as const, targetId: a.targetId, allocatedAmount: a.allocatedAmount, tdsHeadKey: a.tdsHeadKey })),
         });
         if (!result.changed) {
@@ -410,6 +414,12 @@ function PaymentForm({
           </button>
         </div>
 
+        {lockedRecon && (
+          <div className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+            This payment has been reconciled, so its date, amount and payment account are locked. You can still change the party, category, reference, cheque details, description and notes. Moving it to another party or category is recorded as a small entry, with your reason.
+          </div>
+        )}
+
         {!fixedDirection && !editing && (
           <div className="flex gap-1 overflow-x-auto border-b border-line">
             {(["money_in", "money_out"] as const).map((d) => (
@@ -430,7 +440,7 @@ function PaymentForm({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date</label>
-              <DatePicker id="pay-date" max={today()} value={paymentDate} onChange={(v) => setPaymentDate(v)} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
+              <DatePicker id="pay-date" max={today()} value={paymentDate} onChange={(v) => setPaymentDate(v)} disabled={lockedRecon} className={fieldErrors.paymentDate ? inputErrCls : inputCls} />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Payment Number</label>
@@ -457,6 +467,7 @@ function PaymentForm({
                     setPaymentModeName(v.modeName ?? "");
                     setAccountId(v.accountId);
                   }}
+                  disabled={lockedRecon}
                   className={fieldErrors.accountId ? inputErrCls : inputCls}
                 />
               </div>
@@ -465,7 +476,7 @@ function PaymentForm({
             {config.showTransferTo && (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">To Account</label>
-                <select data-field="transferTo" value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className={fieldErrors.transferToAccountId ? inputErrCls : inputCls}>
+                <select data-field="transferTo" value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} disabled={lockedRecon} className={fieldErrors.transferToAccountId ? inputErrCls : inputCls}>
                   <option value="">Select account</option>
                   {flatAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -593,6 +604,7 @@ function PaymentForm({
                     setPaymentModeName("");
                     setAccountId(id);
                   }}
+                  disabled={lockedRecon}
                   className={fieldErrors.accountId && !accountId ? inputErrCls : inputCls}
                 />
               </div>
@@ -628,7 +640,7 @@ function PaymentForm({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount</label>
-              <AmountInput bare data-field="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
+              <AmountInput bare data-field="amount" type="number" step="0.01" min="0" disabled={lockedRecon} value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
             </div>
             {headings.length > 0 && <HeadSplitFields headings={headings} split={headSplit} onChange={changeSplit} inputClass={inputCls} />}
           </div>
@@ -643,6 +655,12 @@ function PaymentForm({
               <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
+          {lockedRecon && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
+              <input value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Needed if you change the party, category or what it settles" className={inputCls} />
+            </div>
+          )}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Attachment reference (URL or filename)</label>
             <input value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)} placeholder="No file upload yet — paste a link or reference" className={inputCls} />
