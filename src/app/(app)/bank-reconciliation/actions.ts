@@ -35,6 +35,8 @@ import { buildStatementTemplate } from "@/lib/banking/statement-template";
 import { normalizeStatementRows, type ColumnMapping } from "@/lib/banking/normalize-rows";
 import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching";
 import { cashStatus } from "@/lib/ledger/cash-reconcile";
+import { reconcileMethodOf, type ReconcileMethod } from "@/lib/ledger/cash-reconcile-rules";
+import { setReconcileMethod } from "@/lib/ledger/reconcile-method";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -101,6 +103,7 @@ const listBankAccountRows = (tenantId: string) =>
       chartOfAccountsLink: bankAccounts.chartOfAccountsLink,
       openingBalance: bankAccounts.openingBalance,
       isActive: bankAccounts.isActive,
+      reconcileMethod: bankAccounts.reconcileMethod,
       institutionId: bankAccounts.institutionId,
       logo: { id: bankInstitutions.id, hasLogo: sql<boolean>`${bankInstitutions.logo} is not null`, updatedAt: bankInstitutions.updatedAt },
       ledgerCode: accounts.code,
@@ -128,6 +131,8 @@ export type AccountOverview = {
   currency: string;
   /** "bank" for an account under Bank, "wallet" for the rest of Cash (e-wallets and the like). */
   kind: "bank" | "wallet";
+  /** How the account is reconciled: against its uploaded statement, or by ticking the entries (what cash and wallet accounts always do). */
+  method: ReconcileMethod;
   statementBalance: number;
   ledgerBalance: number;
   difference: number;
@@ -171,7 +176,7 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
   const stmt = new Map(statement.map((r) => [r.id, r]));
   const book = new Map(ledger.map((r) => [r.id, Number(r.net)]));
 
-  const cashStates = new Map(await Promise.all(accountList.filter((b) => !b.ledgerCode.startsWith("1010")).map(async (b) => [b.id, await cashStatus(session.tenantId, b.id)] as const)));
+  const cashStates = new Map(await Promise.all(accountList.filter((b) => reconcileMethodOf(b.ledgerCode, b.reconcileMethod) === "ticking").map(async (b) => [b.id, await cashStatus(session.tenantId, b.id)] as const)));
 
   return accountList.map((b) => {
     const s = stmt.get(b.id);
@@ -183,6 +188,7 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
       accountNumber: b.accountNumber,
       currency: b.currency,
       kind: b.ledgerCode.startsWith("1010") ? "bank" : "wallet",
+      method: reconcileMethodOf(b.ledgerCode, b.reconcileMethod),
       statementBalance,
       ledgerBalance,
       difference: round2(statementBalance - ledgerBalance),
@@ -192,6 +198,17 @@ export async function getReconciliationOverview(): Promise<AccountOverview[]> {
       cash: cashStates.get(b.id) ?? null,
     };
   });
+}
+
+/** Chooses how a bank account is reconciled: against its statement, or by ticking the entries when there is no statement to upload. */
+export async function setReconcileMethodAction(input: { bankAccountId: string; method: ReconcileMethod }) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const r = await setReconcileMethod(session.tenantId, session.userId, input.bankAccountId, input.method);
+  revalidatePath("/bank-reconciliation");
+  revalidatePath(`/bank-reconciliation/${input.bankAccountId}`);
+  revalidatePath(`/bank-reconciliation/${input.bankAccountId}/cash`);
+  return r;
 }
 
 export type BankAccountInput = {

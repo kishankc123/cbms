@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjustmentLines, explainState, explanationLines, openLines, settle, tickedTotals, type CashLine } from "./cash-reconcile-rules";
+import { adjustmentLines, explainState, explanationLines, openLines, reconcileMethodOf, settle, tickedTotals, type CashLine } from "./cash-reconcile-rules";
 
 const line = (id: string, date: string, debit: number, credit: number, extra: Partial<CashLine> = {}): CashLine => ({
   id,
@@ -76,5 +76,15 @@ describe("explaining a short or excess later", () => {
     const excess = adjustmentLines("cash", "se", 25, "x");
     expect(net(excess, "cash")).toBe(25);
     expect(net([...excess, ...explanationLines("se", "income", 25, 25, "x")], "se")).toBe(0);
+  });
+});
+
+describe("how an account is reconciled", () => {
+  it("makes cash and wallet accounts tick whatever is stored, and bank accounts use the statement unless set to tick", () => {
+    expect(reconcileMethodOf("1000", null)).toBe("ticking");
+    expect(reconcileMethodOf("1000.01", "statement")).toBe("ticking");
+    expect(reconcileMethodOf("1010.01", null)).toBe("statement");
+    expect(reconcileMethodOf("1010.01", "statement")).toBe("statement");
+    expect(reconcileMethodOf("1010.01", "ticking")).toBe("ticking");
   });
 });

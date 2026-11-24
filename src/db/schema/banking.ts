@@ -41,6 +41,8 @@ export const bankAccounts = pgTable("bank_accounts", {
   chartOfAccountsLink: uuid("chart_of_accounts_link").notNull().references(() => accounts.id),
   openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
   isActive: boolean("is_active").notNull().default(true),
+  /** How the account is reconciled: "statement" (match an uploaded bank statement) or "ticking" (tick the entries and confirm the closing balance). Null: bank accounts use the statement, everything else ticks. */
+  reconcileMethod: text("reconcile_method"),
 });
 
 // A reusable column-mapping template per bank, so a tenant only maps

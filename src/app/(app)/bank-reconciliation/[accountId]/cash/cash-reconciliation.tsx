@@ -58,6 +58,8 @@ export function CashReconciliation({
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [useCount, setUseCount] = useState(Boolean(initial.count));
   const [adjust, setAdjust] = useState(false);
+  // A bank account reconciled by ticking: the balance as per the bank, typed in, is the proof instead of a count.
+  const [bankBalance, setBankBalance] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [counting, setCounting] = useState(false);
@@ -81,7 +83,9 @@ export function CashReconciliation({
     }
     return { cashIn: Math.round(cashIn * 100) / 100, cashOut: Math.round(cashOut * 100) / 100 };
   }, [ws.lines, ticked]);
-  const counted = useCount && ws.count ? ws.count.total : null;
+  const bankTyped = bankBalance.trim() === "" || !Number.isFinite(parseFloat(bankBalance)) ? null : parseFloat(bankBalance);
+  const counted = ws.bank ? bankTyped : useCount && ws.count ? ws.count.total : null;
+  const proofWord = ws.bank ? "bank balance" : "count";
   const s = settle({ opening: ws.opening, cashIn: totals.cashIn, cashOut: totals.cashOut, counted, adjust: false });
   const hasDifference = s.difference !== null && Math.abs(s.difference) >= 0.005;
   const closing = adjust && hasDifference && counted !== null ? counted : s.booksBefore;
@@ -95,6 +99,7 @@ export function CashReconciliation({
       setTicked(new Set());
       setUseCount(Boolean(next.count));
       setAdjust(false);
+      setBankBalance("");
       return next;
     } catch (e) {
       report(e instanceof Error ? e.message : "Could not load the entries", null);
@@ -117,15 +122,15 @@ export function CashReconciliation({
       if (!(await ask(`${untickedCount} ${untickedCount === 1 ? "entry is" : "entries are"} not ticked. ${untickedCount === 1 ? "It stays" : "They stay"} open for the next reconciliation.`, { confirmLabel: "Reconcile" }))) return;
     }
     if (hasDifference && !adjust) {
-      const word = (s.difference ?? 0) < 0 ? "short" : "over";
-      if (!(await ask(`The count is ${money.format(Math.abs(s.difference ?? 0))} ${word} against the books. Reconcile without adjusting it? Your books will keep saying ${money.format(s.booksBefore)}.`, { confirmLabel: "Reconcile anyway" }))) return;
+      const word = ws.bank ? ((s.difference ?? 0) < 0 ? "lower" : "higher") : (s.difference ?? 0) < 0 ? "short" : "over";
+      if (!(await ask(`The ${proofWord} is ${money.format(Math.abs(s.difference ?? 0))} ${word} ${ws.bank ? "than" : "against"} the books. Reconcile without adjusting it? Your books will keep saying ${money.format(s.booksBefore)}.`, { confirmLabel: "Reconcile anyway" }))) return;
     }
     if (adjust && hasDifference) {
       if (!(await ask(`Post the ${money.format(Math.abs(s.difference ?? 0))} ${(s.difference ?? 0) < 0 ? "short" : "excess"} to ${shortExcessName}, dated ${ws.asOf}? This changes your books so they agree with the count.`, { confirmLabel: "Post and reconcile" }))) return;
     }
     setBusy(true);
     try {
-      await signOffCashAction({ bankAccountId, asOf: ws.asOf, lineIds: [...ticked], useCount: useCount && Boolean(ws.count), adjust: adjust && hasDifference, note });
+      await signOffCashAction({ bankAccountId, asOf: ws.asOf, lineIds: [...ticked], useCount: useCount && Boolean(ws.count), adjust: !ws.bank && adjust && hasDifference, bankBalance: ws.bank ? bankTyped : null, note });
       toast.success(`Reconciled up to ${ws.asOf}. Closing balance ${money.format(closing)}.`);
       setNote("");
       await load(ws.asOf);
@@ -186,7 +191,7 @@ export function CashReconciliation({
             </span>
             <span>
               <span className="text-ink-2">Closing</span> <span className="font-medium tabular-nums">{money.format(ws.last.closing)}</span>
-              <span className="text-ink-2">{ws.last.kind === "counted" ? ", counted" : ", not counted"}</span>
+              <span className="text-ink-2">{ws.last.kind === "counted" ? (ws.bank ? ", checked with the bank" : ", counted") : ws.bank ? ", not checked with the bank" : ", not counted"}</span>
             </span>
           </>
         ) : (
@@ -283,6 +288,17 @@ export function CashReconciliation({
             <p className="mt-1 text-xs text-ink-3">Your ledger holds {money.format(ws.ledgerBalance)} up to this date.</p>
           </section>
 
+          {ws.bank && (
+            <section className="rounded-lg border border-line bg-surface p-3.5 text-[13px]">
+              <p className="mb-1 font-medium text-ink">
+                Balance as per the bank <span className="font-normal text-ink-2">(optional)</span>
+              </p>
+              <p className="mb-2 text-xs text-ink-2">The balance your bank shows for {ws.asOf}, from its app, passbook or a statement you can read but not upload. It is the proof that the entries you ticked are right.</p>
+              <AmountInput bare type="number" step="0.01" value={bankBalance} onChange={(e) => setBankBalance(e.target.value)} placeholder="0.00" aria-label="Balance as per the bank" className="h-8 w-full rounded-md border border-line-strong bg-surface px-2.5 text-right text-[13px]" />
+            </section>
+          )}
+
+          {!ws.bank && (
           <section className="rounded-lg border border-line bg-surface p-3.5 text-[13px]">
             <p className="mb-1 font-medium text-ink">
               Cash counted <span className="font-normal text-ink-2">(optional)</span>
@@ -322,17 +338,27 @@ export function CashReconciliation({
               </>
             )}
           </section>
+          )}
 
           <section className="rounded-lg bg-surface-2 p-3.5 text-[13px]">
             {counted === null ? (
               <>
-                <StatusPill tone="pending">Not counted</StatusPill>
-                <p className="mt-1.5 text-xs text-ink-2">You can still mark the closing balance as reconciled. It is recorded as &ldquo;Confirmed, not counted&rdquo;.</p>
+                <StatusPill tone="pending">{ws.bank ? "Not checked with the bank" : "Not counted"}</StatusPill>
+                <p className="mt-1.5 text-xs text-ink-2">{ws.bank ? "You can still mark the closing balance as reconciled. It is recorded as \u201cConfirmed, not checked with the bank\u201d." : "You can still mark the closing balance as reconciled. It is recorded as \u201cConfirmed, not counted\u201d."}</p>
               </>
             ) : !hasDifference ? (
               <>
-                <StatusPill tone="success">Counted and agrees</StatusPill>
-                <p className="mt-1.5 text-xs text-ink-2">The books and the cash counted are the same.</p>
+                <StatusPill tone="success">{ws.bank ? "Agrees with the bank" : "Counted and agrees"}</StatusPill>
+                <p className="mt-1.5 text-xs text-ink-2">{ws.bank ? "Your books and the bank's balance are the same." : "The books and the cash counted are the same."}</p>
+              </>
+            ) : ws.bank ? (
+              <>
+                <StatusPill tone="critical">
+                  {(s.difference ?? 0) < 0 ? "Bank is lower" : "Bank is higher"} by {money.format(Math.abs(s.difference ?? 0))}
+                </StatusPill>
+                <p className="mt-1.5 text-xs text-ink-2">
+                  The bank shows {money.format(counted)}; your books say {money.format(s.booksBefore)}. Look for a missing or wrong entry, or reconcile with a note. Nothing is posted to your books.
+                </p>
               </>
             ) : (
               <>
@@ -361,13 +387,15 @@ export function CashReconciliation({
               {counted === null ? "Mark closing as reconciled" : "Mark as reconciled"}
             </Button>
           )}
-          <p className="text-xs text-ink-3">
-            Has a statement from a wallet?{" "}
-            <Link href={`/bank-reconciliation/${bankAccountId}`} className="text-accent hover:underline">
-              Match a statement instead
-            </Link>
-            .
-          </p>
+          {!ws.bank && (
+            <p className="text-xs text-ink-3">
+              Has a statement from a wallet?{" "}
+              <Link href={`/bank-reconciliation/${bankAccountId}`} className="text-accent hover:underline">
+                Match a statement instead
+              </Link>
+              .
+            </p>
+          )}
         </div>
       </div>
 
@@ -380,8 +408,8 @@ export function CashReconciliation({
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a note, a person or a date" aria-label="Search the history" className="w-64" />
             <Select value={proofFilter} onChange={(e) => setProofFilter(e.target.value)} aria-label="Proof" className="w-44">
               <option value="">All proofs</option>
-              <option value="counted">Counted</option>
-              <option value="confirmed">Confirmed, not counted</option>
+              <option value="counted">{ws.bank ? "Checked with the bank" : "Counted"}</option>
+              <option value="confirmed">{ws.bank ? "Confirmed, not checked" : "Confirmed, not counted"}</option>
             </Select>
             <Select value={diffFilter} onChange={(e) => setDiffFilter(e.target.value)} aria-label="Difference" className="w-44">
               <option value="">Any difference</option>
@@ -420,13 +448,13 @@ export function CashReconciliation({
                       <td className={`${td} text-right tabular-nums`}>{h.entries}</td>
                       <td className={`${td} text-right tabular-nums`}>{money.format(h.opening)}</td>
                       <td className={`${td} text-right tabular-nums`}>{money.format(h.closing)}</td>
-                      <td className={td}>{h.kind === "counted" ? `Counted ${money.format(h.counted ?? 0)}` : "Confirmed, not counted"}</td>
+                      <td className={td}>{h.kind === "counted" ? `${ws.bank ? "Bank balance" : "Counted"} ${money.format(h.counted ?? 0)}` : ws.bank ? "Confirmed, not checked" : "Confirmed, not counted"}</td>
                       <td className={td}>
                         {h.difference === null || Math.abs(h.difference) < 0.005 ? (
                           <span className="text-ink-2">{h.difference === null ? "" : "None"}</span>
                         ) : h.adjustment === 0 ? (
                           <span className="text-[var(--warning-text)]">
-                            {h.difference < 0 ? "Short" : "Excess"} {money.format(Math.abs(h.difference))}, not adjusted
+                            {ws.bank ? (h.difference < 0 ? "Bank lower by" : "Bank higher by") : h.difference < 0 ? "Short" : "Excess"} {money.format(Math.abs(h.difference))}{ws.bank ? "" : ", not adjusted"}
                           </span>
                         ) : (
                           <>
