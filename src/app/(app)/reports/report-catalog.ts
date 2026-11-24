@@ -22,6 +22,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { title: "Profit & Loss", href: "/reports/profit-and-loss", built: true },
       { title: "Balance Sheet", href: "/reports/balance-sheet", built: true },
       { title: "Cash Flow Statement", href: "/reports/cash-flow", built: true },
+      { title: "Cash Flow by Account", href: "/reports/cash-flow-by-account", built: true, note: "Every cash and bank account side by side, with money in and out in detail" },
       { title: "Trial Balance", href: "/reports/trial-balance", built: true },
       { title: "Quarterly pack", href: "/reports/quarterly-pack", built: true, note: "Profit & Loss, Balance Sheet, Trial Balance and Cash Flow for a quarter" },
     ],
