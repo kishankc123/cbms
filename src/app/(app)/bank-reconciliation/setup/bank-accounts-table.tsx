@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteBankAccount, setBankAccountActive } from "../actions";
+import { isBankLedgerCode, reconcileMethodOf } from "@/lib/ledger/cash-reconcile-rules";
 import { BankAccountFormModal, type FormOptions, type InitialBankAccount } from "./bank-account-form-modal";
 import { BankLogo } from "@/components/bank-logo";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -20,6 +21,7 @@ type BankAccountRow = {
   isActive: boolean;
   ledgerCode: string;
   ledgerName: string;
+  reconcileMethod: string | null;
   institutionId: string | null;
   logo: { hasLogo: boolean; updatedAt: Date } | null;
   modeIds: string[];
@@ -111,6 +113,8 @@ export function BankAccountsTable({ bankAccounts, ledgerOptions, options }: { ba
                       institutionId: b.institutionId,
                       modeIds: b.modeIds,
                       ledgerLabel: `${b.ledgerCode} — ${b.ledgerName}`,
+                      isBank: isBankLedgerCode(b.ledgerCode),
+                      method: reconcileMethodOf(b.ledgerCode, b.reconcileMethod),
                     })
                   }
                   className="text-xs text-gray-600 hover:underline"
