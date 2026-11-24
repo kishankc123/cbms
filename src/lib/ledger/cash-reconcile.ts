@@ -1,13 +1,13 @@
 import { randomUUID } from "crypto";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, bankAccounts, cashDifferenceExplanations, cashReconciliationLines, cashReconciliations, daybookCashCounts, expenses, journalEntries, journalLines, users } from "@/db/schema";
+import { accounts, bankAccounts, bankReconciliationMatchJournalLines, bankReconciliationMatches, cashDifferenceExplanations, cashReconciliationLines, cashReconciliations, daybookCashCounts, expenses, journalEntries, journalLines, users } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import { todayIso } from "@/lib/calendar";
 import { postJournalEntry, reverseAllActiveEntriesForSource } from "./post";
 import { createExpenseCore, discardExpense, type ExpenseInput } from "@/lib/expenses/expense-records";
 import { findShortExcessAccount, getOrCreateShortExcessAccount } from "./cash-short-excess";
-import { adjustmentLines, describeCash, explainState, explanationLines, inOf, netOf, openLines, outOf, settle, tickedTotals, type CashLine } from "./cash-reconcile-rules";
+import { adjustmentLines, describeCash, explainState, explanationLines, inOf, isBankLedgerCode, netOf, openLines, outOf, reconcileMethodOf, settle, tickedTotals, type CashLine } from "./cash-reconcile-rules";
 
 // Reconciling a cash account against real cash (see cash-reconcile-rules.ts). Plain server helpers, deliberately not server actions: the actions in
 // bank-reconciliation/cash-actions.ts check the permission first.
@@ -20,18 +20,42 @@ const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s + "T00:00:00Z").getTime());
 
 /** Whether a bank-accounts-list entry is reconciled as cash: anything that is not under Bank (1010) is cash or a wallet. */
-export const isCashLedgerCode = (code: string) => !code.startsWith("1010");
+export const isCashLedgerCode = (code: string) => !isBankLedgerCode(code);
 
 async function cashAccount(tenantId: string, bankAccountId: string) {
-  const [row] = await db
-    .select({ id: bankAccounts.id, name: bankAccounts.accountName, accountId: bankAccounts.chartOfAccountsLink, code: accounts.code, active: bankAccounts.isActive })
+  const [found] = await db
+    .select({ id: bankAccounts.id, name: bankAccounts.accountName, accountId: bankAccounts.chartOfAccountsLink, code: accounts.code, active: bankAccounts.isActive, stored: bankAccounts.reconcileMethod })
     .from(bankAccounts)
     .innerJoin(accounts, eq(accounts.id, bankAccounts.chartOfAccountsLink))
     .where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.tenantId, tenantId), eq(accounts.tenantId, tenantId)))
     .limit(1);
-  if (!row) return fail("That account was not found.");
-  if (!isCashLedgerCode(row.code)) return fail("This is a bank account: reconcile it against its bank statement.");
-  return row;
+  if (!found) return fail("That account was not found.");
+  if (reconcileMethodOf(found.code, found.stored) !== "ticking") return fail("This account is reconciled against its bank statement. Change its method to ticking entries to use this screen.");
+  // A bank account reconciled by ticking has no cash to count: the balance on its statement or in the bank's app is its proof instead.
+  return { ...found, isBank: isBankLedgerCode(found.code) };
+}
+
+/** The ledger lines of a bank account that were matched to its statement (and not unmatched since): taken as reconciled when the account ticks instead. */
+async function bankMatchedIds(tenantId: string, bankAccountId: string): Promise<Map<string, Date>> {
+  const rows = await db
+    .select({ id: bankReconciliationMatchJournalLines.journalLineId, at: bankReconciliationMatches.createdAt })
+    .from(bankReconciliationMatchJournalLines)
+    .innerJoin(bankReconciliationMatches, eq(bankReconciliationMatches.id, bankReconciliationMatchJournalLines.matchId))
+    .where(and(eq(bankReconciliationMatches.tenantId, tenantId), eq(bankReconciliationMatches.bankAccountId, bankAccountId), isNull(bankReconciliationMatches.unmatchedAt)));
+  return new Map(rows.map((r) => [r.id, r.at]));
+}
+
+/**
+ * What is already reconciled for an account: ticked in a cash reconciliation, or matched to a bank statement before it was switched to ticking. The matched
+ * lines are never part of a cash reconciliation, so their total is added to the opening figure, except what the last reconciliation's closing already holds
+ * (lines matched before it was signed off, up to its date).
+ */
+async function settledLines(tenantId: string, acct: { id: string; accountId: string }, all: readonly CashLine[], last: { reconciledAt: Date; asOfDate: string } | null) {
+  const [cash, matched] = await Promise.all([reconciledIds(tenantId, acct.accountId), bankMatchedIds(tenantId, acct.id)]);
+  const done = new Set([...cash, ...matched.keys()]);
+  const counted = (l: CashLine) => last !== null && l.date <= last.asOfDate && (matched.get(l.id) as Date) <= last.reconciledAt;
+  const matchedNet = (asOf: string) => round2(all.filter((l) => matched.has(l.id) && !cash.has(l.id) && l.date <= asOf && !counted(l)).reduce((s, l) => s + netOf(l), 0));
+  return { done, matchedNet };
 }
 
 async function loadLines(tenantId: string, accountId: string): Promise<CashLine[]> {
@@ -105,6 +129,8 @@ export type CashWorkspace = {
   last: { through: string; closing: number; kind: string; at: string; by: string } | null;
   /** The last reconciliation's closing, plus an opening-balance entry that has not been taken into one yet. */
   opening: number;
+  /** A bank account reconciled by ticking: its proof is the balance as per the bank, not a cash count. */
+  bank: boolean;
   lines: WorkLine[];
   count: CountInfo | null;
   /** What the ledger holds up to the date, whatever has been ticked. */
@@ -119,9 +145,10 @@ export type CashWorkspace = {
 export async function cashWorkspace(tenantId: string, bankAccountId: string, asOf: string): Promise<CashWorkspace> {
   if (!isDate(asOf)) fail("Choose a valid date.");
   const acct = await cashAccount(tenantId, bankAccountId);
-  const [all, done, last, count] = await Promise.all([loadLines(tenantId, acct.accountId), reconciledIds(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId), loadCount(tenantId, acct.accountId, asOf)]);
-  const open = openLines(all, done, asOf);
-  const [recent] = count
+  const [all, last, count] = await Promise.all([loadLines(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId), acct.isBank ? Promise.resolve(null) : loadCount(tenantId, acct.accountId, asOf)]);
+  const settled = await settledLines(tenantId, acct, all, last);
+  const open = openLines(all, settled.done, asOf);
+  const [recent] = count || acct.isBank
     ? []
     : await db
         .select({ day: daybookCashCounts.countDate })
@@ -142,7 +169,8 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
     account: { id: acct.id, name: acct.name, accountId: acct.accountId },
     asOf,
     last: last ? { through: through ?? last.throughDate, closing: Number(last.closing), kind: last.kind, at: last.reconciledAt.toISOString(), by: who?.name ?? "" } : null,
-    opening: round2((last ? Number(last.closing) : 0) + open.opening),
+    opening: round2((last ? Number(last.closing) : 0) + open.opening + settled.matchedNet(asOf)),
+    bank: acct.isBank,
     lines: open.lines.map((l) => ({ id: l.id, date: l.date, reference: l.reference ?? "", label: describeCash(l), cashIn: inOf(l), cashOut: outOf(l) })),
     count,
     ledgerBalance: round2(all.filter((l) => l.date <= asOf).reduce((s, l) => s + netOf(l), 0)),
@@ -155,8 +183,8 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
 export async function cashStatus(tenantId: string, bankAccountId: string) {
   const acct = await cashAccount(tenantId, bankAccountId);
   const today = todayIso();
-  const [all, done, last] = await Promise.all([loadLines(tenantId, acct.accountId), reconciledIds(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId)]);
-  const open = openLines(all, done, today);
+  const [all, last] = await Promise.all([loadLines(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId)]);
+  const open = openLines(all, (await settledLines(tenantId, acct, all, last)).done, today);
   return { through: await reconciledThrough(tenantId, acct.accountId), closing: last ? Number(last.closing) : null, kind: last?.kind ?? null, unreconciled: open.lines.length };
 }
 
@@ -170,6 +198,8 @@ export type SignOffInput = {
   useCount: boolean;
   /** Post the difference found at the count to Cash short and excess. */
   adjust: boolean;
+  /** A bank account only: the balance as per the bank on that date, the proof instead of a count. Optional. */
+  bankBalance?: number | null;
   note: string;
 };
 
@@ -183,23 +213,30 @@ export async function signOffCash(tenantId: string, userId: string, input: SignO
   const acct = await cashAccount(tenantId, input.bankAccountId);
   if (!acct.active) fail("This account is not active.");
 
-  const [all, done, last, count] = await Promise.all([loadLines(tenantId, acct.accountId), reconciledIds(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId), input.useCount ? loadCount(tenantId, acct.accountId, input.asOf) : Promise.resolve(null)]);
-  if (input.useCount && !count) fail("There is no count of this account on that date.");
+  const wantsCount = input.useCount && !acct.isBank;
+  const [all, last, count] = await Promise.all([loadLines(tenantId, acct.accountId), lastReconciled(tenantId, acct.accountId), wantsCount ? loadCount(tenantId, acct.accountId, input.asOf) : Promise.resolve(null)]);
+  if (wantsCount && !count) fail("There is no count of this account on that date.");
+  const bankBalance = acct.isBank && input.bankBalance !== null && input.bankBalance !== undefined ? round2(Number(input.bankBalance)) : null;
+  if (bankBalance !== null && !Number.isFinite(bankBalance)) fail("Enter the balance as per the bank as a number.");
+  const counted = acct.isBank ? bankBalance : count ? count.total : null;
+  const settled = await settledLines(tenantId, acct, all, last);
+  const done = settled.done;
 
   const open = openLines(all, done, input.asOf);
   const wanted = new Set(input.lineIds);
   const openIds = new Set(open.lines.map((l) => l.id));
   if ([...wanted].some((id) => !openIds.has(id))) fail("Some of the ticked entries have changed or were reconciled elsewhere. Reload the page and tick them again.");
 
-  if (wanted.size === 0 && (open.lines.length > 0 || !input.useCount)) fail("Tick the entries you have checked before marking the closing balance as reconciled.");
+  if (wanted.size === 0 && (open.lines.length > 0 || counted === null)) fail("Tick the entries you have checked before marking the closing balance as reconciled.");
   // What this reconciliation really reconciles up to: the latest entry it takes in (the cut-off only limits what is shown).
   const throughDate = wanted.size > 0 ? open.lines.filter((l) => wanted.has(l.id)).reduce((d, l) => (l.date > d ? l.date : d), "") : input.asOf;
 
-  const opening = round2((last ? Number(last.closing) : 0) + open.opening);
+  const opening = round2((last ? Number(last.closing) : 0) + open.opening + settled.matchedNet(input.asOf));
   const { cashIn, cashOut } = tickedTotals(open.lines, wanted);
   let s;
   try {
-    s = settle({ opening, cashIn, cashOut, counted: count ? count.total : null, adjust: input.adjust });
+    // A bank balance only shows a difference: nothing is posted to cash short and excess for a bank account.
+    s = settle({ opening, cashIn, cashOut, counted, adjust: acct.isBank ? false : input.adjust });
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Could not reconcile.");
   }
@@ -245,7 +282,7 @@ export async function signOffCash(tenantId: string, userId: string, input: SignO
         closing: s.closing.toFixed(2),
         kind: s.kind,
         countId: count?.id ?? null,
-        countedTotal: count ? count.total.toFixed(2) : null,
+        countedTotal: counted === null ? null : counted.toFixed(2),
         note: input.note.trim().slice(0, 500) || null,
         reconciledBy: userId,
       });
@@ -267,7 +304,7 @@ export async function signOffCash(tenantId: string, userId: string, input: SignO
     action: "cash_reconciled",
     entityType: "cash_reconciliation",
     entityId: reconId,
-    after: { account: acct.name, asOf: input.asOf, throughDate, opening, cashIn, cashOut, closing: s.closing, kind: s.kind, counted: count?.total ?? null, adjustment: s.adjustment },
+    after: { account: acct.name, asOf: input.asOf, throughDate, opening, cashIn, cashOut, closing: s.closing, kind: s.kind, counted, bank: acct.isBank, adjustment: s.adjustment },
   });
   return { id: reconId, closing: s.closing, adjustment: s.adjustment };
 }

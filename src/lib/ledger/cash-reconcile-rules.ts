@@ -5,6 +5,17 @@ import { describeLine } from "./party-statement";
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+export type ReconcileMethod = "statement" | "ticking";
+
+/** Whether a ledger account code is under Bank (1010). */
+export const isBankLedgerCode = (code: string) => code.startsWith("1010");
+
+/**
+ * How an account is reconciled. Cash and wallet accounts always tick. A bank account uses its statement unless it was set to tick (the person has no
+ * statement to upload); an account with nothing stored uses the statement.
+ */
+export const reconcileMethodOf = (ledgerCode: string, stored: string | null | undefined): ReconcileMethod => (isBankLedgerCode(ledgerCode) && stored !== "ticking" ? "statement" : "ticking");
+
 /** The ledger account that short and excess cash is posted to. One account for both, so they net off. */
 export const SHORT_EXCESS_CODE = "5930";
 export const SHORT_EXCESS_NAME = "Cash Short and Excess";

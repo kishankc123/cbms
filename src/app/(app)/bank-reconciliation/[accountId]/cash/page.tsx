@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
@@ -11,9 +11,11 @@ import { getExpenseCategoryAccounts } from "@/lib/ledger/expense-accounts";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { cashHistory, cashWorkspace, CashReconError, incomeAccountOptions } from "@/lib/ledger/cash-reconcile";
 import { findShortExcessAccount } from "@/lib/ledger/cash-short-excess";
+import { reconcileMethodOf } from "@/lib/ledger/cash-reconcile-rules";
 import { getExpenseTaxDefaults } from "../../../expenses/actions";
 import { listBankAccounts } from "../../actions";
 import { CashReconciliation } from "./cash-reconciliation";
+import { ChangeMethod } from "../../change-method";
 
 export default async function CashReconciliationPage({ params }: { params: Promise<{ accountId: string }> }) {
   const denied = await guardView("bank_reconciliation");
@@ -24,6 +26,9 @@ export default async function CashReconciliationPage({ params }: { params: Promi
   const accountsList = await listBankAccounts();
   const account = accountsList.find((b) => b.id === accountId && b.isActive);
   if (!account) notFound();
+  // A bank account that is reconciled against its statement has its own screen.
+  if (reconcileMethodOf(account.ledgerCode, account.reconcileMethod) === "statement") redirect(`/bank-reconciliation/${accountId}`);
+  const isBank = account.ledgerCode.startsWith("1010");
 
   let workspace: Awaited<ReturnType<typeof cashWorkspace>>;
   try {
@@ -53,7 +58,8 @@ export default async function CashReconciliationPage({ params }: { params: Promi
   const label = `${account.bankName && account.bankName !== account.accountName ? account.bankName + " — " : ""}${account.accountName}`;
   return (
     <div className="space-y-4">
-      <PageHeader title={`Reconciling ${label}`} description="Tick the entries you have checked, then mark the closing balance as reconciled. Counting the cash is optional but is the proof." back={{ href: "/bank-reconciliation", label: "Back to accounts" }} className="!mb-0" />
+      <PageHeader title={`Reconciling ${label}`} description={isBank ? "Tick the entries you have checked against your bank, then mark the closing balance as reconciled. The balance as per the bank is optional but is the proof." : "Tick the entries you have checked, then mark the closing balance as reconciled. Counting the cash is optional but is the proof."} back={{ href: "/bank-reconciliation", label: "Back to accounts" }} className="!mb-0" />
+      {isBank && <ChangeMethod bankAccountId={accountId} label={label} method="ticking" className="text-xs text-accent-text hover:underline" />}
       <CashReconciliation
         bankAccountId={accountId}
         accountName={label}

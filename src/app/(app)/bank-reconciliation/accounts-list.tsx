@@ -12,6 +12,7 @@ import { FilterBar, SearchInput } from "@/components/ui/filters";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ChangeMethod } from "./change-method";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -129,6 +130,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 </Link>
                 <p className="text-xs text-ink-2">
                   {a.kind === "bank" ? "Bank" : "Cash or wallet"}
+                  {a.kind === "bank" ? (a.method === "ticking" ? " · ticking entries" : " · by statement") : ""}
                   {a.accountNumber ? ` · ${a.accountNumber}` : ""}
                 </p>
               </Td>
@@ -150,7 +152,7 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
               </Td>
               {a.cash ? (
                 <Td numeric>
-                  <p className="text-xs text-ink-2">{a.cash.unreconciled === 0 ? "Every entry is reconciled." : "Tick the entries you have checked, and count the cash."}</p>
+                  <p className="text-xs text-ink-2">{a.cash.unreconciled === 0 ? "Every entry is reconciled." : a.kind === "bank" ? "Tick the entries you have checked against the bank." : "Tick the entries you have checked, and count the cash."}</p>
                 </Td>
               ) : (
               <Td numeric>
@@ -170,6 +172,11 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 <Link href={a.cash ? `/bank-reconciliation/${a.id}/cash` : `/bank-reconciliation/${a.id}`} className="text-xs font-medium text-accent-text hover:underline">
                   Open
                 </Link>
+                {a.kind === "bank" && (
+                  <div className="mt-0.5">
+                    <ChangeMethod bankAccountId={a.id} label={a.label} method={a.method} className="text-xs text-ink-2 hover:underline" />
+                  </div>
+                )}
               </Td>
             </Tr>
           ))}
