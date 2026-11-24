@@ -15,7 +15,6 @@ import { reconcileMethodOf } from "@/lib/ledger/cash-reconcile-rules";
 import { getExpenseTaxDefaults } from "../../../expenses/actions";
 import { listBankAccounts } from "../../actions";
 import { CashReconciliation } from "./cash-reconciliation";
-import { ChangeMethod } from "../../change-method";
 
 export default async function CashReconciliationPage({ params }: { params: Promise<{ accountId: string }> }) {
   const denied = await guardView("bank_reconciliation");
@@ -59,7 +58,6 @@ export default async function CashReconciliationPage({ params }: { params: Promi
   return (
     <div className="space-y-4">
       <PageHeader title={`Reconciling ${label}`} description={isBank ? "Tick the entries you have checked against your bank, then mark the closing balance as reconciled. The balance as per the bank is optional but is the proof." : "Tick the entries you have checked, then mark the closing balance as reconciled. Counting the cash is optional but is the proof."} back={{ href: "/bank-reconciliation", label: "Back to accounts" }} className="!mb-0" />
-      {isBank && <ChangeMethod bankAccountId={accountId} label={label} method="ticking" className="text-xs text-accent-text hover:underline" />}
       <CashReconciliation
         bankAccountId={accountId}
         accountName={label}

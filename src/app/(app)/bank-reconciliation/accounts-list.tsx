@@ -12,7 +12,6 @@ import { FilterBar, SearchInput } from "@/components/ui/filters";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ChangeMethod } from "./change-method";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -172,11 +171,6 @@ export function AccountsList({ accounts }: { accounts: AccountOverview[] }) {
                 <Link href={a.cash ? `/bank-reconciliation/${a.id}/cash` : `/bank-reconciliation/${a.id}`} className="text-xs font-medium text-accent-text hover:underline">
                   Open
                 </Link>
-                {a.kind === "bank" && (
-                  <div className="mt-0.5">
-                    <ChangeMethod bankAccountId={a.id} label={a.label} method={a.method} className="text-xs text-ink-2 hover:underline" />
-                  </div>
-                )}
               </Td>
             </Tr>
           ))}

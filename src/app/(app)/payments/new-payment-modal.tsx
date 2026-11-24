@@ -140,6 +140,8 @@ function PaymentForm({
   const [refundable, setRefundable] = useState<{ credit: number; total: number } | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingRow[]>([]);
   const [allocated, setAllocated] = useState<Record<string, string>>({});
+  // True while the amount was filled in from the ticked expenses, so it keeps following them until the person types an amount of their own.
+  const amountAuto = useRef(false);
 
   // A new Tax Payment is made to one of the tax items still owing; a TDS item is paid by heading, each heading clearing its own payable account.
   const [taxItems, setTaxItems] = useState<TaxItem[]>([]);
@@ -232,23 +234,31 @@ function PaymentForm({
       .map(([id, v]) => ({ targetType, targetId: id, allocatedAmount: parseFloat(v) || 0 }));
   }, [allocated, paymentType]);
 
+  // The page behind does not scroll while the window is open.
+  useEffect(() => {
+    const before = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = before;
+    };
+  }, []);
+
   const amountNum = parseFloat(amount) || 0;
   const allocatedTotal = allocations.reduce((s, a) => s + a.allocatedAmount, 0);
   const unallocated = Math.max(amountNum - allocatedTotal, 0);
 
   function toggleAllocation(row: OutstandingRow, checked: boolean) {
-    if (paymentType === "expense_payment") {
-      // Only one expense can be settled per payment — selecting a new one
-      // replaces any previous selection and pins the amount to it exactly.
-      setAllocated(checked ? { [row.id]: fmt(Math.min(amountNum || row.outstanding, row.outstanding)) } : {});
-      return;
+    // Several expenses can be settled by one payment: each ticked one takes what is left of the amount, up to what it owes, and the rest of what it owes stays
+    // outstanding. With no amount typed yet, a ticked expense takes all it owes and the amount follows the total.
+    const next = { ...allocated };
+    if (checked) next[row.id] = fmt(amountNum > 0 ? Math.min(row.outstanding, Math.max(amountNum - allocatedTotal, 0)) : row.outstanding);
+    else delete next[row.id];
+    setAllocated(next);
+    if (amountNum === 0 || amountAuto.current) {
+      const total = Object.values(next).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+      setAmount(total > 0 ? fmt(total) : "");
+      amountAuto.current = total > 0;
     }
-    setAllocated((prev) => {
-      const next = { ...prev };
-      if (checked) next[row.id] = fmt(Math.min(row.outstanding, Math.max(amountNum - allocatedTotal, 0)) || row.outstanding);
-      else delete next[row.id];
-      return next;
-    });
   }
 
   // A new payment shows what was posted; one made from a bank line being reconciled closes, as the reconciliation carries on from there.
@@ -286,7 +296,8 @@ function PaymentForm({
     if (config.needsEmployee && !employeeId) bad("employeeId", "Please select an employee.", '[data-field="employee"]');
     if (!(amountNum > 0)) bad("amount", "Amount must be greater than zero.", '[data-field="amount"]');
     if (paymentMethod === "cheque" && !chequeNumber.trim()) bad("chequeNumber", "Cheque number is required for a cheque payment.", '[data-field="cheque"]');
-    if (paymentType === "expense_payment" && allocations.length !== 1) bad("allocation", "Select the expense this payment settles.", '[data-field="allocation"]');
+    if (paymentType === "expense_payment" && allocations.length < 1) bad("allocation", "Select the expense this payment settles.", '[data-field="allocation"]');
+    else if (paymentType === "expense_payment" && Math.abs(allocatedTotal - amountNum) > 0.005) bad("allocation", `The payment is ${fmt(amountNum)} but ${fmt(allocatedTotal)} is allocated. Allocate the whole amount across the expenses.`, '[data-field="allocation"]');
     setFieldErrors(errors);
     if (first.length > 0) return report(first[0].message, first[0].target);
 
@@ -403,11 +414,12 @@ function PaymentForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-8">
+    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4">
       <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={onCancel} />
 
-      <div className="relative w-full max-w-3xl rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)] space-y-4">
-        <div className="flex items-center justify-between">
+      {/* my-auto centres it when it fits and starts at the top when it is taller than the screen; the title and the buttons stay in view while the middle scrolls. */}
+      <div className="relative my-auto max-h-[calc(100vh-2rem)] w-full max-w-3xl space-y-4 overflow-y-auto rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between border-b border-line bg-surface px-5 pb-3 pt-4">
           <h2 className="text-base font-semibold text-gray-900">{editing ? `Edit Payment ${editing.paymentNumber}` : `New Payment${fixedDirection ? ` — ${fixedDirection === "money_in" ? "Money In" : "Money Out"}` : ""}`}</h2>
           <button type="button" onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600">
             ✕
@@ -640,7 +652,7 @@ function PaymentForm({
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">Amount</label>
-              <AmountInput bare data-field="amount" type="number" step="0.01" min="0" disabled={lockedRecon} value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : setAmount(e.target.value))} className={fieldErrors.amount ? inputErrCls : inputCls} />
+              <AmountInput bare data-field="amount" type="number" step="0.01" min="0" disabled={lockedRecon} value={amount} onChange={(e) => (headings.length > 0 ? changeSplit(shareAcross(headings, Number(e.target.value) || 0)) : (amountAuto.current = false, setAmount(e.target.value)))} className={fieldErrors.amount ? inputErrCls : inputCls} />
             </div>
             {headings.length > 0 && <HeadSplitFields headings={headings} split={headSplit} onChange={changeSplit} inputClass={inputCls} />}
           </div>
@@ -669,7 +681,8 @@ function PaymentForm({
 
         {config.showAllocation && (
           <section data-field="allocation" className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900">Expense this payment settles</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Expenses this payment settles</h3>
+            <p className="-mt-1 text-xs text-ink-2">Tick one or more. The amount you allocate to each reduces what it owes; anything not allocated to an expense stays outstanding on it.</p>
 
             {outstanding.length === 0 && <p className="text-sm text-gray-400">No outstanding expenses found.</p>}
 
@@ -703,7 +716,11 @@ function PaymentForm({
                               min="0"
                               disabled={!checked}
                               value={allocated[row.id] ?? ""}
-                              onChange={(e) => setAllocated((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                              onChange={(e) => {
+                                const next = { ...allocated, [row.id]: e.target.value };
+                                setAllocated(next);
+                                if (amountAuto.current) setAmount(fmt(Object.values(next).reduce((s, v) => s + (parseFloat(v) || 0), 0)));
+                              }}
                               className="rounded-md border border-line-strong bg-surface px-2.5 py-[5px] text-[13px] text-ink placeholder:text-ink-3 transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-2 disabled:text-ink-3 w-24 text-right"
                             />
                           </td>
@@ -732,7 +749,7 @@ function PaymentForm({
           </section>
         )}
 
-        <div className="flex items-center justify-end gap-3">
+        <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex items-center justify-end gap-3 border-t border-line bg-surface px-5 py-3">
           <button type="button" onClick={onCancel} disabled={saving} className="rounded text-gray-500 hover:text-gray-700 text-sm px-2 py-1.5 disabled:opacity-50">
             Cancel
           </button>
