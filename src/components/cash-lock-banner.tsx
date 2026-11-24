@@ -36,7 +36,7 @@ export function CashLockBanner({ lock, onUnlocked }: { lock: CashLockInfo; onUnl
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
         <p>
-          Locked: this was reconciled in {lock.accountName} up to <D value={lock.asOf} style="long" />. Its amounts, date, category and payment account can&apos;t change and it can&apos;t be voided. You can still change the description and invoice details.
+          Locked: this was reconciled in {lock.accountName} up to <D value={lock.asOf} style="long" />. Its date, amounts and payment account can&apos;t change and it can&apos;t be voided. You can still change the category, supplier, description and invoice details.
           {!lock.canUnlock && " Ask an administrator to unlock it."}
         </p>
         {lock.canUnlock && (

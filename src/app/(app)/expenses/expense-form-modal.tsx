@@ -7,7 +7,7 @@ import { okToChange } from "../suppliers/reconcile/confirm-change";
 import { explainShortageAction } from "../bank-reconciliation/cash-actions";
 import { CashLockBanner } from "@/components/cash-lock-banner";
 import type { CashLockInfo } from "@/lib/ledger/cash-reconcile";
-import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
+import { createExpense, getTdsRateOn, suggestExpense, updateExpense, updateExpenseDetails, updateReconciledExpense, type ExpenseInput, type ExpenseTaxTreatment, type ExpenseBillType } from "./actions";
 import type { ExpenseSuggestion } from "@/lib/expenses/suggestion-rules";
 import { D } from "@/components/calendar/date-text";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
@@ -47,7 +47,7 @@ const BILL_TYPES: { value: ExpenseBillType; label: string }[] = [
 const today = () => todayIso();
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean; cashLock?: CashLockInfo | null };
+export type InitialExpense = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly?: boolean; /** A line of it was matched to a bank statement or ticked in a cash reconciliation. */ reconciled?: boolean; /** Payments were recorded against it later in Payments. */ laterPayments?: boolean; cashLock?: CashLockInfo | null };
 
 /** What the next new expense starts with after one is saved: the day's batch usually shares its date, how it was paid and the bill type. */
 type Carry = { expenseDate: string; billType: ExpenseBillType; taxTreatment: ExpenseTaxTreatment; payment: { accountId: string; modeId: string | null } | null };
@@ -139,6 +139,11 @@ function ExpenseForm({
   const descriptionRef = useRef<HTMLInputElement>(null);
   // Payments recorded later in Payments pin the amounts: then only the details can be edited.
   const locked = Boolean(initial?.detailsOnly);
+  // Reconciled: the date, amounts and payment accounts are locked, but the category, supplier and details can still change (the supplier only while no payment was made later in Payments).
+  const reconciled = Boolean(initial?.reconciled);
+  const categoryLocked = locked && !reconciled;
+  const supplierLocked = locked && !(reconciled && !initial?.laterPayments);
+  const [changeReason, setChangeReason] = useState("");
   // Every problem is shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { problem, report, dialog } = useProblem();
 
@@ -270,7 +275,8 @@ function ExpenseForm({
       };
 
       if (initial && locked) {
-        await updateExpenseDetails({ expenseId: initial.expenseId, description, invoiceNumber, invoiceDate, dueDate, billAvailable });
+        if (reconciled) await updateReconciledExpense({ expenseId: initial.expenseId, categoryAccountId, vendorId: vendorId || null, description, invoiceNumber, invoiceDate, dueDate, billAvailable, reason: changeReason.trim() });
+        else await updateExpenseDetails({ expenseId: initial.expenseId, description, invoiceNumber, invoiceDate, dueDate, billAvailable });
       } else if (initial) {
         await updateExpense({ ...payload, expenseId: initial.expenseId });
       } else if (explain) {
@@ -355,7 +361,12 @@ function ExpenseForm({
             </p>
           )}
           {initial?.cashLock && <CashLockBanner lock={initial.cashLock} onUnlocked={() => { router.refresh(); onClose(); }} />}
-          {locked && !initial?.cashLock && (
+          {reconciled && !initial?.cashLock && (
+            <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+              This expense has been reconciled, so its date, amounts and payment account are locked. You can still change the category{initial?.laterPayments ? "" : ", supplier"}, description and invoice details. Moving it to another category or supplier is recorded with your reason.
+            </p>
+          )}
+          {locked && !reconciled && !initial?.cashLock && (
             <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
               Payments have been recorded against this expense in Payments, so its amounts, category, date and supplier are locked. You can still change the description, invoice details and bill availability. To change the amounts, void those payments first.
             </p>
@@ -444,7 +455,7 @@ function ExpenseForm({
             <section className="space-y-3">
               <SectionTitle>Category and supplier</SectionTitle>
               <Field label="Expense category">
-                <Select data-field="category" disabled={locked} value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)}>
+                <Select data-field="category" disabled={categoryLocked} value={categoryAccountId} onChange={(e) => setCategoryAccountId(e.target.value)}>
                   <option value="">Select category</option>
                   {categoryGroups.map((g) =>
                     g.label ? (
@@ -470,9 +481,14 @@ function ExpenseForm({
                   Supplier {remaining > 0 ? <span className="text-[var(--danger)]">*</span> : <span className="font-normal text-ink-2">(optional once paid in full)</span>}
                 </label>
                 <div data-field="supplier" data-opens>
-                  <SupplierSelect value={vendorId} options={vendors} onChange={(id) => setVendorId(id)} onAdded={addVendor} disabled={locked} className={`${controlClass} w-full bg-surface text-left`} />
+                  <SupplierSelect value={vendorId} options={vendors} onChange={(id) => setVendorId(id)} onAdded={addVendor} disabled={supplierLocked} className={`${controlClass} w-full bg-surface text-left`} />
                 </div>
               </div>
+              {reconciled && (
+                <Field label="Reason for the change">
+                  <Input value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Needed if you change the category or supplier" />
+                </Field>
+              )}
 
               <div className="pt-2">
                 <SectionTitle>Invoice / supporting document</SectionTitle>
