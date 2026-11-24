@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { BillsTable } from "./bills-table";
+import { StatusPill } from "@/components/ui/status-pill";
 import { PurchaseInvoiceForm } from "./purchase-invoice-form";
 import { EditPurchaseInvoiceModal } from "./edit-purchase-invoice-modal";
 import { ConfirmDialog } from "../sales/confirm-dialog";
 import { AmountPurchaseGrid } from "./amount-purchase-grid";
-import { MultiPurchaseInvoices } from "./multi-purchase-invoices";
 import { ImportItems } from "./import/import-items";
 
 type Vendor = { id: string; name: string };
@@ -28,7 +28,6 @@ const TABS = [
   { id: "single", label: "Single invoice" },
   { id: "multi", label: "Multi-invoice" },
   { id: "import", label: "Import purchases" },
-  { id: "amount", label: "Add by amount" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -51,6 +50,7 @@ export function StockableTabs({
   vatRate: number;
 }) {
   const [tab, setTab] = useState<TabId>("invoices");
+  const waiting = bills.filter((b) => b.detailsPending && b.status !== "void").length;
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState<TabId | null>(null);
@@ -85,6 +85,20 @@ export function StockableTabs({
         ))}
       </div>
 
+      {waiting > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-[13px]">
+          <StatusPill tone="pending">Details pending</StatusPill>
+          <span className="text-ink">
+            {waiting === 1 ? "1 purchase is" : `${waiting} purchases are`} waiting for item details. Stock and cost of goods sold do not change for them until the items are added.
+          </span>
+          {tab !== "invoices" && (
+            <button type="button" onClick={() => handleTabClick("invoices")} className="ml-auto text-accent hover:underline">
+              Show them
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === "invoices" && <BillsTable vendors={vendors} bills={bills} paymentModes={paymentModes} onEdit={setEditingBillId} />}
       {tab === "single" && (
         <PurchaseInvoiceForm
@@ -97,11 +111,9 @@ export function StockableTabs({
         />
       )}
 
-      {tab === "multi" && <MultiPurchaseInvoices vendors={vendors} items={items} cashBankAccounts={cashBankAccounts} vatRate={vatRate} onDirtyChange={setDirty} />}
+      {tab === "multi" && <AmountPurchaseGrid vendors={vendors} categories={[]} cashBankAccounts={cashBankAccounts} vendorBalances={vendorBalances} vatRate={vatRate} pending onDirtyChange={setDirty} />}
 
       {tab === "import" && <ImportItems />}
-
-      {tab === "amount" && <AmountPurchaseGrid vendors={vendors} categories={[]} cashBankAccounts={cashBankAccounts} vendorBalances={vendorBalances} vatRate={vatRate} pending onDirtyChange={setDirty} />}
 
       {pendingTab && (
         <ConfirmDialog

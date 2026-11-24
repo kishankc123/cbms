@@ -7,6 +7,7 @@ import {
   salesInvoices,
   journalEntries,
   journalLines,
+  customers,
   type LineItem,
 } from "@/db/schema";
 import { salesInvoiceDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
@@ -22,11 +23,13 @@ import { salesVatRate } from "@/lib/sales/vat";
 import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@/lib/sales/revenue-accounts";
 import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
+import { isCashSaleCustomer } from "@/lib/sales/cash-sale";
 import {
   PartialBatchError,
   deleteEmbeddedPaymentsForInvoice,
   discardInvoice,
   ensureBankAccount,
+  ensureCashCustomer,
   insertEmbeddedCustomerPayment,
   postSalesBatch,
   takenInvoiceNumbers,
@@ -229,6 +232,19 @@ export async function getRevenueAccountOptions() {
   return getRevenueAccounts(session.tenantId);
 }
 
+// The "Cash Sale" stand-in customer is not shown as a chosen customer: such an invoice opens with the customer left blank.
+async function isCashSale(tenantId: string, customerId: string) {
+  const [c] = await db.select({ name: customers.name }).from(customers).where(and(eq(customers.id, customerId), eq(customers.tenantId, tenantId))).limit(1);
+  return isCashSaleCustomer(c?.name);
+}
+
+// With no customer, the sale must be paid in full on the spot: it goes to the "Cash Sale" customer. A shortfall needs a real customer to owe it.
+async function customerForSale(tenantId: string, customerId: string, total: number, paid: number) {
+  if (customerId) return customerId;
+  if (!(total > 0 && paid >= total - 0.004)) throw new Error("Choose a customer, or record the full payment to save it as a cash sale.");
+  return ensureCashCustomer(tenantId);
+}
+
 export type SingleInvoiceEditData = {
   invoiceId: string;
   invoiceNumber: string;
@@ -305,7 +321,7 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: invoice.invoiceDate,
     dueDate: invoice.dueDate,
-    customerId: invoice.customerId,
+    customerId: (await isCashSale(session.tenantId, invoice.customerId)) ? "" : invoice.customerId,
     billType: invoice.taxTreatment,
     revenueAccountId: invoice.revenueAccountId,
     lines,
@@ -332,7 +348,6 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
 
   const invoiceNumber = input.invoiceNumber.trim();
   if (!invoiceNumber) throw new Error("Invoice number is required");
-  if (!input.customerId) throw new Error("Select a customer");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   await assertInvoiceNumberFree(session.tenantId, invoiceNumber, input.invoiceId);
   // Editing reverses the old entries (dated today) and re-posts on the invoice date — both periods must be open,
@@ -364,7 +379,8 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   if (paid > total + 0.004) throw new Error("Recorded payment exceeds the invoice total");
   const status = total > 0 && paid >= total ? "paid" : paid > 0 ? "partially_paid" : "sent";
 
-  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
+  const customerId = await customerForSale(session.tenantId, input.customerId, total, paid);
+  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, customerId);
   // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
   // line, so a Product and a Service with different accounts both land correctly in the same entry.
   // A revenue account chosen for the invoice takes every line to it.
@@ -398,7 +414,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   await db
     .update(salesInvoices)
     .set({
-      customerId: input.customerId,
+      customerId: customerId,
       invoiceNumber,
       invoiceDate: input.invoiceDate,
       dueDate: input.dueDate || null,
@@ -468,7 +484,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
     await insertEmbeddedCustomerPayment(
       session.tenantId,
       session.userId,
-      input.customerId,
+      customerId,
       input.invoiceId,
       input.invoiceDate,
       paid,
@@ -485,7 +501,7 @@ export async function updateSingleInvoice(input: UpdateSingleInvoiceInput) {
   revalidatePath("/journal");
   revalidatePath("/customers");
   await resettleParty(session.tenantId, "customer", existing.customerId);
-  await resettleParty(session.tenantId, "customer", input.customerId);
+  await resettleParty(session.tenantId, "customer", customerId);
   revalidatePath("/inventory/items");
   await recalculateAfter(session.tenantId, [...validLines, ...((existing.lineItems ?? []) as LineItem[])].map((l) => l.itemId), session.userId, `Edit of invoice ${invoiceNumber}`);
 }
@@ -504,6 +520,7 @@ export type SingleInvoiceInput = {
   invoiceNumber: string;
   invoiceDate: string;
   dueDate?: string | null;
+  /** Blank only for a sale paid in full (a cash sale). */
   customerId: string;
   billType?: SalesBillType;
   /** Book the whole invoice to this revenue account; blank: each item's own account, else Sales Revenue. */
@@ -523,15 +540,13 @@ function computeSingleLine(line: SingleInvoiceLine, vatRate: number) {
 
 // A Single invoice is one customer bill with multiple item lines — the same
 // shape as a Stockable purchase invoice, just on the sales side. Unlike
-// Multi-invoice's batch grid, the customer is always required upfront (no
-// "Cash Sale" fallback) and this creates exactly one invoice per Save.
+// Multi-invoice's batch grid, this creates exactly one invoice per Save. The customer may be left blank only when the sale is paid in full: it is then a cash sale.
 export async function createSingleInvoice(input: SingleInvoiceInput) {
   const session = await requireTenantSession();
   if (!can(session, "sales", "create")) throw new Error("Not permitted");
 
   const invoiceNumber = input.invoiceNumber.trim();
   if (!invoiceNumber) throw new Error("Invoice number is required");
-  if (!input.customerId) throw new Error("Select a customer");
   if (!input.invoiceDate) throw new Error("Invoice date is required");
   await assertInvoiceNumberFree(session.tenantId, invoiceNumber);
   await assertPeriodOpen(session.tenantId, input.invoiceDate);
@@ -559,7 +574,8 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   await assertInventoryDate(session.tenantId, input.invoiceDate, validLines);
   await assertStockAvailable(session.tenantId, validLines, { date: input.invoiceDate });
 
-  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, input.customerId);
+  const customerId = await customerForSale(session.tenantId, input.customerId, total, paid);
+  const arId = await getOrCreateCustomerReceivableAccountId(session.tenantId, customerId);
   // Each line posts to ITS OWN revenue account if it has one, else the shared default — never one aggregate
   // line, so a Product and a Service with different accounts both land correctly in the same entry.
   // A revenue account chosen for the invoice takes every line to it.
@@ -579,7 +595,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
     .insert(salesInvoices)
     .values({
       tenantId: session.tenantId,
-      customerId: input.customerId,
+      customerId: customerId,
       invoiceNumber,
       invoiceDate: input.invoiceDate,
       dueDate: input.dueDate || null,
@@ -658,7 +674,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
       await insertEmbeddedCustomerPayment(
         session.tenantId,
         session.userId,
-        input.customerId,
+        customerId,
         invoice.id,
         input.invoiceDate,
         paid,
@@ -675,7 +691,7 @@ export async function createSingleInvoice(input: SingleInvoiceInput) {
   }
 
   // Money the customer paid ahead settles their oldest invoices first (it is on their ledger).
-  await resettleParty(session.tenantId, "customer", input.customerId);
+  await resettleParty(session.tenantId, "customer", customerId);
 
   revalidatePath("/sales");
   revalidatePath("/sales/invoices");
