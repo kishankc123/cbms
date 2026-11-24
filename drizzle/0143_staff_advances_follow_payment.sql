@@ -2,7 +2,7 @@
 -- Put every such record back with its payment's employee. An advance payroll has already recovered from is left as it is: it could not have been edited.
 UPDATE staff_advances sa
 SET employee_id = p.employee_id
-FROM payments p
+FROM payments_ledger p
 WHERE p.id = sa.payment_id
   AND p.employee_id IS NOT NULL
   AND sa.employee_id <> p.employee_id
