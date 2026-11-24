@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { expenses, recurringExpenses, journalEntries, journalLines, payments, paymentAllocations } from "@/db/schema";
+import { expenses, recurringExpenses, payments, paymentAllocations } from "@/db/schema";
 import { getCurrentTaxRate } from "@/lib/compliance/tax-rates";
 import { tdsRateOn } from "@/lib/compliance/tds-rate";
 import { suggestForDescription } from "@/lib/expenses/suggestions";
@@ -12,12 +12,13 @@ import { postJournalEntry, reverseAllActiveEntriesForSource, reverseJournalEntry
 import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { assertSourceNotReconciled } from "@/lib/ledger/reconciliation-guards";
 import { voidExpenseCore } from "@/lib/expenses/void-expense";
+import { changeReconciledExpense, isExpenseReconciled, storedExpensePayments, type ReconciledExpenseEdit } from "@/lib/expenses/reconciled-edit";
 import { getCashLock, type CashLockInfo } from "@/lib/ledger/cash-reconcile";
 import { isOrgAdmin } from "@/lib/roles";
 import { expenseDetail, type DocumentDetailView } from "@/lib/ledger/document-detail";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 
-import { getOrCreateTdsPayableAccount, getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
+import { getOrCreateExpensePayableAccount, expenseSupplierAccountId } from "@/lib/ledger/expense-accounts";
 import { withPaymentNumber } from "@/lib/payment-number";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import {
@@ -60,8 +61,13 @@ export async function getExpenseDetail(expenseId: string): Promise<DocumentDetai
   return { ...detail, canEdit: can(session, "expenses", "edit"), canVoid: can(session, "expenses", "void"), canPay: can(session, "expenses", "edit") };
 }
 
-/** `detailsOnly`: payments have been recorded against this expense in Payments, so its amounts can't change under them. */
-export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly: boolean; /** Set when its cash line was ticked in a cash reconciliation: the amounts are then locked too. */ cashLock: CashLockInfo | null };
+/**
+ * `detailsOnly`: the amounts can't change (payments were recorded against it in Payments, or it has been reconciled).
+ * `reconciled`: a line of it was matched to a bank statement or ticked in a cash reconciliation: the date, amounts and payment accounts are locked, and the category, supplier and details can still change.
+ * `laterPayments`: payments were recorded against it in Payments, so its supplier can't change.
+ * `cashLock`: set when its cash line was ticked in a cash reconciliation (the banner, and who can unlock it).
+ */
+export type ExpenseEditData = ExpenseInput & { expenseId: string; expenseNumber: string; detailsOnly: boolean; reconciled: boolean; laterPayments: boolean; cashLock: CashLockInfo | null };
 
 export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditData> {
   const session = await requireTenantSession();
@@ -76,30 +82,11 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
   if (expense.status === "void") throw new Error("A void expense can't be edited");
   const cashLockRaw = await getCashLock(session.tenantId, expenseId);
   const cashLock = cashLockRaw ? { ...cashLockRaw, canUnlock: isOrgAdmin(session.role) && can(session, "bank_reconciliation", "edit") } : null;
-  const detailsOnly = Boolean(cashLock) || (await assertNoLaterPayments(session.tenantId, "expense", expenseId, "expense").then(() => false, () => true));
+  const laterPayments = await assertNoLaterPayments(session.tenantId, "expense", expenseId, "expense").then(() => false, () => true);
+  const reconciled = Boolean(cashLock) || (await isExpenseReconciled(session.tenantId, expenseId));
+  const detailsOnly = reconciled || laterPayments;
 
-  const [entry] = await db
-    .select()
-    .from(journalEntries)
-    .where(
-      and(
-        eq(journalEntries.tenantId, session.tenantId),
-        eq(journalEntries.sourceType, "expense"),
-        eq(journalEntries.sourceId, expenseId),
-        eq(journalEntries.isReversed, false)
-      )
-    )
-    .limit(1);
-
-  const tdsPayable = await getOrCreateTdsPayableAccount(session.tenantId);
-  const expensePayable = await getOrCreateExpensePayableAccount(session.tenantId);
-  let payments: ExpensePaymentLine[] = [];
-  if (entry) {
-    const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
-    payments = lines
-      .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id && l.accountId !== expense.payableAccountId)
-      .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
-  }
+  const payments = await storedExpensePayments(session.tenantId, expense);
 
   return {
     expenseId: expense.id,
@@ -120,6 +107,8 @@ export async function getExpenseForEdit(expenseId: string): Promise<ExpenseEditD
     otherTaxAmount: Number(expense.otherTaxAmount),
     payments,
     detailsOnly,
+    reconciled,
+    laterPayments,
     cashLock,
   };
 }
@@ -196,6 +185,21 @@ export async function updateExpense(input: UpdateExpenseInput) {
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
   revalidatePath("/journal");
+}
+
+/**
+ * Editing an expense that has been reconciled: its date, amounts and payment accounts stay as they were, and the category, supplier, description and invoice
+ * details can change. Moving the category or supplier is recorded as a small entry, with the reason.
+ */
+export async function updateReconciledExpense(input: ReconciledExpenseEdit) {
+  const session = await requireTenantSession();
+  if (!can(session, "expenses", "edit")) throw new Error("Not permitted");
+  const result = await changeReconciledExpense(session.tenantId, session.userId, input);
+  revalidatePath("/expenses");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  revalidatePath("/suppliers");
+  return result;
 }
 
 export type ExpenseDetailsInput = { expenseId: string; description: string; invoiceNumber: string; invoiceDate: string; dueDate: string; billAvailable?: boolean };

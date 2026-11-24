@@ -29,12 +29,13 @@ export function useLedgerOptions(): LedgerOption[] {
  * A separate picker for settling through a ledger account (a director's account, the owner's capital, a receivable netted off) instead of cash or
  * bank: no cash or bank moves, the amount is recorded against that account in the Chart of Accounts.
  */
-export function LedgerSelect({ value, onChange, accounts, className }: { value: string; onChange: (accountId: string) => void; accounts: LedgerOption[]; className?: string }) {
+export function LedgerSelect({ value, onChange, accounts, className, disabled }: { value: string; onChange: (accountId: string) => void; accounts: LedgerOption[]; className?: string; disabled?: boolean }) {
   const groups = [...new Set(accounts.map((a) => a.group ?? ""))];
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
       className={className}
     >
       <option value="">Select ledger account</option>
@@ -109,7 +110,7 @@ export function LedgerLinesField({ options, lines, onChange }: { options: Ledger
  * With `ledger`, the list ends with the ledger accounts a payment can be settled through instead (a director's account, the owner's
  * capital): no mode, and no cash or bank moves. Only for screens whose payments may be settled that way.
  */
-export function PaymentModeSelect({ value, onChange, className, ledger = false }: { value: ModeAccount; onChange: (v: ModeAccount) => void; className?: string; ledger?: boolean }) {
+export function PaymentModeSelect({ value, onChange, className, ledger = false, disabled }: { value: ModeAccount; onChange: (v: ModeAccount) => void; className?: string; disabled?: boolean; ledger?: boolean }) {
   const [options, setOptions] = useState<Option[] | null>(null);
   const [accounts, setAccounts] = useState<Ledger[]>([]);
 
@@ -154,6 +155,7 @@ export function PaymentModeSelect({ value, onChange, className, ledger = false }
         const [m, a] = e.target.value.split("|");
         onChange({ modeId: m ?? "", accountId: a ?? "", modeName: options?.find((o) => o.id === m)?.name });
       }}
+      disabled={disabled}
       className={className}
     >
       <option value="">{options === null ? "Loading..." : options.length === 0 ? "No payment modes set up" : "Select mode"}</option>

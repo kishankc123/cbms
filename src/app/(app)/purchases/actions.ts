@@ -22,6 +22,8 @@ import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, deleteEmbeddedPaymentsForBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import { assertTrackingOn, getTrackInventory } from "@/lib/inventory/stock";
+import { isSourceReconciled, reverseReclassForSource, supplierPayableAccountIds } from "@/lib/ledger/reclass";
+import { changeReconciledPurchaseBill, type ReconciledBillEdit } from "@/lib/purchases/reconciled-bill";
 import { getOrCreatePendingPurchasesAccount } from "@/lib/ledger/purchases-accounts";
 import {
   billLineItems,
@@ -59,6 +61,8 @@ async function reverseActiveEntry(tenantId: string, billId: string, userId: stri
   if (entry) {
     await reverseJournalEntry(tenantId, entry.id, userId, memo, opts);
   }
+  // Vouchers posted by changes made after the bill was reconciled (a change of supplier) go back with it.
+  await reverseReclassForSource(tenantId, billId, userId, memo);
 }
 
 // Returns the journal lines of a bill's currently active entry — used to
@@ -181,6 +185,8 @@ export type CashPurchaseEditData = {
   billAvailable: boolean | null;
   lines: CashPurchaseLine[];
   payments: CashPaymentLine[];
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, items and payments are locked, and the supplier and details can change. */
+  reconciled: boolean;
 };
 
 // Bills saved with the newer form carry their lines. Older ones (one category, one amount) are rebuilt as a
@@ -199,9 +205,10 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
   const entryLines = await activeEntryLines(session.tenantId, billId);
   const taxReceivable = await findControlAccount(session.tenantId, ["1300"], "Tax Receivable");
   // The credit to the supplier's payable account is the unpaid balance, not a payment.
-  const [supplier] = bill.vendorId ? await db.select({ payableAccountId: vendors.payableAccountId }).from(vendors).where(eq(vendors.id, bill.vendorId)).limit(1) : [];
+  const [supplier] = bill.vendorId ? await db.select({ payableAccountId: vendors.payableAccountId }).from(vendors).where(and(eq(vendors.id, bill.vendorId), eq(vendors.tenantId, session.tenantId))).limit(1) : [];
+  const supplierAccounts = await supplierPayableAccountIds(session.tenantId);
   const payments = entryLines
-    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== supplier?.payableAccountId)
+    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== supplier?.payableAccountId && !supplierAccounts.has(l.accountId))
     .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
 
   const stored = (bill.lineItems ?? []).filter((l) => l.categoryId);
@@ -222,6 +229,7 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
     billAvailable: bill.billAvailable,
     lines,
     payments,
+    reconciled: await isSourceReconciled(session.tenantId, billId),
   };
 }
 
@@ -300,6 +308,8 @@ export type PurchaseInvoiceEditData = {
   /** A purchase recorded by amount whose items are still to be added, and the amount it was recorded with. */
   detailsPending: boolean;
   recordedTotal: number;
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, items and payments are locked, and the supplier and details can change. */
+  reconciled: boolean;
 };
 
 // Reconstructs the payment split (accounts credited besides Accounts
@@ -318,9 +328,11 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
 
   const lines = await activeEntryLines(session.tenantId, billId);
   const apId = bill.vendorId ? await getOrCreateSupplierPayableAccountId(session.tenantId, bill.vendorId) : null;
+  // The unpaid part may sit on a former supplier's account (the bill could have been moved after it was reconciled): none of them is a payment.
+  const supplierAccounts = await supplierPayableAccountIds(session.tenantId);
 
   const payments = lines
-    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== apId)
+    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== apId && !supplierAccounts.has(l.accountId))
     .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
 
   return {
@@ -335,7 +347,24 @@ export async function getPurchaseInvoiceForEdit(billId: string): Promise<Purchas
     payments,
     detailsPending: bill.detailsPending,
     recordedTotal: Number(bill.total),
+    reconciled: await isSourceReconciled(session.tenantId, billId),
   };
+}
+
+/**
+ * Editing a purchase bill that has been reconciled: the date, items, totals and payments stay as they were; the supplier, bill number, due date and whether
+ * the paper bill is in hand can change. Moving the supplier is recorded as a small voucher, with the reason.
+ */
+export async function updateReconciledPurchaseBill(input: ReconciledBillEdit) {
+  const session = await requireTenantSession();
+  if (!can(session, "purchases", "edit")) throw new Error("Not permitted");
+  const result = await changeReconciledPurchaseBill(session.tenantId, session.userId, input);
+  revalidatePath("/purchases/consumable");
+  revalidatePath("/purchases/stockable");
+  revalidatePath("/suppliers");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  return result;
 }
 
 export type UpdatePurchaseInvoiceInput = PurchaseInvoiceInput & { billId: string };

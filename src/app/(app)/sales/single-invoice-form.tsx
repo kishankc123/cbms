@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { CustomerSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { useProblem, type FieldRules } from "@/components/problem-dialog";
-import { createSingleInvoice, updateSingleInvoice, type SalesBillType } from "./actions";
+import { createSingleInvoice, updateSingleInvoice, updateReconciledSalesInvoice, type SalesBillType } from "./actions";
 import { PaymentModal } from "./payment-modal";
 import { SavedScreen } from "@/components/saved-screen";
 import { Amount } from "@/components/ui/data-table";
@@ -65,6 +65,8 @@ export type InitialSingleInvoice = {
   revenueAccountId?: string | null;
   lines: { itemId: string | null; description: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, items and payments are locked. */
+  reconciled?: boolean;
 };
 
 type FieldErrors = { invoiceNumber?: string; date?: string; dueDate?: string; customerId?: string; items?: string };
@@ -128,6 +130,9 @@ export function SingleInvoiceForm({
   const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
   const [billType, setBillType] = useState<SalesBillType>(initial?.billType ?? "taxable");
   const [revenueAccountId, setRevenueAccountId] = useState(initial?.revenueAccountId ?? "");
+  // Reconciled: the date, bill type, items and payments are locked; the customer, revenue account, invoice number and due date can still change, with a reason when the books move.
+  const lockedRecon = Boolean(initial?.reconciled);
+  const [changeReason, setChangeReason] = useState("");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({
@@ -276,7 +281,9 @@ export function SingleInvoiceForm({
         payments,
       };
 
-      if (initial) {
+      if (initial && lockedRecon) {
+        await updateReconciledSalesInvoice({ invoiceId: initial.invoiceId, customerId, invoiceNumber: invoiceNumber.trim(), dueDate: dueDate || null, revenueAccountId: revenueAccountId || null, reason: changeReason.trim() });
+      } else if (initial) {
         await updateSingleInvoice({ ...payload, invoiceId: initial.invoiceId });
       } else {
         await createSingleInvoice(payload);
@@ -321,12 +328,17 @@ export function SingleInvoiceForm({
   return (
     <div className="space-y-4">
       <DraftBanner draft={draft} what="an invoice" onRestore={restoreDraft} />
+      {lockedRecon && (
+        <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+          This invoice has been reconciled, so its date, items, VAT, totals and payments are locked. You can still change the customer, revenue account, invoice number and due date. Moving it to another customer or revenue account is recorded with your reason.
+        </p>
+      )}
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Details</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <DatePicker id="si-date" max={today()} value={invoiceDate} onChange={(v) => {
+            <DatePicker id="si-date" disabled={lockedRecon} max={today()} value={invoiceDate} onChange={(v) => {
                 setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
@@ -376,7 +388,7 @@ export function SingleInvoiceForm({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
-            <select value={billType} onChange={(e) => setBillType(e.target.value as SalesBillType)} className={inputCls}>
+            <select value={billType} onChange={(e) => setBillType(e.target.value as SalesBillType)} disabled={lockedRecon} className={inputCls}>
               <option value="taxable">Taxable</option>
               <option value="zero_rated">Zero-rated</option>
             </select>
@@ -385,11 +397,18 @@ export function SingleInvoiceForm({
             <label className="block text-xs text-gray-500 mb-1">Revenue Account (optional)</label>
             <RevenueAccountSelect value={revenueAccountId} onChange={setRevenueAccountId} className={inputCls} blankLabel="Item's account, else Sales Revenue" />
           </div>
+          {lockedRecon && (
+            <div className="sm:col-span-5">
+              <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
+              <input value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Needed if you change the customer or revenue account" className={inputCls} />
+            </div>
+          )}
         </div>
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Invoice Items</h2>
+        <fieldset disabled={lockedRecon} className="min-w-0 border-0 p-0">
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -489,6 +508,7 @@ export function SingleInvoiceForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Item
         </button>
+        </fieldset>
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -551,6 +571,7 @@ export function SingleInvoiceForm({
         <button
           type="button"
           data-field="pay"
+          disabled={lockedRecon}
           onClick={() => setShowPayment(true)}
           className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap"
         >

@@ -32,6 +32,7 @@ import {
   createPayment as createPaymentEngine,
   voidPayment as voidPaymentEngine,
   updatePayment as updatePaymentEngine,
+  reclassEntriesOf,
   type UpdatePaymentInput,
   MONEY_IN_TYPES,
   MONEY_OUT_TYPES,
@@ -384,6 +385,10 @@ export async function getPaymentDetail(paymentId: string) {
   if (payment.journalEntryId) {
     const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, payment.journalEntryId));
     journalLinesOut = lines.map((l) => ({ accountName: accountNameById[l.accountId] ?? "—", debit: Number(l.debitAmount), credit: Number(l.creditAmount) }));
+    // What was moved after it was reconciled (a change of party or category), shown beside the original lines.
+    for (const e of await reclassEntriesOf(session.tenantId, paymentId)) {
+      for (const l of e.lines) journalLinesOut.push({ accountName: `${accountNameById[l.accountId] ?? "—"} (moved after reconciliation, ${e.entryDate})`, debit: l.debitAmount ?? 0, credit: l.creditAmount ?? 0 });
+    }
   }
 
   let reconciliationStatus: "reconciled" | "unreconciled" = "unreconciled";
@@ -397,8 +402,8 @@ export async function getPaymentDetail(paymentId: string) {
 
   return {
     ...payment,
-    // Only a posted payment recorded here, and not yet matched in a bank reconciliation, can be edited.
-    canEdit: can(session, "payments", "edit") && payment.status === "posted" && payment.origin === "standalone" && reconciliationStatus !== "reconciled",
+    // Only a posted payment recorded here can be edited. One that has been reconciled keeps its date, amount and payment account, and the rest can change.
+    canEdit: can(session, "payments", "edit") && payment.status === "posted" && payment.origin === "standalone",
     advanceMonth: advance ? { calendar: advance.forCalendar as "AD" | "BS", month: advance.forMonth, year: advance.forYear } : null,
     history,
     amount: Number(payment.amount),

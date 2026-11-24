@@ -10,7 +10,7 @@ import { SupplierSelect, ItemSelect } from "@/components/quick-add/pickers";
 import { invoiceRequirements } from "@/lib/purchases/invoice-requirements";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
-import { createPurchaseInvoice, updatePurchaseInvoice, type CashBillType } from "./actions";
+import { createPurchaseInvoice, updatePurchaseInvoice, updateReconciledPurchaseBill, type CashBillType } from "./actions";
 import { SavedScreen } from "@/components/saved-screen";
 import { Amount } from "@/components/ui/data-table";
 import { D } from "@/components/calendar/date-text";
@@ -80,6 +80,8 @@ export type InitialInvoice = {
   payments: PaymentLine[];
   /** A purchase recorded by amount, waiting for its items: the amount it was recorded with. The items should add up to it. */
   pendingTotal?: number | null;
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, items and payments are locked. */
+  reconciled?: boolean;
 };
 
 type FieldErrors = { invoiceNumber?: string; date?: string; dueDate?: string; vendorId?: string; items?: string };
@@ -122,6 +124,9 @@ export function PurchaseInvoiceForm({
   const [invoiceNumber, setInvoiceNumber] = useState(initial?.invoiceNumber ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [billType, setBillType] = useState<CashBillType>(initial?.billType ?? "no_bill");
+  // Reconciled: the date, bill type, items and payments are locked; the supplier, bill number, due date and bill in hand can still change, with a reason when the supplier changes.
+  const lockedRecon = Boolean(initial?.reconciled);
+  const [changeReason, setChangeReason] = useState("");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({
@@ -264,7 +269,9 @@ export function PurchaseInvoiceForm({
       };
 
       let savedNumber = "";
-      if (initial) {
+      if (initial && lockedRecon) {
+        await updateReconciledPurchaseBill({ billId: initial.billId, vendorId, billNumber: invoiceNumber.trim(), dueDate: dueDate || null, billAvailable, reason: changeReason.trim() });
+      } else if (initial) {
         await updatePurchaseInvoice({ ...payload, billId: initial.billId, ...(initial.pendingTotal != null && acceptDifferent ? { acceptDifferentTotal: true } : {}) });
       } else {
         savedNumber = (await createPurchaseInvoice(payload)).billNumber;
@@ -319,6 +326,11 @@ export function PurchaseInvoiceForm({
 
   return (
     <div className="space-y-4">
+      {lockedRecon && (
+        <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+          This invoice has been reconciled, so its date, items, VAT, totals and payments are locked. You can still change the supplier, invoice number, due date and whether the bill is in hand. Moving it to another supplier is recorded with your reason.
+        </p>
+      )}
       {pendingTotal !== null && (
         <section className="space-y-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <p>
@@ -340,7 +352,7 @@ export function PurchaseInvoiceForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
-            <DatePicker id="inv-date" max={today()} value={invoiceDate} onChange={(v) => {
+            <DatePicker id="inv-date" disabled={lockedRecon} max={today()} value={invoiceDate} onChange={(v) => {
                 setInvoiceDate(v);
                 if (fieldErrors.date) setFieldErrors((p) => ({ ...p, date: undefined }));
               }} className={fieldErrors.date ? inputErrCls : inputCls} />
@@ -389,7 +401,7 @@ export function PurchaseInvoiceForm({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
-            <select value={billType} onChange={(e) => setBillType(e.target.value as CashBillType)} className={inputCls}>
+            <select value={billType} onChange={(e) => setBillType(e.target.value as CashBillType)} disabled={lockedRecon} className={inputCls}>
               {BILL_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -401,9 +413,16 @@ export function PurchaseInvoiceForm({
         <div className="mt-3">
           <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </div>
+        {lockedRecon && (
+          <div className="mt-3">
+            <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
+            <input value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Needed if you change the supplier" className={inputCls} />
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <fieldset disabled={lockedRecon} className="min-w-0 border-0 p-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-900">Invoice Items</h2>
           {billType === "vat" && (
@@ -526,6 +545,7 @@ export function PurchaseInvoiceForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Item
         </button>
+        </fieldset>
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -601,6 +621,7 @@ export function PurchaseInvoiceForm({
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
+          disabled={lockedRecon}
           onClick={() => setShowPayment(true)}
           className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap"
         >

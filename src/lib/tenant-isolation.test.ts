@@ -160,7 +160,7 @@ const BASELINE: Record<string, number> = {
   "app/(app)/payments/actions.ts": 6,
   "app/(app)/payroll/employees/actions.ts": 1,
   "app/(app)/payroll/salary-sheet/actions.ts": 6,
-  "app/(app)/purchases/actions.ts": 4,
+  "app/(app)/purchases/actions.ts": 3,
   "app/(app)/return/purchase/actions.ts": 2,
   "app/(app)/return/sales/actions.ts": 2,
   "app/(app)/sales/actions.ts": 2,
