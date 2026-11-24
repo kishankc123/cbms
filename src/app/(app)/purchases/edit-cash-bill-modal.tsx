@@ -74,6 +74,7 @@ export function EditCashBillModal({
               billAvailable: data.billAvailable,
               lines: data.lines,
               payments: data.payments,
+              reconciled: data.reconciled,
             }}
             onDone={onClose}
           />

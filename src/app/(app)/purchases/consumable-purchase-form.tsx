@@ -8,7 +8,7 @@ import { useWithAdded } from "@/components/quick-add/use-with-added";
 import { SupplierSelect } from "@/components/quick-add/pickers";
 import { BillAvailableToggle } from "@/components/bill-available-toggle";
 import { useProblem } from "@/components/problem-dialog";
-import { createCashPurchase, updateCashPurchase, type CashBillType } from "./actions";
+import { createCashPurchase, updateCashPurchase, updateReconciledPurchaseBill, type CashBillType } from "./actions";
 import { SavedScreen } from "@/components/saved-screen";
 import { Amount } from "@/components/ui/data-table";
 import { D } from "@/components/calendar/date-text";
@@ -69,6 +69,8 @@ export type InitialConsumableBill = {
   billAvailable?: boolean | null;
   lines: { description: string; categoryId: string; rate: number; quantity: number; discount: number }[];
   payments: PaymentLine[];
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, lines and payments are locked. */
+  reconciled?: boolean;
 };
 
 const inputCls =
@@ -111,6 +113,9 @@ export function ConsumablePurchaseForm({
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
   const [billType, setBillType] = useState<CashBillType>(initial?.billType ?? "no_bill");
   const [billAvailable, setBillAvailable] = useState(initial?.billAvailable ?? true);
+  // Reconciled: the date, bill type, lines and payments are locked; the supplier, bill number and bill in hand can still change, with a reason when the supplier changes.
+  const lockedRecon = Boolean(initial?.reconciled);
+  const [changeReason, setChangeReason] = useState("");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
       ? initial.lines.map((l) => ({ description: l.description, categoryId: l.categoryId, rate: String(l.rate), quantity: String(l.quantity), discount: String(l.discount) }))
@@ -201,7 +206,8 @@ export function ConsumablePurchaseForm({
         payments,
       };
       let savedNumber = "";
-      if (initial) await updateCashPurchase({ ...payload, billId: initial.billId });
+      if (initial && lockedRecon) await updateReconciledPurchaseBill({ billId: initial.billId, vendorId, billNumber: billNumber.trim(), billAvailable, reason: changeReason.trim() });
+      else if (initial) await updateCashPurchase({ ...payload, billId: initial.billId });
       else savedNumber = (await createCashPurchase(payload)).billNumber;
 
       if (onDone) {
@@ -249,6 +255,11 @@ export function ConsumablePurchaseForm({
 
   return (
     <div className="space-y-4">
+      {lockedRecon && (
+        <p className="rounded-md border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs text-[var(--warning-text)]">
+          This bill has been reconciled, so its date, lines, VAT, totals and payments are locked. You can still change the supplier, bill number and whether the bill is in hand. Moving it to another supplier is recorded with your reason.
+        </p>
+      )}
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Purchase Details</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -256,6 +267,7 @@ export function ConsumablePurchaseForm({
             <label className="block text-xs text-gray-500 mb-1">Date</label>
             <DatePicker
               id="cp-date"
+              disabled={lockedRecon}
               max={today()}
               value={billDate}
               onChange={(v) => {
@@ -277,7 +289,7 @@ export function ConsumablePurchaseForm({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bill Type</label>
-            <select value={billType} onChange={(e) => setBillType(e.target.value as CashBillType)} className={inputCls}>
+            <select value={billType} onChange={(e) => setBillType(e.target.value as CashBillType)} disabled={lockedRecon} className={inputCls}>
               {BILL_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -289,10 +301,17 @@ export function ConsumablePurchaseForm({
         <div className="mt-3">
           <BillAvailableToggle value={billAvailable} onChange={setBillAvailable} />
         </div>
+        {lockedRecon && (
+          <div className="mt-3">
+            <label className="block text-xs text-gray-500 mb-1">Reason for the change</label>
+            <input value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Needed if you change the supplier" className={inputCls} />
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Purchase Items</h2>
+        <fieldset disabled={lockedRecon} className="min-w-0 border-0 p-0">
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -405,6 +424,7 @@ export function ConsumablePurchaseForm({
         <button type="button" onClick={handleAddLine} className="mt-2 text-sm text-gray-600 hover:text-gray-900">
           + Add Line
         </button>
+        </fieldset>
       </section>
 
       <div className="flex flex-wrap gap-4">
@@ -459,6 +479,7 @@ export function ConsumablePurchaseForm({
         <button
           type="button"
           data-field="pay"
+          disabled={lockedRecon}
           onClick={() => setShowPayment(true)}
           className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap"
         >

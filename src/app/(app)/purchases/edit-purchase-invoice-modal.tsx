@@ -72,6 +72,7 @@ export function EditPurchaseInvoiceModal({
               lines: data.lineItems,
               payments: data.payments,
               pendingTotal: data.detailsPending ? data.recordedTotal : null,
+              reconciled: data.reconciled,
             }}
             onDone={onClose}
           />

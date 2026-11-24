@@ -24,6 +24,8 @@ import { assertRevenueAccount, getRevenueAccounts, resolveRevenueLines } from "@
 import { assertSettlementAccounts, assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { todayIso } from "@/lib/calendar";
 import { isCashSaleCustomer } from "@/lib/sales/cash-sale";
+import { changeReconciledSalesInvoice, type ReconciledInvoiceEdit } from "@/lib/sales/reconciled-invoice";
+import { isSourceReconciled, reverseReclassForSource } from "@/lib/ledger/reclass";
 import {
   PartialBatchError,
   deleteEmbeddedPaymentsForInvoice,
@@ -112,6 +114,9 @@ async function reverseActiveEntriesForInvoice(
     userId,
     memo
   );
+
+  // Vouchers posted by changes made after the invoice was reconciled (a change of customer or revenue account) go back with it.
+  await reverseReclassForSource(tenantId, invoiceId, userId, memo);
 }
 
 // Books the cost side of a sale for stockable items — Dr Cost of Goods Sold,
@@ -255,6 +260,8 @@ export type SingleInvoiceEditData = {
   revenueAccountId: string | null;
   lines: SingleInvoiceEditLine[];
   payments: BatchPaymentLine[];
+  /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, items and payments are locked, and the customer, revenue account and details can change. */
+  reconciled: boolean;
 };
 
 // Payments aren't stored on the invoice row itself, so the split is
@@ -326,7 +333,24 @@ export async function getSalesInvoiceForEdit(invoiceId: string): Promise<SingleI
     revenueAccountId: invoice.revenueAccountId,
     lines,
     payments,
+    reconciled: await isSourceReconciled(session.tenantId, invoiceId),
   };
+}
+
+/**
+ * Editing a sales invoice that has been reconciled: the date, items, totals and payments stay as they were; the customer, revenue account, invoice number
+ * and due date can change. Moving the customer or revenue account is recorded as a small voucher, with the reason.
+ */
+export async function updateReconciledSalesInvoice(input: ReconciledInvoiceEdit) {
+  const session = await requireTenantSession();
+  if (!can(session, "sales", "edit")) throw new Error("Not permitted");
+  const result = await changeReconciledSalesInvoice(session.tenantId, session.userId, input);
+  revalidatePath("/sales");
+  revalidatePath("/sales/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/journal");
+  revalidatePath("/customers");
+  return result;
 }
 
 export type UpdateSingleInvoiceInput = SingleInvoiceInput & { invoiceId: string };

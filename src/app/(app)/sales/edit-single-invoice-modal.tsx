@@ -74,6 +74,7 @@ export function EditSingleInvoiceModal({
               revenueAccountId: data.revenueAccountId,
               lines: data.lines,
               payments: data.payments,
+              reconciled: data.reconciled,
             }}
             onDone={onClose}
           />

@@ -7,6 +7,7 @@ import { expenseSupplierAccountId, getOrCreateExpensePayableAccount, getOrCreate
 import { assertNoLaterPayments } from "@/lib/ledger/account-guards";
 import { postJournalEntry, reverseJournalEntry, reversalDateFor, type PostLineInput } from "@/lib/ledger/post";
 import { reconciledEntryIds } from "@/lib/ledger/reconciled-entries";
+import { supplierPayableAccountIds } from "@/lib/ledger/reclass";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { buildPostingLines, computeExpenseTotals, tdsHeadForExpense, validateExpenseInput, type ExpenseBillType, type ExpenseInput, type ExpensePaymentLine, type ExpenseTaxTreatment } from "./expense-records";
 
@@ -28,10 +29,11 @@ async function mainEntry(tenantId: string, expenseId: string) {
 export async function storedExpensePayments(tenantId: string, expense: ExpenseRow): Promise<ExpensePaymentLine[]> {
   const entry = await mainEntry(tenantId, expense.id);
   if (!entry) return [];
-  const [tdsPayable, expensePayable] = await Promise.all([getOrCreateTdsPayableAccount(tenantId), getOrCreateExpensePayableAccount(tenantId)]);
+  // A supplier's own payable account may hold the unpaid part (the expense could since have been moved to another supplier), so none of them is a payment.
+  const [tdsPayable, expensePayable, supplierAccounts] = await Promise.all([getOrCreateTdsPayableAccount(tenantId), getOrCreateExpensePayableAccount(tenantId), supplierPayableAccountIds(tenantId)]);
   const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, entry.id));
   return lines
-    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id && l.accountId !== expense.payableAccountId)
+    .filter((l) => Number(l.creditAmount) > 0 && l.accountId !== tdsPayable.id && l.accountId !== expensePayable.id && l.accountId !== expense.payableAccountId && !supplierAccounts.has(l.accountId))
     .map((l) => ({ accountId: l.accountId, amount: Number(l.creditAmount), modeId: l.paymentModeId }));
 }
 
