@@ -1020,7 +1020,7 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
       const m = input.advanceMonth!;
       await db
         .update(staffAdvances)
-        .set({ advanceDate: input.paymentDate, forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })!, amount: input.amount.toFixed(2) })
+        .set({ employeeId: input.employeeId!, advanceDate: input.paymentDate, forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })!, amount: input.amount.toFixed(2) })
         .where(eq(staffAdvances.paymentId, paymentId));
     }
 
@@ -1178,7 +1178,7 @@ async function updateReconciledPayment(tenantId: string, userId: string, payment
       const m = input.advanceMonth;
       await db
         .update(staffAdvances)
-        .set({ forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })! })
+        .set({ employeeId: input.employeeId!, forCalendar: m.calendar, forMonth: m.month, forYear: m.year, forPeriodStart: isoFromYmd(m.calendar, { year: m.year, month: m.month, day: 1 })! })
         .where(eq(staffAdvances.paymentId, paymentId));
     }
 
