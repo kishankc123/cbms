@@ -17,6 +17,7 @@ import {
 } from "./actions";
 import type { MatchCandidate } from "@/lib/banking/matching";
 import { UploadStatementModal } from "./upload-statement-modal";
+import { StatementImportsModal } from "./statement-imports-modal";
 import { ClassifyLedgerModal } from "./classify-ledger-modal";
 import { LinePanel } from "./line-panel";
 import { confirmChequeMatch, getChequeMatchesForAccount } from "./cheque-actions";
@@ -78,6 +79,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("todo");
   const [showUpload, setShowUpload] = useState(false);
+  const [showImports, setShowImports] = useState(false);
   const [findingFor, setFindingFor] = useState<StatementLineRow | null>(null);
   const [recording, setRecording] = useState<{ line: StatementLineRow; options: PaymentOptions } | null>(null);
   const [classifyingLine, setClassifyingLine] = useState<UnmatchedLedgerRow | null>(null);
@@ -261,9 +263,14 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
         ) : (
           <span />
         )}
+        <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setShowImports(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface px-3 py-[5px] text-[13px] font-medium text-ink transition-colors hover:bg-hover">
+          Uploaded statements
+        </button>
         <button type="button" onClick={() => setShowUpload(true)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
           Upload Statement
         </button>
+        </div>
       </div>
 
       <div className="grid gap-4 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:grid-cols-3">
@@ -432,6 +439,7 @@ export function ReconciliationWorkspace({ bankAccounts, offsetAccounts }: { bank
 
       {dialog}
 
+      {showImports && <StatementImportsModal bankAccountId={bankAccountId} onClose={() => setShowImports(false)} onChanged={load} />}
       {showUpload && <UploadStatementModal bankAccountId={bankAccountId} onClose={() => setShowUpload(false)} onImported={load} />}
       {findingFor && (
         <LinePanel

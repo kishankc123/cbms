@@ -37,6 +37,7 @@ import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching
 import { cashStatus } from "@/lib/ledger/cash-reconcile";
 import { reconcileMethodOf, type ReconcileMethod } from "@/lib/ledger/cash-reconcile-rules";
 import { setReconcileMethod } from "@/lib/ledger/reconcile-method";
+import { deleteStatementImport, listStatementImports } from "@/lib/banking/statement-imports";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -529,6 +530,22 @@ export async function confirmStatementImport(input: ConfirmImportInput): Promise
 
   revalidatePath("/bank-reconciliation");
   return { imported: newRows.length, duplicates, skipped };
+}
+
+/** The statements uploaded for an account, with whether each can be deleted. */
+export async function listStatementImportsAction(bankAccountId: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "view")) throw new Error("Not permitted");
+  return listStatementImports(session.tenantId, bankAccountId);
+}
+
+/** Removes an uploaded statement (nothing matched, no signed-off reconciliation over it) so a corrected file can be uploaded again. */
+export async function deleteStatementImportAction(input: { importId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "bank_reconciliation", "edit")) throw new Error("Not permitted");
+  const r = await deleteStatementImport(session.tenantId, session.userId, input.importId);
+  revalidatePath("/bank-reconciliation");
+  return r;
 }
 
 // ---------- Reconciliation workspace ----------
