@@ -20,11 +20,11 @@ type Employee = {
   employmentStatus: string;
 };
 
-type SortKey = "code" | "name" | "salary";
+type SortKey = "code" | "name" | "salary" | "balance";
 
 const STATUS_TONE: Record<string, StatusTone> = { active: "success", on_leave: "pending", inactive: "neutral", terminated: "neutral", resigned: "neutral" };
 
-export function EmployeesTable({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> | null }) {
+export function EmployeesTable({ employees, currentSalaries, balances }: { employees: Employee[]; currentSalaries: Record<string, number> | null; balances: Record<string, number> | null }) {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -46,12 +46,12 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
     );
     if (sortKey) {
       rows = [...rows].sort((a, b) => {
-        const cmp = sortKey === "salary" ? (currentSalaries?.[a.id] ?? 0) - (currentSalaries?.[b.id] ?? 0) : sortKey === "name" ? a.fullName.localeCompare(b.fullName) : a.employeeCode.localeCompare(b.employeeCode, undefined, { numeric: true });
+        const cmp = sortKey === "balance" ? (balances?.[a.id] ?? 0) - (balances?.[b.id] ?? 0) : sortKey === "salary" ? (currentSalaries?.[a.id] ?? 0) - (currentSalaries?.[b.id] ?? 0) : sortKey === "name" ? a.fullName.localeCompare(b.fullName) : a.employeeCode.localeCompare(b.employeeCode, undefined, { numeric: true });
         return sortDir === "asc" ? cmp : -cmp;
       });
     }
     return rows;
-  }, [employees, search, departmentFilter, statusFilter, sortKey, sortDir, currentSalaries]);
+  }, [employees, search, departmentFilter, statusFilter, sortKey, sortDir, currentSalaries, balances]);
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -123,6 +123,11 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
                 Current basic salary
               </SortableTh>
             )}
+            {balances && (
+              <SortableTh align="right" direction={dirOf("balance")} onSort={() => toggleSort("balance")}>
+                Balance
+              </SortableTh>
+            )}
             <Th className="w-24" />
           </Tr>
         </thead>
@@ -143,6 +148,18 @@ export function EmployeesTable({ employees, currentSalaries }: { employees: Empl
               {currentSalaries && (
                 <Td numeric>
                   <Amount value={currentSalaries[e.id] ?? 0} />
+                </Td>
+              )}
+              {balances && (
+                <Td numeric>
+                  {(balances[e.id] ?? 0) === 0 ? (
+                    <span className="text-ink-3">—</span>
+                  ) : (
+                    <>
+                      <Amount value={Math.abs(balances[e.id])} />
+                      <p className="text-xs text-ink-2">{balances[e.id] > 0 ? "to pay the employee" : "to recover from the employee"}</p>
+                    </>
+                  )}
                 </Td>
               )}
               <Td className="whitespace-nowrap text-right">

@@ -7,6 +7,7 @@ import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
 import { createPayment, updatePayment, type UpdatePaymentInput } from "@/lib/ledger/payments-engine";
 import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
 import { getEmployeeAdvanceBalance } from "@/lib/ledger/advance-accounts";
+import { employeeBalances } from "@/lib/payroll/employee-balances";
 
 // Changing a staff advance payment to another employee must move the advance in the Payroll > Advances list as well as in the books, whether the payment was
 // edited in full or after it had been reconciled.
@@ -83,5 +84,11 @@ describe("a staff advance moved to another employee", () => {
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(5000);
     await consistent(chandra);
     await consistent(bimal);
+  });
+
+  it("shows the advance as a negative balance in the employees list (no salary is owed)", async () => {
+    const b = await employeeBalances(org.tenantId);
+    expect(b[chandra]).toBe(-5000);
+    expect(b[bimal]).toBe(0);
   });
 });

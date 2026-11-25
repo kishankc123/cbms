@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { employees, salaryHistory } from "@/db/schema";
 import { can, requireTenantSession } from "@/lib/session";
 import { EmployeesTabs } from "./employees-tabs";
+import { employeeBalances } from "@/lib/payroll/employee-balances";
 
 import { todayIso } from "@/lib/calendar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -15,9 +16,10 @@ export default async function EmployeesPage() {
 
   // Pay is only read for a role that may see it; without it the salary column and Add new (which sets a salary) are left out.
   const seesSalary = can(session, "payroll", "view_salary");
-  const [employeeList, salaryRows] = await Promise.all([
+  const [employeeList, salaryRows, balances] = await Promise.all([
     db.select().from(employees).where(eq(employees.tenantId, session.tenantId)).orderBy(asc(employees.employeeCode)),
     seesSalary ? db.select().from(salaryHistory).where(eq(salaryHistory.tenantId, session.tenantId)) : Promise.resolve([]),
+    seesSalary ? employeeBalances(session.tenantId) : Promise.resolve(null),
   ]);
 
   // Latest salary per employee as of today — the same effective-dated lookup
@@ -39,6 +41,7 @@ export default async function EmployeesPage() {
       <EmployeesTabs
         employees={employeeList}
         currentSalaries={seesSalary ? Object.fromEntries(currentSalaryByEmployee) : null}
+        balances={balances}
       />
     </div>
   );
