@@ -1,6 +1,7 @@
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { payrollLines, payrollRuns, staffAdvanceRecoveries, staffAdvances } from "@/db/schema";
+import { isoFromYmd, ymdOf, type CalendarSystem } from "@/lib/calendar/service";
 
 type Run = typeof payrollRuns.$inferSelect;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -91,11 +92,37 @@ export async function removeRunRecoveries(tenantId: string, runId: string) {
   await db.delete(staffAdvanceRecoveries).where(and(eq(staffAdvanceRecoveries.tenantId, tenantId), eq(staffAdvanceRecoveries.payrollRunId, runId)));
 }
 
+type FinalizedRun = Pick<typeof payrollRuns.$inferSelect, "calendarSystem" | "month" | "year" | "periodStart" | "periodEnd">;
+
+/** Whether a finalized run closes that month: one for the month itself, or any run covering the month's first day. */
+const monthClosed = (runs: readonly FinalizedRun[], forCalendar: string, forMonth: number, forYear: number, forPeriodStart: string) =>
+  runs.some((r) => (r.calendarSystem === forCalendar && r.month === forMonth && r.year === forYear) || (r.periodStart <= forPeriodStart && r.periodEnd >= forPeriodStart));
+
 /** A finalized run — for the month the advance is taken against, or any run covering that month's first day — closes that month. */
 export async function assertMonthOpenForAdvance(tenantId: string, forCalendar: string, forMonth: number, forYear: number, forPeriodStart: string) {
   const runs = await db.select().from(payrollRuns).where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.status, "finalized")));
-  const closed = runs.find((r) => (r.calendarSystem === forCalendar && r.month === forMonth && r.year === forYear) || (r.periodStart <= forPeriodStart && r.periodEnd >= forPeriodStart));
-  if (closed) throw new Error("Payroll for that month has already been finalized — choose a later month for this advance");
+  if (monthClosed(runs, forCalendar, forMonth, forYear, forPeriodStart)) throw new Error("Payroll for that month has already been finalized — choose a later month for this advance");
+}
+
+/**
+ * The month an advance is recovered from when the person leaves the month out: the month of the advance's own date, or the next month whose payroll is still
+ * open when that one has already been finalized.
+ */
+export async function resolveAdvanceMonth(tenantId: string, calendar: CalendarSystem, advanceDate: string): Promise<{ calendar: CalendarSystem; month: number; year: number }> {
+  const start = ymdOf(calendar, advanceDate);
+  if (!start) throw new Error("Choose a valid date for this advance");
+  const runs = await db.select().from(payrollRuns).where(and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.status, "finalized")));
+  let { month, year } = start;
+  for (let i = 0; i < 36; i++) {
+    const first = isoFromYmd(calendar, { year, month, day: 1 });
+    if (first && !monthClosed(runs, calendar, month, year, first)) return { calendar, month, year };
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  throw new Error("No open payroll month was found for this advance. Choose the month yourself.");
 }
 
 /** Advances for one employee, with what has been recovered — for the profile page. */

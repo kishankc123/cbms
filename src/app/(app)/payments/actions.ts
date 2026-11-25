@@ -20,7 +20,7 @@ import {
 } from "@/db/schema";
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
 import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
-import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
+import { getEmployeeAdvanceOutstanding, resolveAdvanceMonth } from "@/lib/payroll/staff-advances";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { reconciledEntryIds } from "@/lib/ledger/reconciled-entries";
 import { requireTenantSession, can } from "@/lib/session";
@@ -127,7 +127,9 @@ export async function createPayment(input: CreatePaymentActionInput) {
   if (!can(session, "payments", "create")) throw new Error("Not permitted");
 
   const paymentNumber = await buildNextPaymentNumber(session.tenantId, input.direction);
-  const result = await createPaymentEngine(session.tenantId, session.userId, paymentNumber, input);
+  // A staff advance with no month chosen is recovered from the month of its date (or the next open one).
+  const advanceMonth = input.paymentType === "staff_advance" && !input.advanceMonth ? await resolveAdvanceMonth(session.tenantId, session.calendar, input.paymentDate) : input.advanceMonth;
+  const result = await createPaymentEngine(session.tenantId, session.userId, paymentNumber, { ...input, advanceMonth });
 
   revalidatePath("/payments");
   revalidatePath("/dashboard");
@@ -149,7 +151,9 @@ export async function updatePayment(paymentId: string, input: UpdatePaymentActio
   const session = await requireTenantSession();
   if (!can(session, "payments", "edit")) throw new Error("Not permitted");
 
-  const result = await updatePaymentEngine(session.tenantId, session.userId, paymentId, input);
+  const [existing] = await db.select({ type: payments.paymentType }).from(payments).where(and(eq(payments.id, paymentId), eq(payments.tenantId, session.tenantId))).limit(1);
+  const advanceMonth = existing?.type === "staff_advance" && !input.advanceMonth ? await resolveAdvanceMonth(session.tenantId, session.calendar, input.paymentDate) : input.advanceMonth;
+  const result = await updatePaymentEngine(session.tenantId, session.userId, paymentId, { ...input, advanceMonth });
 
   revalidatePath("/payments");
   revalidatePath("/dashboard");

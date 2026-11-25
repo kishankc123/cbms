@@ -125,7 +125,8 @@ function PaymentForm({
   // A staff advance is taken against a payroll month of the organization's calendar; it opens on the current month.
   const calendar = useCalendar();
   const currentMonth = ymdOf(calendar, todayIso()) ?? ymdOf("AD", todayIso())!;
-  const [advMonth, setAdvMonth] = useState(editing?.advanceMonth?.month ?? currentMonth.month);
+  // 0 = left to the system: the advance is recovered from the month of its date.
+  const [advMonth, setAdvMonth] = useState(editing?.advanceMonth?.month ?? 0);
   const [advYear, setAdvYear] = useState(editing?.advanceMonth?.year ?? currentMonth.year);
   const [advInfo, setAdvInfo] = useState<{ outstanding: number; basic: number } | null>(null);
   const [partyOtherName, setPartyOtherName] = useState(editing?.partyOtherName ?? "");
@@ -292,7 +293,7 @@ function PaymentForm({
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
     if (config.needsVendor && !vendorId) bad("vendorId", "Please select a supplier.", '[data-field="vendor"]');
-    if (config.needsAdvanceMonth && (!advMonth || !advYear)) bad("advanceMonth", "Select the month this advance is against.", '[data-field="advance-month"]');
+    if (config.needsAdvanceMonth && advMonth && !advYear) bad("advanceMonth", "Enter the year of the month this advance is for.", '[data-field="advance-month"]');
     if (config.needsEmployee && !employeeId) bad("employeeId", "Please select an employee.", '[data-field="employee"]');
     if (!(amountNum > 0)) bad("amount", "Amount must be greater than zero.", '[data-field="amount"]');
     if (paymentMethod === "cheque" && !chequeNumber.trim()) bad("chequeNumber", "Cheque number is required for a cheque payment.", '[data-field="cheque"]');
@@ -309,7 +310,7 @@ function PaymentForm({
         partyType: (config.needsEmployee ? "employee" : config.needsCustomer ? "customer" : config.needsVendor || (config.optionalVendor && vendorId) ? "supplier" : config.optionalOtherParty && partyOtherName ? "other" : "none") as "customer" | "supplier" | "employee" | "other" | "none",
         customerId: config.needsCustomer ? customerId : null,
         employeeId: config.needsEmployee ? employeeId : null,
-        advanceMonth: config.needsAdvanceMonth ? { calendar, month: advMonth, year: advYear } : null,
+        advanceMonth: config.needsAdvanceMonth && advMonth ? { calendar, month: advMonth, year: advYear } : null,
         vendorId: config.needsVendor || config.optionalVendor ? vendorId || null : null,
         partyOtherName: config.optionalOtherParty ? partyOtherName || null : null,
         accountId,
@@ -563,18 +564,19 @@ function PaymentForm({
             )}
             {config.needsAdvanceMonth && (
               <div data-field="advance-month">
-                <label className="block text-xs text-gray-500 mb-1">Advance for month</label>
+                <label className="block text-xs text-gray-500 mb-1">Recover from month (optional)</label>
                 <div className="flex gap-2">
                   <select value={advMonth} onChange={(e) => setAdvMonth(Number(e.target.value))} className={inputCls}>
+                    <option value={0}>Automatic: the month of the date</option>
                     {monthNames(calendar).map((name, i) => (
                       <option key={i} value={i + 1}>
                         {name}
                       </option>
                     ))}
                   </select>
-                  <input type="number" value={advYear} onChange={(e) => setAdvYear(Number(e.target.value))} className={`${inputCls} w-24`} />
+                  {advMonth > 0 && <input type="number" value={advYear} onChange={(e) => setAdvYear(Number(e.target.value))} className={`${inputCls} w-24`} />}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Recovered from that month&apos;s salary sheet.</p>
+                <p className="mt-1 text-xs text-gray-500">{advMonth > 0 ? "Recovered from that month's salary sheet." : "Recovered from the salary sheet of the month the advance is dated in. Choose a month only to push it later."}</p>
               </div>
             )}
             {(config.needsVendor || config.optionalVendor) && (
