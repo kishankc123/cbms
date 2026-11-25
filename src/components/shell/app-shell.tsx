@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { LabelLinks } from "./label-links";
 import { DialogBehavior } from "./dialog-behavior";
+import { AutoBack } from "./auto-back";
 
 const SidebarContext = createContext({ collapsed: false });
 /** Whether the sidebar is showing icons only (desktop). The drawer on a small screen is always the full menu. */
@@ -86,6 +87,7 @@ export function AppShell({
             <button type="button" onClick={() => setDrawer(true)} aria-label="Open menu" className="flex h-7 w-7 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-hover md:hidden">
               <Menu size={16} />
             </button>
+            <AutoBack />
             <div className="flex min-w-0 flex-1 items-center gap-1">{topLeft}</div>
             <div className="flex shrink-0 items-center gap-2">{topRight}</div>
           </header>
