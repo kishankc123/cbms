@@ -15,7 +15,7 @@ const CHOICES: { value: ReconcileMethod; title: string; text: string }[] = [
 ];
 
 /** Lets a person choose how a bank account is reconciled. The link takes the shape of the screen it sits on; after a change it opens the other screen. */
-export function ChangeMethod({ bankAccountId, label, method, className }: { bankAccountId: string; label: string; method: ReconcileMethod; className?: string }) {
+export function ChangeMethod({ bankAccountId, label, method, className, stay, onChanged, text = "Change method" }: { bankAccountId: string; label: string; method: ReconcileMethod; className?: string; /** Stay on this screen after a change instead of opening the account's reconciliation screen. */ stay?: boolean; onChanged?: (method: ReconcileMethod) => void; text?: string }) {
   const router = useRouter();
   const toast = useToast();
   const { report, dialog } = useProblem();
@@ -29,7 +29,8 @@ export function ChangeMethod({ bankAccountId, label, method, className }: { bank
       const r = await setReconcileMethodAction({ bankAccountId, method: choice });
       setOpen(false);
       if (r.changed) toast.success(choice === "ticking" ? "This account is now reconciled by ticking entries." : "This account is now reconciled against its bank statement.");
-      router.push(choice === "ticking" ? `/bank-reconciliation/${bankAccountId}/cash` : `/bank-reconciliation/${bankAccountId}`);
+      onChanged?.(choice);
+      if (!stay) router.push(choice === "ticking" ? `/bank-reconciliation/${bankAccountId}/cash` : `/bank-reconciliation/${bankAccountId}`);
       router.refresh();
     } catch (e) {
       report(e instanceof Error ? e.message : "Could not change the method", null);
@@ -48,7 +49,7 @@ export function ChangeMethod({ bankAccountId, label, method, className }: { bank
           setOpen(true);
         }}
       >
-        Change method
+        {text}
       </button>
       {open && (
         <Modal

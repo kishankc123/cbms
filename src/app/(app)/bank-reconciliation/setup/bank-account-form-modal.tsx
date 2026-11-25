@@ -10,10 +10,12 @@ import { Modal } from "@/components/ui/modal";
 import { useProblem } from "@/components/problem-dialog";
 import { defaultModeNames, KIND_LABEL, type Institution, type InstitutionKind } from "@/lib/banking/institution-rules";
 import { createBankAccount, updateBankAccount, type BankAccountInput } from "../actions";
+import { ChangeMethod } from "../change-method";
+import type { ReconcileMethod } from "@/lib/ledger/cash-reconcile-rules";
 
 type LedgerOption = { id: string; code: string; name: string };
 export type FormOptions = { institutions: Institution[]; modes: { id: string; name: string }[]; canSetModes: boolean };
-export type InitialBankAccount = BankAccountInput & { bankAccountId: string; ledgerLabel: string; modeIds: string[] };
+export type InitialBankAccount = BankAccountInput & { bankAccountId: string; ledgerLabel: string; modeIds: string[]; /** A bank account (not cash or a wallet): it can be reconciled by statement or by ticking. */ isBank: boolean; method: ReconcileMethod };
 
 // Adding an account is two steps: choose the bank or wallet from the list (or "Other"), then the details that are personal to the account.
 // Editing starts at the second step, with the bank or wallet it already has.
@@ -34,6 +36,7 @@ export function BankAccountFormModal({ ledgerOptions, options, initial, onClose 
     chartOfAccountsLink: initial?.chartOfAccountsLink ?? "",
   });
   const [modeIds, setModeIds] = useState<string[]>(initial?.modeIds ?? []);
+  const [method, setMethod] = useState<ReconcileMethod>(initial?.method ?? "statement");
   const [saving, setSaving] = useState(false);
   const set = (patch: Partial<typeof f>) => setF((p) => ({ ...p, ...patch }));
   const shownName = institution?.name ?? f.bankName;
@@ -159,6 +162,15 @@ export function BankAccountFormModal({ ledgerOptions, options, initial, onClose 
             )}
           </Field>
         </div>
+        {initial?.isBank && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px]">
+            <div>
+              <p className="font-medium text-ink">How it is reconciled</p>
+              <p className="text-xs text-ink-2">{method === "ticking" ? "By ticking entries and confirming the balance, for when there is no statement to upload." : "Against the bank statement you upload."}</p>
+            </div>
+            <ChangeMethod bankAccountId={initial.bankAccountId} label={initial.accountName} method={method} stay onChanged={setMethod} className="rounded-md border border-line-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-hover" />
+          </div>
+        )}
         {options.canSetModes && options.modes.length > 0 && (
           <fieldset>
             <legend className="mb-1 text-xs font-medium text-ink-2">Can be used for</legend>

@@ -234,11 +234,17 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [{ accountId: advanceId, debitAmount: amount, description: label }, primaryLine];
     }
     case "expense_payment": {
-      // Settles where the expense is owed: the supplier's own account when it has a supplier, else the shared Expense Payable account.
-      const target = allocations.find((a) => a.targetType === "expense");
-      const [owed] = target ? await db.select({ account: expenses.payableAccountId }).from(expenses).where(and(eq(expenses.id, target.targetId), eq(expenses.tenantId, tenantId))).limit(1) : [];
-      const owedOn = owed?.account ?? (await getOrCreateExpensePayableAccount(tenantId)).id;
-      return [{ accountId: owedOn, debitAmount: amount, description: label }, primaryLine];
+      // Settles where each expense is owed: the supplier's own account when it has a supplier, else the shared Expense Payable account. One payment can settle
+      // several expenses, so what is allocated to each is added up per account.
+      const targets = allocations.filter((a) => a.targetType === "expense");
+      const owedRows = targets.length > 0 ? await db.select({ id: expenses.id, account: expenses.payableAccountId }).from(expenses).where(and(inArray(expenses.id, targets.map((t) => t.targetId)), eq(expenses.tenantId, tenantId))) : [];
+      const shared = owedRows.some((r) => !r.account) || targets.length === 0 ? (await getOrCreateExpensePayableAccount(tenantId)).id : null;
+      const perAccount = new Map<string, number>();
+      for (const t of targets.length > 0 ? targets : [{ targetId: "", allocatedAmount: amount }]) {
+        const account = owedRows.find((r) => r.id === t.targetId)?.account ?? shared!;
+        perAccount.set(account, round2((perAccount.get(account) ?? 0) + t.allocatedAmount));
+      }
+      return [...[...perAccount].map(([accountId, value]) => ({ accountId, debitAmount: value, description: label })), primaryLine];
     }
     case "tax_payment": {
       const lines: PostLineInput[] = [];
@@ -370,9 +376,9 @@ function validateInput(input: CreatePaymentInput) {
     throw new Error("Allocated amount cannot exceed the payment amount.");
   }
   if (input.paymentType === "expense_payment") {
-    if (allocations.length !== 1) throw new Error("Select exactly one expense to settle.");
-    if (Math.abs(allocations[0].allocatedAmount - input.amount) > 0.005) {
-      throw new Error("The full payment amount must be allocated to the selected expense.");
+    if (allocations.length < 1) throw new Error("Select the expense this payment settles.");
+    if (Math.abs(allocatedTotal - round2(input.amount)) > 0.005) {
+      throw new Error("The full payment amount must be allocated across the selected expenses.");
     }
   }
 }

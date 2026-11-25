@@ -21,7 +21,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export function EmployeesTabs({ employees, currentSalaries }: { employees: Employee[]; currentSalaries: Record<string, number> | null }) {
+export function EmployeesTabs({ employees, currentSalaries, balances }: { employees: Employee[]; currentSalaries: Record<string, number> | null; balances: Record<string, number> | null }) {
   const [tab, setTab] = useState<TabId>("employees");
 
   return (
@@ -43,7 +43,7 @@ export function EmployeesTabs({ employees, currentSalaries }: { employees: Emplo
         </Link>
       </div>
 
-      {tab === "employees" && <EmployeesTable employees={employees} currentSalaries={currentSalaries} />}
+      {tab === "employees" && <EmployeesTable employees={employees} currentSalaries={currentSalaries} balances={balances} />}
       {tab === "add" && <EmployeeAddForm onDone={() => setTab("employees")} />}
     </div>
   );
