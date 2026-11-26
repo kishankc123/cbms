@@ -35,6 +35,7 @@ import { buildStatementTemplate } from "@/lib/banking/statement-template";
 import { normalizeStatementRows, type ColumnMapping } from "@/lib/banking/normalize-rows";
 import { findMatchCandidates, type MatchCandidate } from "@/lib/banking/matching";
 import { cashStatus } from "@/lib/ledger/cash-reconcile";
+import { expenseTexts, withExpenseText } from "@/lib/ledger/expense-text";
 import { reconcileMethodOf, type ReconcileMethod } from "@/lib/ledger/cash-reconcile-rules";
 import { setReconcileMethod } from "@/lib/ledger/reconcile-method";
 import { deleteStatementImport, listStatementImports } from "@/lib/banking/statement-imports";
@@ -610,6 +611,8 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
       journalEntryId: journalEntries.id,
       entryDate: journalEntries.entryDate,
       memo: journalEntries.memo,
+      sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
       referenceNumber: journalEntries.referenceNumber,
       description: journalLines.description,
       debitAmount: journalLines.debitAmount,
@@ -643,13 +646,15 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
     .where(and(eq(unmatchedLedgerClassifications.tenantId, session.tenantId), eq(unmatchedLedgerClassifications.bankAccountId, bankAccountId)));
   const classificationByLine = new Map(classifications.map((c) => [c.journalLineId, c.classification]));
 
+  // An expense (or the payment of one) is shown with what it was for, not only its number.
+  const spent = await expenseTexts(session.tenantId, ledgerRows.map((r) => ({ entryId: r.journalEntryId, sourceType: r.sourceType, sourceId: r.sourceId })));
   const unmatchedLedger: UnmatchedLedgerRow[] = ledgerRows
     .filter((r) => !matchedSet.has(r.journalLineId))
     .map((r) => ({
       journalLineId: r.journalLineId,
       journalEntryId: r.journalEntryId,
       entryDate: r.entryDate,
-      memo: r.memo,
+      memo: withExpenseText(r.memo, spent.get(r.journalEntryId)),
       referenceNumber: r.referenceNumber,
       description: r.description,
       signedAmount: round2(Number(r.debitAmount) - Number(r.creditAmount)),
@@ -675,6 +680,9 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
           matchId: bankReconciliationMatchJournalLines.matchId,
           date: journalEntries.entryDate,
           memo: journalEntries.memo,
+          journalEntryId: journalEntries.id,
+          sourceType: journalEntries.sourceType,
+          sourceId: journalEntries.sourceId,
           description: journalLines.description,
           reference: journalEntries.referenceNumber,
           debit: journalLines.debitAmount,
@@ -686,7 +694,8 @@ export async function getReconciliationWorkspace(bankAccountId: string) {
         .where(and(eq(journalEntries.tenantId, session.tenantId), inArray(bankReconciliationMatchJournalLines.matchId, matchIds)))
     : [];
   const matches: Record<string, MatchedEntry[]> = {};
-  for (const r of matchedEntryRows) (matches[r.matchId] ??= []).push({ date: r.date, text: r.memo || r.description || r.reference || "Ledger entry", amount: round2(Number(r.debit) - Number(r.credit)) });
+  const matchedSpent = await expenseTexts(session.tenantId, matchedEntryRows.map((r) => ({ entryId: r.journalEntryId, sourceType: r.sourceType, sourceId: r.sourceId })));
+  for (const r of matchedEntryRows) (matches[r.matchId] ??= []).push({ date: r.date, text: withExpenseText(r.memo || r.description || r.reference || "Ledger entry", matchedSpent.get(r.journalEntryId)), amount: round2(Number(r.debit) - Number(r.credit)) });
 
   const statementRows: StatementLineRow[] = statementLines.map((l) => ({
     id: l.id,
