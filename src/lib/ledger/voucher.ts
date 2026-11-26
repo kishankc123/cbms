@@ -1,10 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
+import { formatVoucher } from "./voucher-format";
 
-export const VOUCHER_PREFIX = "JV-";
-
-export const formatVoucher = (n: number) => `${VOUCHER_PREFIX}${String(n).padStart(4, "0")}`;
+export { VOUCHER_PREFIX, formatVoucher } from "./voucher-format";
 
 /** The number the next manual entry will get (for showing on the form; not reserved). */
 export async function peekNextVoucher(tenantId: string): Promise<string> {

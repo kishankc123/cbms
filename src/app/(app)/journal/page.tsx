@@ -1,104 +1,49 @@
-import Link from "next/link";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, journalEntries, journalLines } from "@/db/schema";
+import { accounts } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { peekNextVoucher } from "@/lib/ledger/voucher";
-import { JournalEntryForm } from "./journal-entry-form";
-import { reverseEntry } from "./actions";
-import { D } from "@/components/calendar/date-text";
+import { isoFromYmd, todayIso, ymdOf } from "@/lib/calendar";
 import { PageHeader } from "@/components/ui/page-header";
+import { JournalTabs } from "./journal-tabs";
 
-export default async function JournalPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+/** The first and last day of the month today falls in, in the organization's calendar. */
+function thisMonth(calendar: "AD" | "BS") {
+  const today = todayIso();
+  const now = ymdOf(calendar, today);
+  if (!now) return { from: today, to: today };
+  const from = isoFromYmd(calendar, { year: now.year, month: now.month, day: 1 }) ?? today;
+  const next = isoFromYmd(calendar, now.month === 12 ? { year: now.year + 1, month: 1, day: 1 } : { year: now.year, month: now.month + 1, day: 1 });
+  const to = next ? new Date(new Date(`${next}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10) : today;
+  return { from, to };
+}
+
+export default async function JournalPage() {
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
-  const showHistory = (await searchParams).history === "1";
 
   const [accountList, nextVoucher] = await Promise.all([
     db
-      .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+      .select({ id: accounts.id, code: accounts.code, name: accounts.name, isActive: accounts.isActive })
       .from(accounts)
-      .where(and(eq(accounts.tenantId, session.tenantId), eq(accounts.isActive, true)))
+      .where(eq(accounts.tenantId, session.tenantId))
       .orderBy(asc(accounts.code)),
     peekNextVoucher(session.tenantId),
   ]);
+  const plain = accountList.map((a) => ({ id: a.id, code: a.code, name: a.name }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader title="Journal Entries" className="!mb-0" />
-
-      <JournalEntryForm accounts={accountList} nextVoucher={nextVoucher} />
-
-      {showHistory ? (
-        <History tenantId={session.tenantId} accountList={accountList} />
-      ) : (
-        <Link href="/journal?history=1" className="inline-block text-sm text-[var(--accent-text)] hover:underline">
-          Show entry history
-        </Link>
-      )}
-    </div>
-  );
-}
-
-// Entry history is hidden by default and only loaded when asked for.
-async function History({ tenantId, accountList }: { tenantId: string; accountList: { id: string; code: string; name: string }[] }) {
-  const entries = await db
-    .select()
-    .from(journalEntries)
-    .where(eq(journalEntries.tenantId, tenantId))
-    .orderBy(desc(journalEntries.entryDate), desc(journalEntries.createdAt))
-    .limit(200);
-  const lines = entries.length ? await db.select().from(journalLines).where(inArray(journalLines.journalEntryId, entries.map((e) => e.id))) : [];
-  const linesByEntry = new Map<string, typeof lines>();
-  for (const line of lines) linesByEntry.set(line.journalEntryId, [...(linesByEntry.get(line.journalEntryId) ?? []), line]);
-  const accountById = new Map(accountList.map((a) => [a.id, a]));
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900">Entry history</h2>
-        <Link href="/journal" className="text-sm text-[var(--accent-text)] hover:underline">
-          Hide entry history
-        </Link>
-      </div>
-      {entries.map((entry) => (
-        <div key={entry.id} className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                <D value={entry.entryDate} /> — {entry.memo || entry.sourceType}
-                {entry.isReversed && <span className="ml-2 text-xs text-amber-600">(reversed)</span>}
-                {entry.reversalOfId && <span className="ml-2 text-xs text-gray-500">(reversal entry)</span>}
-              </p>
-              <p className="text-xs text-gray-500">
-                {entry.referenceNumber ? `Voucher ${entry.referenceNumber} · ` : ""}source: {entry.sourceType}
-              </p>
-            </div>
-            {!entry.isReversed && !entry.reversalOfId && (
-              <form action={reverseEntry}>
-                <input type="hidden" name="journalEntryId" value={entry.id} />
-                <button type="submit" className="text-xs text-red-600 hover:underline">
-                  Reverse
-                </button>
-              </form>
-            )}
-          </div>
-          <table className="w-full text-sm mt-3">
-            <tbody>
-              {(linesByEntry.get(entry.id) ?? []).map((l) => (
-                <tr key={l.id} className="border-b border-line transition-colors hover:bg-hover">
-                  <td className="py-1">
-                    {accountById.get(l.accountId)?.code} {accountById.get(l.accountId)?.name}
-                  </td>
-                  <td className="py-1 text-right w-24">{Number(l.debitAmount) > 0 ? Number(l.debitAmount).toFixed(2) : ""}</td>
-                  <td className="py-1 text-right w-24">{Number(l.creditAmount) > 0 ? Number(l.creditAmount).toFixed(2) : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-      {entries.length === 0 && <p className="text-sm text-gray-500">No journal entries yet.</p>}
+      <JournalTabs
+        // The list can be filtered by any account, a retired one too; a new entry only takes active ones.
+        allAccounts={plain}
+        activeAccounts={plain.filter((_, i) => accountList[i].isActive)}
+        nextVoucher={nextVoucher}
+        month={thisMonth(session.calendar === "BS" ? "BS" : "AD")}
+        canCreate={can(session, "chart_of_accounts", "create")}
+        canReverse={can(session, "chart_of_accounts", "void")}
+      />
     </div>
   );
 }
