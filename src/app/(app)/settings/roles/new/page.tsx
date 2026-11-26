@@ -12,7 +12,7 @@ export default async function NewRolePage({ searchParams }: { searchParams: Prom
   const editor = await getRoleEditor(null, copy ?? null);
   return (
     <div className="space-y-5">
-      <SettingsHeader title="Add role" description="Name the role and choose what it can do in each module." />
+      <SettingsHeader back={{ href: "/settings/roles", label: "Back to Roles" }} title="Add role" description="Name the role and choose what it can do in each module." />
       <RoleTabs active="new" />
       {editor && <RoleForm editor={editor} />}
     </div>

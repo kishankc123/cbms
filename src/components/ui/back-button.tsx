@@ -15,7 +15,6 @@ export function BackButton({ href, label, className }: { href: string; label: st
       href={href}
       aria-label={label}
       title={label}
-      data-page-back=""
       className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink transition-colors hover:bg-[var(--border)] ${className ?? ""}`}
     >
       <ChevronLeft size={16} strokeWidth={2} />

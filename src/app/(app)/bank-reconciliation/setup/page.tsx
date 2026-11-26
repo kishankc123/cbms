@@ -10,7 +10,7 @@ export default async function BankAccountSetupPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Bank Accounts" className="!mb-0" />
+      <PageHeader title="Bank Accounts" back={{ href: "/bank-reconciliation", label: "Back to bank accounts" }} className="!mb-0" />
       <BankAccountsTable bankAccounts={bankAccounts} ledgerOptions={ledgerOptions} options={options} />
     </div>
   );

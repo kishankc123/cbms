@@ -12,7 +12,7 @@ export default async function NewTransferPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="New Transfer" description="Move money from one cash or bank account to another." />
+      <PageHeader title="New Transfer" back={{ href: "/payments/inter-transfer", label: "Back to Inter-transfers" }} description="Move money from one cash or bank account to another." />
       <TransferForm options={options} />
     </div>
   );

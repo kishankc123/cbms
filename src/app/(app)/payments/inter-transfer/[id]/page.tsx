@@ -1,3 +1,4 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView } from "@/components/page-guard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -34,9 +35,12 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Transfer {t.transferNumber}</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Inter-Transfer</p>
+        <div className="flex items-start gap-3">
+          <BackButton href="/payments/inter-transfer" label="Back to Inter-transfers" className="mt-0.5 print:hidden" />
+          <div>
+            <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Transfer {t.transferNumber}</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Inter-Transfer</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <StatusPill tone={t.status === "posted" ? "success" : "critical"}>{t.status}</StatusPill>
@@ -129,8 +133,6 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           </div>
         </section>
       )}
-
-      <Link href="/payments/inter-transfer" className="text-sm text-gray-500 hover:text-gray-700">← Back to transfers</Link>
     </div>
   );
 }

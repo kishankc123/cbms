@@ -1,3 +1,4 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -39,9 +40,12 @@ export default async function SupplierProfilePage({ params }: { params: Promise<
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{supplier.name}</h1>
-          <p className="text-sm text-gray-500">Supplier</p>
+        <div className="flex items-start gap-3">
+          <BackButton href="/suppliers" label="Back to Suppliers" className="mt-0.5 print:hidden" />
+          <div>
+            <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{supplier.name}</h1>
+            <p className="text-sm text-gray-500">Supplier</p>
+          </div>
         </div>
         <Link href={`/suppliers/reconcile?supplier=${supplier.id}`} className="text-sm text-accent hover:underline">
           Reconcile with their statement

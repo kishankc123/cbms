@@ -13,7 +13,7 @@ export default async function EditRolePage({ params }: { params: Promise<{ roleI
   if (!editor?.role) return <p className="text-sm text-gray-500">Role not found.</p>;
   return (
     <div className="space-y-5">
-      <SettingsHeader title={editor.role.fixed ? editor.role.name : `Edit ${editor.role.name}`} description="What this role can see and do in every module." />
+      <SettingsHeader back={{ href: "/settings/roles", label: "Back to Roles" }} title={editor.role.fixed ? editor.role.name : `Edit ${editor.role.name}`} description="What this role can see and do in every module." />
       <RoleTabs active="edit" />
       <RoleForm key={editor.role.id} editor={editor} />
     </div>

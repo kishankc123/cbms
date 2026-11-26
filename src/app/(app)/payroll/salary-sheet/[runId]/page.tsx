@@ -1,3 +1,4 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView, guardSalary } from "@/components/page-guard";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -97,13 +98,16 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
-            {payrollPeriodLabel(run)}
-          </h1>
-          <p className="text-sm text-gray-500">
-            <D value={run.periodStart} /> – <D value={run.periodEnd} />
-          </p>
+        <div className="flex items-start gap-3">
+          <BackButton href="/payroll/salary-sheet" label="Back to the salary sheet" className="mt-0.5 print:hidden" />
+          <div>
+            <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">
+              {payrollPeriodLabel(run)}
+            </h1>
+            <p className="text-sm text-gray-500">
+              <D value={run.periodStart} /> – <D value={run.periodEnd} />
+            </p>
+          </div>
         </div>
         <RunStatusControls runId={run.id} canDelete={can(session, "payroll", "delete")} status={run.status} month={run.month} year={run.year} calendar={run.calendarSystem === "BS" ? "BS" : "AD"} slabsMissing={slabsMissing} />
       </div>

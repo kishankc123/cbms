@@ -1,3 +1,4 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView } from "@/components/page-guard";
 import { notFound, redirect } from "next/navigation";
 import { requireTenantSession } from "@/lib/session";
@@ -15,9 +16,12 @@ export default async function EditTransferPage({ params }: { params: Promise<{ i
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Edit Transfer {detail.transferNumber}</h1>
-        <p className="mt-0.5 text-sm text-gray-500">The accounting entry is updated automatically.</p>
+      <div className="flex items-start gap-3">
+        <BackButton href={`/payments/inter-transfer/${detail.id}`} label="Back to the transfer" className="mt-0.5 print:hidden" />
+        <div>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Edit Transfer {detail.transferNumber}</h1>
+          <p className="mt-0.5 text-sm text-gray-500">The accounting entry is updated automatically.</p>
+        </div>
       </div>
       <TransferForm
         options={options}

@@ -14,7 +14,7 @@ export default async function FiscalYearsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Fiscal Years" description="Every fiscal year on record, its status, and the reporting/posting boundaries it defines." />
+      <PageHeader title="Fiscal Years" back={{ href: "/settings", label: "Back to Settings" }} description="Every fiscal year on record, its status, and the reporting/posting boundaries it defines." />
       <FiscalYearsManager data={data} isAdmin={isOrgAdmin(session.role)} />
 
       {/* There is one books start date, and it is set where the opening balances are: this only shows it. */}

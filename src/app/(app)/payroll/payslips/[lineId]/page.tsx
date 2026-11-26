@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackButton } from "@/components/ui/back-button";
 import { and, eq } from "drizzle-orm";
 import { guardView, guardSalary } from "@/components/page-guard";
 import { db } from "@/db";
@@ -68,9 +68,10 @@ export default async function PayslipPage({ params }: { params: Promise<{ lineId
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between print:hidden">
-        <Link href={`/payroll/employees/${employee.id}`} className="text-sm text-accent hover:underline">
-          ← Back to {employee.fullName}
-        </Link>
+        <div className="flex items-center gap-3">
+          <BackButton href={`/payroll/employees/${employee.id}`} label={`Back to ${employee.fullName}`} />
+          <h2 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">Payslip — {employee.fullName}</h2>
+        </div>
         <PrintButton />
       </div>
       {run.status !== "finalized" && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:hidden">This payroll run is not finalized yet, so this payslip can still change.</p>}

@@ -13,7 +13,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
   if (!data) return <p className="text-sm text-gray-500">User not found.</p>;
   return (
     <div className="space-y-5">
-      <SettingsHeader title={data.member.name} description={`${data.member.code} · ${data.member.email}`} />
+      <SettingsHeader back={{ href: "/settings/users", label: "Back to Users" }} title={data.member.name} description={`${data.member.code} · ${data.member.email}`} />
       <UserTabs active="edit" />
       <EditUserForm key={userId} data={data} />
     </div>
