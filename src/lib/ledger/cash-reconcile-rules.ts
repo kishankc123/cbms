@@ -32,6 +32,8 @@ export type CashLine = {
   memo: string | null;
   isReversed: boolean;
   reversalOfId: string | null;
+  /** The record the entry came from (an expense, a payment...), where the caller needs it. */
+  sourceId?: string | null;
 };
 
 export const inOf = (l: Pick<CashLine, "debit" | "credit">) => round2(Math.max(l.debit - l.credit, 0));

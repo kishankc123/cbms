@@ -1,6 +1,7 @@
 import { and, eq, gte, lte, notInArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { journalLines, journalEntries, bankReconciliationMatchJournalLines, bankReconciliationMatches } from "@/db/schema";
+import { expenseTexts, withExpenseText } from "@/lib/ledger/expense-text";
 
 export type MatchCandidate = {
   journalLineId: string;
@@ -68,6 +69,8 @@ export async function findMatchCandidates(
       journalEntryId: journalEntries.id,
       entryDate: journalEntries.entryDate,
       memo: journalEntries.memo,
+      sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
       referenceNumber: journalEntries.referenceNumber,
       description: journalLines.description,
       debitAmount: journalLines.debitAmount,
@@ -126,5 +129,9 @@ export async function findMatchCandidates(
   }
 
   candidates.sort((a, b) => b.score - a.score);
-  return candidates;
+  // What the expense was for goes beside the number in what is shown; the score above was worked out on the entry's own text.
+  const found = new Set(candidates.map((c) => c.journalLineId));
+  const shown = rows.filter((r) => found.has(r.journalLineId));
+  const spent = await expenseTexts(tenantId, shown.map((r) => ({ entryId: r.journalEntryId, sourceType: r.sourceType, sourceId: r.sourceId })));
+  return candidates.map((c) => ({ ...c, memo: withExpenseText(c.memo, spent.get(c.journalEntryId)) }));
 }

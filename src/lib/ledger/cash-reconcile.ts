@@ -7,6 +7,7 @@ import { todayIso } from "@/lib/calendar";
 import { postJournalEntry, reverseAllActiveEntriesForSource } from "./post";
 import { createExpenseCore, discardExpense, type ExpenseInput } from "@/lib/expenses/expense-records";
 import { findShortExcessAccount, getOrCreateShortExcessAccount } from "./cash-short-excess";
+import { expenseTexts, withExpenseText } from "./expense-text";
 import { adjustmentLines, describeCash, explainState, explanationLines, inOf, isBankLedgerCode, netOf, openLines, outOf, reconcileMethodOf, settle, tickedTotals, type CashLine } from "./cash-reconcile-rules";
 
 // Reconciling a cash account against real cash (see cash-reconcile-rules.ts). Plain server helpers, deliberately not server actions: the actions in
@@ -67,6 +68,7 @@ async function loadLines(tenantId: string, accountId: string): Promise<CashLine[
       debit: journalLines.debitAmount,
       credit: journalLines.creditAmount,
       sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
       reference: journalEntries.referenceNumber,
       memo: journalEntries.memo,
       isReversed: journalEntries.isReversed,
@@ -156,6 +158,7 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
         .where(and(eq(daybookCashCounts.tenantId, tenantId), eq(daybookCashCounts.accountId, acct.accountId)))
         .orderBy(desc(daybookCashCounts.countDate))
         .limit(1);
+  const spent = await expenseTexts(tenantId, open.lines.map((l) => ({ entryId: l.entryId, sourceType: l.sourceType, sourceId: l.sourceId ?? null })));
   const reopened = await db
     .select({ ids: cashReconciliations.rememberedIds, at: cashReconciliations.reopenedAt })
     .from(cashReconciliations)
@@ -171,7 +174,7 @@ export async function cashWorkspace(tenantId: string, bankAccountId: string, asO
     last: last ? { through: through ?? last.throughDate, closing: Number(last.closing), kind: last.kind, at: last.reconciledAt.toISOString(), by: who?.name ?? "" } : null,
     opening: round2((last ? Number(last.closing) : 0) + open.opening + settled.matchedNet(asOf)),
     bank: acct.isBank,
-    lines: open.lines.map((l) => ({ id: l.id, date: l.date, reference: l.reference ?? "", label: describeCash(l), cashIn: inOf(l), cashOut: outOf(l) })),
+    lines: open.lines.map((l) => ({ id: l.id, date: l.date, reference: l.reference ?? "", label: withExpenseText(describeCash(l), spent.get(l.entryId)), cashIn: inOf(l), cashOut: outOf(l) })),
     count,
     ledgerBalance: round2(all.filter((l) => l.date <= asOf).reduce((s, l) => s + netOf(l), 0)),
     otherCountDate: recent?.day ?? null,
@@ -485,6 +488,7 @@ export async function reconEntries(tenantId: string, reconId: string): Promise<R
       debit: journalLines.debitAmount,
       credit: journalLines.creditAmount,
       sourceType: journalEntries.sourceType,
+      sourceId: journalEntries.sourceId,
       reference: journalEntries.referenceNumber,
       memo: journalEntries.memo,
       isReversed: journalEntries.isReversed,
@@ -494,9 +498,10 @@ export async function reconEntries(tenantId: string, reconId: string): Promise<R
     .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
     .where(and(eq(journalEntries.tenantId, tenantId), inArray(journalLines.id, ids), ne(journalEntries.sourceType, "opening_balance")))
     .orderBy(asc(journalEntries.entryDate), asc(journalEntries.createdAt));
+  const spent = await expenseTexts(tenantId, rows.map((r) => ({ entryId: r.entryId, sourceType: r.sourceType, sourceId: r.sourceId })));
   return rows.map((r) => {
     const l: CashLine = { ...r, debit: Number(r.debit), credit: Number(r.credit), reference: r.reference || null, memo: r.memo || null };
-    return { date: l.date, reference: l.reference ?? "", label: describeCash(l), cashIn: inOf(l), cashOut: outOf(l) };
+    return { date: l.date, reference: l.reference ?? "", label: withExpenseText(describeCash(l), spent.get(r.entryId)), cashIn: inOf(l), cashOut: outOf(l) };
   });
 }
 
