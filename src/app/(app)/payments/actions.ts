@@ -27,6 +27,7 @@ import { requireTenantSession, can } from "@/lib/session";
 import { getCashBankAccounts } from "@/lib/ledger/cash-bank-accounts";
 import { getCustomerBalances } from "@/lib/ledger/customer-balances";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
+import { openPayables } from "@/lib/ledger/open-payables";
 import { listEditHistory } from "@/lib/audit-history";
 import {
   createPayment as createPaymentEngine,
@@ -121,6 +122,13 @@ export async function getEmployeeAdvanceInfo(employeeId: string) {
 export type PaymentAllocationInput = { targetType: "expense"; targetId: string; allocatedAmount: number };
 
 export type CreatePaymentActionInput = Omit<CreatePaymentInput, "allocations"> & { allocations?: PaymentAllocationInput[] };
+
+/** Expense payables with something owed that no expense bill covers (an opening balance): a ledger payment can clear that part. */
+export async function getOpenPayableOptions(editingPaymentId?: string) {
+  const session = await requireTenantSession();
+  if (!can(session, "payments", "view")) throw new Error("Not permitted");
+  return openPayables(session.tenantId, { excludePaymentId: editingPaymentId });
+}
 
 export async function createPayment(input: CreatePaymentActionInput) {
   const session = await requireTenantSession();

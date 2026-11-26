@@ -27,6 +27,7 @@ import { reconciledEntryIds } from "./reconciled-entries";
 import { logAuditEvent } from "@/lib/audit";
 import { findControlAccount } from "./control-accounts";
 import { assertCashBankAccounts, assertSettlementAccounts } from "./account-guards";
+import { openPayables } from "./open-payables";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import { getCustomerBalances } from "./customer-balances";
 import { resettleParty } from "./party-settlement";
@@ -421,7 +422,7 @@ function isUniqueViolation(e: unknown) {
 
 // The parties and accounts a payment names must be this organization's, and the money must move through its
 // Cash/Bank accounts — ids arrive from the browser, so this is checked here rather than trusted.
-async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
+async function validateOwnership(tenantId: string, input: CreatePaymentInput, editingPaymentId?: string) {
   if (input.customerId) {
     const [c] = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.id, input.customerId), eq(customers.tenantId, tenantId))).limit(1);
     if (!c) throw new Error("Customer not found");
@@ -439,7 +440,10 @@ async function validateOwnership(tenantId: string, input: CreatePaymentInput) {
   else await assertSettlementAccounts(tenantId, [input.accountId]);
   if (input.paymentType === "ledger_receipt" || input.paymentType === "ledger_payment") {
     if (!input.categoryAccountId) throw new Error("Choose the ledger account the money comes from or goes to.");
-    await assertSettlementAccounts(tenantId, [input.categoryAccountId]);
+    // An expense payable can be paid straight only for what no expense bill covers (an opening balance); the billed part is paid by settling the bill.
+    const open = input.paymentType === "ledger_payment" ? (await openPayables(tenantId, { excludePaymentId: editingPaymentId })).find((a) => a.id === input.categoryAccountId) : undefined;
+    if (!open) await assertSettlementAccounts(tenantId, [input.categoryAccountId]);
+    else if (round2(input.amount) > open.unbilled + 0.005) throw new Error(`Only ${open.unbilled.toFixed(2)} on ${open.name} has no expense bill behind it. Pay the rest as an Expense Payment against its bill.`);
   }
   if (input.categoryAccountId) {
     const [a] = await db.select({ code: accounts.code }).from(accounts).where(and(eq(accounts.id, input.categoryAccountId), eq(accounts.tenantId, tenantId))).limit(1);
@@ -915,7 +919,7 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
 
   // ---- everything that can refuse the edit, before anything is touched ----
   validateInput(input);
-  await validateOwnership(tenantId, input);
+  await validateOwnership(tenantId, input, paymentId);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
   const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
@@ -1077,7 +1081,7 @@ async function updateReconciledPayment(tenantId: string, userId: string, payment
   const oldInput = inputFromRow(payment, oldAllocs, oldAdvance ?? null);
 
   validateInput(input);
-  await validateOwnership(tenantId, input);
+  await validateOwnership(tenantId, input, paymentId);
   await assertAccountActive(tenantId, input.accountId);
   if (input.transferToAccountId) await assertAccountActive(tenantId, input.transferToAccountId);
   const mode = await resolvePaymentMode(tenantId, input.paymentModeId, input.accountId);
