@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, journalLines } from "@/db/schema";
+import { accounts, journalEntries, journalLines } from "@/db/schema";
 import { requireTenantSession, can } from "@/lib/session";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/ledger/post";
 import { assertEntryNotReconciled } from "@/lib/ledger/reconciliation-guards";
@@ -11,6 +11,9 @@ import { resettleForAccounts } from "@/lib/ledger/party-settlement";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { validateADDate } from "@/lib/calendar";
 import { issueVoucher } from "@/lib/ledger/voucher";
+import { listJournal, type JournalFilters } from "@/lib/ledger/journal-list";
+import { isOwnEntry, REVERSE_REFUSAL } from "@/lib/ledger/journal-rules";
+import { exportDateColumns, exportDateHeaders } from "@/lib/calendar";
 
 export type ManualEntryInput = {
   /** Business date, AD "YYYY-MM-DD" (the picker converts from BS if needed). */
@@ -19,7 +22,7 @@ export type ManualEntryInput = {
   lines: { accountId: string; debitAmount: number; creditAmount: number }[];
 };
 
-export type ManualEntryResult = { ok: true; voucherNumber: string } | { ok: false; error: string };
+export type ManualEntryResult = { ok: true; voucherNumber: string; entryId: string; entryDate: string } | { ok: false; error: string };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -48,7 +51,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
   try {
     await assertPeriodOpen(session.tenantId, input.entryDate);
     const voucherNumber = await issueVoucher(session.tenantId);
-    await postJournalEntry({
+    const entry = await postJournalEntry({
       tenantId: session.tenantId,
       entryDate: input.entryDate,
       sourceType: "manual",
@@ -60,7 +63,7 @@ export async function createManualJournalEntry(input: ManualEntryInput): Promise
     await resettleForAccounts(session.tenantId, ids);
     revalidatePath("/journal");
     revalidatePath("/dashboard");
-    return { ok: true, voucherNumber };
+    return { ok: true, voucherNumber, entryId: entry.id, entryDate: input.entryDate };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "The entry could not be posted." };
   }
@@ -70,10 +73,41 @@ export async function reverseEntry(formData: FormData) {
   const session = await requireTenantSession();
   if (!can(session, "chart_of_accounts", "void")) throw new Error("Not permitted");
   const journalEntryId = String(formData.get("journalEntryId"));
+  const [entry] = await db
+    .select({ sourceType: journalEntries.sourceType, sourceId: journalEntries.sourceId, referenceNumber: journalEntries.referenceNumber, reversalOfId: journalEntries.reversalOfId })
+    .from(journalEntries)
+    .where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.tenantId, session.tenantId)))
+    .limit(1);
+  if (!entry) throw new Error("Journal entry not found");
+  // Only an entry typed in on this screen is reversed here: reversing any other would leave its document saying one thing and the books another.
+  if (!isOwnEntry(entry)) throw new Error(REVERSE_REFUSAL);
+  if (entry.reversalOfId) throw new Error("This entry is itself a reversal.");
   await assertEntryNotReconciled(session.tenantId, journalEntryId, "entry");
   const touched = await db.select({ accountId: journalLines.accountId }).from(journalLines).where(eq(journalLines.journalEntryId, journalEntryId));
   await reverseJournalEntry(session.tenantId, journalEntryId, session.userId);
   await resettleForAccounts(session.tenantId, touched.map((l) => l.accountId));
   revalidatePath("/journal");
   revalidatePath("/dashboard");
+}
+
+const PAGE = 50;
+const EXPORT_MAX = 5000;
+
+/** One page of the Entries list. */
+export async function listEntriesAction(input: { filters: JournalFilters; offset?: number }) {
+  const session = await requireTenantSession();
+  if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
+  return listJournal(session.tenantId, input.filters, { limit: PAGE, offset: Math.max(input.offset ?? 0, 0) });
+}
+
+/** The filtered list as spreadsheet rows, one for each debit or credit line, so the columns add up. */
+export async function exportEntriesAction(filters: JournalFilters) {
+  const session = await requireTenantSession();
+  if (!can(session, "chart_of_accounts", "view")) throw new Error("Not permitted");
+  const { rows, hasMore } = await listJournal(session.tenantId, filters, { limit: EXPORT_MAX });
+  const header = [...exportDateHeaders("BOTH"), "Voucher", "Narration", "Source", "Status", "Account code", "Account", "Line note", "Debit", "Credit", "Entered by"];
+  const body = rows.flatMap((r) =>
+    r.lines.map((l): (string | number)[] => [...exportDateColumns("BOTH", r.date), r.voucher, r.narration, r.source, r.state, l.code, l.name, l.note, l.debit || "", l.credit || "", r.enteredBy])
+  );
+  return { rows: [header, ...body], entries: rows.length, cut: hasMore };
 }

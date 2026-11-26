@@ -20,7 +20,7 @@ const SERVER_RULES: FieldRules = [
   [/debit|credit|balance|amount/i, '[data-field="debit0"]'],
 ];
 
-export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[]; nextVoucher: string }) {
+export function JournalEntryForm({ accounts, nextVoucher, onPosted }: { accounts: Account[]; nextVoucher: string; /** Called once the "recorded" message is closed. */ onPosted?: (entry: { id: string; date: string }) => void }) {
   const router = useRouter();
   const [entryDate, setEntryDate] = useState(todayIso());
   const [description, setDescription] = useState("");
@@ -28,7 +28,12 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
   const [busy, setBusy] = useState(false);
   // Problems are shown in a dialog that says why; closing it puts the cursor in the field that needs attention.
   const { reportError, report, dialog } = useProblem();
-  const [recorded, setRecorded] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<{ voucher: string; id: string; date: string } | null>(null);
+  const closeRecorded = () => {
+    const done = recorded;
+    setRecorded(null);
+    if (done) onPosted?.({ id: done.id, date: done.date });
+  };
 
   const totalDebit = rows.reduce((s, r) => s + (parseFloat(r.debitAmount) || 0), 0);
   const totalCredit = rows.reduce((s, r) => s + (parseFloat(r.creditAmount) || 0), 0);
@@ -47,7 +52,7 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
         lines: rows.map((r) => ({ accountId: r.accountId, debitAmount: parseFloat(r.debitAmount) || 0, creditAmount: parseFloat(r.creditAmount) || 0 })),
       });
       if (!result.ok) return report(result.error, SERVER_RULES.find(([re]) => re.test(result.error))?.[1] ?? '[data-field="description"]');
-      setRecorded(result.voucherNumber);
+      setRecorded({ voucher: result.voucherNumber, id: result.entryId, date: result.entryDate });
       // Ready for the next entry.
       setDescription("");
       setRows([{ ...EMPTY_ROW }, { ...EMPTY_ROW }]);
@@ -129,14 +134,14 @@ export function JournalEntryForm({ accounts, nextVoucher }: { accounts: Account[
 
       {recorded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setRecorded(null)} />
+          <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={closeRecorded} />
           <div role="dialog" aria-modal="true" aria-label="Transaction recorded" className="relative w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-lg space-y-3">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-lg text-green-700">✓</div>
             <h2 className="text-base font-semibold text-gray-900">Transaction recorded</h2>
             <p className="text-sm text-gray-500">
-              Your journal entry has been posted as voucher <span className="font-medium text-gray-900">{recorded}</span>.
+              Your journal entry has been posted as voucher <span className="font-medium text-gray-900">{recorded.voucher}</span>.
             </p>
-            <button type="button" autoFocus onClick={() => setRecorded(null)} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
+            <button type="button" autoFocus onClick={closeRecorded} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-[5px] text-[13px] font-medium text-[var(--on-accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50">
               OK
             </button>
           </div>
