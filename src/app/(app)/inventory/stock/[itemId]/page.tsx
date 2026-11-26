@@ -1,5 +1,5 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView } from "@/components/page-guard";
-import Link from "next/link";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { items, purchaseBills, purchaseReturns, salesInvoices, salesReturns } from "@/db/schema";
@@ -39,14 +39,14 @@ export default async function StockCardPage({ params }: { params: Promise<{ item
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/inventory/stock" className="text-xs text-gray-500 hover:underline">
-          ← Stock
-        </Link>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{item.name}</h1>
-        <p className="text-sm text-gray-500">
-          On hand {Number(item.stockQuantity)} · value {fmt(Number(item.stockValue))}
-        </p>
+      <div className="flex items-start gap-3">
+        <BackButton href="/inventory/stock" label="Back to Stock" className="mt-0.5 print:hidden" />
+        <div>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{item.name}</h1>
+          <p className="text-sm text-gray-500">
+            On hand {Number(item.stockQuantity)} · value {fmt(Number(item.stockValue))}
+          </p>
+        </div>
       </div>
 
       <table className="border-collapse text-[13px] w-full">

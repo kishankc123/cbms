@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { RowMenu } from "@/components/row-menu";
 import { listInterTransfers, type TransferListFilters } from "./actions";
 import { StatusPill } from "@/components/ui/status-pill";
 
@@ -14,6 +15,7 @@ const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 
 const selCls = "rounded border border-gray-300 px-2 py-1.5 text-sm";
 
 export function TransfersTable({ initialRows, options }: { initialRows: Row[]; options: Option[] }) {
+  const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -118,10 +120,12 @@ export function TransfersTable({ initialRows, options }: { initialRows: Row[]; o
                 <td className="px-3 py-2 text-gray-500">{r.reference ?? "—"}</td>
                 <td className="px-3 py-2"><StatusPill tone={r.status === "posted" ? "success" : "critical"}>{r.status}</StatusPill></td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <Link href={`/payments/inter-transfer/${r.id}`} className="text-xs text-[var(--accent-text)] hover:underline">View</Link>
-                  {r.status === "posted" && (
-                    <Link href={`/payments/inter-transfer/${r.id}/edit`} className="ml-3 text-xs text-[var(--accent-text)] hover:underline">Edit</Link>
-                  )}
+                  <RowMenu
+                    items={[
+                      { label: "View", onClick: () => router.push(`/payments/inter-transfer/${r.id}`) },
+                      { label: "Edit", onClick: () => router.push(`/payments/inter-transfer/${r.id}/edit`), hidden: r.status !== "posted" },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}

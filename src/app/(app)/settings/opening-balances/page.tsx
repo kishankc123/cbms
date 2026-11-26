@@ -11,7 +11,7 @@ export default async function OpeningBalancesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Opening balances" className="!mb-0" />
+      <PageHeader title="Opening balances" back={{ href: "/settings", label: "Back to Settings" }} className="!mb-0" />
       <ReadOnlyNotice canEdit={canEdit} />
       <OpeningBalancesForm sheet={sheet} canSave={canEdit} />
     </div>

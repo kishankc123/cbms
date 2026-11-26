@@ -1,3 +1,4 @@
+import { BackButton } from "@/components/ui/back-button";
 import { guardView } from "@/components/page-guard";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -33,9 +34,12 @@ export default async function CustomerProfilePage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{customer.name}</h1>
-        <p className="text-sm text-gray-500">Customer</p>
+      <div className="flex items-start gap-3">
+        <BackButton href="/customers" label="Back to Customers" className="mt-0.5 print:hidden" />
+        <div>
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight text-ink">{customer.name}</h1>
+          <p className="text-sm text-gray-500">Customer</p>
+        </div>
       </div>
 
       <ProfileTabs
