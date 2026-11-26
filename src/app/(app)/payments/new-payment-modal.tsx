@@ -8,7 +8,7 @@ import {
   createPayment,
   updatePayment,
   getPaymentDetail,
-  getOutstandingExpenses,
+  getOutstandingExpenses, getOpenPayableOptions,
   getPaymentFormOptions,
   getCustomerRefundable,
   getEmployeeOwed,
@@ -234,6 +234,16 @@ function PaymentForm({
       .filter(([, v]) => (parseFloat(v) || 0) > 0)
       .map(([id, v]) => ({ targetType, targetId: id, allocatedAmount: parseFloat(v) || 0 }));
   }, [allocated, paymentType]);
+
+  // Expense payables with an opening balance still owed, which a ledger payment can clear (no expense bill stands behind them).
+  const [openOwed, setOpenOwed] = useState<Awaited<ReturnType<typeof getOpenPayableOptions>>>([]);
+  useEffect(() => {
+    if (paymentType !== "ledger_payment") return;
+    getOpenPayableOptions(editing?.id)
+      .then(setOpenOwed)
+      .catch(() => setOpenOwed([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentType]);
 
   // The page behind does not scroll while the window is open.
   useEffect(() => {
@@ -602,7 +612,7 @@ function PaymentForm({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">{direction === "money_in" ? "Received from ledger account" : "Paid to ledger account"}</label>
                 <div data-field="ledger">
-                  <LedgerSelect accounts={ledgerOptions} value={categoryAccountId} onChange={setCategoryAccountId} className={fieldErrors.categoryAccountId ? inputErrCls : inputCls} />
+                  <LedgerSelect accounts={direction === "money_out" ? [...ledgerOptions, ...openOwed.map((o) => ({ id: o.id, code: o.code, name: `${o.name} (opening balance due ${fmt(o.unbilled)})`, category: "liability", group: o.group, groupCode: o.groupCode }))] : ledgerOptions} value={categoryAccountId} onChange={setCategoryAccountId} className={fieldErrors.categoryAccountId ? inputErrCls : inputCls} />
                 </div>
               </div>
             )}
