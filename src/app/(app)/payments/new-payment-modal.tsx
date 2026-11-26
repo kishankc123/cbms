@@ -245,6 +245,12 @@ function PaymentForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType]);
 
+  /** What "Paid to / Received from ledger account" offers: the usual ledger accounts and, for money out, the payables with an opening balance still due. */
+  const ledgerChoices =
+    direction === "money_out"
+      ? [...ledgerOptions, ...openOwed.map((o) => ({ id: o.id, code: o.code, name: `${o.name} (opening balance due ${fmt(o.unbilled)})`, category: "liability", group: o.group, groupCode: o.groupCode }))]
+      : ledgerOptions;
+
   // The page behind does not scroll while the window is open.
   useEffect(() => {
     const before = document.body.style.overflow;
@@ -298,7 +304,7 @@ function PaymentForm({
       first.push({ message, target });
     };
     if (!paymentDate) bad("paymentDate", "Please enter the payment date.", "#pay-date");
-    if (config.needsLedgerAccount && !ledgerOptions.some((l) => l.id === categoryAccountId)) bad("categoryAccountId", "Choose the ledger account the money comes from or goes to.", '[data-field="ledger"]');
+    if (config.needsLedgerAccount && !ledgerChoices.some((l) => l.id === categoryAccountId)) bad("categoryAccountId", "Choose the ledger account the money comes from or goes to.", '[data-field="ledger"]');
     if (!accountId || ((config.showTransferTo || config.needsLedgerAccount) && ledgerChosen)) bad("accountId", config.showTransferTo ? "Select the payment mode and the account the money moves through." : "Select the payment mode and account, or settle through a ledger account.", '[data-field="account"]');
     if (config.showTransferTo && !transferToAccountId) bad("transferToAccountId", "Select the destination account.", '[data-field="transferTo"]');
     if (config.needsCustomer && !customerId) bad("customerId", "Please select a customer.", '[data-field="customer"]');
@@ -612,7 +618,7 @@ function PaymentForm({
               <div>
                 <label className="block text-xs text-gray-500 mb-1">{direction === "money_in" ? "Received from ledger account" : "Paid to ledger account"}</label>
                 <div data-field="ledger">
-                  <LedgerSelect accounts={direction === "money_out" ? [...ledgerOptions, ...openOwed.map((o) => ({ id: o.id, code: o.code, name: `${o.name} (opening balance due ${fmt(o.unbilled)})`, category: "liability", group: o.group, groupCode: o.groupCode }))] : ledgerOptions} value={categoryAccountId} onChange={setCategoryAccountId} className={fieldErrors.categoryAccountId ? inputErrCls : inputCls} />
+                  <LedgerSelect accounts={ledgerChoices} value={categoryAccountId} onChange={setCategoryAccountId} className={fieldErrors.categoryAccountId ? inputErrCls : inputCls} />
                 </div>
               </div>
             )}
