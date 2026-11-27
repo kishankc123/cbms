@@ -183,7 +183,7 @@ export function netSalaryPaymentReport(lines: ReportLine[], paid: Map<string, nu
     { key: "owed", label: "Still owed now", numeric: true },
   ];
   const rows = groupByEmployee(lines).map((list) => ({ employee: `${list[0].employeeCode} ${list[0].fullName}`, net: round2(list.reduce((s, l) => s + l.net, 0)), paid: round2(paid.get(list[0].employeeId) ?? 0), owed: round2(owedNow.get(list[0].employeeId) ?? 0) }));
-  return withTotals(columns, rows, "Total", "Still owed is the balance on each employee's salary payable account today, whatever the range.");
+  return withTotals(columns, rows, "Total", "Still owed is the balance on each employee's staff account today, whatever the range. A minus figure is what the employee owes back.");
 }
 
 /** What payroll owes today, by account (not limited to a range). */

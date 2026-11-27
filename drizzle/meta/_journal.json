@@ -1016,6 +1016,13 @@
       "when": 1795520929141,
       "tag": "0144_bank_account_reconcile_method",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1795780180719,
+      "tag": "0145_single_staff_account",
+      "breakpoints": true
     }
   ]
 }

@@ -224,7 +224,7 @@ function PaymentForm({
   useEffect(() => {
     setOwed(null);
     setAdvInfo(null);
-    if (paymentType === "salary_payment" && employeeId) getEmployeeOwed(employeeId).then((r) => setOwed(r.owed)).catch(() => setOwed(null));
+    if (paymentType === "salary_payment" && employeeId) getEmployeeOwed(employeeId).then((r) => setOwed(r.balance)).catch(() => setOwed(null));
     if (paymentType === "staff_advance" && employeeId) getEmployeeAdvanceInfo(employeeId).then(setAdvInfo).catch(() => setAdvInfo(null));
   }, [paymentType, employeeId]);
 
@@ -569,7 +569,19 @@ function PaymentForm({
                     </option>
                   ))}
                 </select>
-                {paymentType === "salary_payment" && owed !== null && <p className="mt-1 text-xs text-gray-500">Owed to this employee: {fmt(owed)}</p>}
+                {paymentType === "salary_payment" &&
+                  owed !== null &&
+                  (() => {
+                    // In an edit the saved payment is already on the account, so it is added back to show what was owed without it.
+                    const balance = owed + (editing?.paymentType === "salary_payment" && editing.employeeId === employeeId ? Number(editing.amount) : 0);
+                    const over = amountNum - Math.max(balance, 0);
+                    return (
+                      <>
+                        <p className="mt-1 text-xs text-gray-500">{balance < -0.004 ? `This employee owes you ${fmt(-balance)} (advances and anything overpaid)` : `Owed to this employee: ${fmt(balance)}`}</p>
+                        {over > 0.004 && <p className="mt-1 text-xs text-amber-700">This is {fmt(over)} more than is owed. It will save, and the account will show it as owed back to you.</p>}
+                      </>
+                    );
+                  })()}
                 {paymentType === "staff_advance" && advInfo && (
                   <p className={`mt-1 text-xs ${advInfo.outstanding + amountNum > advInfo.basic && advInfo.basic > 0 ? "text-amber-700" : "text-gray-500"}`}>
                     Advances not yet recovered: {fmt(advInfo.outstanding)} · Monthly basic: {fmt(advInfo.basic)}

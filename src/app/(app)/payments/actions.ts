@@ -19,7 +19,7 @@ import {
   staffAdvances,
 } from "@/db/schema";
 import { obligationAmounts } from "@/lib/compliance/tax-amounts";
-import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { getStaffBalance } from "@/lib/payroll/staff-account";
 import { getEmployeeAdvanceOutstanding, resolveAdvanceMonth } from "@/lib/payroll/staff-advances";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { reconciledEntryIds } from "@/lib/ledger/reconciled-entries";
@@ -102,11 +102,11 @@ export async function getCustomerRefundable(customerId: string) {
   return { credit, total: credit };
 }
 
-/** What an employee is owed and hasn't been paid — the limit of a salary payment. */
+/** The employee's staff account: positive means they are owed that much, negative that they owe it. Shown beside a salary payment; it is not a limit. */
 export async function getEmployeeOwed(employeeId: string) {
   const session = await requireTenantSession();
   if (!can(session, "payments", "view")) throw new Error("Not permitted");
-  return { owed: Math.max(await getEmployeePayableBalance(session.tenantId, employeeId), 0) };
+  return { balance: await getStaffBalance(session.tenantId, employeeId) };
 }
 
 /** For a staff advance: what the employee still has to pay back on earlier advances, and their monthly basic salary. */

@@ -28,15 +28,15 @@ export async function getOrCreateSalaryExpenseAccount(tenantId: string) {
   return created;
 }
 
-// The liability group every employee's payable sub-account nests under —
-// a top-level account under "Current liabilities".
+// The liability group every employee's staff account nests under — a top-level account under "Current liabilities". It was called Salary Payable until salary and
+// advances became one account per employee.
 export async function getOrCreateSalaryPayableGroup(tenantId: string) {
-  const existing = await findControlAccount(tenantId, ["2300"], "Salary Payable");
+  const existing = (await findControlAccount(tenantId, ["2300"], "Staff accounts")) ?? (await findControlAccount(tenantId, [], "Salary Payable"));
   if (existing) return existing;
 
   const [created] = await db
     .insert(accounts)
-    .values({ tenantId, code: "2300", name: "Salary Payable", category: "liability", subCategory: "Current liabilities" })
+    .values({ tenantId, code: "2300", name: "Staff accounts", category: "liability", subCategory: "Current liabilities" })
     .returning();
   return created;
 }
@@ -69,8 +69,7 @@ export async function getOrCreatePayrollDeductionsAccount(tenantId: string) {
   return created;
 }
 
-// Creates the per-employee liability sub-account nested under Salary
-// Payable. Named after the employee only, matching how Chart of Accounts >
+// Creates an employee's staff account, nested under Staff accounts. Named after the employee only, matching how Chart of Accounts >
 // Sub-group names its own rows (just a name, no extra detail baked in).
 export async function createEmployeePayableAccount(tenantId: string, employeeName: string) {
   const group = await getOrCreateSalaryPayableGroup(tenantId);

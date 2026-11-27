@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalizedRun, deletePayrollRun } from "../actions";
+import { advanceRunStatus, revertRunToDraft, generatePayrollRun, reverseFinalizedRun, getReversalOverpaid, deletePayrollRun } from "../actions";
 import { useProblem } from "@/components/problem-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
@@ -100,6 +100,12 @@ export function RunStatusControls({
     if (!reason.trim()) return report("Enter the reason for reversing this payroll run.", "[data-reason]");
     setBusy(true);
     try {
+      // Reversing takes this run's salary back off the staff accounts: anyone already paid from it then shows as overpaid, so say who first.
+      const would = await getReversalOverpaid({ runId });
+      if (would.length > 0) {
+        const names = would.map((p) => `${p.name} (${p.overpaid.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`).join(", ");
+        if (!(await ask(`After this reversal these employees will show as overpaid until the run is finalized again: ${names}. Reverse anyway?`, { confirmLabel: "Reverse anyway" }))) return;
+      }
       await reverseFinalizedRun({ runId, reason });
       setReversing(false);
       setReason("");
@@ -169,7 +175,7 @@ export function RunStatusControls({
           <div className="absolute inset-0 bg-[var(--bg-overlay)]" onClick={() => setReversing(false)} />
           <div className="relative w-full max-w-sm space-y-3 rounded-[var(--radius-modal)] border border-line bg-surface p-5 shadow-[var(--shadow-modal)]">
             <h2 className="text-base font-semibold text-gray-900">Reverse this payroll run</h2>
-            <p className="text-xs text-gray-500">Its salary entry is reversed and the run goes back to draft so it can be corrected and finalized again. Not possible once an employee has been paid out of it.</p>
+            <p className="text-xs text-gray-500">Its salary entry is reversed and the run goes back to draft so it can be corrected and finalized again. Salary already paid stays on the employees&apos; accounts.</p>
             <textarea
               data-reason
               value={reason}

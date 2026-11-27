@@ -7,10 +7,9 @@ import { can, requireTenantSession } from "@/lib/session";
 import { todayIso, ymdOf } from "@/lib/calendar";
 import { getCurrentSalary } from "@/lib/payroll/salary";
 import { listEmployeeAdvances } from "@/lib/payroll/staff-advances";
-import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
-import { getEmployeeAdvanceBalance } from "@/lib/ledger/advance-accounts";
-import { netPosition } from "@/lib/payroll/net-position";
-import { NetPositionCard } from "./net-position-card";
+import { buildStatement, getPartyLines } from "@/lib/ledger/party-ledger";
+import { staffAccountIds } from "@/lib/payroll/staff-account";
+import { StaffAccountCard } from "./staff-account-card";
 import { ProfileTabs } from "./profile-tabs";
 import { payrollRulesOn } from "@/lib/payroll/platform-rules";
 import { enrolmentsOn, enrolmentWarnings, type Enrolment } from "@/lib/payroll/employee-retirement";
@@ -91,8 +90,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   const [attendanceRows, pay] = await Promise.all([db.select().from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, session.tenantId), eq(attendanceRecords.employeeId, employeeId))), seesPay ? loadPay() : Promise.resolve(null)]);
   const [currentSalary, salaryRows, payslipRows, advanceRows, componentCatalog, componentAssignments, retirementRows, tenantRows] = pay ?? [null, [], [], [], [], [], [], []];
 
-  // The salary account and the advance account, set against each other (for roles that may see pay).
-  const position = seesPay ? netPosition(await getEmployeePayableBalance(session.tenantId, employeeId), await getEmployeeAdvanceBalance(session.tenantId, employeeId)) : null;
+  // The employee's one staff account, as a statement (for roles that may see pay).
+  const statement = seesPay ? buildStatement([...(await getPartyLines(session.tenantId, staffAccountIds(employee))).values()].flat().sort((a, b) => a.date.localeCompare(b.date)), "credit", {}) : null;
 
   // The payroll rules in force today for the organization's country, and anything worth a look about this employee's enrolment.
   const today = todayIso();
@@ -114,7 +113,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         </div>
       </div>
 
-      {position && <NetPositionCard position={position} />}
+      {statement && <StaffAccountCard statement={statement} />}
 
       <ProfileTabs
         employee={employee}

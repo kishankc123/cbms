@@ -1,9 +1,9 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, journalEntries, journalLines, payrollLines, type payrollRuns } from "@/db/schema";
+import { employees, journalEntries, payrollLines, type payrollRuns } from "@/db/schema";
 import { postJournalEntry, type PostLineInput } from "@/lib/ledger/post";
-import { getOrCreateEmployeeAdvanceAccountId } from "@/lib/ledger/advance-accounts";
-import { getOrCreateSalaryExpenseAccount, getSalaryPartAccounts, getOrCreateIncentiveHeadingAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount, createEmployeePayableAccount } from "@/lib/ledger/payroll-accounts";
+import { getOrCreateStaffAccountId } from "@/lib/payroll/staff-account";
+import { getOrCreateSalaryExpenseAccount, getSalaryPartAccounts, getOrCreateIncentiveHeadingAccount, getOrCreatePayrollDeductionsAccount, getOrCreateSalaryTdsPayableAccount } from "@/lib/ledger/payroll-accounts";
 import { getOrCreateTdsHeadPayableAccount, payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
 import { payrollPeriodLabel } from "@/lib/payroll/period-label";
 import { getOrCreateEmployerRetirementExpense, getOrCreateRetirementPayable } from "@/lib/ledger/retirement-accounts";
@@ -21,10 +21,10 @@ export async function activePayrollEntries(tenantId: string, runId: string) {
 }
 
 /**
- * Posts the ledger accrual for a finalized run: every employee's own Salary Payable sub-account is credited with
- * their net pay, Salary Expense is debited with gross pay, deductions withheld go to Payroll Deductions Payable, and any staff
- * advance recovered from the pay clears the employee's Staff Advance account, and the salary TDS withheld goes to TDS Payable — Salary
- * (gross = net + deductions + advance recovered + TDS + the employee's retirement contribution).
+ * Posts the ledger accrual for a finalized run: every employee's staff account is credited with their net pay and, on a line of its own, with the staff
+ * advance recovered from it (which sets off the advance already debited there). Salary Expense is debited with gross pay, deductions withheld go to Payroll
+ * Deductions Payable, and the salary TDS withheld goes to TDS Payable — Salary (gross = net + deductions + advance recovered + TDS + the employee's
+ * retirement contribution).
  * Retirement contributions (only for employees in a scheme): the employee's share is credited to the matching payable account, and the
  * employer's share is debited to Employer Retirement Contributions and credited to its payable account (the employer's gratuity has an account
  * of its own). One entry covers the whole run, so a run is never posted twice.
@@ -62,11 +62,7 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     const employee = employeeById.get(line.employeeId);
     if (!employee) continue;
 
-    let payableAccountId = employee.payableAccountId;
-    if (!payableAccountId) {
-      payableAccountId = (await createEmployeePayableAccount(tenantId, employee.fullName)).id;
-      await db.update(employees).set({ payableAccountId }).where(eq(employees.id, employee.id));
-    }
+    const staffAccountId = employee.payableAccountId ?? (await getOrCreateStaffAccountId(tenantId, employee.id));
 
     const gross = Number(line.grossPay);
     const deductions = Number(line.deductions);
@@ -95,8 +91,8 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
         postLines.push({ accountId, debitAmount: round2(i.amount), description: `${i.name} - ${employee.fullName}` });
       }
     }
-    if (net > 0) postLines.push({ accountId: payableAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
-    if (advance > 0) postLines.push({ accountId: await getOrCreateEmployeeAdvanceAccountId(tenantId, employee.id), creditAmount: advance, description: `Staff advance recovered - ${employee.fullName}` });
+    if (net > 0) postLines.push({ accountId: staffAccountId, creditAmount: net, description: `Salary payable - ${employee.fullName}` });
+    if (advance > 0) postLines.push({ accountId: staffAccountId, creditAmount: advance, description: `Staff advance recovered - ${employee.fullName}` });
     if (tds > 0 && tdsAccount) postLines.push({ accountId: tdsAccount.id, creditAmount: tds, description: `Salary TDS - ${employee.fullName}` });
     if (deductions > 0 && deductionsAccount) postLines.push({ accountId: deductionsAccount.id, creditAmount: deductions, description: `Payroll deductions - ${employee.fullName}` });
   }
@@ -122,16 +118,4 @@ export async function postPayrollAccrual(tenantId: string, run: Run, userId: str
     lines: postLines,
   });
   return entry.id;
-}
-
-/** What an employee is owed and hasn't been paid: the credit balance of their own Salary Payable account. */
-export async function getEmployeePayableBalance(tenantId: string, employeeId: string): Promise<number> {
-  const [e] = await db.select({ a: employees.payableAccountId }).from(employees).where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId))).limit(1);
-  if (!e?.a) return 0;
-  const [row] = await db
-    .select({ v: sql<string>`coalesce(sum(${journalLines.creditAmount} - ${journalLines.debitAmount}), 0)` })
-    .from(journalLines)
-    .innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
-    .where(and(eq(journalEntries.tenantId, tenantId), eq(journalLines.accountId, e.a)));
-  return Math.round(Number(row.v) * 100) / 100 + 0;
 }

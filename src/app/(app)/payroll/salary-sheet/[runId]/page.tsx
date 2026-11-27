@@ -18,6 +18,7 @@ import { getRunRecoveryBreakdown } from "@/lib/payroll/staff-advances";
 import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
 import { TdsCell } from "../../tds-working";
 import Link from "next/link";
+import { draftOverpaidAdjustments } from "@/lib/payroll/overpaid";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { attendanceCheckedFor } from "@/lib/payroll/attendance";
 
@@ -55,6 +56,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
       tdsAmount: payrollLines.tdsAmount,
       tdsDetail: payrollLines.tdsDetail,
       netPay: payrollLines.netPay,
+      overpaidAdjusted: payrollLines.overpaidAdjusted,
       employeeRetirement: payrollLines.employeeRetirement,
       employerRetirement: payrollLines.employerRetirement,
       retirementDetail: payrollLines.retirementDetail,
@@ -65,6 +67,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
 
   const sum = (f: (l: (typeof lines)[number]) => number) => Math.round(lines.reduce((s, l) => s + f(l), 0) * 100) / 100;
   const totalNet = sum((l) => Number(l.netPay));
+  // Money already paid that no advance covers: shown only when someone has some, with what is then left to pay.
+  const draftAdjusted = run.status === "finalized" ? null : await draftOverpaidAdjustments(session.tenantId, run);
+  const alreadyPaid = (l: (typeof lines)[number]) => (draftAdjusted ? draftAdjusted.get(l.id) ?? 0 : Number(l.overpaidAdjusted));
+  const toPay = (l: (typeof lines)[number]) => Math.max(Math.round((Number(l.netPay) - alreadyPaid(l)) * 100) / 100, 0);
+  const showAdjusted = lines.some((l) => alreadyPaid(l) > 0);
   const totalGross = sum((l) => Number(l.grossPay));
   const totalTds = sum((l) => Number(l.tdsAmount));
   const totalEmployerRetirement = sum((l) => Number(l.employerRetirement));
@@ -170,6 +177,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
               <th className="px-3 py-2 font-medium whitespace-nowrap">TDS</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Advance Recovered</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">Net Pay</th>
+              {showAdjusted && <th className="px-3 py-2 font-medium whitespace-nowrap">Overpaid earlier</th>}
+              {showAdjusted && <th className="px-3 py-2 font-medium whitespace-nowrap">To Pay</th>}
               <th className="px-3 py-2 font-medium whitespace-nowrap">Employer contribution</th>
               <th />
             </tr>
@@ -198,6 +207,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">{Number(l.advanceRecovered).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium">{Number(l.netPay).toFixed(2)}</td>
+                {showAdjusted && <td className="px-3 py-2 whitespace-nowrap">{alreadyPaid(l).toFixed(2)}</td>}
+                {showAdjusted && <td className="px-3 py-2 whitespace-nowrap font-medium">{toPay(l).toFixed(2)}</td>}
                 <td className="px-3 py-2 whitespace-nowrap text-ink-2">{Number(l.employerRetirement).toFixed(2)}</td>
                 <td className="px-3 py-2 whitespace-nowrap text-right">
                   <Link href={`/payroll/payslips/${l.id}`} className="text-xs text-accent hover:underline">
@@ -209,7 +220,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={showBenefits ? 17 : 16} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={(showBenefits ? 17 : 16) + (showAdjusted ? 2 : 0)} className="px-4 py-6 text-center text-gray-400">
                   No lines in this run
                 </td>
               </tr>
@@ -222,6 +233,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ run
                   Total Net Pay
                 </td>
                 <td className="px-3 py-2">{totalNet.toFixed(2)}</td>
+                {showAdjusted && <td className="px-3 py-2">{sum(alreadyPaid).toFixed(2)}</td>}
+                {showAdjusted && <td className="px-3 py-2">{sum(toPay).toFixed(2)}</td>}
                 <td className="px-3 py-2 text-ink-2">{totalEmployerRetirement.toFixed(2)}</td>
                 <td />
               </tr>

@@ -5,9 +5,8 @@ import { accounts, employees, payments, payrollLines, staffAdvanceRecoveries, st
 import { createTempOrg } from "@/test/temp-org";
 import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
 import { createPayment, voidPayment } from "@/lib/ledger/payments-engine";
-import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { getStaffBalance } from "@/lib/payroll/staff-account";
 import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
-import { getEmployeeAdvanceBalance } from "@/lib/ledger/advance-accounts";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let dropCountry: () => Promise<void>;
@@ -40,9 +39,9 @@ const advance = (employeeId: string, amount: number, date: string, month: number
     direction: "money_out", paymentType: "staff_advance", paymentDate: date, partyType: "employee", employeeId, accountId: cashId, paymentMethod: "cash", amount,
     advanceMonth: month === null ? null : { calendar: "AD", month, year }, confirmDuplicate: true,
   });
-// What the ledger says the employee has been advanced must always equal what the advances say is still to recover.
-async function expectConsistent(employeeId: string) {
-  expect(await getEmployeeAdvanceBalance(org.tenantId, employeeId)).toBe(await getEmployeeAdvanceOutstanding(org.tenantId, employeeId));
+// The one staff account must always come to the salary still unpaid, less what the advances say is still to recover.
+async function expectConsistent(employeeId: string, unpaidSalary: number) {
+  expect(await getStaffBalance(org.tenantId, employeeId)).toBe(unpaidSalary - (await getEmployeeAdvanceOutstanding(org.tenantId, employeeId)));
 }
 
 beforeAll(async () => {
@@ -61,12 +60,13 @@ describe("staff advances", () => {
   let sepAdvancePayment: string;
   let sepRun: string;
   let sepNet = 0;
+  let novNet = 0;
 
-  it("records the advance on the employee's own Staff Advance account, and refuses bad ones", async () => {
+  it("records the advance on the employee's staff account, and refuses bad ones", async () => {
     const sep = await advance(chandra, 5000, "2026-09-05", 9);
     sepAdvancePayment = "paymentId" in sep ? sep.paymentId : "";
     await advance(chandra, 60000, "2026-09-06", 10);
-    expect(await getEmployeeAdvanceBalance(org.tenantId, chandra)).toBe(65000);
+    expect(await getStaffBalance(org.tenantId, chandra)).toBe(-65000);
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(65000);
 
     await expect(advance(chandra, 100, "2026-09-05", null)).rejects.toThrow(/month/i);
@@ -85,9 +85,8 @@ describe("staff advances", () => {
     sepNet = Number(line.netPay);
 
     await finalize(sepRun);
-    expect(await getEmployeePayableBalance(org.tenantId, chandra)).toBe(sepNet);
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(60000);
-    await expectConsistent(chandra);
+    await expectConsistent(chandra, sepNet);
   });
 
   it("can't be voided once payroll has recovered part of it", async () => {
@@ -102,16 +101,16 @@ describe("staff advances", () => {
     expect(Number(oct.netPay)).toBe(0);
     await finalize(octRun);
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(60000 - takeHome);
-    await expectConsistent(chandra);
+    await expectConsistent(chandra, sepNet);
 
     const novRun = await generatePayrollRun({ month: 11, year: 2026, calendar: "AD", employeeIds: [chandra] });
     const nov = await lineOf(novRun);
     expect(Number(nov.advanceRecovered)).toBe(60000 - takeHome);
     await finalize(novRun);
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(0);
-    expect(await getEmployeeAdvanceBalance(org.tenantId, chandra)).toBe(0);
-    // only September's net pay is owed to the employee; October's and part of November's went to clearing the advance
-    expect(await getEmployeePayableBalance(org.tenantId, chandra)).toBe(sepNet + Number(nov.netPay));
+    novNet = Number(nov.netPay);
+    // only September's net pay and what was left of November's is owed; October's and part of November's went to clearing the advance
+    expect(await getStaffBalance(org.tenantId, chandra)).toBe(sepNet + novNet);
   });
 
   it("a draft run can't be finalized with out-of-date advances; regenerating brings it up to date", async () => {
@@ -127,13 +126,13 @@ describe("staff advances", () => {
     await reverseFinalizedRun({ runId: sepRun, reason: "test" });
     expect((await db.select().from(staffAdvanceRecoveries).where(eq(staffAdvanceRecoveries.payrollRunId, sepRun))).length).toBe(0);
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(5000 + 1000);
-    await expectConsistent(chandra);
+    await expectConsistent(chandra, novNet);
 
     await voidPayment(org.tenantId, sepAdvancePayment, org.userId, "test");
     const [adv] = await db.select().from(staffAdvances).where(eq(staffAdvances.paymentId, sepAdvancePayment));
     expect(adv.status).toBe("void");
     expect(await getEmployeeAdvanceOutstanding(org.tenantId, chandra)).toBe(1000);
-    await expectConsistent(chandra);
+    await expectConsistent(chandra, novNet);
     const [p] = await db.select().from(payments).where(eq(payments.id, sepAdvancePayment));
     expect(p.status).toBe("voided");
   });

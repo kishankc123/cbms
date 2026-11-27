@@ -10,6 +10,7 @@ import type { TdsWorking } from "@/lib/payroll/salary-tax-calc";
 import type { RetirementLine } from "@/lib/payroll/retirement-pay";
 import type { ComponentLine } from "@/lib/payroll/components";
 import { PrintButton } from "./print-button";
+import { draftOverpaidAdjustments } from "@/lib/payroll/overpaid";
 
 const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,6 +34,8 @@ export default async function PayslipPage({ params }: { params: Promise<{ lineId
   const [company] = await db.select({ name: tenants.companyName, address: tenants.address, phone: tenants.phone, email: tenants.email, pan: tenants.panVatNumber }).from(tenants).where(eq(tenants.id, session.tenantId)).limit(1);
 
   const n = (v: string | number | null) => Number(v ?? 0);
+  // Money already paid that no advance covers comes off what is left to pay. A finalized run keeps its figure; a draft shows it as it stands now.
+  const alreadyPaid = run.status === "finalized" ? n(line.overpaidAdjusted) : (await draftOverpaidAdjustments(session.tenantId, run)).get(line.id) ?? 0;
   const components = ((line.componentsDetail as ComponentLine[] | null) ?? []).filter((c) => c.amount !== 0);
   const allowanceLines = components.filter((c) => c.type === "allowance");
   const deductionComponents = components.filter((c) => c.type === "deduction");
@@ -141,6 +144,19 @@ export default async function PayslipPage({ params }: { params: Promise<{ lineId
           <span className="text-sm font-semibold">Net salary</span>
           <span className="text-lg font-semibold tabular-nums">{money(n(line.netPay))}</span>
         </div>
+
+        {alreadyPaid > 0 && (
+          <div className="space-y-1 px-4 text-[13px]">
+            <div className="flex justify-between">
+              <span>Overpaid earlier, adjusted</span>
+              <span className="tabular-nums">−{money(alreadyPaid)}</span>
+            </div>
+            <div className="flex justify-between border-t border-line pt-1 text-sm font-semibold">
+              <span>To pay</span>
+              <span className="tabular-nums">{money(Math.max(n(line.netPay) - alreadyPaid, 0))}</span>
+            </div>
+          </div>
+        )}
 
         {employerRetirement > 0 && (
           <section>
