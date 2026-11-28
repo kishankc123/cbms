@@ -135,7 +135,7 @@ export async function createEmployee(input: Omit<EmployeeInput, "employeeCode"> 
   }
   if (!employee) throw new Error("Could not assign an employee ID. Please try again.");
 
-  // Every employee gets their own Salary Payable sub-account immediately —
+  // Every employee gets their own staff account immediately —
   // the liability side payroll accruals post to once a run is finalized.
   const payableAccount = await createEmployeePayableAccount(session.tenantId, fullName);
   await db.update(employees).set({ payableAccountId: payableAccount.id }).where(eq(employees.id, employee.id));

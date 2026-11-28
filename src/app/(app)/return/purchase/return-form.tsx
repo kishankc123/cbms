@@ -11,8 +11,9 @@ import { useProblem, type FieldRules } from "@/components/problem-dialog";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { AmountInput } from "@/components/ui/amount-input";
+import { LINE_TREATMENTS, isTreatment, lineVatRate, splitByTreatment, type LineTreatment } from "@/lib/purchases/vat-lines";
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; purchasePrice: string };
+type Item = { id: string; name: string; purchasePrice: string; purchaseVatTreatment?: string };
 
 type LineRow = {
   itemId: string;
@@ -20,12 +21,14 @@ type LineRow = {
   rate: string;
   quantity: string;
   discount: string;
+  /** On a return of a VAT bill: whether the line carried VAT. */
+  taxTreatment: LineTreatment;
 };
 
 const MIN_LINES = 4;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
-const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0" });
+const emptyLine = (): LineRow => ({ itemId: "", description: "", rate: "", quantity: "", discount: "0", taxTreatment: "taxable" });
 
 function computeLine(line: LineRow, vatRate: number) {
   const rate = parseFloat(line.rate) || 0;
@@ -33,7 +36,7 @@ function computeLine(line: LineRow, vatRate: number) {
   const discount = parseFloat(line.discount) || 0;
   const gross = rate * quantity;
   const taxable = Math.max(gross - discount, 0);
-  const vat = taxable * (vatRate / 100);
+  const vat = taxable * (lineVatRate("vat", line.taxTreatment, vatRate) / 100);
   const total = taxable + vat;
   return { gross, taxable, vat, total };
 }
@@ -109,6 +112,7 @@ export function PurchaseReturnForm({
             itemId: value,
             description: item ? item.name : l.description,
             rate: item ? item.purchasePrice : l.rate,
+            taxTreatment: item && isTreatment(item.purchaseVatTreatment) ? item.purchaseVatTreatment : "taxable",
           };
         }
         return { ...l, [field]: value };
@@ -126,7 +130,7 @@ export function PurchaseReturnForm({
 
   const computedLines = lines.map((l) => computeLine(l, withVat ? vatRate : 0));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
-  const grandTaxable = computedLines.reduce((s, c) => s + c.taxable, 0);
+  const split = splitByTreatment(withVat ? "vat" : "none", computedLines.map((c, i) => ({ taxable: c.taxable, taxTreatment: lines[i].taxTreatment })));
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
@@ -166,6 +170,7 @@ export function PurchaseReturnForm({
           rate: parseFloat(l.rate) || 0,
           quantity: parseFloat(l.quantity) || 0,
           discount: parseFloat(l.discount) || 0,
+          ...(withVat && l.taxTreatment !== "taxable" ? { taxTreatment: l.taxTreatment } : {}),
         })),
       });
 
@@ -246,8 +251,9 @@ export function PurchaseReturnForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                {withVat && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>}
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT amount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs whitespace-nowrap"></th>
               </tr>
@@ -305,6 +311,17 @@ export function PurchaseReturnForm({
                         className={`w-20 ${cellInputCls}`}
                       />
                     </td>
+                    {withVat && (
+                      <td className="px-1 py-1 text-center">
+                        <select value={line.taxTreatment} onChange={(e) => updateLine(i, "taxTreatment", e.target.value)} className={`w-28 ${cellInputCls}`} aria-label="VAT treatment of this line">
+                          {LINE_TREATMENTS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.value === "taxable" ? `Taxable ${vatRate}%` : t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-20 ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
@@ -350,9 +367,21 @@ export function PurchaseReturnForm({
               <span>{fmt(grandDiscount)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Taxable</span>
-              <span>{fmt(grandTaxable)}</span>
+              <span className="text-gray-500">{withVat ? "Taxable amount" : "Amount"}</span>
+              <span>{fmt(split.taxable)}</span>
             </div>
+            {split.zeroRated > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Zero-rated</span>
+                <span>{fmt(split.zeroRated)}</span>
+              </div>
+            )}
+            {split.exempt > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Exempt</span>
+                <span>{fmt(split.exempt)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-gray-500">VAT</span>
               <span>{fmt(grandVat)}</span>

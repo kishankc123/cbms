@@ -54,6 +54,7 @@ export const purchaseColumnGuide = (): ColumnGuideRow[] =>
     billNumber: { accepts: "The supplier's own bill number. Blank gets an automatic one.", example: "B-101" },
     description: { accepts: "Free text: what was bought.", example: "Office paper" },
     billType: { accepts: "VAT, PAN, Estimate, Challan or No bill. Only a VAT bill carries VAT.", example: "VAT" },
+    vat: { accepts: "Only for a VAT bill: Taxable, Zero-rated or Exempt, for the whole row. Blank is Taxable. A bill that is partly taxable can't be given in one row.", example: "Taxable" },
     ...payRules("Not more than the bill total.", "paid", "0"),
   });
 

@@ -6,7 +6,7 @@ import { createTempOrg } from "@/test/temp-org";
 import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
 import { createPayment, updatePayment, type UpdatePaymentInput } from "@/lib/ledger/payments-engine";
 import { getEmployeeAdvanceOutstanding } from "@/lib/payroll/staff-advances";
-import { getEmployeeAdvanceBalance } from "@/lib/ledger/advance-accounts";
+import { getStaffBalance } from "@/lib/payroll/staff-account";
 import { employeeBalances } from "@/lib/payroll/employee-balances";
 
 // Changing a staff advance payment to another employee must move the advance in the Payroll > Advances list as well as in the books, whether the payment was
@@ -37,7 +37,8 @@ const edit = (employeeId: string, reason?: string) =>
   updatePayment(org.tenantId, org.userId, paymentId, {
     paymentDate: "2026-09-05", partyType: "employee", employeeId, accountId: cashId, paymentMethod: "cash", amount: 5000, advanceMonth: { calendar: "AD", month: 9, year: 2026 }, ...(reason ? { reason } : {}),
   } as UpdatePaymentInput);
-const consistent = async (employeeId: string) => expect(await getEmployeeAdvanceBalance(org.tenantId, employeeId)).toBe(await getEmployeeAdvanceOutstanding(org.tenantId, employeeId));
+// With no salary run here, each staff account is simply what is still owed back on advances.
+const consistent = async (employeeId: string) => expect((await getStaffBalance(org.tenantId, employeeId)) + (await getEmployeeAdvanceOutstanding(org.tenantId, employeeId))).toBe(0);
 
 beforeAll(async () => {
   org = await createTempOrg("ZZ Advance Employee");

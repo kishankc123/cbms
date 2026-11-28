@@ -29,6 +29,8 @@ export function SalaryPayableView({ rows, asOf }: { rows: SalaryPayableRow[]; as
         </button>
       </div>
 
+      {rows.some((r) => r.balance < 0) && <p className="text-xs text-ink-2">A minus figure is money the employee owes you: an advance not yet recovered, or an overpayment.</p>}
+
       <table className="border-collapse text-[13px] w-full">
         <thead className="text-left text-xs text-ink-2 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-app">
           <tr>

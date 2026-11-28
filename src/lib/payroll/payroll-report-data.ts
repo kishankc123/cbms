@@ -1,10 +1,9 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, employeeRetirement, employees, journalEntries, journalLines, payments, payrollLines, payrollRuns } from "@/db/schema";
-import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { employeeRetirement, employees, journalEntries, journalLines, payments, payrollLines, payrollRuns } from "@/db/schema";
 import { getAccountByRole } from "@/lib/compliance/tax-accounts";
 import { payrollTdsHeadKey } from "@/lib/ledger/tds-payable-accounts";
-import { getEmployeePayableBalance } from "./accrual";
+import { staffBalances } from "./staff-account";
 import { payrollPeriodLabel } from "./period-label";
 import { FUNDS, retirementBalances } from "./contributions";
 import { RETIREMENT_ACCOUNTS } from "./retirement-pay";
@@ -78,9 +77,7 @@ export async function loadSalaryPaid(tenantId: string, range: { from: string; to
 }
 
 export async function loadOwedNow(tenantId: string, employeeIds: string[]): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
-  for (const id of employeeIds) out.set(id, await getEmployeePayableBalance(tenantId, id));
-  return out;
+  return staffBalances(tenantId, employeeIds);
 }
 
 async function creditBalance(tenantId: string, accountIds: string[]) {
@@ -96,9 +93,9 @@ async function creditBalance(tenantId: string, accountIds: string[]) {
 /** What payroll owes today: employees' salary, the tax office (salary TDS) and each retirement fund account. */
 export async function loadLiabilities(tenantId: string): Promise<{ label: string; amount: number }[]> {
   const items: { label: string; amount: number }[] = [];
-  const group = await findControlAccount(tenantId, ["2300"], "Salary Payable");
-  const children = group ? await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.tenantId, tenantId), eq(accounts.parentAccountId, group.id))) : [];
-  items.push({ label: "Employees: net salary payable", amount: await creditBalance(tenantId, children.map((c) => c.id)) });
+  // Every staff account together: what is owed to employees, less what any of them owe back.
+  const staff = [...(await staffBalances(tenantId)).values()].reduce((s, v) => s + v, 0);
+  items.push({ label: "Employees: net salary payable", amount: Math.round(staff * 100) / 100 });
   const head = await payrollTdsHeadKey(tenantId);
   const tds = head ? await getAccountByRole(tenantId, `tds_payable:${head}`) : null;
   items.push({ label: "Tax office: remuneration tax (TDS) withheld", amount: tds ? await creditBalance(tenantId, [tds.id]) : 0 });

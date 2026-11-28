@@ -16,6 +16,40 @@ const KIND: Record<VatDetailLine["kind"], string> = {
   purchase_return: "Purchase return",
 };
 
+const OTHER_LABEL = { exempt: "Exempt", zeroRated: "Zero-rated", noVatBill: "Not on a VAT bill (PAN, estimate, challan, no bill)" } as const;
+
+/** What is not in net purchase, each heading opening to its documents. */
+function OtherPurchases({ details }: { details: VatPeriodDetails }) {
+  const all = details.purchasesTaxable + details.otherPurchases.reduce((s, o) => s + o.total, 0);
+  return (
+    <div className="space-y-1 text-xs">
+      <h4 className="font-semibold uppercase tracking-wide text-gray-500">Not in net purchase</h4>
+      {details.otherPurchases.map((o) => (
+        <details key={o.key} className="border-b border-gray-100 pb-1">
+          <summary className="flex cursor-pointer justify-between gap-3 text-gray-800">
+            <span>
+              {OTHER_LABEL[o.key]} ({o.lines.length})
+            </span>
+            <span className="tabular-nums">{fmt(o.total)}</span>
+          </summary>
+          {o.lines.map((l, i) => (
+            <span key={i} className={`flex justify-between gap-3 py-0.5 pl-4 ${l.taxable < 0 ? "text-red-700" : "text-gray-600"}`}>
+              <span>
+                <D value={l.date} /> · {KIND[l.kind]} {l.number} · {l.party}
+              </span>
+              <span className="tabular-nums">{fmt(l.taxable)}</span>
+            </span>
+          ))}
+        </details>
+      ))}
+      <p className="flex justify-between gap-3 font-semibold text-gray-900">
+        <span>All purchases before VAT</span>
+        <span className="tabular-nums">{fmt(all)}</span>
+      </p>
+    </div>
+  );
+}
+
 function Section({ title, lines, taxable, vat, partyLabel }: { title: string; lines: VatDetailLine[]; taxable: number; vat: number; partyLabel: string }) {
   return (
     <div>
@@ -121,9 +155,10 @@ export function VatPeriodHover({ row }: { row: VatWorksheetRow }) {
           {!details && !error && <span className="block text-gray-400">Loading…</span>}
           {details && (
             <>
-              {differs && <span className="block rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900">The books have changed since this worksheet was saved. These are the current documents; the worksheet still shows the saved figures.</span>}
+              {differs && <span className="block rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900">These are the current documents, and they differ from the saved figures: either the books changed since the worksheet was saved, or a filed period is keeping the figure it was filed with.</span>}
               <Section title="Net sales (sales less sales returns)" lines={details.sales} taxable={details.salesTaxable} vat={details.salesVat} partyLabel="Customer" />
-              <Section title="Net purchase (purchases and expenses less purchase returns)" lines={details.purchases} taxable={details.purchasesTaxable} vat={details.purchasesVat} partyLabel="Supplier" />
+              <Section title="Net purchase (taxable purchases and expenses less returns)" lines={details.purchases} taxable={details.purchasesTaxable} vat={details.purchasesVat} partyLabel="Supplier" />
+              <OtherPurchases details={details} />
             </>
           )}
         </span>

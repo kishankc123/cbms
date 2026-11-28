@@ -1016,6 +1016,20 @@
       "when": 1795520929141,
       "tag": "0144_bank_account_reconcile_method",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1795780180719,
+      "tag": "0145_single_staff_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1795858853115,
+      "tag": "0146_pending_exempt_amount",
+      "breakpoints": true
     }
   ]
 }

@@ -33,11 +33,11 @@ export const employees = pgTable("employees", {
   // Confirmed by the organization as qualifying for the first-band (social security tax) exemption. Kept apart from the retirement
   // scheme on purpose: being in SSF does not by itself establish the right to the exemption.
   sstEligible: boolean("sst_eligible").notNull().default(false),
-  // The Chart of Accounts liability sub-account this employee posts salary
-  // accruals to — a sub-group under the tenant's Salary Payable group,
-  // created alongside the employee (see payroll-accounts.ts).
+  // The employee's one staff account: the liability sub-account this employee posts salary
+  // accruals, advances and salary payments to — under the tenant's Staff accounts group,
+  // created alongside the employee (see payroll-accounts.ts and payroll/staff-account.ts).
   payableAccountId: uuid("payable_account_id").references(() => accounts.id),
-  // The employee's own sub-account under Staff Advances (money paid to them ahead of salary).
+  // From before staff had one account: the separate Staff Advances sub-account. Nothing posts to it now; its history is moved by merge-staff-accounts.ts.
   advanceAccountId: uuid("advance_account_id").references(() => accounts.id),
 }, (t) => [uniqueIndex("employees_tenant_code").on(t.tenantId, t.employeeCode)]);
 
@@ -202,6 +202,8 @@ export const payrollLines = pgTable("payroll_lines", {
   employeeRetirement: numeric("employee_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
   employerRetirement: numeric("employer_retirement", { precision: 18, scale: 2 }).notNull().default("0"),
   retirementDetail: jsonb("retirement_detail"),
+  // Already paid before this run was finalized and not covered by an advance: taken off what is left to pay on the payslip. The salary entry is not changed by it.
+  overpaidAdjusted: numeric("overpaid_adjusted", { precision: 18, scale: 2 }).notNull().default("0"),
   netPay: numeric("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 
@@ -325,3 +327,14 @@ export const incentiveEntries = pgTable("incentive_entries", {
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Journal lines moved from an employee's old advance account onto their staff account (see merge-staff-accounts.ts), kept so the move can be undone.
+export const staffAccountMoves = pgTable("staff_account_moves", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  journalLineId: uuid("journal_line_id").notNull(),
+  fromAccountId: uuid("from_account_id").notNull().references(() => accounts.id),
+  toAccountId: uuid("to_account_id").notNull().references(() => accounts.id),
+  movedAt: timestamp("moved_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("staff_account_moves_tenant").on(t.tenantId)]);

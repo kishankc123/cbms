@@ -214,7 +214,7 @@ export async function getCashPurchaseForEdit(billId: string): Promise<CashPurcha
   const stored = (bill.lineItems ?? []).filter((l) => l.categoryId);
   let lines: CashPurchaseLine[];
   if (stored.length > 0) {
-    lines = stored.map((l) => ({ description: l.description, categoryId: l.categoryId as string, rate: l.rate, quantity: l.quantity, discount: l.discount }));
+    lines = stored.map((l) => ({ description: l.description, categoryId: l.categoryId as string, rate: l.rate, quantity: l.quantity, discount: l.discount, ...(l.taxTreatment ? { taxTreatment: l.taxTreatment } : {}) }));
   } else {
     const categoryLine = entryLines.find((l) => Number(l.debitAmount) > 0 && l.accountId !== taxReceivable?.id);
     lines = [{ description: bill.description ?? "", categoryId: categoryLine?.accountId ?? "", rate: Number(bill.subtotal), quantity: 1, discount: 0 }];
@@ -476,6 +476,8 @@ export async function updatePurchaseInvoice(input: UpdatePurchaseInvoiceInput) {
       status,
       amountPaid: paid.toFixed(2),
       detailsPending: false,
+      // From here the items' own VAT choices say which part is exempt.
+      pendingExemptAmount: "0",
       ...(input.billAvailable !== undefined ? { billAvailable: input.billAvailable } : {}),
     })
     .where(eq(purchaseBills.id, input.billId));
@@ -522,7 +524,18 @@ export type AmountPurchaseRow = {
   discount: number;
   billAvailable?: boolean;
   payments: CashPaymentLine[];
+  /** On a VAT bill, the part of it with no VAT on it. `amount` is then only the taxable part. */
+  nonTaxable?: number;
 };
+
+// A VAT bill recorded by amount can have two parts: what carried VAT, and what did not (kept as exempt). Each becomes a line of the bill.
+function amountLines(r: AmountPurchaseRow): CashPurchaseLine[] {
+  const nonTaxable = r.billType === "vat" ? Math.max(r.nonTaxable ?? 0, 0) : 0;
+  const main = { description: r.description, categoryId: r.categoryId, rate: r.amount, quantity: 1, discount: r.discount };
+  if (nonTaxable <= 0) return [main];
+  const exempt = { description: "", categoryId: r.categoryId, rate: nonTaxable, quantity: 1, discount: 0, taxTreatment: "exempt" as const };
+  return r.amount > 0 ? [main, exempt] : [{ ...exempt, description: r.description }];
+}
 
 const asBill = (r: AmountPurchaseRow): CashPurchaseInput => ({
   billNumber: r.billNumber,
@@ -530,7 +543,7 @@ const asBill = (r: AmountPurchaseRow): CashPurchaseInput => ({
   vendorId: r.vendorId,
   billType: r.billType,
   billAvailable: r.billAvailable,
-  lines: [{ description: r.description, categoryId: r.categoryId, rate: r.amount, quantity: 1, discount: r.discount }],
+  lines: amountLines(r),
   payments: r.payments,
 });
 

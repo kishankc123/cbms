@@ -25,7 +25,8 @@ import { assertRunAdvancesCurrent, planEmployeeRecovery, recordRunRecoveries, re
 import { slabsOn } from "@/lib/compliance/slabs";
 import { computeMonthlyTds, earlierInFiscalYear, payrollTaxContext, type TdsWorking } from "@/lib/payroll/salary-tax";
 import type { TaxpayerClass } from "@/lib/compliance/slab-tables";
-import { postPayrollAccrual, activePayrollEntries, getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { postPayrollAccrual, activePayrollEntries } from "@/lib/payroll/accrual";
+import { draftOverpaidAdjustments, overpaidAfterReversal } from "@/lib/payroll/overpaid";
 import { todayIso } from "@/lib/calendar";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -259,9 +260,14 @@ export async function advanceRunStatus(input: { runId: string }) {
     // run is only marked finalized once it exists — a run can never be finalized with no accounting behind it.
     await assertPeriodOpen(session.tenantId, run.periodEnd);
     await assertRunAdvancesCurrent(session.tenantId, run);
+    // Worked out before the salary is posted: what each employee had already been paid beyond their advances.
+    const alreadyPaid = await draftOverpaidAdjustments(session.tenantId, run);
     const entryId = await postPayrollAccrual(session.tenantId, run, session.userId);
     try {
       await recordRunRecoveries(session.tenantId, run);
+      for (const [lineId, amount] of alreadyPaid) {
+        await db.update(payrollLines).set({ overpaidAdjusted: amount.toFixed(2) }).where(and(eq(payrollLines.id, lineId), eq(payrollLines.tenantId, session.tenantId)));
+      }
       await db.update(payrollRuns).set({ status: "finalized", finalizedAt: new Date() }).where(eq(payrollRuns.id, input.runId));
     } catch (e) {
       await removeRunRecoveries(session.tenantId, run.id).catch(() => {});
@@ -291,10 +297,19 @@ export async function advanceRunStatus(input: { runId: string }) {
   }
 }
 
+/** Who would show as overpaid if this finalized run were reversed, to put in front of the person before they confirm. */
+export async function getReversalOverpaid(input: { runId: string }) {
+  const session = await requireTenantSession();
+  if (!can(session, "payroll", "edit")) throw new Error("Not permitted");
+  if (!can(session, "payroll", "view_salary")) throw new Error("Not permitted");
+  const [run] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.id, input.runId), eq(payrollRuns.tenantId, session.tenantId))).limit(1);
+  if (!run) throw new Error("Payroll run not found");
+  return run.status === "finalized" ? overpaidAfterReversal(session.tenantId, run) : [];
+}
+
 /**
- * Takes a finalized run back to draft so it can be corrected: its salary entry is reversed and the run reopens. Refused
- * when an employee's salary payable no longer covers what this run credited them (they have been paid out of it), so
- * the payable can never go negative; a reason is required and recorded.
+ * Takes a finalized run back to draft so it can be corrected: its salary entry is reversed and the run reopens. It is allowed even when employees have already been
+ * paid from it — they then show as overpaid, and the screen says who before asking to go ahead (see getReversalOverpaid). A reason is required and recorded.
  */
 export async function reverseFinalizedRun(input: { runId: string; reason: string }) {
   const session = await requireTenantSession();
@@ -312,16 +327,6 @@ export async function reverseFinalizedRun(input: { runId: string; reason: string
 
   const entries = await activePayrollEntries(session.tenantId, run.id);
   if (entries.length > 0) {
-    const lines = await db.select().from(payrollLines).where(eq(payrollLines.payrollRunId, run.id));
-    for (const line of lines) {
-      const net = Number(line.netPay);
-      if (net <= 0) continue;
-      const balance = await getEmployeePayableBalance(session.tenantId, line.employeeId);
-      if (balance + 0.005 < net) {
-        const [emp] = await db.select({ name: employees.fullName }).from(employees).where(eq(employees.id, line.employeeId)).limit(1);
-        throw new Error(`${emp?.name ?? "An employee"} has already been paid out of this run (payable ${balance.toFixed(2)} of ${net.toFixed(2)}) — void those salary payments first`);
-      }
-    }
     await assertPeriodOpen(session.tenantId, todayIso());
     for (const entry of entries) {
       await reverseJournalEntry(session.tenantId, entry.id, session.userId, `Payroll run reversed: ${input.reason.trim()}`);
@@ -329,6 +334,7 @@ export async function reverseFinalizedRun(input: { runId: string; reason: string
   }
 
   await removeRunRecoveries(session.tenantId, run.id); // the advances it recovered are outstanding again
+  await db.update(payrollLines).set({ overpaidAdjusted: "0" }).where(and(eq(payrollLines.payrollRunId, run.id), eq(payrollLines.tenantId, session.tenantId)));
   await db.update(payrollRuns).set({ status: "draft", finalizedAt: null }).where(eq(payrollRuns.id, run.id));
   await db.insert(auditLog).values({
     tenantId: session.tenantId,

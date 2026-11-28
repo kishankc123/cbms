@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { createSubAccount } from "@/lib/ledger/control-accounts";
-import { getOrCreateStaffAdvanceAccount, getOrCreateSupplierAdvanceAccount, getOrCreateSupplierAdvanceSubAccountId } from "@/lib/ledger/advance-accounts";
+import { getOrCreateSupplierAdvanceAccount, getOrCreateSupplierAdvanceSubAccountId } from "@/lib/ledger/advance-accounts";
 import { getOrCreatePendingPurchasesAccount } from "@/lib/ledger/purchases-accounts";
 import { createPaymentMode, deletePaymentMode, listLinkableAccounts, listModeOptions, listPaymentModes, modeAccountIds, updatePaymentMode } from "@/lib/payment-modes";
 
@@ -49,7 +49,7 @@ describe("payment modes", () => {
   it("does not offer the accounts the system keeps for supplier advances, staff advances or stock waiting for its details", async () => {
     await getOrCreateSupplierAdvanceAccount(org.tenantId);
     await getOrCreateSupplierAdvanceSubAccountId(org.tenantId, "An Advance Supplier");
-    await getOrCreateStaffAdvanceAccount(org.tenantId);
+    await db.insert(accounts).values({ tenantId: org.tenantId, code: "1360", name: "Staff Advances", category: "asset", subCategory: "Current assets" }).onConflictDoNothing(); // from before staff had one account
     await getOrCreatePendingPurchasesAccount(org.tenantId);
     const codes = (await listLinkableAccounts(org.tenantId)).map((a) => a.code);
     expect(codes.filter((c) => /^(1100|1200|1210|1300|1350|1360)/.test(c))).toEqual([]);

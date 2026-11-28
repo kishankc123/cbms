@@ -16,6 +16,7 @@ import { allocateProportional, assertTrackingOn, assertInventoryDate, assertItem
 import { recalculateAfter } from "@/lib/inventory/recalc";
 import { inputVatClaimable } from "@/lib/purchases/vat";
 import { getTaxRate } from "@/lib/compliance/tax-rates";
+import { lineVatRate } from "@/lib/purchases/vat-lines";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -23,7 +24,7 @@ export type PurchaseReturnInput = {
   noteNumber: string;
   noteDate: string;
   vendorId: string;
-  /** True when the goods came on a VAT bill, so the input VAT is claimed back too. */
+  /** True when the goods came on a VAT bill, so the input VAT is claimed back too — on the lines that carried it: each line says whether it is taxable. */
   withVat: boolean;
   lines: PurchaseLineItem[];
 };
@@ -74,7 +75,13 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
   // Taxed at the rate that applied on the return's OWN date, not today's.
   const vatRate = input.withVat ? await getTaxRate(session.tenantId, "vat", input.noteDate) : 0;
 
-  const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
+  // As on a purchase invoice, the treatment is kept only on a VAT return and only when it is not simply taxable.
+  const validLines = input.lines
+    .filter((l) => l.quantity > 0 && l.rate > 0)
+    .map((l): PurchaseLineItem => {
+      const { taxTreatment, ...rest } = l;
+      return input.withVat && taxTreatment && taxTreatment !== "taxable" ? { ...rest, taxTreatment } : rest;
+    });
   if (validLines.length === 0) throw new Error("Add at least one item line");
   await assertItemsUsable(session.tenantId, validLines);
   await assertInventoryDate(session.tenantId, input.noteDate, validLines);
@@ -82,7 +89,7 @@ export async function createPurchaseReturn(input: PurchaseReturnInput) {
   // You can't send back more than you hold — on that date, and from then on.
   await assertStockTimeline(session.tenantId, { add: validLines.map((l) => ({ itemId: l.itemId, date: input.noteDate, quantity: -l.quantity })) });
 
-  const computed = validLines.map((l) => computeLine(l, vatRate));
+  const computed = validLines.map((l) => computeLine(l, lineVatRate("vat", l.taxTreatment, vatRate)));
   const subtotal = round2(computed.reduce((s, c) => s + c.taxable, 0));
   const taxAmount = round2(computed.reduce((s, c) => s + c.vat, 0));
   const total = round2(subtotal + taxAmount);

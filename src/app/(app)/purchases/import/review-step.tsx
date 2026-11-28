@@ -456,7 +456,10 @@ function Rows({ rows, skipRows, onSkipRows, supplierDecisions, overrides, onOver
                   </td>
                   <td className="px-3 py-2">{r.categoryName ?? (r.categoryText ? <span className="text-red-600">{r.categoryText}</span> : <span className="text-[var(--text-secondary)]">—</span>)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{money(r.amount)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{money(r.total)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {money(r.total)}
+                    {r.billType === "vat" && <p className="text-xs text-[var(--text-secondary)]">{r.treatment === "exempt" ? "Exempt" : r.treatment === "zero_rated" ? "Zero-rated" : `VAT ${money(r.tax)}`}</p>}
+                  </td>
                   <td className="px-3 py-2">
                     <StatusPill tone={TONE[r.status]}>{LABEL[r.status]}</StatusPill>
                   </td>

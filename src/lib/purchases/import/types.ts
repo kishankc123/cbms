@@ -1,6 +1,7 @@
 import type { PurchaseRowIssue, PurchaseRowStatus } from "./checks";
 import type { PurchaseFieldKey } from "./fields";
 import type { PurchaseBillTypeValue } from "./values";
+import type { LineTreatment } from "@/lib/purchases/vat-lines";
 
 // The shapes passed between the Import Purchases screen and its server actions.
 
@@ -31,6 +32,8 @@ export type PurchaseReviewRow = {
   amount: number | null;
   paid: number;
   billType: PurchaseBillTypeValue | null;
+  /** On a VAT bill: whether it carries VAT. */
+  treatment: LineTreatment | null;
   status: PurchaseRowStatus;
   issues: PurchaseRowIssue[];
   messages: string[];

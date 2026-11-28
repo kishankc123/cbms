@@ -11,6 +11,7 @@ import { attentionItems, loadOverview } from "@/lib/payroll/overview";
 import { loadLiabilities } from "@/lib/payroll/payroll-report-data";
 import { payrollRulesOn } from "@/lib/payroll/platform-rules";
 import { payrollTaxContext } from "@/lib/payroll/salary-tax";
+import { overpaidStaff } from "@/lib/payroll/overpaid";
 
 const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STATUS: Record<string, { label: string; tone: StatusTone }> = { draft: { label: "Draft", tone: "neutral" }, approved: { label: "Approved", tone: "action" }, finalized: { label: "Finalized", tone: "success" } };
@@ -22,11 +23,12 @@ export default async function PayrollOverviewPage() {
   const session = await requireTenantSession();
   const today = todayIso();
   const ctx = await payrollTaxContext(session.tenantId, today);
-  const [overview, liabilities, slabs, rules] = await Promise.all([
+  const [overview, liabilities, slabs, rules, overpaid] = await Promise.all([
     loadOverview(session.tenantId),
     loadLiabilities(session.tenantId),
     ctx.headKey ? slabsOn(ctx.countryCode, ctx.headKey, today) : Promise.resolve(null),
     ctx.countryCode ? payrollRulesOn(ctx.countryCode, today) : Promise.resolve(null),
+    overpaidStaff(session.tenantId),
   ]);
 
   const latest = overview.recent[0];
@@ -77,6 +79,32 @@ export default async function PayrollOverviewPage() {
           </Link>
         </div>
       </section>
+
+      {overpaid.length > 0 && (
+        <section className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold">
+              {overpaid.length === 1 ? "1 employee is overpaid" : `${overpaid.length} employees are overpaid`}
+            </h2>
+            <p className="text-sm font-semibold tabular-nums">Total {money(overpaid.reduce((s, p) => s + p.overpaid, 0))}</p>
+          </div>
+          <table className="w-full border-collapse text-[13px]">
+            <tbody>
+              {overpaid.map((p) => (
+                <tr key={p.employeeId} className="border-t border-amber-300">
+                  <td className="py-1.5 pr-3">
+                    <Link href={`/payroll/employees/${p.employeeId}`} className="underline">
+                      <span className="font-mono text-xs">{p.code}</span> {p.name}
+                    </Link>
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">{money(p.overpaid)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs">Paid beyond what they have earned. Advances waiting for their payroll month are not counted. It clears when later salary or a repayment covers it.</p>
+        </section>
+      )}
 
       {attention.length > 0 && (
         <section className="space-y-2">

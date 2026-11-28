@@ -95,7 +95,7 @@ export async function removeRunRecoveries(tenantId: string, runId: string) {
 type FinalizedRun = Pick<typeof payrollRuns.$inferSelect, "calendarSystem" | "month" | "year" | "periodStart" | "periodEnd">;
 
 /** Whether a finalized run closes that month: one for the month itself, or any run covering the month's first day. */
-const monthClosed = (runs: readonly FinalizedRun[], forCalendar: string, forMonth: number, forYear: number, forPeriodStart: string) =>
+export const monthClosed = (runs: readonly FinalizedRun[], forCalendar: string, forMonth: number, forYear: number, forPeriodStart: string) =>
   runs.some((r) => (r.calendarSystem === forCalendar && r.month === forMonth && r.year === forYear) || (r.periodStart <= forPeriodStart && r.periodEnd >= forPeriodStart));
 
 /** A finalized run — for the month the advance is taken against, or any run covering that month's first day — closes that month. */

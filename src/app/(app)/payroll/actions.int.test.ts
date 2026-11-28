@@ -4,8 +4,9 @@ import { db } from "@/db";
 import { accounts, accountingPeriods, auditLog, employees, journalEntries, payrollLines, payrollRuns, salaryHistory } from "@/db/schema";
 import { createTempOrg } from "@/test/temp-org";
 import { useCountryWithoutSlabs } from "@/test/no-slabs-country";
-import { createPayment, voidPayment } from "@/lib/ledger/payments-engine";
-import { getEmployeePayableBalance, activePayrollEntries } from "@/lib/payroll/accrual";
+import { createPayment } from "@/lib/ledger/payments-engine";
+import { activePayrollEntries } from "@/lib/payroll/accrual";
+import { getStaffBalance } from "@/lib/payroll/staff-account";
 
 let org: Awaited<ReturnType<typeof createTempOrg>>;
 let dropCountry: () => Promise<void>;
@@ -110,7 +111,7 @@ describe("payroll run lifecycle", () => {
     await finalize(runId);
     expect((await runOf(runId)).status).toBe("finalized");
     expect((await activePayrollEntries(org.tenantId, runId)).length).toBe(1);
-    expect(await getEmployeePayableBalance(org.tenantId, ashaId)).toBe(net);
+    expect(await getStaffBalance(org.tenantId, ashaId)).toBe(net);
   });
 
   it("refuses to regenerate or overlap a finalized run", async () => {
@@ -124,33 +125,28 @@ describe("payroll run lifecycle", () => {
     await expect(revertRunToDraft({ runId })).rejects.toThrow(/finalized/);
   });
 
-  it("a salary payment can't be more than what the employee is owed, and settles the payable", async () => {
-    await expect(salaryPayment(ashaId, net + 1)).rejects.toThrow(/is owed/);
+  it("a salary payment comes off the staff account, with no limit", async () => {
     await salaryPayment(ashaId, 1000);
-    expect(await getEmployeePayableBalance(org.tenantId, ashaId)).toBe(net - 1000);
-    // someone who is owed nothing can't be paid
+    expect(await getStaffBalance(org.tenantId, ashaId)).toBe(net - 1000);
+    // someone who is owed nothing can still be paid; their account then says they owe it back
     const chandra = await findEmployee("E-3");
-    await expect(salaryPayment(chandra.id, 10)).rejects.toThrow(/isn't owed/);
+    await salaryPayment(chandra.id, 10);
+    expect(await getStaffBalance(org.tenantId, chandra.id)).toBe(-10);
   });
 
-  it("can't reverse a run the employee has been paid out of; can once the payment is voided", async () => {
-    await expect(reverseFinalizedRun({ runId, reason: "wrong basic" })).rejects.toThrow(/already been paid/);
+  it("reverses a run the employee has been paid out of, leaving the payment on their account", async () => {
     await expect(reverseFinalizedRun({ runId, reason: "  " })).rejects.toThrow(/reason/);
-
-    const { payments } = await import("@/db/schema");
-    const [p] = await db.select().from(payments).where(and(eq(payments.tenantId, org.tenantId), eq(payments.paymentType, "salary_payment")));
-    await voidPayment(org.tenantId, p.id, org.userId, "test");
-    expect(await getEmployeePayableBalance(org.tenantId, ashaId)).toBe(net);
-
     await reverseFinalizedRun({ runId, reason: "wrong basic" });
     expect((await runOf(runId)).status).toBe("draft");
     expect((await activePayrollEntries(org.tenantId, runId)).length).toBe(0);
-    expect(await getEmployeePayableBalance(org.tenantId, ashaId)).toBe(0);
+    expect(await getStaffBalance(org.tenantId, ashaId)).toBe(-1000);
 
-    // it can be corrected and finalized again — one entry in force, not two
+    // it can be corrected and finalized again — one entry in force, not two — and the 1000 already paid comes off what is left to pay
     await finalize(runId);
     expect((await activePayrollEntries(org.tenantId, runId)).length).toBe(1);
-    expect(await getEmployeePayableBalance(org.tenantId, ashaId)).toBe(net);
+    expect(await getStaffBalance(org.tenantId, ashaId)).toBe(net - 1000);
+    const [line] = await db.select().from(payrollLines).where(eq(payrollLines.payrollRunId, runId));
+    expect(Number(line.overpaidAdjusted)).toBe(1000);
   });
 
   it("refuses to finalize when the run's period is closed, leaving the run unfinalized", async () => {

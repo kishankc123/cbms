@@ -297,7 +297,8 @@ export async function loadForecast(tenantId: string, today: string, horizonDays:
 
   // Salaries already owed (finalised, unpaid) are assumed paid soon; later months repeat the last finalised month's pay.
   const salaryOwed = round2(salaryRows.reduce((s, r) => s + r.balance, 0));
-  if (salaryOwed > 0) events.push({ id: "salary-owed", category: "payroll", side: "out", date: addDays(today, OVERDUE_DAYS), amount: salaryOwed, party: "Salaries owed", basis: "assumed", certainty: "expected" });
+  const salaryToPay = round2(salaryRows.reduce((s, r) => s + Math.max(r.balance, 0), 0));
+  if (salaryToPay > 0) events.push({ id: "salary-owed", category: "payroll", side: "out", date: addDays(today, OVERDUE_DAYS), amount: salaryToPay, party: "Salaries owed", basis: "assumed", certainty: "expected" });
   let lastPay: { periodStart: string; periodEnd: string; total: number } | null = null;
   if (lastRun[0]) {
     const [t] = await db.select({ v: sql<string>`coalesce(sum(${payrollLines.netPay}), 0)` }).from(payrollLines).where(eq(payrollLines.payrollRunId, lastRun[0].id));

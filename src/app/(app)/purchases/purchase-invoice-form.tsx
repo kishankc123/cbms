@@ -201,9 +201,8 @@ export function PurchaseInvoiceForm({
     setLines((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  // A VAT bill can mix goods that carry VAT with zero-rated and exempt ones: each line has its own treatment, shown when asked for or once one differs.
-  const [mixed, setMixed] = useState(false);
-  const showTreatment = billType === "vat" && (mixed || lines.some((l) => l.taxTreatment !== "taxable"));
+  // A VAT bill can mix goods that carry VAT with zero-rated and exempt ones, so every line of one has its own choice.
+  const showTreatment = billType === "vat";
   const computedLines = lines.map((l) => computeLine(l, vatRate, billType));
   const split = splitByTreatment(billType, computedLines.map((c, i) => ({ taxable: c.taxable, taxTreatment: lines[i].taxTreatment })));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
@@ -425,12 +424,6 @@ export function PurchaseInvoiceForm({
         <fieldset disabled={lockedRecon} className="min-w-0 border-0 p-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-900">Invoice Items</h2>
-          {billType === "vat" && (
-            <label className="flex items-center gap-1.5 text-xs text-gray-600">
-              <input type="checkbox" checked={showTreatment} disabled={lines.some((l) => l.taxTreatment !== "taxable")} onChange={(e) => setMixed(e.target.checked)} />
-              Mixed VAT bill: some items are zero-rated or exempt
-            </label>
-          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -442,9 +435,9 @@ export function PurchaseInvoiceForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
                 {showDiscount && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>}
-                {showTreatment && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT treatment</th>}
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                {showTreatment && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>}
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT amount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap"></th>
               </tr>
@@ -509,7 +502,7 @@ export function PurchaseInvoiceForm({
                         <select value={line.taxTreatment} onChange={(e) => updateLine(i, "taxTreatment", e.target.value)} className={`w-28 ${cellInputCls}`} aria-label="VAT treatment of this line">
                           {LINE_TREATMENTS.map((t) => (
                             <option key={t.value} value={t.value}>
-                              {t.label}
+                              {t.value === "taxable" ? `Taxable ${vatRate}%` : t.label}
                             </option>
                           ))}
                         </select>
@@ -563,7 +556,7 @@ export function PurchaseInvoiceForm({
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">{split.zeroRated > 0 || split.exempt > 0 ? "Taxable (VAT applies)" : "Taxable"}</span>
+              <span className="text-gray-500">{billType === "vat" ? "Taxable amount" : "Amount"}</span>
               <span>{fmt(split.taxable)}</span>
             </div>
             {split.zeroRated > 0 && (

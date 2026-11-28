@@ -31,11 +31,9 @@ import { openPayables } from "./open-payables";
 import { resolvePaymentMode } from "@/lib/payment-modes";
 import { getCustomerBalances } from "./customer-balances";
 import { resettleParty } from "./party-settlement";
-import { getEmployeePayableBalance } from "@/lib/payroll/accrual";
+import { getOrCreateStaffAccountId } from "@/lib/payroll/staff-account";
 import { assertMonthOpenForAdvance } from "@/lib/payroll/staff-advances";
-import { getOrCreateEmployeeAdvanceAccountId } from "./advance-accounts";
 import { isoFromYmd, type CalendarSystem } from "@/lib/calendar";
-import { createEmployeePayableAccount } from "./payroll-accounts";
 import { assertPeriodOpen } from "@/lib/compliance/period-lock";
 import { buildNextPaymentNumber } from "@/lib/payment-number";
 import { todayIso } from "@/lib/calendar";
@@ -221,19 +219,10 @@ async function buildLines(tenantId: string, input: CreatePaymentInput): Promise<
       return [{ accountId: await getOrCreateSupplierPayableAccountId(tenantId, input.vendorId!), debitAmount: amount, description: label }, primaryLine];
     case "customer_refund":
       return [{ accountId: await getOrCreateCustomerReceivableAccountId(tenantId, input.customerId!), debitAmount: amount, description: label }, primaryLine];
-    case "salary_payment": {
-      // Pay-out of what an employee is owed: settles their own Salary Payable account.
-      const [emp] = await db.select({ id: employees.id, fullName: employees.fullName, payableAccountId: employees.payableAccountId }).from(employees).where(and(eq(employees.id, input.employeeId!), eq(employees.tenantId, tenantId))).limit(1);
-      if (!emp) throw new Error("Employee not found");
-      const payableId = emp.payableAccountId ?? (await createEmployeePayableAccount(tenantId, emp.fullName)).id;
-      if (!emp.payableAccountId) await db.update(employees).set({ payableAccountId: payableId }).where(eq(employees.id, emp.id));
-      return [{ accountId: payableId, debitAmount: amount, description: label }, primaryLine];
-    }
-    case "staff_advance": {
-      // Money handed to an employee ahead of salary: it sits on their own Staff Advance account until payroll recovers it.
-      const advanceId = await getOrCreateEmployeeAdvanceAccountId(tenantId, input.employeeId!);
-      return [{ accountId: advanceId, debitAmount: amount, description: label }, primaryLine];
-    }
+    // Salary and advances both go on the employee's one staff account. An advance is also recorded (staff_advances) so payroll knows what to take back, and when.
+    case "salary_payment":
+    case "staff_advance":
+      return [{ accountId: await getOrCreateStaffAccountId(tenantId, input.employeeId!), debitAmount: amount, description: label }, primaryLine];
     case "expense_payment": {
       // Settles where each expense is owed: the supplier's own account when it has a supplier, else the shared Expense Payable account. One payment can settle
       // several expenses, so what is allocated to each is added up per account.
@@ -503,19 +492,6 @@ async function validateRefund(tenantId: string, input: CreatePaymentInput, ownAm
   }
 }
 
-// A salary payment settles what the employee is owed (their Salary Payable balance), so it can't be more than that.
-async function validateSalaryPayment(tenantId: string, input: CreatePaymentInput, ownAmount = 0) {
-  if (input.paymentType !== "salary_payment") return;
-  const owed = round2(Math.max(await getEmployeePayableBalance(tenantId, input.employeeId!), 0) + ownAmount);
-  if (round2(input.amount) > owed + 0.005) {
-    throw new Error(
-      owed > 0
-        ? `This employee is owed ${owed.toFixed(2)}, so a salary payment can't be more than that`
-        : "This employee isn't owed any salary — finalize their payroll run first (or there is nothing left to pay)"
-    );
-  }
-}
-
 // A staff advance goes to someone who is employed on the day it is paid, against a payroll month that is still open.
 async function validateStaffAdvance(tenantId: string, input: CreatePaymentInput) {
   if (input.paymentType !== "staff_advance") return;
@@ -570,7 +546,6 @@ export async function createPayment(
   await validateTaxAllocations(tenantId, input);
   await validateAllocations(tenantId, input);
   await validateRefund(tenantId, input);
-  await validateSalaryPayment(tenantId, input);
   await validateStaffAdvance(tenantId, input);
   await validateRetirementPayment(tenantId, input);
   await assertAccountActive(tenantId, input.accountId);
@@ -935,7 +910,6 @@ export async function updatePayment(tenantId: string, userId: string, paymentId:
   await validateAllocations(tenantId, input, credit);
   const sameParty = (a: string | null | undefined, b: string | null | undefined) => Boolean(a) && a === b;
   await validateRefund(tenantId, input, sameParty(payment.customerId, input.customerId) ? Number(payment.amount) : 0);
-  await validateSalaryPayment(tenantId, input, sameParty(payment.employeeId, input.employeeId) ? Number(payment.amount) : 0);
 
   // ---- what changed (nothing to do if nothing did) ----
   const newAllocsAsRows = (input.allocations ?? []).map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }));
@@ -1100,7 +1074,6 @@ async function updateReconciledPayment(tenantId: string, userId: string, payment
   await validateAllocations(tenantId, input, credit);
   const sameParty = (a: string | null | undefined, b: string | null | undefined) => Boolean(a) && a === b;
   await validateRefund(tenantId, input, sameParty(payment.customerId, input.customerId) ? Number(payment.amount) : 0);
-  await validateSalaryPayment(tenantId, input, sameParty(payment.employeeId, input.employeeId) ? Number(payment.amount) : 0);
 
   const newAllocsAsRows = (input.allocations ?? []).map((a) => ({ targetType: a.targetType, targetId: a.targetId, allocatedAmount: a.allocatedAmount.toFixed(2) }));
   const draftRow: PaymentRow = {
