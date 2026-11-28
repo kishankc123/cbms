@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_bills" ADD COLUMN "pending_exempt_amount" numeric(18, 2) DEFAULT '0' NOT NULL;

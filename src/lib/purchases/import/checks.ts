@@ -1,6 +1,7 @@
 import { checkPayments, snapPayments, type PaySlot } from "@/lib/import-payments";
 import { netFromInclusive, rowTotals } from "@/lib/sales/import/amounts";
 import type { PurchaseBillTypeValue } from "./values";
+import type { LineTreatment } from "@/lib/purchases/vat-lines";
 
 // Whether an imported purchase row can become a bill as it stands, and what is wrong when it can't. Pure: no database. The
 // review and the import both run this, so what you approved is what gets posted.
@@ -17,6 +18,9 @@ export type PurchaseRowInput = {
   amount: { value: number | null; invalid: boolean };
   billType: PurchaseBillTypeValue | undefined | null;
   billTypeText?: string;
+  /** The VAT treatment cell: undefined when blank (taxable), null when it isn't a treatment. */
+  treatment?: LineTreatment | null;
+  treatmentText?: string;
   /** The payment columns: up to three parts, each with the account it went through. */
   pays: PaySlot[];
   supplier: SupplierState;
@@ -35,7 +39,7 @@ export type PurchaseRowCheck = {
   status: PurchaseRowStatus;
   issues: PurchaseRowIssue[];
   messages: string[];
-  computed: { gross: number; discount: number; subtotal: number; tax: number; total: number; paid: number; billType: PurchaseBillTypeValue } | null;
+  computed: { gross: number; discount: number; subtotal: number; tax: number; total: number; paid: number; billType: PurchaseBillTypeValue; treatment: LineTreatment } | null;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -59,6 +63,9 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
 
   if (i.billType === null) flag("billType", `"${i.billTypeText ?? ""}" isn't a bill type. Use VAT, PAN, estimate, challan or no bill.`);
   const billType: PurchaseBillTypeValue = i.billType ?? i.settings.defaultBillType;
+  if (i.treatment === null) flag("billType", `"${i.treatmentText ?? ""}" isn't a VAT treatment. Use taxable, zero-rated or exempt.`);
+  // The treatment means something only on a VAT bill.
+  const treatment: LineTreatment = billType === "vat" ? i.treatment ?? "taxable" : "taxable";
 
   if (i.category === "none") flag("category", "Choose the purchase category (a column in the file, or the default below).");
   else if (i.category === "unknown") flag("category", `"${i.categoryText ?? ""}" isn't one of your purchase categories.`);
@@ -66,10 +73,11 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
   let computed: PurchaseRowCheck["computed"] = null;
   const amountOk = !i.amount.invalid && i.amount.value !== null && i.amount.value > 0;
   if (amountOk) {
-    // The file's amount is what is paid, VAT included. VAT applies only to a VAT bill; for any other bill type the amount is the whole cost.
-    const vatRate = billType === "vat" ? i.settings.vatRate : 0;
+    // The file's amount is what is paid, VAT included. VAT applies only to a taxable VAT bill; otherwise the amount is the whole cost.
+    const carriesVat = billType === "vat" && treatment === "taxable";
+    const vatRate = carriesVat ? i.settings.vatRate : 0;
     let t;
-    if (billType === "vat") {
+    if (carriesVat) {
       const net = netFromInclusive(round2(i.amount.value!), vatRate);
       t = rowTotals(net, 0, "taxable", vatRate);
     } else {
@@ -82,7 +90,7 @@ export function checkPurchaseRow(i: PurchaseRowInput): PurchaseRowCheck {
     if (paid < t.total - 0.004 && (i.supplier === "none" || i.supplier === "unknown")) {
       flag("supplier", i.supplier === "unknown" ? "This supplier isn't set up yet." : "A supplier is needed, because the bill isn't fully paid.");
     }
-    computed = { gross: t.gross, discount: t.discount, subtotal: t.subtotal, tax: t.tax, total: t.total, paid, billType };
+    computed = { gross: t.gross, discount: t.discount, subtotal: t.subtotal, tax: t.tax, total: t.total, paid, billType, treatment };
   }
   if (i.supplier === "unknown" && !issues.includes("supplier")) flag("supplier", "This supplier isn't set up yet.");
 

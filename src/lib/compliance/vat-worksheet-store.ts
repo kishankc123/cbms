@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users, vatWorksheets } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit";
-import { buildVatWorksheet, computeVatWorksheetFigures, listVatWorksheetYears, vatBooksChangedSince, type VatWorksheet, type VatWorksheetYear } from "./vat-worksheet";
+import { buildVatWorksheet, computeVatWorksheetFigures, keepFiledNetPurchase, listVatWorksheetYears, vatBooksChangedSince, type VatWorksheet, type VatWorksheetYear } from "./vat-worksheet";
 
 export type VatWorksheetState = {
   years: VatWorksheetYear[];
@@ -57,9 +57,10 @@ async function selectedYear(tenantId: string, yearKey: string): Promise<VatWorks
 /** Works the year out from the books and keeps it as the draft (replacing an earlier draft). Slow, on purpose: it is asked for. */
 export async function loadVatWorksheet(tenantId: string, userId: string, yearKey: string) {
   const year = await selectedYear(tenantId, yearKey);
-  const figures = await computeVatWorksheetFigures(tenantId, year);
+  const worked = await computeVatWorksheetFigures(tenantId, year);
   const now = new Date();
   const existing = await rowFor(tenantId, year.key);
+  const figures = await keepFiledNetPurchase(tenantId, worked, existing?.data ?? null);
   if (existing) {
     await db.update(vatWorksheets).set({ draft: figures, draftLoadedAt: now, draftLoadedBy: userId, fiscalYearLabel: year.label }).where(eq(vatWorksheets.id, existing.id));
   } else {

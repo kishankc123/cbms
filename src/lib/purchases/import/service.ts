@@ -15,6 +15,7 @@ import { createCashPurchaseCore } from "@/lib/purchases/cash-purchase";
 import { assertColumns, templateMapping, templateRows } from "@/lib/import-columns";
 import { paymentLines, readPaySlots, snapPayments } from "@/lib/import-payments";
 import { bestNameMatch, normalizeName, parseAmountCell } from "@/lib/sales/import/values";
+import { parseTreatmentCell } from "@/lib/purchases/vat-lines";
 import { checkPurchaseRow, type CategoryState, type SupplierState } from "./checks";
 import { PURCHASE_FIELDS, type PurchaseColumnMapping } from "./fields";
 import type {
@@ -207,6 +208,8 @@ async function buildRows(
       amount,
       billType: parsePurchaseBillType(billTypeText),
       billTypeText,
+      treatment: parseTreatmentCell(cell(r, "vat")),
+      treatmentText: cell(r, "vat"),
       pays,
       supplier,
       category,
@@ -249,6 +252,7 @@ async function buildRows(
       amount: amount.value,
       paid: check.computed?.paid ?? 0,
       billType: check.computed?.billType ?? null,
+      treatment: check.computed?.treatment ?? null,
       status,
       issues: check.issues,
       messages,
@@ -315,7 +319,7 @@ export async function reviewPurchaseFile(
   }
   const strip = (r: Row): PurchaseReviewRow => ({
     rowNumber: r.rowNumber, raw: r.raw, dateIso: r.dateIso, dateRaw: r.dateRaw, supplierText: r.supplierText, supplierName: r.supplierName, supplierKey: r.supplierKey,
-    categoryText: r.categoryText, categoryName: r.categoryName, categoryKey: r.categoryKey, amount: r.amount, paid: r.paid, billType: r.billType, status: r.status,
+    categoryText: r.categoryText, categoryName: r.categoryName, categoryKey: r.categoryKey, amount: r.amount, paid: r.paid, billType: r.billType, treatment: r.treatment, status: r.status,
     issues: r.issues, messages: r.messages, total: r.total, tax: r.tax,
   });
   return { rows: rows.map(strip), supplierGroups: [...sGroups.values()].sort((a, b) => b.rows - a.rows), categoryGroups: [...cGroups.values()].sort((a, b) => b.rows - a.rows), counts, fileTotal, importTotal, importTax };
@@ -439,7 +443,7 @@ export async function importPurchaseChunk(ctx: { tenantId: string; userId: strin
           billDate: r.dateIso,
           vendorId: r.vendorId ?? "",
           billType: r.billType ?? input.settings.defaultBillType,
-          lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: 0 }],
+          lines: [{ description: r.description, categoryId: r.categoryId, rate: r.gross, quantity: 1, discount: 0, ...(r.treatment && r.treatment !== "taxable" ? { taxTreatment: r.treatment } : {}) }],
           payments: r.payLines,
         },
         { importId: input.importId, takenNumbers: taken }
@@ -510,12 +514,12 @@ export async function buildPurchaseTemplate(tenantId: string): Promise<string> {
   const wb = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet(
     templateRows(PURCHASE_FIELDS, [
-      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5650, billType: "VAT", paid: 0 },
+      { date: "15/04/2083", supplier: supplierList[0]?.name ?? "Supplier name", category: categoryList[0]?.name ?? "Category", billNumber: "B-101", description: "Office supplies", amount: 5650, billType: "VAT", vat: "Taxable", paid: 0 },
       // Paid in two parts, through two accounts
       { date: "16/04/2083", category: categoryList[0]?.name ?? "Category", description: "Tea and snacks", amount: 850, billType: "No bill", paid: 500, account: accountList[0]?.name ?? "Cash", paid2: 350, account2: accountList[1]?.name ?? "Fonepay" },
     ])
   );
-  const wide: Partial<Record<(typeof PURCHASE_FIELDS)[number]["key"], number>> = { date: 14, supplier: 28, category: 24, billNumber: 14, description: 26, account: 22, account2: 22, account3: 22, mode: 16, mode2: 16, mode3: 16 };
+  const wide: Partial<Record<(typeof PURCHASE_FIELDS)[number]["key"], number>> = { date: 14, supplier: 28, category: 24, billNumber: 14, description: 26, vat: 14, account: 22, account2: 22, account3: 22, mode: 16, mode2: 16, mode3: 16 };
   sheet["!cols"] = PURCHASE_FIELDS.map((f) => ({ wch: wide[f.key] ?? 12 }));
   XLSX.utils.book_append_sheet(wb, sheet, "Purchases");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Suppliers (copy names from here)"], ...supplierList.map((s) => [s.name])]), "Suppliers");

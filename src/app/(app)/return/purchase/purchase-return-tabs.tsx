@@ -6,7 +6,7 @@ import { PurchaseReturnsTable } from "./returns-table";
 import { ConfirmDialog } from "../../sales/confirm-dialog";
 
 type Vendor = { id: string; name: string };
-type Item = { id: string; name: string; purchasePrice: string };
+type Item = { id: string; name: string; purchasePrice: string; purchaseVatTreatment?: string };
 type Note = { id: string; noteNumber: string; vendorId: string; noteDate: string; total: string; status: string };
 
 const TABS = [

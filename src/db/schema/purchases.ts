@@ -107,6 +107,8 @@ export const purchaseBills = pgTable("purchase_bills", {
   // A stockable purchase recorded by its amount only, with the items still to be added. Its amount waits in "Purchases awaiting item details"
   // (not Inventory) until the items are added, which moves it into Inventory and brings the stock in.
   detailsPending: boolean("details_pending").notNull().default(false),
+  // The exempt part of the subtotal of a bill recorded by amount, which has no lines to carry it. Once the items are added, their own treatments count.
+  pendingExemptAmount: numeric("pending_exempt_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   /** Set when the bill came in through Import Purchases. */
   importId: uuid("import_id").references(() => purchaseImports.id),
 }, (t) => [index("purchase_bills_tenant_due").on(t.tenantId, t.dueDate)]);

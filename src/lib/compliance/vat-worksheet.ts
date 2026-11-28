@@ -119,6 +119,19 @@ export async function computeVatWorksheetFigures(tenantId: string, year: VatWork
   return { openingCredit, periods: figures, earlierPayable };
 }
 
+const FILED = ["filed", "paid", "partially_paid"];
+
+/**
+ * A period already filed keeps the net purchase it was saved with: a change in how the figure is worked out must not rewrite what was filed. A period that is
+ * reopened, or was never saved, gets the figure as worked out now.
+ */
+export async function keepFiledNetPurchase(tenantId: string, figures: VatWorksheetFigures, saved: VatWorksheetFigures | null): Promise<VatWorksheetFigures> {
+  if (!saved) return figures;
+  const filed = new Set((await vatObligations(tenantId)).filter((o) => FILED.includes(o.status) && !o.filedBeforeSystem).map((o) => o.id));
+  const before = new Map(saved.periods.map((p) => [p.obligationId, p]));
+  return { ...figures, periods: figures.periods.map((p) => (filed.has(p.obligationId) && before.has(p.obligationId) ? { ...p, netPurchase: before.get(p.obligationId)!.netPurchase } : p)) };
+}
+
 /** What has been paid against each VAT obligation (voided payments excluded). */
 export async function paidByObligation(tenantId: string, obligationIds: string[]): Promise<Map<string, number>> {
   if (obligationIds.length === 0) return new Map();

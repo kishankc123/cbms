@@ -17,6 +17,7 @@ import { RecordPayModal } from "./record-pay-modal";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { todayIso } from "@/lib/calendar";
 import { AmountInput } from "@/components/ui/amount-input";
+import { LINE_TREATMENTS, lineVatRate, splitByTreatment, type LineTreatment } from "@/lib/purchases/vat-lines";
 type Vendor = { id: string; name: string };
 type Account = { id: string; code: string; name: string };
 type CashBankGroup = { id: string; code: string; name: string; children: { id: string; code: string; name: string }[] };
@@ -28,6 +29,8 @@ type LineRow = {
   rate: string;
   quantity: string;
   discount: string;
+  /** On a VAT bill: whether the line carries VAT. */
+  taxTreatment: LineTreatment;
 };
 
 export const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
@@ -41,7 +44,7 @@ export const BILL_TYPE_OPTIONS: { value: CashBillType; label: string }[] = [
 const MIN_LINES = 4;
 const fmt = (n: number) => n.toFixed(2);
 const today = () => todayIso();
-const emptyLine = (): LineRow => ({ description: "", categoryId: "", rate: "", quantity: "", discount: "0" });
+const emptyLine = (): LineRow => ({ description: "", categoryId: "", rate: "", quantity: "", discount: "0", taxTreatment: "taxable" });
 const cell = (row: number, col: string) => `[data-row="${row}"][data-col="${col}"]`;
 
 // VAT only applies when the bill type is VAT — any other bill type books the taxable amount with no VAT.
@@ -51,7 +54,7 @@ function computeLine(line: LineRow, vatRate: number) {
   const discount = parseFloat(line.discount) || 0;
   const gross = rate * quantity;
   const taxable = Math.max(gross - discount, 0);
-  const vat = taxable * (vatRate / 100);
+  const vat = taxable * (lineVatRate("vat", line.taxTreatment, vatRate) / 100);
   const total = taxable + vat;
   return { gross, taxable, vat, total };
 }
@@ -67,7 +70,7 @@ export type InitialConsumableBill = {
   vendorId: string;
   billType: CashBillType;
   billAvailable?: boolean | null;
-  lines: { description: string; categoryId: string; rate: number; quantity: number; discount: number }[];
+  lines: { description: string; categoryId: string; rate: number; quantity: number; discount: number; taxTreatment?: LineTreatment }[];
   payments: PaymentLine[];
   /** A line of it was matched to a bank statement or ticked in a cash reconciliation: its date, lines and payments are locked. */
   reconciled?: boolean;
@@ -118,7 +121,7 @@ export function ConsumablePurchaseForm({
   const [changeReason, setChangeReason] = useState("");
   const [lines, setLines] = useState<LineRow[]>(() =>
     initial && initial.lines.length > 0
-      ? initial.lines.map((l) => ({ description: l.description, categoryId: l.categoryId, rate: String(l.rate), quantity: String(l.quantity), discount: String(l.discount) }))
+      ? initial.lines.map((l) => ({ description: l.description, categoryId: l.categoryId, rate: String(l.rate), quantity: String(l.quantity), discount: String(l.discount), taxTreatment: l.taxTreatment ?? "taxable" }))
       : Array.from({ length: MIN_LINES }, emptyLine)
   );
   const [payments, setPayments] = useState<PaymentLine[]>(initial?.payments ?? []);
@@ -156,7 +159,8 @@ export function ConsumablePurchaseForm({
   const effectiveVatRate = billType === "vat" ? vatRate : 0;
   const computedLines = lines.map((l) => computeLine(l, effectiveVatRate));
   const grandGross = computedLines.reduce((s, c) => s + c.gross, 0);
-  const grandTaxable = computedLines.reduce((s, c) => s + c.taxable, 0);
+  const showTreatment = billType === "vat";
+  const split = splitByTreatment(billType, computedLines.map((c, i) => ({ taxable: c.taxable, taxTreatment: lines[i].taxTreatment })));
   const grandVat = computedLines.reduce((s, c) => s + c.vat, 0);
   const grandTotal = computedLines.reduce((s, c) => s + c.total, 0);
   const grandDiscount = lines.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
@@ -202,6 +206,7 @@ export function ConsumablePurchaseForm({
           rate: parseFloat(l.rate) || 0,
           quantity: parseFloat(l.quantity) || 0,
           discount: parseFloat(l.discount) || 0,
+          ...(billType === "vat" && l.taxTreatment !== "taxable" ? { taxTreatment: l.taxTreatment } : {}),
         })),
         payments,
       };
@@ -323,8 +328,9 @@ export function ConsumablePurchaseForm({
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Qty</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Gross</th>
                 {showDiscount && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Discount</th>}
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Taxable</th>
-                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>
+                {showTreatment && <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT</th>}
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Amount</th>
+                <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">VAT amount</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap">Total</th>
                 <th className="px-1.5 py-1.5 font-semibold text-xs text-center whitespace-nowrap"></th>
               </tr>
@@ -400,6 +406,17 @@ export function ConsumablePurchaseForm({
                         />
                       </td>
                     )}
+                    {showTreatment && (
+                      <td className="px-1 py-1 text-center">
+                        <select value={line.taxTreatment} onChange={(e) => updateLine(i, "taxTreatment", e.target.value)} className={`w-28 ${cellInputCls}`} aria-label="VAT treatment of this line">
+                          {LINE_TREATMENTS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.value === "taxable" ? `Taxable ${vatRate}%` : t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     <td className="px-1 py-1 text-center">
                       <div className={`mx-auto w-[95px] ${calculatedCellCls}`}>{fmt(c.taxable)}</div>
                     </td>
@@ -442,9 +459,21 @@ export function ConsumablePurchaseForm({
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Taxable</span>
-              <span>{fmt(grandTaxable)}</span>
+              <span className="text-gray-500">{billType === "vat" ? "Taxable amount" : "Amount"}</span>
+              <span>{fmt(split.taxable)}</span>
             </div>
+            {split.zeroRated > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Zero-rated</span>
+                <span>{fmt(split.zeroRated)}</span>
+              </div>
+            )}
+            {split.exempt > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Exempt</span>
+                <span>{fmt(split.exempt)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-gray-500">VAT</span>
               <span>{fmt(grandVat)}</span>

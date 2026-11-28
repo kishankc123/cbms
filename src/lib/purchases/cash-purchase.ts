@@ -11,6 +11,7 @@ import { getTaxRate } from "@/lib/compliance/tax-rates";
 import { nextFreeInvoiceNumber } from "@/lib/sales/invoice-numbering";
 import { resettleParty } from "@/lib/ledger/party-settlement";
 import { assertBillNumberFree, discardBill, insertEmbeddedSupplierPayment } from "@/lib/purchases/bill-records";
+import { lineVatRate, type LineTreatment } from "@/lib/purchases/vat-lines";
 
 // A Consumable purchase: one bill with one or more lines, booked to purchase categories. The rules and the writer live
 // here so the Add New form, the edit form and Import Purchases all post the same way. Kept out of the "use server" action
@@ -23,7 +24,7 @@ export type CashBillType = "vat" | "pan" | "estimate" | "challan" | "no_bill";
 export type CashPaymentLine = { accountId: string; amount: number; modeId?: string | null };
 
 // One line of a Consumable purchase: what was bought, and the purchase category it is booked to.
-export type CashPurchaseLine = { description: string; categoryId: string; rate: number; quantity: number; discount: number };
+export type CashPurchaseLine = { description: string; categoryId: string; rate: number; quantity: number; discount: number; /** On a VAT bill: whether the line carries VAT. Missing means taxable. */ taxTreatment?: LineTreatment };
 
 // A Consumable purchase is ONE bill with one or more lines. It is settled by whatever payments are recorded with
 // it — in full, in part or not at all; what isn't paid is owed to the supplier (Accounts Payable), so a supplier
@@ -42,7 +43,8 @@ export function computeCashLine(line: CashPurchaseLine, vatRate: number) {
   const gross = round2(line.rate * line.quantity);
   const discount = round2(Math.min(Math.max(line.discount, 0), gross));
   const taxable = round2(gross - discount);
-  const vat = round2(taxable * (vatRate / 100));
+  // `vatRate` is the bill's rate (nothing unless it is a VAT bill); a zero-rated or exempt line carries none of it.
+  const vat = round2(taxable * (lineVatRate("vat", line.taxTreatment, vatRate) / 100));
   return { gross, discount, taxable, vat };
 }
 
@@ -50,7 +52,13 @@ export function computeCashLine(line: CashPurchaseLine, vatRate: number) {
 // VAT applies only when the bill type is VAT; the payments may not exceed the bill total (VAT included). Taxed at
 // the rate that applied on the BILL'S date, not today's — a backdated bill is not re-taxed at the current rate.
 export async function prepareCashPurchase(tenantId: string, input: CashPurchaseInput, opts: { skipCategoryCheck?: boolean } = {}) {
-  const validLines = input.lines.filter((l) => l.quantity > 0 && l.rate > 0);
+  // The treatment is kept only where it means something: on a VAT bill, and only when it differs from taxable.
+  const validLines = input.lines
+    .filter((l) => l.quantity > 0 && l.rate > 0)
+    .map((l): CashPurchaseLine => {
+      const { taxTreatment, ...rest } = l;
+      return input.billType === "vat" && taxTreatment && taxTreatment !== "taxable" ? { ...rest, taxTreatment } : rest;
+    });
   if (validLines.length === 0) throw new Error("Add at least one line with a rate and quantity");
   if (!opts.skipCategoryCheck) for (const categoryId of new Set(validLines.map((l) => l.categoryId))) await assertPurchaseCategory(tenantId, categoryId);
 
@@ -104,7 +112,7 @@ export async function taxReceivableIdIfClaimed(tenantId: string, tax: number) {
 }
 
 export function billLineItems(computed: { line: CashPurchaseLine }[]): PurchaseLineItem[] {
-  return computed.map(({ line }) => ({ itemId: null, categoryId: line.categoryId, description: line.description.trim(), rate: line.rate, quantity: line.quantity, discount: line.discount }));
+  return computed.map(({ line }) => ({ itemId: null, categoryId: line.categoryId, description: line.description.trim(), rate: line.rate, quantity: line.quantity, discount: line.discount, ...(line.taxTreatment ? { taxTreatment: line.taxTreatment } : {}) }));
 }
 
 /**
@@ -148,6 +156,8 @@ export async function createCashPurchaseCore(
       billType: input.billType,
       description: prepared.description,
       lineItems: opts.pending ? [] : billLineItems(prepared.computed),
+      // A bill recorded by amount keeps no lines, so its exempt part is kept on the bill.
+      pendingExemptAmount: opts.pending ? prepared.computed.filter((c) => c.line.taxTreatment === "exempt").reduce((s, c) => s + c.taxable, 0).toFixed(2) : "0",
       subtotal: prepared.subtotal.toFixed(2),
       taxAmount: prepared.tax.toFixed(2),
       total: prepared.total.toFixed(2),

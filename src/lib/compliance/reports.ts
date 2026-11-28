@@ -4,6 +4,7 @@ import { and, eq, ne, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, assetDisposals, salesInvoices, purchaseBills, expenses, customers, vendors, journalLines, journalEntries, salesReturns, purchaseReturns } from "@/db/schema";
 import { findControlAccount } from "@/lib/ledger/control-accounts";
+import { addSplit, EMPTY_SPLIT, splitDocument, splitExpense, type VatSplit } from "@/lib/purchases/vat-split";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -63,6 +64,9 @@ export async function getPurchaseRegister(tenantId: string, from: string, to: st
       taxAmount: purchaseBills.taxAmount,
       total: purchaseBills.total,
       status: purchaseBills.status,
+      billType: purchaseBills.billType,
+      lineItems: purchaseBills.lineItems,
+      pendingExempt: purchaseBills.pendingExemptAmount,
     })
     .from(purchaseBills)
     .where(and(eq(purchaseBills.tenantId, tenantId), gte(purchaseBills.billDate, from), lte(purchaseBills.billDate, to)))
@@ -71,9 +75,15 @@ export async function getPurchaseRegister(tenantId: string, from: string, to: st
   const vendorList = await db.select({ id: vendors.id, name: vendors.name }).from(vendors).where(eq(vendors.tenantId, tenantId));
   const nameById = Object.fromEntries(vendorList.map((v) => [v.id, v.name]));
 
-  const active = rows.filter((r) => r.status !== "void");
+  const shown = rows.map(({ lineItems, pendingExempt, ...r }) => ({
+    ...r,
+    vendorName: r.vendorId ? nameById[r.vendorId] ?? "—" : "—",
+    split: splitDocument({ billType: r.billType, subtotal: Number(r.subtotal), taxAmount: Number(r.taxAmount), lines: lineItems, pendingExempt: Number(pendingExempt) }),
+  }));
+  const active = shown.filter((r) => r.status !== "void");
   return {
-    rows: rows.map((r) => ({ ...r, vendorName: r.vendorId ? nameById[r.vendorId] ?? "—" : "—" })),
+    rows: shown,
+    split: active.reduce((s, r) => addSplit(s, r.split), EMPTY_SPLIT),
     totalSubtotal: round2(active.reduce((s, r) => s + Number(r.subtotal), 0)),
     totalTax: round2(active.reduce((s, r) => s + Number(r.taxAmount), 0)),
     totalAmount: round2(active.reduce((s, r) => s + Number(r.total), 0)),
@@ -83,11 +93,11 @@ export async function getPurchaseRegister(tenantId: string, from: string, to: st
 // VAT paid on expenses (rent, utilities, services) is input VAT too.
 async function getExpenseVat(tenantId: string, from: string, to: string) {
   const rows = await db
-    .select({ vat: expenses.vatAmount, taxable: expenses.taxableAmount })
+    .select({ vat: expenses.vatAmount, taxable: expenses.taxableAmount, billType: expenses.billType, taxTreatment: expenses.taxTreatment })
     .from(expenses)
     .where(and(eq(expenses.tenantId, tenantId), gte(expenses.expenseDate, from), lte(expenses.expenseDate, to), ne(expenses.status, "void")));
-  const withVat = rows.filter((r) => Number(r.vat) > 0);
-  return { vat: round2(withVat.reduce((s, r) => s + Number(r.vat), 0)), taxable: round2(withVat.reduce((s, r) => s + Number(r.taxable), 0)) };
+  const split = rows.reduce((s, r) => addSplit(s, splitExpense({ billType: r.billType, taxTreatment: r.taxTreatment, taxableAmount: Number(r.taxable), vatAmount: Number(r.vat) })), EMPTY_SPLIT);
+  return { vat: round2(rows.reduce((s, r) => s + Math.max(Number(r.vat), 0), 0)), split };
 }
 
 // Sales returns (debit notes) take VAT back off output VAT; purchase returns (credit notes) take it off input VAT.
@@ -98,12 +108,13 @@ async function getReturnsVat(tenantId: string, from: string, to: string) {
       .from(salesReturns)
       .where(and(eq(salesReturns.tenantId, tenantId), gte(salesReturns.noteDate, from), lte(salesReturns.noteDate, to), ne(salesReturns.status, "void"))),
     db
-      .select({ subtotal: purchaseReturns.subtotal, tax: purchaseReturns.taxAmount })
+      .select({ subtotal: purchaseReturns.subtotal, tax: purchaseReturns.taxAmount, lineItems: purchaseReturns.lineItems })
       .from(purchaseReturns)
       .where(and(eq(purchaseReturns.tenantId, tenantId), gte(purchaseReturns.noteDate, from), lte(purchaseReturns.noteDate, to), ne(purchaseReturns.status, "void"))),
   ]);
   const sum = (rows: { subtotal: string; tax: string }[], k: "subtotal" | "tax") => round2(rows.reduce((s, r) => s + Number(r[k]), 0));
-  return { salesTax: sum(sales, "tax"), salesSubtotal: sum(sales, "subtotal"), purchasesTax: sum(purchases, "tax"), purchasesSubtotal: sum(purchases, "subtotal") };
+  const purchaseSplit: VatSplit = purchases.reduce((s, r) => addSplit(s, splitDocument({ subtotal: Number(r.subtotal), taxAmount: Number(r.tax), lines: r.lineItems })), EMPTY_SPLIT);
+  return { salesTax: sum(sales, "tax"), salesSubtotal: sum(sales, "subtotal"), purchasesTax: sum(purchases, "tax"), purchaseSplit };
 }
 
 export async function getVatReturn(tenantId: string, from: string, to: string) {
@@ -115,12 +126,15 @@ export async function getVatReturn(tenantId: string, from: string, to: string) {
   ]);
   const outputVat = round2(sales.totalTax - returns.salesTax);
   const inputVat = round2(purchases.totalTax + expenseVat.vat - returns.purchasesTax);
+  const purchaseSplit = addSplit(addSplit(purchases.split, expenseVat.split), returns.purchaseSplit, -1);
   return {
     outputVat,
     inputVat,
     netVatPayable: round2(outputVat - inputVat),
     salesTaxable: round2(sales.totalSubtotal - returns.salesSubtotal),
-    purchasesTaxable: round2(purchases.totalSubtotal + expenseVat.taxable - returns.purchasesSubtotal),
+    // Only what VAT was charged on. Zero-rated, exempt and purchases not on a VAT bill are shown beside it.
+    purchasesTaxable: purchaseSplit.taxable,
+    purchaseSplit,
     // What the totals above are made of.
     breakdown: {
       salesVat: sales.totalTax,

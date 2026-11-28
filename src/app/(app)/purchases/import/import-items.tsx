@@ -11,6 +11,7 @@ import { D } from "@/components/calendar/date-text";
 import { BILL_TYPE_LABEL, type PurchaseBillTypeValue } from "@/lib/purchases/import/values";
 import type { ItemImportReview, ItemImportSettings } from "@/lib/purchases/import/item-service";
 import { downloadItemTemplateAction, getItemImportSetup, importItemBillsAction, previewItemImportAction } from "./item-actions";
+import { lineValue } from "@/lib/purchases/vat-split";
 
 const th = "border-b border-line bg-app px-2.5 py-1.5 text-left text-xs font-medium text-ink-2";
 const td = "border-b border-line px-2.5 py-1.5 align-top";
@@ -211,7 +212,18 @@ export function ImportItems() {
                     <td className={td}>{b.date ? <D value={b.date} /> : "—"}</td>
                     <td className={td}>{b.billType ? BILL_TYPE_LABEL[b.billType] : "—"}</td>
                     <td className={`${td} text-right tabular-nums`}>{b.lines.length}</td>
-                    <td className={`${td} text-right tabular-nums`}>{money.format(b.vat)}</td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {money.format(b.vat)}
+                      {b.billType === "vat" &&
+                        (["zero_rated", "exempt"] as const).map((t) => {
+                          const part = b.lines.filter((l) => l.treatment === t).reduce((s, l) => s + lineValue(l), 0);
+                          return part > 0 ? (
+                            <p key={t} className="text-xs text-ink-2">
+                              {t === "exempt" ? "Exempt" : "Zero-rated"} {money.format(part)}
+                            </p>
+                          ) : null;
+                        })}
+                    </td>
                     <td className={`${td} text-right tabular-nums`}>{money.format(b.total)}</td>
                     <td className={td}>
                       {b.status === "ready" ? <StatusPill tone="success">Ready</StatusPill> : b.status === "duplicate" ? <StatusPill tone="pending">Already recorded</StatusPill> : <StatusPill tone="critical">Fix in the file</StatusPill>}

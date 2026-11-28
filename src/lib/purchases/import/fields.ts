@@ -3,7 +3,7 @@ import { payFields, type PayKey } from "@/lib/import-payments";
 
 // The columns Import Purchases understands (one row = one consumable bill).
 
-export type PurchaseFieldKey = "date" | "amount" | "supplier" | "category" | "billNumber" | "description" | "billType" | PayKey;
+export type PurchaseFieldKey = "date" | "amount" | "supplier" | "category" | "billNumber" | "description" | "billType" | "vat" | PayKey;
 
 export const PURCHASE_FIELDS: FieldDef<PurchaseFieldKey>[] = [
   { key: "date", label: "Date", required: true, help: "dd/mm/yyyy, in AD or BS." },
@@ -13,6 +13,7 @@ export const PURCHASE_FIELDS: FieldDef<PurchaseFieldKey>[] = [
   { key: "billNumber", label: "Bill number", required: false, help: "The supplier's own number. Blank gets an automatic one." },
   { key: "description", label: "Description", required: false, help: "What was bought." },
   { key: "billType", label: "Bill type", required: false, help: "VAT, PAN, estimate, challan or no bill." },
+  { key: "vat", label: "VAT treatment", required: false, help: "For a VAT bill: taxable, zero-rated or exempt, for the whole row. Blank is taxable." },
   ...payFields("Paid from", "How much has been paid.", "The cash or bank account name."),
 ];
 
